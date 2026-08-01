@@ -1,0 +1,1225 @@
+openapi: 3.1.0
+info:
+  title: FleetVision API
+  description: |
+    Enterprise Fleet Management Platform API — v1
+    
+    ## Authentication
+    All API requests require a valid JWT Bearer token in the Authorization header.
+    Tokens are obtained via Keycloak OIDC endpoints.
+    
+    ## Rate Limiting
+    Rate limits are applied per user and per tenant. Standard limits:
+    - Web: 100 req/s
+    - Mobile: 50 req/s
+    - Partner: 200 req/s
+    
+    ## Pagination
+    All collection endpoints support cursor-based pagination:
+    - `page[number]`: Page number (default: 1)
+    - `page[size]`: Items per page (default: 20, max: 100)
+  version: 1.0.0
+  contact:
+    name: FleetVision API Support
+    email: api-support@fleetvision.io
+  license:
+    name: Proprietary
+    url: https://www.fleetvision.io/license
+  x-fleetvision:
+    api-status: production
+    sunset: null
+    deprecation-notice: null
+
+servers:
+  - url: https://api.fleetvision.io/api/v1
+    description: Production
+  - url: https://api-staging.fleetvision.io/api/v1
+    description: Staging
+
+security:
+  - BearerAuth: []
+  - TenantHeader: []
+
+tags:
+  - name: Vehicles
+    description: Vehicle management operations
+  - name: Fleets
+    description: Fleet management operations
+  - name: Tracking
+    description: Real-time tracking and GPS data
+  - name: Drivers
+    description: Driver management operations
+  - name: Trips
+    description: Trip planning and management
+  - name: Maintenance
+    description: Vehicle maintenance operations
+  - name: Compliance
+    description: Compliance and safety operations
+  - name: Fuel
+    description: Fuel management operations
+  - name: Billing
+    description: Billing and subscription management
+  - name: Notifications
+    description: Alert and notification management
+  - name: Users
+    description: User and access management
+
+paths:
+  # ─── VEHICLES ───
+  /vehicles:
+    get:
+      operationId: listVehicles
+      summary: List vehicles
+      description: Retrieve a paginated list of vehicles with optional filtering
+      tags: [Vehicles]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/SortParam'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/VehicleStatus'
+          description: Filter by vehicle status
+        - name: vehicle_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/VehicleType'
+          description: Filter by vehicle type
+        - name: fleet_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by fleet membership
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+          description: Search by VIN, make, model, or license plate
+        - name: fields
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of fields to include (sparse fieldsets)
+      responses:
+        '200':
+          description: List of vehicles
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/VehicleCollectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      operationId: registerVehicle
+      summary: Register a new vehicle
+      description: Register a new vehicle in the fleet management system
+      tags: [Vehicles]
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/VehicleCreateRequest'
+      responses:
+        '201':
+          description: Vehicle registered successfully
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+          headers:
+            Location:
+              description: URI of the newly created vehicle
+              schema:
+                type: string
+                format: uri
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Validation'
+
+  /vehicles/{vehicleId}:
+    get:
+      operationId: getVehicle
+      summary: Get vehicle details
+      description: Retrieve a single vehicle by ID
+      tags: [Vehicles]
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+        - name: include
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [fleet, telematics_device, maintenance_summary, driver]
+          description: Related resources to include
+      responses:
+        '200':
+          description: Vehicle details
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateVehicle
+      summary: Update vehicle
+      description: Partial update of vehicle attributes
+      tags: [Vehicles]
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/VehicleUpdateRequest'
+      responses:
+        '200':
+          description: Vehicle updated
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Validation'
+
+    delete:
+      operationId: decommissionVehicle
+      summary: Decommission vehicle
+      description: Mark vehicle as decommissioned (soft delete)
+      tags: [Vehicles]
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      responses:
+        '204':
+          description: Vehicle decommissioned
+        '409':
+          description: Cannot decommission vehicle with active trips or open work orders
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ─── TRACKING ───
+  /vehicles/{vehicleId}/positions:
+    get:
+      operationId: getVehiclePositions
+      summary: Get vehicle position history
+      description: Retrieve GPS position history for a vehicle
+      tags: [Tracking]
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          required: true
+          description: Start timestamp (ISO 8601)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          required: true
+          description: End timestamp (ISO 8601)
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1s, 5s, 15s, 30s, 1m, 5m, 15m, 1h]
+            default: 1m
+          description: Position sampling interval (downsampling for large ranges)
+      responses:
+        '200':
+          description: Position history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Position'
+                  meta:
+                    type: object
+                    properties:
+                      vehicle_id:
+                        type: string
+                        format: uuid
+                      from:
+                        type: string
+                        format: date-time
+                      to:
+                        type: string
+                        format: date-time
+                      interval:
+                        type: string
+                      total_points:
+                        type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vehicles/{vehicleId}/latest-position:
+    get:
+      operationId: getLatestPosition
+      summary: Get latest vehicle position
+      description: Get the most recent GPS position for a vehicle (from cache)
+      tags: [Tracking]
+      parameters:
+        - $ref: '#/components/parameters/VehicleId'
+      responses:
+        '200':
+          description: Latest position
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Position'
+        '404':
+          description: No position data available for this vehicle
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tracking/geofences:
+    get:
+      operationId: listGeofences
+      summary: List geofences
+      tags: [Tracking]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: List of geofences
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/GeofenceCollectionResponse'
+
+    post:
+      operationId: createGeofence
+      summary: Create geofence
+      tags: [Tracking]
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/GeofenceCreateRequest'
+      responses:
+        '201':
+          description: Geofence created
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/GeofenceResponse'
+        '422':
+          $ref: '#/components/responses/Validation'
+
+  # ─── TRIPS ───
+  /trips:
+    get:
+      operationId: listTrips
+      summary: List trips
+      tags: [Trips]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TripStatus'
+        - name: vehicle_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: driver_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of trips
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/TripCollectionResponse'
+
+    post:
+      operationId: planTrip
+      summary: Plan a new trip
+      tags: [Trips]
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/TripCreateRequest'
+      responses:
+        '201':
+          description: Trip planned
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/TripResponse'
+
+  /trips/{tripId}/dispatch:
+    post:
+      operationId: dispatchTrip
+      summary: Dispatch a trip
+      description: Dispatch a planned trip to the assigned driver and vehicle
+      tags: [Trips]
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Trip dispatched
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/TripResponse'
+        '409':
+          description: Trip cannot be dispatched (driver not HOS-eligible, vehicle in maintenance, etc.)
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ─── MAINTENANCE ───
+  /maintenance/work-orders:
+    get:
+      operationId: listWorkOrders
+      summary: List maintenance work orders
+      tags: [Maintenance]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: vehicle_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, ASSIGNED, IN_PROGRESS, PENDING_PARTS, COMPLETED, CANCELLED]
+      responses:
+        '200':
+          description: List of work orders
+
+    post:
+      operationId: createWorkOrder
+      summary: Create work order
+      tags: [Maintenance]
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/WorkOrderCreateRequest'
+      responses:
+        '201':
+          description: Work order created
+
+  # ─── COMPLIANCE ───
+  /compliance/hos-logs:
+    get:
+      operationId: listHOSLogs
+      summary: List HOS logs
+      tags: [Compliance]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: driver_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: HOS log entries
+
+  /compliance/dvir-inspections:
+    get:
+      operationId: listDVIRInspections
+      summary: List DVIR inspections
+      tags: [Compliance]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: vehicle_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: driver_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [PRE_TRIP, POST_TRIP]
+      responses:
+        '200':
+          description: List of DVIR inspections
+
+    post:
+      operationId: submitDVIRInspection
+      summary: Submit DVIR inspection
+      tags: [Compliance]
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/DVIRInspectionCreateRequest'
+      responses:
+        '201':
+          description: DVIR inspection submitted
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from Keycloak
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+      description: Tenant ID (auto-injected by API Gateway from JWT; not required in request)
+
+  parameters:
+    PageNumber:
+      name: page[number]
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page[size]
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    SortParam:
+      name: sort
+      in: query
+      schema:
+        type: string
+        description: Field to sort by. Prefix with - for descending. e.g., -created_at,name
+    VehicleId:
+      name: vehicleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    VehicleStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, MAINTENANCE, DECOMMISSIONED, RETIRED, STOLEN, TOTALED]
+    VehicleType:
+      type: string
+      enum: [TRUCK, VAN, SEDAN, BUS, TRAILER, MOTORCYCLE, OTHER]
+    FuelType:
+      type: string
+      enum: [GASOLINE, DIESEL, ELECTRIC, HYBRID, CNG, LPG]
+    TripStatus:
+      type: string
+      enum: [PLANNED, DISPATCHED, IN_PROGRESS, COMPLETED, CANCELLED, DIVERTED]
+
+    # ─── Position ───
+    Position:
+      type: object
+      properties:
+        vehicle_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        altitude:
+          type: number
+          format: double
+          nullable: true
+        heading:
+          type: integer
+          minimum: 0
+          maximum: 359
+          nullable: true
+        speed_kmh:
+          type: number
+          format: float
+          nullable: true
+        accuracy_m:
+          type: number
+          format: float
+          nullable: true
+        ignition_on:
+          type: boolean
+          nullable: true
+        odometer_km:
+          type: integer
+          nullable: true
+
+    # ─── Vehicle Request/Response ───
+    VehicleCreateRequest:
+      type: object
+      required: [type, attributes]
+      properties:
+        type:
+          type: string
+          example: vehicle
+        attributes:
+          type: object
+          required: [vin, make, model, year, vehicle_type]
+          properties:
+            vin:
+              type: string
+              pattern: '^[A-HJ-NPR-Z0-9]{17}$'
+              example: 1HGCM82633A004352
+            make:
+              type: string
+              maxLength: 100
+              example: Honda
+            model:
+              type: string
+              maxLength: 100
+              example: Accord
+            year:
+              type: integer
+              minimum: 1900
+              maximum: 2027
+              example: 2023
+            vehicle_type:
+              $ref: '#/components/schemas/VehicleType'
+            fuel_type:
+              $ref: '#/components/schemas/FuelType'
+            license_plate:
+              type: string
+              nullable: true
+              maxLength: 20
+            license_state:
+              type: string
+              nullable: true
+              maxLength: 10
+            fleet_id:
+              type: string
+              format: uuid
+              nullable: true
+        relationships:
+          type: object
+          properties:
+            fleet:
+              data:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+                    example: fleet
+
+    VehicleUpdateRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, type, attributes]
+          properties:
+            id:
+              type: string
+              format: uuid
+            type:
+              type: string
+              example: vehicle
+            attributes:
+              type: object
+              properties:
+                status:
+                  $ref: '#/components/schemas/VehicleStatus'
+                license_plate:
+                  type: string
+                  nullable: true
+                odometer_km:
+                  type: integer
+                  nullable: true
+
+    VehicleResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/VehicleResource'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    VehicleCollectionResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VehicleResource'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: object
+              properties:
+                number:
+                  type: integer
+                size:
+                  type: integer
+                total_pages:
+                  type: integer
+        links:
+          $ref: '#/components/schemas/PaginationLinks'
+
+    VehicleResource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: vehicle
+        attributes:
+          type: object
+          properties:
+            vin:
+              type: string
+            make:
+              type: string
+            model:
+              type: string
+            year:
+              type: integer
+            vehicle_type:
+              $ref: '#/components/schemas/VehicleType'
+            fuel_type:
+              $ref: '#/components/schemas/FuelType'
+            status:
+              $ref: '#/components/schemas/VehicleStatus'
+            license_plate:
+              type: string
+              nullable: true
+            license_state:
+              type: string
+              nullable: true
+            odometer_km:
+              type: integer
+            telematics_device_id:
+              type: string
+              format: uuid
+              nullable: true
+            fleet_id:
+              type: string
+              format: uuid
+              nullable: true
+            acquisition_date:
+              type: string
+              format: date
+              nullable: true
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+        relationships:
+          type: object
+          properties:
+            fleet:
+              data:
+                type: object
+                nullable: true
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+            telematics_device:
+              data:
+                type: object
+                nullable: true
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+                    example: device
+        links:
+          type: object
+          properties:
+            self:
+              type: string
+              format: uri
+
+    # ─── Geofence ───
+    GeofenceCreateRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, attributes]
+          properties:
+            type:
+              type: string
+              example: geofence
+            attributes:
+              type: object
+              required: [name, boundary_type, boundary]
+              properties:
+                name:
+                  type: string
+                  maxLength: 200
+                description:
+                  type: string
+                  nullable: true
+                boundary_type:
+                  type: string
+                  enum: [POLYGON, CIRCLE, CORRIDOR]
+                boundary:
+                  type: object
+                  description: |
+                    POLYGON: { coordinates: [[lat, lng], ...], min_area: 100 }
+                    CIRCLE: { center: { lat, lng }, radius_meters: 1000 }
+                    CORRIDOR: { points: [[lat, lng], ...], width_meters: 500 }
+                rules:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      event:
+                        type: string
+                        enum: [ENTER, EXIT, DWELL]
+                      action:
+                        type: string
+                        enum: [ALERT, LOG, SPEED_LIMIT_CHANGE]
+                      parameters:
+                        type: object
+
+    GeofenceResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            type:
+              type: string
+            attributes:
+              type: object
+              properties:
+                name:
+                  type: string
+                boundary_type:
+                  type: string
+                boundary:
+                  type: object
+                rules:
+                  type: array
+                created_at:
+                  type: string
+                  format: date-time
+
+    GeofenceCollectionResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeofenceResponse'
+
+    # ─── Trip ───
+    TripCreateRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, attributes]
+          properties:
+            type:
+              type: string
+              example: trip
+            attributes:
+              type: object
+              required: [vehicle_id, driver_id]
+              properties:
+                vehicle_id:
+                  type: string
+                  format: uuid
+                driver_id:
+                  type: string
+                  format: uuid
+                planned_departure:
+                  type: string
+                  format: date-time
+                planned_arrival:
+                  type: string
+                  format: date-time
+                route_waypoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sequence:
+                        type: integer
+                      address:
+                        type: string
+                      latitude:
+                        type: number
+                        format: double
+                      longitude:
+                        type: number
+                        format: double
+                      estimated_arrival:
+                        type: string
+                        format: date-time
+                load_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+
+    TripResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            type:
+              type: string
+            attributes:
+              type: object
+              properties:
+                vehicle_id:
+                  type: string
+                  format: uuid
+                driver_id:
+                  type: string
+                  format: uuid
+                status:
+                  $ref: '#/components/schemas/TripStatus'
+                planned_departure:
+                  type: string
+                  format: date-time
+                planned_arrival:
+                  type: string
+                  format: date-time
+                actual_departure:
+                  type: string
+                  format: date-time
+                  nullable: true
+                actual_arrival:
+                  type: string
+                  format: date-time
+                  nullable: true
+                created_at:
+                  type: string
+                  format: date-time
+
+    TripCollectionResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripResponse'
+
+    # ─── Maintenance ───
+    WorkOrderCreateRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, attributes]
+          properties:
+            type:
+              type: string
+              example: maintenance-work-order
+            attributes:
+              type: object
+              required: [vehicle_id, title, priority]
+              properties:
+                vehicle_id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  maxLength: 500
+                description:
+                  type: string
+                  nullable: true
+                priority:
+                  type: string
+                  enum: [CRITICAL, HIGH, MEDIUM, LOW]
+                type:
+                  type: string
+                  enum: [PREVENTIVE, CORRECTIVE, INSPECTION]
+                estimated_labor_hours:
+                  type: number
+                  format: float
+                  nullable: true
+
+    # ─── DVIR ───
+    DVIRInspectionCreateRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, attributes]
+          properties:
+            type:
+              type: string
+              example: dvir-inspection
+            attributes:
+              type: object
+              required: [vehicle_id, type]
+              properties:
+                vehicle_id:
+                  type: string
+                  format: uuid
+                type:
+                  type: string
+                  enum: [PRE_TRIP, POST_TRIP]
+                odometer_reading:
+                  type: integer
+                defects:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      component:
+                        type: string
+                      location:
+                        type: string
+                        nullable: true
+                      severity:
+                        type: string
+                        enum: [CRITICAL, MAJOR, MINOR]
+                      description:
+                        type: string
+                      requires_immediate_attention:
+                        type: boolean
+                driver_signature:
+                  type: string
+                  description: Base64-encoded signature image
+
+    # ─── Shared ───
+    ErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                example: FLEET-4001
+              title:
+                type: string
+                example: Vehicle Already Assigned
+              detail:
+                type: string
+              status:
+                type: integer
+              source:
+                type: object
+                properties:
+                  pointer:
+                    type: string
+                    example: /data/attributes/vin
+                  parameter:
+                    type: string
+              meta:
+                type: object
+                properties:
+                  request_id:
+                    type: string
+                    format: uuid
+                  timestamp:
+                    type: string
+                    format: date-time
+                  documentation_url:
+                    type: string
+                    format: uri
+
+    ResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+          format: uuid
+
+    PaginationLinks:
+      type: object
+      properties:
+        self:
+          type: string
+          format: uri
+        first:
+          type: string
+          format: uri
+        prev:
+          type: string
+          format: uri
+          nullable: true
+        next:
+          type: string
+          format: uri
+          nullable: true
+        last:
+          type: string
+          format: uri
+
+  responses:
+    BadRequest:
+      description: The request was malformed or invalid
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication credentials are missing or invalid
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated user does not have permission
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Requested resource not found
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Request conflicts with current state
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Validation:
+      description: Request validation failed
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
