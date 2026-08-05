@@ -1,0 +1,5 @@
+# plop templates placeholder.
+# In Sprint 2 this directory holds the Handlebars templates that stamp a new
+# service (main.ts.hbs, app.module.ts.hbs, package.json.hbs, Dockerfile, etc.)
+# from the variables the generator prompts for (service name, bounded context,
+# schema name, port). Empty for now — see README.md in this folder.

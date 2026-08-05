@@ -44,71 +44,71 @@ FleetVision is a **cloud-native, enterprise-grade Fleet Management Platform** de
 
 | Document | Path | Description |
 |---|---|---|
-| **Master Architecture Document** | `Architecture/FleetVision-Master-Architecture.md` | Single source of truth — system overview, principles, patterns, context map |
-| **Infrastructure Architecture** | `Architecture/FleetVision-Infrastructure-Architecture.md` | Kubernetes topology, networking, environments, cost, DR |
-| **Event-Driven Architecture** | `Architecture/FleetVision-Event-Driven-Architecture.md` | Kafka topology, event catalog, saga patterns, schema evolution |
-| **C4 Diagrams** | `Diagrams/FleetVision-C4-Diagrams.md` | System context, container, component, sequence, deployment diagrams |
+| **Master Architecture Document** | `docs/architecture/FleetVision-Master-Architecture.md` | Single source of truth — system overview, principles, patterns, context map |
+| **Infrastructure Architecture** | `docs/architecture/FleetVision-Infrastructure-Architecture.md` | Kubernetes topology, networking, environments, cost, DR |
+| **Event-Driven Architecture** | `docs/architecture/FleetVision-Event-Driven-Architecture.md` | Kafka topology, event catalog, saga patterns, schema evolution |
+| **C4 Diagrams** | `docs/diagrams/FleetVision-C4-Diagrams.md` | System context, container, component, sequence, deployment diagrams |
 
 ### 🎯 Domain Model
 
 | Document | Path | Description |
 |---|---|---|
-| **Domain Model Specification** | `Domain/FleetVision-Domain-Model.md` | Ubiquitous language, 14 bounded contexts, 44 aggregates, domain events, context mapping |
+| **Domain Model Specification** | `docs/architecture/FleetVision-Domain-Model.md` | Ubiquitous language, 14 bounded contexts, 44 aggregates, domain events, context mapping |
 
 ### 🧩 Modules (Bounded Contexts)
 
 | Module | Path |
 |---|---|
-| Identity & Access Management | `Modules/Identity-Access-Management.md` |
-| Fleet Management | `Modules/Fleet-Management.md` |
-| Tracking & Monitoring | `Modules/Tracking-Monitoring.md` |
-| Telematics & Device Management | `Modules/Telemetry-Device-Management.md` |
-| Vehicle Maintenance | `Modules/Vehicle-Maintenance.md` |
-| Driver Management | `Modules/Driver-Management.md` |
-| Trip & Route Management | `Modules/Trip-Route-Management.md` |
-| Compliance & Safety | `Modules/Compliance-Safety.md` |
-| Fuel Management | `Modules/Fuel-Management.md` |
-| Analytics & Reporting | `Modules/Analytics-Reporting.md` |
-| Asset Lifecycle | `Modules/Asset-Lifecycle.md` |
-| Notification & Alerting | `Modules/Notification-Alerting.md` |
-| Billing & Tenant Management | `Modules/Billing-Tenant-Management.md` |
-| Audit & Compliance Log | `Modules/Audit-Compliance-Log.md` |
+| Identity & Access Management | `docs/modules/Identity-Access-Management.md` |
+| Fleet Management | `docs/modules/Fleet-Management.md` |
+| Tracking & Monitoring | `docs/modules/Tracking-Monitoring.md` |
+| Telematics & Device Management | `docs/modules/Telemetry-Device-Management.md` |
+| Vehicle Maintenance | `docs/modules/Vehicle-Maintenance.md` |
+| Driver Management | `docs/modules/Driver-Management.md` |
+| Trip & Route Management | `docs/modules/Trip-Route-Management.md` |
+| Compliance & Safety | `docs/modules/Compliance-Safety.md` |
+| Fuel Management | `docs/modules/Fuel-Management.md` |
+| Analytics & Reporting | `docs/modules/Analytics-Reporting.md` |
+| Asset Lifecycle | `docs/modules/Asset-Lifecycle.md` |
+| Notification & Alerting | `docs/modules/Notification-Alerting.md` |
+| Billing & Tenant Management | `docs/modules/Billing-Tenant-Management.md` |
+| Audit & Compliance Log | `docs/modules/Audit-Compliance-Log.md` |
 
 ### 📐 Architecture Decisions
 
 | ADR | Path | Decision |
 |---|---|---|
-| ADR-001 | `Decisions/ADR-001-CQRS-Event-Sourcing.md` | CQRS + Event Sourcing for critical aggregates |
-| ADR-002 | `Decisions/ADR-002-Apache-Kafka.md` (in ADR-001 file) | Apache Kafka as central event backbone |
-| ADR-003 | `Decisions/ADR-003-Multi-Tenancy.md` (in ADR-001 file) | Hybrid multi-tenancy (3 isolation tiers) |
-| ADR-004 | `Decisions/ADR-004-Service-Communication.md` (in ADR-001 file) | gRPC (sync) + Kafka (async) dual model |
-| ADR-005 | `Decisions/ADR-005-Istio-Service-Mesh.md` (in ADR-001 file) | Istio 1.20+ ambient mesh |
-| ADR-006 | `Decisions/ADR-006-Spring-Boot-Kotlin.md` (in ADR-001 file) | Spring Boot 3.3 + Kotlin 2.0 (Go + Python exceptions) |
-| ADR-007 | `Decisions/ADR-007-PostgreSQL.md` (in ADR-001 file) | PostgreSQL 16 as primary OLTP database |
-| ADR-008 | `Decisions/ADR-008-Polyglot-Persistence.md` (in ADR-001 file) | Polyglot persistence (8 data stores) |
-| ADR-009 | `Decisions/ADR-009-Keycloak-IAM.md` (in ADR-001 file) | Keycloak 24+ for IAM |
-| ADR-010 | `Decisions/ADR-010-GitOps-ArgoCD.md` (in ADR-001 file) | GitOps with ArgoCD |
-| ADR-011 | `Decisions/ADR-011-OpenTelemetry.md` (in ADR-001 file) | OpenTelemetry for observability |
-| ADR-012 | `Decisions/ADR-012-API-Versioning.md` (in ADR-001 file) | URI-based API versioning with sunset policy |
+| ADR-001 | `docs/adr/ADR-001-CQRS-Event-Sourcing.md` | CQRS + Event Sourcing for critical aggregates |
+| ADR-002 | `docs/adr/ADR-002-Apache-Kafka.md` (in ADR-001 file) | Apache Kafka as central event backbone |
+| ADR-003 | `docs/adr/ADR-003-Multi-Tenancy.md` (in ADR-001 file) | Hybrid multi-tenancy (3 isolation tiers) |
+| ADR-004 | `docs/adr/ADR-004-Service-Communication.md` (in ADR-001 file) | gRPC (sync) + Kafka (async) dual model |
+| ADR-005 | `docs/adr/ADR-005-Istio-Service-Mesh.md` (in ADR-001 file) | Istio 1.20+ ambient mesh |
+| ADR-006 | `docs/adr/ADR-006-Spring-Boot-Kotlin.md` (in ADR-001 file) | Spring Boot 3.3 + Kotlin 2.0 (Go + Python exceptions) |
+| ADR-007 | `docs/adr/ADR-007-PostgreSQL.md` (in ADR-001 file) | PostgreSQL 16 as primary OLTP database |
+| ADR-008 | `docs/adr/ADR-008-Polyglot-Persistence.md` (in ADR-001 file) | Polyglot persistence (8 data stores) |
+| ADR-009 | `docs/adr/ADR-009-Keycloak-IAM.md` (in ADR-001 file) | Keycloak 24+ for IAM |
+| ADR-010 | `docs/adr/ADR-010-GitOps-ArgoCD.md` (in ADR-001 file) | GitOps with ArgoCD |
+| ADR-011 | `docs/adr/ADR-011-OpenTelemetry.md` (in ADR-001 file) | OpenTelemetry for observability |
+| ADR-012 | `docs/adr/ADR-012-API-Versioning.md` (in ADR-001 file) | URI-based API versioning with sunset policy |
 
 ### 🔌 API
 
 | Document | Path | Description |
 |---|---|---|
-| **API Gateway Architecture** | `API/FleetVision-API-Gateway-Architecture.md` | Routing, auth, rate limiting, WebSocket, MQTT gateway |
-| **OpenAPI v1 Specification** | `API/FleetVision-OpenAPI-v1.yaml` | Full REST API specification (vehicles, tracking, trips, maintenance, compliance) |
+| **API Gateway Architecture** | `docs/api-specs/FleetVision-API-Gateway-Architecture.md` | Routing, auth, rate limiting, WebSocket, MQTT gateway |
+| **OpenAPI v1 Specification** | `docs/api-specs/FleetVision-OpenAPI-v1.yaml` | Full REST API specification (vehicles, tracking, trips, maintenance, compliance) |
 
 ### 🗄 Database
 
 | Document | Path | Description |
 |---|---|---|
-| **Database Architecture** | `Database/FleetVision-Database-Architecture.md` | Polyglot persistence, schema design, CQRS write/read paths, backups |
+| **Database Architecture** | `docs/architecture/FleetVision-Database-Architecture.md` | Polyglot persistence, schema design, CQRS write/read paths, backups |
 
 ### 🔒 Security
 
 | Document | Path | Description |
 |---|---|---|
-| **Security Architecture & Threat Model** | `Security/FleetVision-Security-Architecture.md` | Zero-trust model, STRIDE threat analysis, auth flows, encryption, compliance |
+| **Security Architecture & Threat Model** | `docs/security/FleetVision-Security-Architecture.md` | Zero-trust model, STRIDE threat analysis, auth flows, encryption, compliance |
 
 ### 📖 Runbooks
 
@@ -153,51 +153,36 @@ Container Reg:    Amazon ECR (Cosign signed)
 ```
 FleetVision/
 ├── README.md                          ← You are here
-├── Architecture/                      # Architecture documents
-│   ├── FleetVision-Master-Architecture.md
-│   ├── FleetVision-Infrastructure-Architecture.md
-│   └── FleetVision-Event-Driven-Architecture.md
-├── Domain/                            # Domain model & ubiquitous language
-│   └── FleetVision-Domain-Model.md
-├── Modules/                           # Bounded context specifications (14)
-│   ├── Identity-Access-Management.md
-│   ├── Fleet-Management.md
-│   ├── Tracking-Monitoring.md
-│   ├── Telemetry-Device-Management.md
-│   ├── Vehicle-Maintenance.md
-│   ├── Driver-Management.md
-│   ├── Trip-Route-Management.md
-│   ├── Compliance-Safety.md
-│   ├── Fuel-Management.md
-│   ├── Analytics-Reporting.md
-│   ├── Asset-Lifecycle.md
-│   ├── Notification-Alerting.md
-│   ├── Billing-Tenant-Management.md
-│   └── Audit-Compliance-Log.md
-├── Decisions/                         # Architecture Decision Records (12 ADRs)
-│   └── ADR-001-CQRS-Event-Sourcing.md
-├── API/                               # API specifications & gateway design
-│   ├── FleetVision-API-Gateway-Architecture.md
-│   └── FleetVision-OpenAPI-v1.yaml
-├── Database/                          # Database architecture & schemas
-│   └── FleetVision-Database-Architecture.md
-├── Security/                          # Security architecture & threat model
-│   └── FleetVision-Security-Architecture.md
-├── Diagrams/                          # C4 & deployment diagrams
-│   └── FleetVision-C4-Diagrams.md
-├── Documents/                         # Additional documentation
-├── docs/
-│   ├── adr/                           # Additional ADR storage
-│   ├── api-specs/                     # Additional API specifications
-│   ├── architecture/                  # Supplementary architecture docs
-│   ├── diagrams/                      # Supplementary diagrams
+├── docs/                              # All documentation (single location)
+│   ├── architecture/                  # Architecture + domain + database docs
+│   │   ├── FleetVision-Master-Architecture.md
+│   │   ├── FleetVision-Infrastructure-Architecture.md
+│   │   ├── FleetVision-Event-Driven-Architecture.md
+│   │   ├── FleetVision-Domain-Model.md
+│   │   └── FleetVision-Database-Architecture.md
+│   ├── specs/                         # Numbered & named design specs (vision, master, domain, DB, engines, API/SDK, TDR, codebase)
+│   ├── modules/                       # Bounded-context module specs (24)
+│   ├── adr/                           # Architecture Decision Records (4 implemented)
+│   │   ├── ADR-001-CQRS-Event-Sourcing.md
+│   │   ├── ADR-019-Architecture-Consistency-Reconciliation.md
+│   │   ├── ADR-021-Node-NestJS-Runtime.md
+│   │   └── ADR-022-Lean-Persistence.md
+│   ├── api-specs/                     # API specifications & gateway design
+│   │   ├── FleetVision-API-Gateway-Architecture.md
+│   │   └── FleetVision-OpenAPI-v1.yaml
+│   ├── diagrams/                      # C4 & deployment diagrams
+│   │   └── FleetVision-C4-Diagrams.md
+│   ├── security/                      # Security architecture & threat model
+│   │   └── FleetVision-Security-Architecture.md
 │   ├── governance/
 │   │   └── FleetVision-Governance-Standards.md
-│   ├── runbooks/
-│   │   ├── ci-cd-pipeline.md
-│   │   └── monitoring-observability.md
-│   └── security/                      # Supplementary security docs
-└── infrastructure/                    # (future) Terraform, Helm, Kustomize
+│   └── runbooks/
+│       ├── ci-cd-pipeline.md
+│       └── monitoring-observability.md
+├── apps/                              # Deployable services (NestJS apps)
+├── packages/                          # Shared workspace packages (shared-kernel, config, ...)
+├── tools/                             # Generators & dev tooling
+└── infra/                             # Docker compose stack + env templates
 ```
 
 ---
@@ -230,3 +215,74 @@ FleetVision/
 ---
 
 *This architecture is designed as a multi-year software product. All documents are implementation-ready and cross-referenced for consistency.*
+
+---
+
+## Getting Started (Sprint 1)
+
+> Sprint 1 delivers a **runnable pnpm monorepo** realizing the architecture in
+> `docs/specs/22_Codebase_Architecture.md` and ADR-021/022 (Node.js LTS + NestJS +
+> TypeScript). One reference service — `identity-service` — boots end-to-end,
+> proving the foundation: config → logger → health → PostgreSQL/knex migration →
+> Redis, with graceful shutdown.
+
+### Prerequisites
+
+- **Node 22 LTS** (`.nvmrc`)
+- **Docker Desktop** (for the local infra stack)
+- **pnpm** — enabled via Node's bundled Corepack (no global install):
+  ```bash
+  corepack enable && corepack prepare pnpm@9.15.0 --activate
+  ```
+
+### Bootstrap
+
+```bash
+# 1. Install dependencies (one deterministic lockfile)
+pnpm install
+
+# 2. Bring up the lean stack (Postgres+Timescale, Redis, Kafka, RabbitMQ, MinIO)
+cp infra/docker/.env.example infra/docker/.env   # then edit secrets
+pnpm stack:up
+
+# 3. Run the reference service (auto-loads infra/docker/.env into the process env)
+pnpm dev          # boots identity-service on :3000
+
+# 4. Verify the foundation
+curl http://localhost:3000/health/live   # 200 — process is up
+curl http://localhost:3000/health/ready  # 200 + postgres/redis indicators up
+```
+
+### Quality gates
+
+```bash
+pnpm lint        # Biome check
+pnpm typecheck   # tsc -b (composite project graph) + per-package --noEmit
+pnpm build       # tsc -b builds every package + the app
+pnpm test        # jest across the workspace
+```
+
+### What's in the workspace
+
+```
+packages/
+  shared-kernel/      DDD primitives, branded ids, value objects, tenancy
+  config/             zod-validated env loader (crash-fast)
+  observability/      pino logger + W3C traceparent correlation
+  persistence-knex/   PgBouncer-aware knex client, BaseRepository, migrations runner
+  cache-redis/        ioredis client + RedisModule
+  health/             @nestjs/terminus /health/live + /health/ready
+  web/                JSON:API error envelope + global exception filter stub
+apps/
+  identity-service/   the reference service (registry #1)
+infra/docker/         compose stack + .env template
+```
+
+### Done vs. planned
+
+**Done (Sprint 1):** monorepo foundation, all 7 shared packages, the reference
+service, the full Docker stack, CI, graceful shutdown, health checks.
+
+**Planned (Sprint 2+):** business/aggregate domain code, REST CRUD verticals,
+Kafka producers/consumers, gRPC, CQRS bus, event store, auth/OPA, the service
+generator, ArgoCD/Istio/Helm/Terraform, Pact contract tests, front-end.

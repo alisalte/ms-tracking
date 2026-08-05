@@ -1,0 +1,51 @@
+# FleetVision CI — Sprint 1 base pipeline (Sprint 1 plan Deliverable 5).
+# Single job, no matrix. Installs via Corepack-bundled pnpm, then typecheck +
+# Biome lint/format + build + unit tests across the whole workspace.
+# Matrix/scan/sign gates land in Sprint 2.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint • typecheck • build • test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm via Corepack
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+      - name: Setup pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test

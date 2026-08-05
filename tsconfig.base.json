@@ -1,0 +1,36 @@
+{
+  "//": "Shared, strict TypeScript config inherited by every package/app via `extends ../../tsconfig.base.json`. Enforces ADR-021 §2.1 (strict TS end-to-end) and Codebase Architecture §15 (strict TS guardrail).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+
+    "resolveJsonModule": true,
+    "useDefineForClassFields": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "exclude": ["**/node_modules", "**/dist", "**/coverage"]
+}

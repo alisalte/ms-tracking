@@ -32,7 +32,7 @@
 
 ### 1.3 ADR Process
 
-1. **Propose:** Author creates ADR draft in `/Decisions/ADR-NNN-{title}.md`
+1. **Propose:** Author creates ADR draft in `/docs/adr/ADR-NNN-{title}.md`
 2. **Review:** ARB reviews at weekly meeting
 3. **Decide:** Accept / Reject / Defer with rationale
 4. **Implement:** Development proceeds per ADR
@@ -319,14 +319,14 @@ break(fuel): change fuel transaction event schema v1→v2 [FUEL-6666]
 
 | Document | Owner | Review Cycle | Location |
 |---|---|---|---|
-| Master Architecture Document | Chief Architect | Quarterly | `/Architecture/FleetVision-Master-Architecture.md` |
-| Domain Model | Domain Expert | Per release | `/Domain/FleetVision-Domain-Model.md` |
-| Architecture Decision Records | Author + ARB | Annual | `/Decisions/ADR-NNN-{title}.md` |
-| Module Design Document | Service Owner | Per release | `/Modules/{Context-Name}.md` |
+| Master Architecture Document | Chief Architect | Quarterly | `/docs/architecture/FleetVision-Master-Architecture.md` |
+| Domain Model | Domain Expert | Per release | `/docs/architecture/FleetVision-Domain-Model.md` |
+| Architecture Decision Records | Author + ARB | Annual | `/docs/adr/ADR-NNN-{title}.md` |
+| Module Design Document | Service Owner | Per release | `/docs/modules/{Context-Name}.md` |
 | API Specification | API Owner | Per API change | `/API/{service}-api.yaml` |
 | Database Schema | DBA + Service Owner | Per migration | `/Database/{schema}.sql` |
-| Security Architecture | Security Architect | Quarterly | `/Security/FleetVision-Security-Architecture.md` |
-| Infrastructure Architecture | Platform Lead | Quarterly | `/Architecture/FleetVision-Infrastructure-Architecture.md` |
+| Security Architecture | Security Architect | Quarterly | `/docs/security/FleetVision-Security-Architecture.md` |
+| Infrastructure Architecture | Platform Lead | Quarterly | `/docs/architecture/FleetVision-Infrastructure-Architecture.md` |
 | Runbook | Service Owner + SRE | Per incident/process change | `/docs/runbooks/{name}.md` |
 | Governance Standards | Chief Architect | Semi-annually | `/docs/governance/FleetVision-Governance-Standards.md` |
 

@@ -1,0 +1,6 @@
+# pnpm workspace declaration — single source of truth for the monorepo graph.
+# Mirrors docs/specs/22_Codebase_Architecture.md §2 (apps/* + packages/*).
+# `generated/*` will be added once buf/avro codegen lands (Sprint 2+).
+packages:
+  - 'apps/*'
+  - 'packages/*'

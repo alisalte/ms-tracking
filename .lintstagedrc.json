@@ -1,0 +1,4 @@
+{
+  "*.{ts,mts,cts,js,mjs,cjs,json,jsonc}": ["biome check --write --no-errors-on-unmatched"],
+  "*.{ts,mts,cts}": ["tsc --noEmit -p tsconfig.base.json"]
+}

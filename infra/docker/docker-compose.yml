@@ -1,0 +1,138 @@
+# FleetVision local lean stack (docs/specs/01_Master_Architecture.md §4.2, TDR §0/§2/§4/§5/§6).
+# Brings up the shared infrastructure every service depends on for local dev.
+#
+#   pnpm stack:up     # docker compose -f infra/docker/docker-compose.yml up -d
+#   pnpm stack:down
+#
+# Named volumes (no host bind) keep the DB/MinIO data portable across Windows/Linux
+# (Sprint 1 plan risk note). Ports are exposed on the host only for local dev.
+
+name: fleetvision
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: fleetvision-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fleetvision}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleetvision}
+      POSTGRES_DB: ${POSTGRES_DB:-fleetvision}
+      # TimescaleDB + trigram + uuid-ossp for the fleet schema (docs/specs/03_Database_Architecture.md §4).
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb
+      - -c
+      - timescaledb.telemetry_level=off
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init/postgres.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleetvision} -d ${POSTGRES_DB:-fleetvision}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: fleetvision-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: fleetvision-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo srvr | nc localhost 2181 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    # Single-broker dev profile with topic auto-create (Sprint 1 plan Deliverable 4).
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: fleetvision-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:${KAFKA_PORT:-9092}
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: fleetvision-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fleetvision}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-fleetvision}
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    # S3-API object storage (sovereign/edge parity, TDR §6).
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: fleetvision-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-fleetvision}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fleetvision-secret}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+  minio-data:

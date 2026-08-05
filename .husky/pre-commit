@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Husky pre-commit hook — runs Biome (format + lint) on staged files via lint-staged.
+# Config: .lintstagedrc.json at repo root.
+npx lint-staged
