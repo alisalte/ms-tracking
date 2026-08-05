@@ -9,6 +9,7 @@
     { "path": "packages/cache-redis" },
     { "path": "packages/health" },
     { "path": "packages/web" },
-    { "path": "apps/identity-service" }
+    { "path": "apps/identity-service" },
+    { "path": "apps/device-gateway-service" }
   ]
 }
