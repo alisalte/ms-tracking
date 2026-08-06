@@ -104,9 +104,37 @@ export class PacketDispatcher {
 
       // Non-LOGIN messages require an already-authenticated session (06 §6.1 #1).
       if (!session.canPublish()) {
-        // Pre-auth frame that isn't a LOGIN → drop silently (do not publish).
-        // The auth-grace heartbeat policy will close the session if it never logs in.
-        continue;
+        // Implicit login (06 §7): some protocols carry the device identity in
+        // every packet and never send a dedicated LOGIN (e.g. Meitrack embeds
+        // the IMEI in each frame). For a pre-auth message that already carries a
+        // serialOrImei, resolve + authenticate here, then fall through to publish
+        // the real payload — exactly as a LOGIN would. This mirrors the reference
+        // model where the first packet establishes the session. It is strictly
+        // gated: messages with no serialOrImei (GT06 non-LOGIN frames) keep the
+        // original anonymous pre-auth drop behavior, so existing adapters are
+        // unaffected.
+        if (!msg.serialOrImei) {
+          continue; // anonymous pre-auth frame → drop silently; auth-grace closes later.
+        }
+        const outcome = await this.deps.authResolver.resolve(msg.serialOrImei);
+        if (!outcome.ok) {
+          return {
+            published: 0,
+            authenticated: false,
+            close: true,
+            closeReason: 'AUTH_FAILED',
+          };
+        }
+        if (session.state === 'NEW') session.identify(raw.receivedAt);
+        session.authenticate({
+          deviceId: outcome.device.deviceId,
+          tenantId: outcome.device.tenantId,
+          serialOrImei: msg.serialOrImei,
+          now: raw.receivedAt,
+        });
+        await this.deps.sessionManager.registerAuthenticated(session);
+        authenticated = true;
+        // Fall through: publish the (now identity-bound) real payload.
       }
 
       // Stage 4: normalize — identity is already bound; stamp it onto the message.

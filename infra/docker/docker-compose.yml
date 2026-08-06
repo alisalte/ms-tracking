@@ -11,14 +11,14 @@ name: fleetvision
 
 services:
   postgres:
-    image: timescale/timescaledb:2.17.2-pg16
+    image: timescale/timescaledb-ha:pg16
     container_name: fleetvision-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-fleetvision}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleetvision}
       POSTGRES_DB: ${POSTGRES_DB:-fleetvision}
-      # TimescaleDB + trigram + uuid-ossp for the fleet schema (docs/specs/03_Database_Architecture.md §4).
+      # TimescaleDB + PostGIS + trigram + uuid-ossp (docs/specs/03_Database_Architecture.md §4).
     command:
       - postgres
       - -c

@@ -148,6 +148,57 @@ describe('PacketDispatcher — fail-closed pipeline (06 §8, §6.1)', () => {
     expect(session.state).toBe('NEW'); // unchanged
   });
 
+  it('implicit login: a pre-auth non-LOGIN message carrying an IMEI authenticates + publishes (Meitrack model, 06 §7)', async () => {
+    const { deps, kafka } = buildDeps();
+    const dispatcher = new PacketDispatcher(deps);
+    const session = newSession(); // NEW — no LOGIN sent
+    const position = new DeviceMessage({
+      messageId: 'm2b',
+      deviceId: '',
+      serialOrImei: 'imei-1', // identity embedded in the payload (Meitrack-style)
+      tenantId: '',
+      protocolId: 'meitrack',
+      type: 'POSITION',
+      timestamp: NOW,
+      ingestedAt: NOW,
+      rawSize: 2,
+      checksum: 'abc',
+      direction: 'INBOUND',
+    });
+    const result = await dispatcher.dispatch(session, fakeAdapter([position]), rawPacket());
+    expect(result.authenticated).toBe(true);
+    expect(result.close).toBe(false);
+    expect(session.state).toBe('ACTIVE'); // POSITION after auth → ACTIVE
+    expect(session.deviceId).toBe('dev-1');
+    expect(session.tenantId).toBe('tenant-1');
+    expect(kafka.published).toHaveLength(1); // the POSITION published, not dropped
+    expect(kafka.published[0]?.deviceId).toBe('dev-1');
+    expect(kafka.published[0]?.type).toBe('POSITION');
+  });
+
+  it('implicit login fails closed when the embedded IMEI is unknown', async () => {
+    const { deps, kafka } = buildDeps();
+    const dispatcher = new PacketDispatcher(deps);
+    const session = newSession();
+    const position = new DeviceMessage({
+      messageId: 'm2c',
+      deviceId: '',
+      serialOrImei: 'no-such-imei',
+      tenantId: '',
+      protocolId: 'meitrack',
+      type: 'POSITION',
+      timestamp: NOW,
+      ingestedAt: NOW,
+      rawSize: 2,
+      checksum: 'abc',
+      direction: 'INBOUND',
+    });
+    const result = await dispatcher.dispatch(session, fakeAdapter([position]), rawPacket());
+    expect(result.close).toBe(true);
+    expect(result.closeReason).toBe('AUTH_FAILED');
+    expect(kafka.published).toHaveLength(0);
+  });
+
   it('auth failure on LOGIN closes the session (fail-closed, 06 §7.3)', async () => {
     const { deps, kafka } = buildDeps({
       authOutcome: { ok: false, reason: 'unknown' },
