@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft } from 'lucide-react';
 import {
   Alert,
   Box,
@@ -11,11 +10,12 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import { resetPassword as resetPasswordApi } from '@/api/auth.api';
 import { FormAlert } from '@/components/form/FormAlert';
@@ -90,7 +90,11 @@ export function ResetPasswordPage() {
     <Card sx={{ width: '100%', maxWidth: 420 }}>
       <CardContent sx={{ p: 4 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <IconButton size="small" onClick={() => navigate('/login')} aria-label={t('common.backToLogin')}>
+          <IconButton
+            size="small"
+            onClick={() => navigate('/login')}
+            aria-label={t('common.backToLogin')}
+          >
             <ArrowLeft size={20} />
           </IconButton>
           <Typography variant="h5" fontWeight={700}>
@@ -117,7 +121,9 @@ export function ResetPasswordPage() {
                 autoFocus
                 disabled={isSubmitting}
                 error={Boolean(errors.password)}
-                helperText={errors.password ? t(errors.password.message!) : t('auth.passwordPolicy')}
+                helperText={
+                  errors.password ? t(errors.password?.message ?? '') : t('auth.passwordPolicy')
+                }
               />
             )}
           />
@@ -133,7 +139,7 @@ export function ResetPasswordPage() {
                 autoCompleteValue="new-password"
                 disabled={isSubmitting}
                 error={Boolean(errors.confirmPassword)}
-                helperText={errors.confirmPassword ? t(errors.confirmPassword.message!) : ' '}
+                helperText={errors.confirmPassword ? t(errors.confirmPassword?.message ?? '') : ' '}
               />
             )}
           />

@@ -11,6 +11,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { resolveMock } from '@/lib/mock-gate';
 import {
   mockDeviceDetail,
   mockDevices,
@@ -22,8 +23,6 @@ import {
 } from '@/mock/asset-data';
 import type { Device, Driver, Vehicle, VehicleGroup } from '@/types/asset.types';
 import { queryKeys } from './query-keys';
-import { resolveMock } from '@/lib/mock-gate';
-
 
 // ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
 

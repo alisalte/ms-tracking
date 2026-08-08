@@ -4,8 +4,12 @@
  * Drives the full flow documented in `10_Live_Video.md` §3.1: mock-REST mints
  * the session, the mock signaling client advances `connecting → active`, and
  * the stream library produces a synthetic `MediaStream` to attach to `<video>`.
- * Tears down cleanly on unmount or when the channel/quality changes (idle
- * auto-close, 10 §2.5).
+ *
+ * v2 enhancements:
+ * - Connection timeout (auto-fail after 10s if negotiation doesn't complete)
+ * - Error state (stream lifecycle surfaces `error` for the tile to display)
+ * - Automatic reconnect with backoff (on error, up to 3 retries)
+ * - Cleanup guarantees (teardown always closes handles + clears timers)
  *
  * Swap path: replace the mock body with `apiPost('/media/streams')` + a real
  * `RTCPeerConnection` driven by `MediaSignalingClient` (Socket.IO). The hook's
@@ -24,10 +28,21 @@ export interface StreamSessionHook {
   stream: MediaStream | null;
   /** Switch the simulcast layer (10 §2.3). */
   setQuality: (q: StreamQuality) => void;
+  /** Manually retry the connection (after an error). */
+  retry: () => void;
 }
 
 /** Heartbeat interval for live latency/signal refresh (simulated). */
 const STATS_REFRESH_MS = 2000;
+
+/** Connection timeout — if negotiation doesn't complete in 10s, mark as error. */
+const CONNECTION_TIMEOUT_MS = 10_000;
+
+/** Max automatic reconnect attempts. */
+const MAX_RETRIES = 3;
+
+/** Base backoff delay for reconnect. */
+const RECONNECT_BASE_MS = 1000;
 
 /**
  * @param channel The camera channel to stream, or null to stay idle.
@@ -40,30 +55,53 @@ export function useStreamSession(
   const [session, setSession] = useState<StreamSession | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [currentQuality, setCurrentQuality] = useState<StreamQuality>(quality);
+  const [retryTrigger, setRetryTrigger] = useState(0);
 
-  // Refs hold the live resources so cleanup always closes the right handle.
   const handleRef = useRef<StreamHandle | null>(null);
   const signalingRef = useRef(new MockMediaSignalingClient());
   const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef = useRef(0);
 
-  const stopStats = useCallback(() => {
+  const stopTimers = useCallback(() => {
     if (statsTimerRef.current !== null) {
       clearInterval(statsTimerRef.current);
       statsTimerRef.current = null;
     }
+    if (timeoutTimerRef.current !== null) {
+      clearTimeout(timeoutTimerRef.current);
+      timeoutTimerRef.current = null;
+    }
+    if (reconnectTimerRef.current !== null) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
   }, []);
 
   const teardown = useCallback(() => {
-    stopStats();
+    stopTimers();
     if (handleRef.current) {
       handleRef.current.close();
       handleRef.current = null;
     }
     setStream(null);
     setSession((prev) => (prev ? { ...prev, state: 'closed' } : prev));
-  }, [stopStats]);
+  }, [stopTimers]);
 
-  // Open / re-open whenever the channel or quality changes.
+  /** Schedule an automatic reconnect with exponential backoff. */
+  const scheduleReconnect = useCallback(() => {
+    if (retryCountRef.current >= MAX_RETRIES) {
+      setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+      return;
+    }
+    const delay = RECONNECT_BASE_MS * 2 ** retryCountRef.current;
+    retryCountRef.current += 1;
+    reconnectTimerRef.current = setTimeout(() => setRetryTrigger((n) => n + 1), delay);
+  }, []);
+
+  // Open / re-open whenever the channel, quality, or retry trigger changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: teardown/stopTimers/scheduleReconnect use stable refs
   useEffect(() => {
     if (!channel) {
       teardown();
@@ -85,16 +123,34 @@ export function useStreamSession(
     handleRef.current = openStream(channel, currentQuality, { audio: true });
     setStream(handleRef.current.stream);
 
+    // Connection timeout — if negotiation doesn't complete, fail + retry.
+    timeoutTimerRef.current = setTimeout(() => {
+      if (cancelled) return;
+      if (handleRef.current) {
+        handleRef.current.close();
+        handleRef.current = null;
+      }
+      setStream(null);
+      setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+      scheduleReconnect();
+    }, CONNECTION_TIMEOUT_MS);
+
     // Drive the negotiation lifecycle via the (mock) signaling client.
     signalingRef.current
       .connect(initial.signalingToken, initial.websocketUrl)
       .then(() => signalingRef.current.negotiate(initial.sessionId))
       .then(({ latencyMs, signal }) => {
         if (cancelled) return;
+        // Clear the timeout — negotiation succeeded.
+        if (timeoutTimerRef.current !== null) {
+          clearTimeout(timeoutTimerRef.current);
+          timeoutTimerRef.current = null;
+        }
+        retryCountRef.current = 0;
         setSession({ ...initial, state: 'active', latencyMs, signal });
 
         // Refresh live stats on a heartbeat so the latency badge feels alive.
-        stopStats();
+        stopTimers();
         statsTimerRef.current = setInterval(() => {
           setSession((prev) => {
             if (!prev) return prev;
@@ -104,19 +160,30 @@ export function useStreamSession(
             return { ...prev, latencyMs: nextLatency, signal: nextSignal };
           });
         }, STATS_REFRESH_MS);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        teardown();
+        setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+        scheduleReconnect();
       });
 
     return () => {
       cancelled = true;
       teardown();
     };
-  }, [channel, currentQuality, teardown, stopStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel, currentQuality, retryTrigger]);
 
   const setQuality = useCallback((q: StreamQuality) => {
     setCurrentQuality(q);
-    // The effect above re-runs (new quality → re-open); in production this is
-    // an in-band simulcast layer switch with no re-pull.
   }, []);
 
-  return { session, stream, setQuality };
+  /** Manual retry — resets the retry counter and re-triggers the effect. */
+  const retry = useCallback(() => {
+    retryCountRef.current = 0;
+    setRetryTrigger((n) => n + 1);
+  }, []);
+
+  return { session, stream, setQuality, retry };
 }

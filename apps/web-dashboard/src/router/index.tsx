@@ -4,16 +4,19 @@ import { Navigate, createBrowserRouter } from 'react-router';
 import { ProtectedRoute } from '@/auth/auth.guard';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { AdminPage } from '@/pages/AdminPage';
+import { AlarmCenterPage } from '@/pages/AlarmCenterPage';
+import { AssetManagementPage } from '@/pages/AssetManagementPage';
+import { CommandCenterPage } from '@/pages/CommandCenterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
+import { GeofencePage } from '@/pages/GeofencePage';
 import { LoginPage } from '@/pages/LoginPage';
+import { MaintenancePage } from '@/pages/MaintenancePage';
 import { MapPage } from '@/pages/MapPage';
 import { MfaVerifyPage } from '@/pages/MfaVerifyPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
-import { AdminPage } from '@/pages/AdminPage';
-import { AlarmCenterPage } from '@/pages/AlarmCenterPage';
-import { AssetManagementPage } from '@/pages/AssetManagementPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TripDetailPage } from '@/pages/TripDetailPage';
@@ -135,6 +138,18 @@ export const router = createBrowserRouter([
           {
             path: '/admin',
             element: <AdminPage />,
+          },
+          {
+            path: '/geofences',
+            element: <GeofencePage />,
+          },
+          {
+            path: '/commands',
+            element: <CommandCenterPage />,
+          },
+          {
+            path: '/maintenance',
+            element: <MaintenancePage />,
           },
           {
             path: '/account/profile',

@@ -1,10 +1,4 @@
 import {
-  ArrowLeft,
-  KeyRound,
-  Smartphone,
-  ShieldAlert,
-} from 'lucide-react';
-import {
   Alert,
   Box,
   Button,
@@ -17,6 +11,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { ArrowLeft, KeyRound, ShieldAlert, Smartphone } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -71,7 +66,7 @@ export function MfaVerifyPage() {
       return;
     }
     const next = [...digits];
-    next[index] = cleaned[0]!;
+    next[index] = cleaned[0] ?? '';
     setDigits(next);
     if (index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
@@ -130,7 +125,11 @@ export function MfaVerifyPage() {
     <Card sx={{ width: '100%', maxWidth: 420 }}>
       <CardContent sx={{ p: 4 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-          <IconButton size="small" onClick={() => navigate('/login')} aria-label={t('common.backToLogin')}>
+          <IconButton
+            size="small"
+            onClick={() => navigate('/login')}
+            aria-label={t('common.backToLogin')}
+          >
             <ArrowLeft size={20} />
           </IconButton>
           <Typography variant="h5" fontWeight={700}>
@@ -161,6 +160,7 @@ export function MfaVerifyPage() {
         <Stack direction="row" spacing={1} justifyContent="center" sx={{ mb: 3 }}>
           {digits.map((digit, i) => (
             <Input
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed-position OTP inputs
               key={i}
               inputRef={(el) => {
                 inputRefs.current[i] = el;

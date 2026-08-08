@@ -44,7 +44,11 @@ export const usernameSchema = z
   .max(64, { message: 'validation.username.tooLong' });
 
 /** Display name: optional, max 128 (matches the backend schema). */
-export const displayNameSchema = z.string().trim().max(128, { message: 'validation.displayName.tooLong' }).optional();
+export const displayNameSchema = z
+  .string()
+  .trim()
+  .max(128, { message: 'validation.displayName.tooLong' })
+  .optional();
 
 /**
  * Password + confirmation pair. Validates that the two fields match and

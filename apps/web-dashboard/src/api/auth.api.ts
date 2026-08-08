@@ -1,3 +1,4 @@
+import { NotImplementedError } from '@/lib/errors';
 import type {
   ForgotPasswordPayload,
   LoginResponse,
@@ -12,7 +13,6 @@ import type {
   ResetPasswordPayload,
   User,
 } from '@/types/auth.types';
-import { NotImplementedError } from '@/lib/errors';
 import { apiGet, apiPost, apiPostNoContent } from './client';
 
 /**

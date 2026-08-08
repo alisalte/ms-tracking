@@ -165,7 +165,10 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
       </Typography>
       <Typography
         variant="body2"
-        sx={{ fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit', wordBreak: 'break-all' }}
+        sx={{
+          fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit',
+          wordBreak: 'break-all',
+        }}
       >
         {value}
       </Typography>

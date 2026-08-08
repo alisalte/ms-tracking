@@ -146,4 +146,20 @@ export async function apiPostNoContent(url: string, body?: unknown): Promise<voi
   await apiClient.post(url, body);
 }
 
+/**
+ * Typed DELETE request that unwraps the { data: T } envelope.
+ */
+export async function apiDelete<T = void>(url: string): Promise<T> {
+  const response = await apiClient.delete<ApiResponse<T>>(url);
+  return response.data.data;
+}
+
+/**
+ * Typed PUT request that unwraps the { data: T } envelope.
+ */
+export async function apiPut<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {
+  const response = await apiClient.put<ApiResponse<TRes>>(url, body);
+  return response.data.data;
+}
+
 export { apiClient };

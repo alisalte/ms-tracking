@@ -107,13 +107,7 @@ export interface ActivityBucket {
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 
 /** Alert category — selects the icon + i18n label. */
-export type AlertType =
-  | 'overspeed'
-  | 'idle'
-  | 'geofence'
-  | 'fcw'
-  | 'dtc'
-  | 'lowBattery';
+export type AlertType = 'overspeed' | 'idle' | 'geofence' | 'fcw' | 'dtc' | 'lowBattery';
 
 /** A live alert row in the Active Alerts panel. */
 export interface FleetAlert {
@@ -149,13 +143,7 @@ export interface FleetUtilization {
 }
 
 /** Weather condition — selects the icon. */
-export type WeatherCondition =
-  | 'clear'
-  | 'partly-cloudy'
-  | 'cloudy'
-  | 'rain'
-  | 'storm'
-  | 'snow';
+export type WeatherCondition = 'clear' | 'partly-cloudy' | 'cloudy' | 'rain' | 'storm' | 'snow';
 
 /** Current + 3-day forecast for the weather widget. */
 export interface WeatherSnapshot {

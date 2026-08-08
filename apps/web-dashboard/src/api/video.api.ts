@@ -16,12 +16,11 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
+import { resolveMock } from '@/lib/mock-gate';
 import { captureSnapshot, downloadBlob } from '@/lib/video-stream';
 import { mockChannels, mockVideoWalls } from '@/mock/video-data';
 import type { CameraChannel, VideoWall } from '@/types/video.types';
 import { queryKeys } from './query-keys';
-import { resolveMock } from '@/lib/mock-gate';
-
 
 // ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
 

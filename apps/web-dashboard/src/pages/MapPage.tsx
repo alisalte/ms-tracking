@@ -1,12 +1,15 @@
-import { Box, Stack } from '@mui/material';
+import { Map as MapIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useMapVehicles } from '@/api/fleet.api';
+import { ErrorState } from '@/components/common/ErrorState';
 import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
 import { FleetMap } from '@/components/map/FleetMap';
 import { MapToolbar } from '@/components/map/MapToolbar';
 import type { StatusFilter } from '@/components/map/types';
+import { Box, CircularProgress, Stack, Typography } from '@mui/material';
 
 /**
  * MapPage — the Live Tracking map dashboard (UI_UX_Design.md §2).
@@ -16,11 +19,11 @@ import type { StatusFilter } from '@/components/map/types';
  * the shared UI state (selected vehicle, search query, status filter, paused)
  * and derives the filtered fleet that both the list and the map consume.
  *
- * The AppLayout content area adds `p: 3`; this page neutralizes it with a
- * negative margin so the map reaches the edges (§2.2 full-bleed).
+ * Includes loading skeleton, error state, and empty state (FE-03).
  */
 export function MapPage() {
-  const { data } = useMapVehicles();
+  const { t } = useTranslation();
+  const { data, isLoading, isError, error, refetch } = useMapVehicles();
   const vehicles = data ?? [];
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -55,6 +58,33 @@ export function MapPage() {
       );
     });
   }, [vehicles, query, status]);
+
+  // ── Loading state ──
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // ── Error state ──
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} />;
+  }
+
+  // ── Empty state ──
+  if (vehicles.length === 0) {
+    return (
+      <Stack alignItems="center" justifyContent="center" gap={2} sx={{ py: 8 }}>
+        <MapIcon size={48} color="#64748B" />
+        <Typography variant="h6">{t('map.noResults')}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t('map.emptyHelp', { defaultValue: 'No vehicles are being tracked yet.' })}
+        </Typography>
+      </Stack>
+    );
+  }
 
   return (
     <Box

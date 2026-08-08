@@ -20,22 +20,22 @@ import {
 import {
   BarChart3,
   Bell,
-  CheckCircle,
   ChevronLeft,
-  Fuel,
   HelpCircle,
   LayoutDashboard,
   LogOut,
   Map as MapIcon,
+  MapPin,
   Moon,
   Navigation,
   Search,
   Settings,
   Sun,
+  TerminalSquare,
   Truck,
+  UserCircle,
   Users,
   Video,
-  UserCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -59,10 +59,13 @@ const navItems = [
   { key: 'drivers', path: '/drivers', icon: <Users size={20} /> },
   { key: 'trips', path: '/trips', icon: <Navigation size={20} /> },
   { key: 'video', path: '/video', icon: <Video size={20} /> },
+  { key: 'alarms', path: '/alarms', icon: <Bell size={20} /> },
+  { key: 'geofences', path: '/geofences', icon: <MapPin size={20} /> },
+  { key: 'commands', path: '/commands', icon: <TerminalSquare size={20} /> },
+  { key: 'assets', path: '/assets', icon: <Truck size={20} /> },
   { key: 'maintenance', path: '/maintenance', icon: <Settings size={20} /> },
-  { key: 'compliance', path: '/compliance', icon: <CheckCircle size={20} /> },
-  { key: 'fuel', path: '/fuel', icon: <Fuel size={20} /> },
   { key: 'reports', path: '/reports', icon: <BarChart3 size={20} /> },
+  { key: 'admin', path: '/admin', icon: <Settings size={20} /> },
 ] as const;
 
 /**

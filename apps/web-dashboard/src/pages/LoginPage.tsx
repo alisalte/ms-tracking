@@ -97,7 +97,7 @@ export function LoginPage() {
                 autoFocus
                 disabled={isLoading}
                 error={Boolean(errors.tenantId)}
-                helperText={errors.tenantId ? t(errors.tenantId.message!) : ' '}
+                helperText={errors.tenantId ? t(errors.tenantId?.message ?? '') : ' '}
               />
             )}
           />
@@ -116,7 +116,7 @@ export function LoginPage() {
                 autoComplete="email"
                 disabled={isLoading}
                 error={Boolean(errors.email)}
-                helperText={errors.email ? t(errors.email.message!) : ' '}
+                helperText={errors.email ? t(errors.email?.message ?? '') : ' '}
               />
             )}
           />
@@ -134,7 +134,7 @@ export function LoginPage() {
                 autoCompleteValue="current-password"
                 disabled={isLoading}
                 error={Boolean(errors.password)}
-                helperText={errors.password ? t(errors.password.message!) : ' '}
+                helperText={errors.password ? t(errors.password?.message ?? '') : ' '}
               />
             )}
           />

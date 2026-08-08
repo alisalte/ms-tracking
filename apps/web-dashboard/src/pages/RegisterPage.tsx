@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft } from 'lucide-react';
 import {
   Box,
   Button,
@@ -11,6 +10,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -87,7 +87,11 @@ export function RegisterPage() {
     <Card sx={{ width: '100%', maxWidth: 460 }}>
       <CardContent sx={{ p: 4 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-          <IconButton size="small" onClick={() => navigate('/login')} aria-label={t('common.backToLogin')}>
+          <IconButton
+            size="small"
+            onClick={() => navigate('/login')}
+            aria-label={t('common.backToLogin')}
+          >
             <ArrowLeft size={20} />
           </IconButton>
           <Typography variant="h5" fontWeight={700}>
@@ -111,7 +115,7 @@ export function RegisterPage() {
                 autoComplete="email"
                 disabled={isSubmitting}
                 error={Boolean(errors.email)}
-                helperText={errors.email ? t(errors.email.message!) : ' '}
+                helperText={errors.email ? t(errors.email?.message ?? '') : ' '}
               />
             )}
           />
@@ -127,7 +131,9 @@ export function RegisterPage() {
                 autoComplete="username"
                 disabled={isSubmitting}
                 error={Boolean(errors.username)}
-                helperText={errors.username ? t(errors.username.message!) : t('auth.usernameHelp')}
+                helperText={
+                  errors.username ? t(errors.username?.message ?? '') : t('auth.usernameHelp')
+                }
               />
             )}
           />
@@ -143,7 +149,7 @@ export function RegisterPage() {
                 autoComplete="name"
                 disabled={isSubmitting}
                 error={Boolean(errors.displayName)}
-                helperText={errors.displayName ? t(errors.displayName.message!) : ' '}
+                helperText={errors.displayName ? t(errors.displayName?.message ?? '') : ' '}
               />
             )}
           />
@@ -159,7 +165,9 @@ export function RegisterPage() {
                 autoCompleteValue="new-password"
                 disabled={isSubmitting}
                 error={Boolean(errors.password)}
-                helperText={errors.password ? t(errors.password.message!) : t('auth.passwordPolicy')}
+                helperText={
+                  errors.password ? t(errors.password?.message ?? '') : t('auth.passwordPolicy')
+                }
               />
             )}
           />
@@ -175,7 +183,7 @@ export function RegisterPage() {
                 autoCompleteValue="new-password"
                 disabled={isSubmitting}
                 error={Boolean(errors.confirmPassword)}
-                helperText={errors.confirmPassword ? t(errors.confirmPassword.message!) : ' '}
+                helperText={errors.confirmPassword ? t(errors.confirmPassword?.message ?? '') : ' '}
               />
             )}
           />

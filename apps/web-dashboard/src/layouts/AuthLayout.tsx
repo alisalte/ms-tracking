@@ -1,5 +1,5 @@
 import { Box, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { ShieldCheck, Truck, MapPin, Camera, Activity } from 'lucide-react';
+import { Activity, Camera, MapPin, ShieldCheck, Truck } from 'lucide-react';
 import { Outlet } from 'react-router';
 
 /**
@@ -42,8 +42,7 @@ export function AuthLayout() {
           p: 8,
           position: 'relative',
           overflow: 'hidden',
-          background:
-            'linear-gradient(160deg, #0B1120 0%, #131C31 40%, #1E3A5F 100%)',
+          background: 'linear-gradient(160deg, #0B1120 0%, #131C31 40%, #1E3A5F 100%)',
         }}
       >
         {/* Decorative radial glow */}

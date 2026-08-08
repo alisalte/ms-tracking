@@ -11,6 +11,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { resolveMock } from '@/lib/mock-gate';
 import { downloadBlob } from '@/lib/video-stream';
 import {
   mockChartSeries,
@@ -29,8 +30,6 @@ import type {
   ReportJob,
 } from '@/types/report.types';
 import { queryKeys } from './query-keys';
-import { resolveMock } from '@/lib/mock-gate';
-
 
 // ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
 

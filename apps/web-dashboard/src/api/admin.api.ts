@@ -19,10 +19,8 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { downloadBlob } from '@/lib/video-stream';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
-import { apiGet, apiPost, apiPostNoContent } from './client';
-import { queryKeys } from './query-keys';
+import { downloadBlob } from '@/lib/video-stream';
 import {
   PERMISSION_CATALOG,
   mockAuditEntries,
@@ -39,6 +37,8 @@ import type {
   Role,
   TenantSettings,
 } from '@/types/admin.types';
+import { apiGet, apiPost, apiPostNoContent } from './client';
+import { queryKeys } from './query-keys';
 
 // ── identity-service wire format → UI type ───────────────────────────────────
 
@@ -170,7 +170,7 @@ export function useCreateUser() {
           });
           return mapUser(res.data);
         },
-        () => resolveMock({ ...mockUsers[0]!, ...input } as AdminUser),
+        () => resolveMock({ ...mockUsers[0], ...input } as AdminUser),
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.users() }),
@@ -193,7 +193,7 @@ export function useUpdateUser() {
           });
           return mapUser(res.data);
         },
-        () => resolveMock({ ...mockUsers[0]!, email: email ?? mockUsers[0]!.email } as AdminUser),
+        () => resolveMock({ ...mockUsers[0], email: email ?? mockUsers[0]?.email } as AdminUser),
       );
     },
     onSuccess: (_data, { id }) => {

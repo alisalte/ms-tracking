@@ -13,7 +13,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 
-import { queryKeys } from './query-keys';
+import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
 import {
   mockActivity,
   mockAlerts,
@@ -22,8 +22,8 @@ import {
   mockMapVehicles,
   mockTripDetail,
   mockTrips,
-  mockVehicleDetail,
   mockUtilization,
+  mockVehicleDetail,
   mockWeather,
 } from '@/mock/fleet-data';
 import type {
@@ -38,7 +38,7 @@ import type {
   VehicleDetail,
   WeatherSnapshot,
 } from '@/types/fleet.types';
-import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
+import { queryKeys } from './query-keys';
 
 // ── Fetchers ─────────────────────────────────────────────────────────────────
 // All mock-backed — these services (analytics, fleet, tracking, weather) don't
@@ -117,7 +117,10 @@ export function useFleetStats() {
 
 /** 24h fleet activity series for the stacked-area chart. */
 export function useFleetActivity(range: string) {
-  return useQuery({ queryKey: queryKeys.fleet.activity(range), queryFn: () => fetchActivity(range) });
+  return useQuery({
+    queryKey: queryKeys.fleet.activity(range),
+    queryFn: () => fetchActivity(range),
+  });
 }
 
 /** Severity-sorted active alerts. */

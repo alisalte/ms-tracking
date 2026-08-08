@@ -51,10 +51,15 @@
     "drivers": "Drivers",
     "trips": "Trips",
     "video": "Video",
+    "alarms": "Alarms",
+    "assets": "Assets",
     "maintenance": "Maintenance",
     "compliance": "Compliance",
     "fuel": "Fuel",
-    "reports": "Reports"
+    "reports": "Reports",
+    "admin": "Admin",
+    "geofences": "Geofences",
+    "commands": "Commands"
   },
   "common": {
     "search": "Search...",
@@ -72,10 +77,22 @@
     "lightMode": "Light mode",
     "language": "Language",
     "close": "Close",
+    "upcoming": "Coming soon",
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome back"
     }
+  },
+  "errors": {
+    "retry": "Retry",
+    "unauthorized": "Session expired",
+    "unauthorizedDesc": "Please sign in again.",
+    "forbidden": "Access denied",
+    "forbiddenDesc": "You don't have permission to view this.",
+    "network": "Connection error",
+    "networkDesc": "Unable to reach the server. Check your connection.",
+    "generic": "Something went wrong",
+    "genericDesc": "An unexpected error occurred. Please try again."
   },
   "dashboard": {
     "title": "Fleet Dashboard",
@@ -739,6 +756,24 @@
         "system": "System"
       }
     }
+  },
+  "geofences": {
+    "title": "Geofences",
+    "subtitle": "Manage geographic boundaries and alert rules",
+    "create": "Create",
+    "createTitle": "Create Geofence",
+    "name": "Name",
+    "radius": "Radius (m)",
+    "empty": "No geofences defined yet.",
+    "untitled": "Untitled Geofence"
+  },
+  "commands": {
+    "title": "Command Center",
+    "description": "Send commands to devices — request position, reboot, lock/unlock, engine cut, configuration, and OTA firmware updates."
+  },
+  "maintenance": {
+    "title": "Maintenance",
+    "description": "Work orders, preventive maintenance schedules, parts inventory, and maintenance history."
   },
   "profile": {
     "title": "Profile",

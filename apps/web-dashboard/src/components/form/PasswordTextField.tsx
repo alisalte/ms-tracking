@@ -1,5 +1,5 @@
-import { Eye, EyeOff } from 'lucide-react';
 import { IconButton, InputAdornment, TextField, type TextFieldProps } from '@mui/material';
+import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,8 +14,7 @@ import { useTranslation } from 'react-i18next';
  * label (UI_UX_Design.md §0.8). `autoComplete` defaults to `new-password`;
  * override for current-password (login).
  */
-export interface PasswordTextFieldProps
-  extends Omit<TextFieldProps, 'type' | 'InputProps'> {
+export interface PasswordTextFieldProps extends Omit<TextFieldProps, 'type' | 'InputProps'> {
   /** Override the default `new-password` autocomplete. Use `current-password` for login. */
   autoCompleteValue?: string;
 }

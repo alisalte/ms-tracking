@@ -67,26 +67,110 @@ export const mockActivity: ActivityBucket[] = [
   { hour: 21, driving: 42, idle: 14, stopped: 256 },
   { hour: 22, driving: 30, idle: 11, stopped: 271 },
   { hour: 23, driving: 24, idle: 9, stopped: 279 },
-].map((b) => ({ hour: b.hour, driving: b.driving ?? 0, idle: b.idle ?? 0, stopped: b.stopped ?? 0 }));
+].map((b) => ({
+  hour: b.hour,
+  driving: b.driving ?? 0,
+  idle: b.idle ?? 0,
+  stopped: b.stopped ?? 0,
+}));
 
 /** Active alerts, severity-sorted (critical first) — wireframe §1.3. */
 export const mockAlerts: FleetAlert[] = [
-  { id: 'a1', type: 'overspeed', severity: 'critical', vehicleLabel: 'Truck-42', detail: '128 km/h', occurredAt: '2026-08-07T14:31:00' },
-  { id: 'a2', type: 'fcw', severity: 'critical', vehicleLabel: 'Truck-55', detail: 'Forward collision warning', occurredAt: '2026-08-07T14:18:00' },
-  { id: 'a3', type: 'idle', severity: 'warning', vehicleLabel: 'Van-07', detail: 'Idle 18m+', occurredAt: '2026-08-07T14:05:00' },
-  { id: 'a4', type: 'geofence', severity: 'warning', vehicleLabel: 'Truck-19', detail: 'Exited Depot-N', occurredAt: '2026-08-07T13:52:00' },
-  { id: 'a5', type: 'dtc', severity: 'warning', vehicleLabel: 'Truck-19', detail: 'P0420 catalyst', occurredAt: '2026-08-07T13:40:00' },
-  { id: 'a6', type: 'lowBattery', severity: 'info', vehicleLabel: 'Bus-12', detail: 'Battery 11%', occurredAt: '2026-08-07T13:22:00' },
-  { id: 'a7', type: 'overspeed', severity: 'warning', vehicleLabel: 'Van-03', detail: '112 km/h', occurredAt: '2026-08-07T12:58:00' },
+  {
+    id: 'a1',
+    type: 'overspeed',
+    severity: 'critical',
+    vehicleLabel: 'Truck-42',
+    detail: '128 km/h',
+    occurredAt: '2026-08-07T14:31:00',
+  },
+  {
+    id: 'a2',
+    type: 'fcw',
+    severity: 'critical',
+    vehicleLabel: 'Truck-55',
+    detail: 'Forward collision warning',
+    occurredAt: '2026-08-07T14:18:00',
+  },
+  {
+    id: 'a3',
+    type: 'idle',
+    severity: 'warning',
+    vehicleLabel: 'Van-07',
+    detail: 'Idle 18m+',
+    occurredAt: '2026-08-07T14:05:00',
+  },
+  {
+    id: 'a4',
+    type: 'geofence',
+    severity: 'warning',
+    vehicleLabel: 'Truck-19',
+    detail: 'Exited Depot-N',
+    occurredAt: '2026-08-07T13:52:00',
+  },
+  {
+    id: 'a5',
+    type: 'dtc',
+    severity: 'warning',
+    vehicleLabel: 'Truck-19',
+    detail: 'P0420 catalyst',
+    occurredAt: '2026-08-07T13:40:00',
+  },
+  {
+    id: 'a6',
+    type: 'lowBattery',
+    severity: 'info',
+    vehicleLabel: 'Bus-12',
+    detail: 'Battery 11%',
+    occurredAt: '2026-08-07T13:22:00',
+  },
+  {
+    id: 'a7',
+    type: 'overspeed',
+    severity: 'warning',
+    vehicleLabel: 'Van-03',
+    detail: '112 km/h',
+    occurredAt: '2026-08-07T12:58:00',
+  },
 ];
 
 /** Vehicles needing attention — ranked blend of maintenance/behavior/AI/device. */
 export const mockAttention: AttentionItem[] = [
-  { id: 'v1', vehicleLabel: 'Truck-42', category: 'behavior', summary: 'Overspeed · 14:31', occurredAt: '2026-08-07T14:31:00' },
-  { id: 'v2', vehicleLabel: 'Van-07', category: 'behavior', summary: 'Excess idle · 18m', occurredAt: '2026-08-07T14:05:00' },
-  { id: 'v3', vehicleLabel: 'Truck-19', category: 'maintenance', summary: 'DTC P0420 · catalytic', occurredAt: '2026-08-07T13:40:00' },
-  { id: 'v4', vehicleLabel: 'Truck-55', category: 'ai', summary: 'Forward collision warning', occurredAt: '2026-08-07T14:18:00' },
-  { id: 'v5', vehicleLabel: 'Bus-12', category: 'device', summary: 'Low battery · 11%', occurredAt: '2026-08-07T13:22:00' },
+  {
+    id: 'v1',
+    vehicleLabel: 'Truck-42',
+    category: 'behavior',
+    summary: 'Overspeed · 14:31',
+    occurredAt: '2026-08-07T14:31:00',
+  },
+  {
+    id: 'v2',
+    vehicleLabel: 'Van-07',
+    category: 'behavior',
+    summary: 'Excess idle · 18m',
+    occurredAt: '2026-08-07T14:05:00',
+  },
+  {
+    id: 'v3',
+    vehicleLabel: 'Truck-19',
+    category: 'maintenance',
+    summary: 'DTC P0420 · catalytic',
+    occurredAt: '2026-08-07T13:40:00',
+  },
+  {
+    id: 'v4',
+    vehicleLabel: 'Truck-55',
+    category: 'ai',
+    summary: 'Forward collision warning',
+    occurredAt: '2026-08-07T14:18:00',
+  },
+  {
+    id: 'v5',
+    vehicleLabel: 'Bus-12',
+    category: 'device',
+    summary: 'Low battery · 11%',
+    occurredAt: '2026-08-07T13:22:00',
+  },
 ];
 
 /** Fleet utilization breakdown (wireframe: 73% / Driving 59% / Idle 13% / Stopped 19% / Offline 9%). */
@@ -123,7 +207,12 @@ const DRIVERS = [
   'T. Okonkwo',
 ] as const;
 const TYPES: VehicleType[] = ['truck', 'van', 'bus', 'car'];
-const TYPE_LABEL: Record<VehicleType, string> = { truck: 'Truck', van: 'Van', bus: 'Bus', car: 'Car' };
+const TYPE_LABEL: Record<VehicleType, string> = {
+  truck: 'Truck',
+  van: 'Van',
+  bus: 'Bus',
+  car: 'Car',
+};
 
 /** Tiny deterministic PRNG (mulberry32) — no Math.random so tests are stable. */
 function seeded(seed: number): () => number {
@@ -148,10 +237,23 @@ function buildMockFleet(): MapVehicle[] {
     const roll = rand();
     // Realistic-ish state distribution: ~55% driving, ~15% idle, ~15% stopped, ~12% offline, ~3% overspeed.
     const state: MapVehicle['state'] =
-      roll > 0.97 ? 'overspeed' : roll > 0.85 ? 'offline' : roll > 0.7 ? 'stopped' : roll > 0.55 ? 'idle' : 'driving';
+      roll > 0.97
+        ? 'overspeed'
+        : roll > 0.85
+          ? 'offline'
+          : roll > 0.7
+            ? 'stopped'
+            : roll > 0.55
+              ? 'idle'
+              : 'driving';
     const moving = state === 'driving' || state === 'overspeed';
     const heading = moving ? Math.round(rand() * 360) : 0;
-    const speed = state === 'overspeed' ? 115 + Math.round(rand() * 25) : state === 'driving' ? 40 + Math.round(rand() * 60) : 0;
+    const speed =
+      state === 'overspeed'
+        ? 115 + Math.round(rand() * 25)
+        : state === 'driving'
+          ? 40 + Math.round(rand() * 60)
+          : 0;
     // Spread within ~±0.06° (~6 km) of the depot at [51.338, 35.719].
     const lat = +(35.719 + (rand() - 0.5) * 0.12).toFixed(5);
     const lng = +(51.338 + (rand() - 0.5) * 0.12).toFixed(5);
@@ -280,7 +382,7 @@ function buildWaypoints(
     } else {
       speed = 50 + Math.round(rand() * 35); // cruise
     }
-    const heading = i === 0 ? Math.round(rand() * 360) : pts[i - 1]!.heading;
+    const heading = i === 0 ? Math.round(rand() * 360) : pts[i - 1]?.heading;
     pts.push({ ts: new Date(t).toISOString(), lat, lng, speed, heading });
     t += (60 + Math.round(rand() * 60)) * 1000; // +1–2 min per sample
   }
@@ -291,7 +393,7 @@ function buildWaypoints(
 function deriveEvents(waypoints: TripWaypoint[]): TripEvent[] {
   const events: TripEvent[] = [];
   waypoints.forEach((w, i) => {
-    if (w.speed === 0 && i > 0 && waypoints[i - 1]!.speed === 0) {
+    if (w.speed === 0 && i > 0 && waypoints[i - 1]?.speed === 0) {
       // Treat consecutive zero-speed runs as one stop/idle event at the start.
       if (events.at(-1)?.type === 'stop') return;
       const isIdle = i % 2 === 0; // alternate stop/idle for variety
@@ -323,10 +425,17 @@ function buildMockTrips(): Trip[] {
   const rand = seeded(54321);
   const fleet = mockMapVehicles;
   const now = Date.now();
-  const statuses: Trip['status'][] = ['completed', 'completed', 'completed', 'in_progress', 'planned', 'cancelled'];
+  const statuses: Trip['status'][] = [
+    'completed',
+    'completed',
+    'completed',
+    'in_progress',
+    'planned',
+    'cancelled',
+  ];
   const trips: Trip[] = [];
   for (let i = 0; i < 12; i++) {
-    const v = fleet[Math.floor(rand() * fleet.length)] ?? fleet[0]!;
+    const v = fleet[Math.floor(rand() * fleet.length)] ?? fleet[0];
     const status = statuses[Math.floor(rand() * statuses.length)] ?? 'completed';
     const durationMin = 35 + Math.round(rand() * 220);
     const startOffset = Math.round(rand() * 86_400_000 * 4); // within ~4 days
@@ -340,8 +449,8 @@ function buildMockTrips(): Trip[] {
       driverId: v.driver ? `d-${i}` : undefined,
       driver: v.driver,
       status,
-      originLabel: TRIP_ORIGINS[i % TRIP_ORIGINS.length] ?? TRIP_ORIGINS[0]!,
-      destinationLabel: TRIP_DESTINATIONS[i % TRIP_DESTINATIONS.length] ?? TRIP_DESTINATIONS[0]!,
+      originLabel: TRIP_ORIGINS[i % TRIP_ORIGINS.length] ?? TRIP_ORIGINS[0],
+      destinationLabel: TRIP_DESTINATIONS[i % TRIP_DESTINATIONS.length] ?? TRIP_DESTINATIONS[0],
       startTime,
       endTime: status === 'completed' || status === 'cancelled' ? startTime : undefined,
       distanceKm,
@@ -367,7 +476,7 @@ export const mockTrips: Trip[] = buildMockTrips();
  * this body with `apiGet` + the GeoJSON replay mapping.
  */
 export function mockTripDetail(id: string): TripDetail {
-  const trip = mockTrips.find((t) => t.id === id) ?? mockTrips[0]!;
+  const trip = mockTrips.find((t) => t.id === id) ?? mockTrips[0];
   const rand = seeded(Number.parseInt(id.replace(/\D/g, '') || '1', 10) * 104729);
   const startLat = 35.719 + (rand() - 0.5) * 0.04;
   const startLng = 51.338 + (rand() - 0.5) * 0.04;
@@ -379,4 +488,3 @@ export function mockTripDetail(id: string): TripDetail {
   const events = deriveEvents(waypoints);
   return { ...trip, waypoints, events };
 }
-

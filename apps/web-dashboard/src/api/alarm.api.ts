@@ -14,11 +14,10 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { resolveMock } from '@/lib/mock-gate';
 import { mockAlarmDetail, mockAlarms } from '@/mock/alarm-data';
 import type { Alarm, AlarmStatus } from '@/types/alarm.types';
 import { queryKeys } from './query-keys';
-import { resolveMock } from '@/lib/mock-gate';
-
 
 // ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
 
