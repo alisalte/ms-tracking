@@ -11,9 +11,14 @@ import { MapPage } from '@/pages/MapPage';
 import { MfaVerifyPage } from '@/pages/MfaVerifyPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
+import { AdminPage } from '@/pages/AdminPage';
+import { AlarmCenterPage } from '@/pages/AlarmCenterPage';
+import { AssetManagementPage } from '@/pages/AssetManagementPage';
+import { ReportsPage } from '@/pages/ReportsPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TripDetailPage } from '@/pages/TripDetailPage';
 import { TripsPage } from '@/pages/TripsPage';
+import { VideoWallPage } from '@/pages/VideoWallPage';
 
 /**
  * Not-found page rendered inside the authenticated AppLayout shell.
@@ -101,6 +106,35 @@ export const router = createBrowserRouter([
           {
             path: '/trips/:id',
             element: <TripDetailPage />,
+          },
+          {
+            path: '/video',
+            element: <VideoWallPage />,
+          },
+          {
+            path: '/alarms',
+            element: <AlarmCenterPage />,
+          },
+          {
+            path: '/assets',
+            element: <AssetManagementPage />,
+          },
+          {
+            // Legacy nav items redirect to the consolidated Asset hub.
+            path: '/vehicles',
+            element: <Navigate to="/assets?tab=vehicles" replace />,
+          },
+          {
+            path: '/drivers',
+            element: <Navigate to="/assets?tab=drivers" replace />,
+          },
+          {
+            path: '/reports',
+            element: <ReportsPage />,
+          },
+          {
+            path: '/admin',
+            element: <AdminPage />,
           },
           {
             path: '/account/profile',

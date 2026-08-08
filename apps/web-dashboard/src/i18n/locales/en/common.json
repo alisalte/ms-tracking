@@ -71,6 +71,7 @@
     "darkMode": "Dark mode",
     "lightMode": "Light mode",
     "language": "Language",
+    "close": "Close",
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome back"
@@ -266,6 +267,477 @@
       "idle": "Idle",
       "overspeed": "Overspeed",
       "geofence": "Geofence"
+    }
+  },
+  "video": {
+    "title": "Video Wall",
+    "subtitle": "Live multi-camera monitoring",
+    "empty": "No cameras on the wall yet",
+    "emptyHelp": "Pick a camera from the left, or use Auto-fill.",
+    "divisions": {
+      "1": "1 camera",
+      "4": "4 cameras",
+      "9": "9 cameras",
+      "16": "16 cameras",
+      "36": "36 cameras",
+      "64": "64 cameras"
+    },
+    "facing": {
+      "forward": "Forward",
+      "driver": "Driver",
+      "rear": "Rear",
+      "cargo": "Cargo",
+      "site": "Camera"
+    },
+    "quality": {
+      "auto": "Auto",
+      "high": "High (1080p)",
+      "medium": "Medium (720p)",
+      "low": "Low (360p)",
+      "audio-only": "Audio only"
+    },
+    "toolbar": {
+      "live": "live",
+      "cap": "live cap",
+      "capHelp": "Max concurrent live streams:",
+      "spotlight": "Spotlight",
+      "pauseRotation": "Pause rotation",
+      "resumeRotation": "Resume rotation",
+      "fullscreenWall": "Fullscreen wall",
+      "simulateAlert": "Simulate alert",
+      "loadWall": "Load wall…",
+      "saveWall": "Save wall"
+    },
+    "dock": {
+      "title": "Cameras",
+      "search": "Search cameras…",
+      "online": "Online",
+      "onlineOnly": "Show online only",
+      "autoFill": "Auto-fill",
+      "noResults": "No cameras match your filters."
+    },
+    "tile": {
+      "empty": "Add camera",
+      "offline": "Camera offline",
+      "noConsent": "Camera disabled (no consent)",
+      "queued": "Queued",
+      "clickToPromote": "Click to view live",
+      "snapshot": "Snapshot",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "quality": "Quality",
+      "fullscreen": "Fullscreen",
+      "spotlight": "Spotlight",
+      "remove": "Remove",
+      "cabinCam": "Cabin cam",
+      "signal": {
+        "good": "Signal: good",
+        "fair": "Signal: fair",
+        "poor": "Signal: poor"
+      }
+    },
+    "snapshot": {
+      "saved": "Snapshot saved",
+      "failed": "Snapshot failed — try again"
+    }
+  },
+  "alarms": {
+    "title": "Alarm Center",
+    "subtitle": "Triage and acknowledge live alarms",
+    "empty": "No alarms match your filters.",
+    "stats": {
+      "active": "active",
+      "unacked": "unacked",
+      "escalated": "escalated"
+    },
+    "type": {
+      "sos": "SOS / Panic",
+      "overspeed": "Overspeed",
+      "geofence": "Geofence",
+      "offline": "Offline",
+      "fuel-theft": "Fuel theft",
+      "temperature": "Temperature",
+      "collision": "Collision",
+      "camera": "Camera / AI",
+      "other": "Other"
+    },
+    "severity": {
+      "critical": "Critical",
+      "major": "Major",
+      "minor": "Minor",
+      "info": "Info"
+    },
+    "status": {
+      "raised": "Raised",
+      "acked": "Acknowledged",
+      "escalated": "Escalated",
+      "resolved": "Resolved"
+    },
+    "views": {
+      "list": "List",
+      "timeline": "Timeline",
+      "map": "Map"
+    },
+    "filters": {
+      "type": "Type",
+      "severity": "Severity",
+      "status": "Status",
+      "all": "All",
+      "search": "Search vehicle / driver / id…"
+    },
+    "list": {
+      "colType": "Alarm",
+      "colVehicle": "Vehicle",
+      "colSeverity": "Severity",
+      "colStatus": "Status",
+      "colTime": "Time"
+    },
+    "detail": {
+      "notFound": "Alarm not found.",
+      "vehicle": "Vehicle",
+      "driver": "Driver",
+      "location": "Location",
+      "raised": "Raised",
+      "acked": "Acknowledged",
+      "resolved": "Resolved",
+      "escalation": "Escalation",
+      "escalationStep": "Step {{step}}",
+      "description": "Description",
+      "sourceEvents": "Source events",
+      "linked": "Linked artifacts",
+      "viewClip": "View clip",
+      "viewTrip": "View trip"
+    },
+    "actions": {
+      "ack": "Acknowledge",
+      "resolve": "Resolve",
+      "contest": "Contest (false positive)"
+    }
+  },
+  "assets": {
+    "title": "Asset Management",
+    "subtitle": "Vehicles, drivers, devices, and groups",
+    "empty": "No assets match your filters.",
+    "count": "{{count}}",
+    "tabs": {
+      "vehicles": "Vehicles",
+      "drivers": "Drivers",
+      "devices": "Devices",
+      "groups": "Groups"
+    },
+    "filters": {
+      "allStatus": "All statuses",
+      "allTypes": "All types"
+    },
+    "vehicle": {
+      "notFound": "Vehicle not found.",
+      "search": "Search plate / VIN / model…",
+      "vin": "VIN",
+      "fleet": "Fleet",
+      "fuelType": "Fuel",
+      "device": "Device",
+      "actions": "Actions",
+      "toMaintenance": "To maintenance",
+      "fromMaintenance": "Return to active",
+      "colPlate": "Plate",
+      "colVehicle": "Vehicle",
+      "colType": "Type",
+      "colStatus": "Status",
+      "colOdometer": "Odometer",
+      "type": {
+        "truck": "Truck",
+        "van": "Van",
+        "bus": "Bus",
+        "car": "Car"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "maintenance": "Maintenance",
+        "decommissioned": "Decommissioned",
+        "sold": "Sold"
+      },
+      "fuel": {
+        "diesel": "Diesel",
+        "gasoline": "Gasoline",
+        "electric": "Electric",
+        "hybrid": "Hybrid",
+        "cng": "CNG",
+        "lpg": "LPG"
+      }
+    },
+    "driver": {
+      "notFound": "Driver not found.",
+      "search": "Search name / email / license…",
+      "license": "License",
+      "licenseExpiry": "License expiry",
+      "employeeId": "Employee ID",
+      "phone": "Phone",
+      "assigned": "Assigned vehicle",
+      "behavior": "Behavior",
+      "totalTrips": "Trips",
+      "totalDistance": "Distance",
+      "certifications": "Certifications",
+      "colName": "Driver",
+      "colLicense": "License",
+      "colStatus": "Status",
+      "colScore": "Score",
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "suspended": "Suspended",
+        "terminated": "Terminated"
+      }
+    },
+    "device": {
+      "notFound": "Device not found.",
+      "search": "Search serial / IMEI / vehicle…",
+      "firmware": "Firmware",
+      "reportingInterval": "Reporting interval",
+      "health": "Health",
+      "battery": "Battery",
+      "signal": "Signal",
+      "lastHeartbeat": "Last heartbeat",
+      "targetFirmware": "Target firmware",
+      "colSerial": "Serial",
+      "colType": "Type",
+      "colVehicle": "Vehicle",
+      "colStatus": "Status",
+      "colHealth": "Health",
+      "type": {
+        "obd2": "OBD-II",
+        "gps_tracker": "GPS tracker",
+        "dashcam": "Dashcam",
+        "custom_sensor": "Custom sensor"
+      },
+      "status": {
+        "provisioned": "Provisioned",
+        "active": "Active",
+        "inactive": "Inactive",
+        "firmware_updating": "Updating",
+        "faulted": "Faulted",
+        "decommissioned": "Decommissioned"
+      }
+    },
+    "group": {
+      "members": "Members",
+      "typeFilter": "Type filter",
+      "status": {
+        "active": "Active",
+        "archived": "Archived"
+      }
+    }
+  },
+  "reports": {
+    "title": "Reports & Analytics",
+    "subtitle": "KPIs, charts, and report exports",
+    "target": "Target",
+    "generate": "Generate",
+    "generateTitle": "Generate report",
+    "generating": "Generating…",
+    "cancel": "Cancel",
+    "formats": "Formats",
+    "download": "Download",
+    "exportRaw": "Export raw data",
+    "exporting": "Exporting…",
+    "sections": {
+      "overview": "Overview",
+      "reports": "Reports",
+      "jobs": "Jobs & Exports",
+      "dashboards": "Dashboards"
+    },
+    "filters": {
+      "allCategories": "All categories"
+    },
+    "category": {
+      "operational": "Operational",
+      "safety": "Safety",
+      "compliance": "Compliance",
+      "maintenance": "Maintenance",
+      "fuel": "Fuel",
+      "financial": "Financial",
+      "asset": "Asset",
+      "executive": "Executive"
+    },
+    "kpi": {
+      "kpi-util": "Fleet Utilization",
+      "kpi-mpg": "Fleet MPG",
+      "kpi-safety": "Safety Score",
+      "kpi-ontime": "On-time Delivery",
+      "kpi-costkm": "Cost per km"
+    },
+    "charts": {
+      "activity": "Fleet Activity (24h)",
+      "utilization": "Utilization Breakdown",
+      "behavior": "Driver Behavior Events",
+      "fuel": "Fuel Efficiency Trend",
+      "loading": "Loading…"
+    },
+    "jobs": {
+      "colReport": "Report",
+      "colFormats": "Formats",
+      "colStatus": "Status",
+      "colCreated": "Created",
+      "colActions": "Actions",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
+    },
+    "dashboards": {
+      "widgets": "widgets",
+      "shared": "shared",
+      "selectPrompt": "Select a dashboard to view."
+    }
+  },
+  "admin": {
+    "title": "Admin Panel",
+    "upcoming": "soon",
+    "empty": "No records match your filters.",
+    "count": "{{count}}",
+    "nav": {
+      "organization": "Organization",
+      "users": "Users & Roles",
+      "fleets": "Fleets & Vehicles",
+      "devices": "Devices",
+      "geofences": "Geofences",
+      "policies": "Policies",
+      "notifications": "Notifications",
+      "integrations": "Integrations",
+      "apikeys": "API Keys",
+      "billing": "Billing",
+      "audit": "Audit Log",
+      "settings": "Settings",
+      "permissions": "Permissions"
+    },
+    "users": {
+      "notFound": "User not found.",
+      "search": "Search name / email / username…",
+      "allStatus": "All statuses",
+      "username": "Username",
+      "role": "Role",
+      "authProvider": "Auth provider",
+      "provider": {
+        "local": "Local",
+        "sso": "SSO",
+        "scim": "SCIM"
+      },
+      "mfa": "MFA",
+      "mfaOn": "Enabled",
+      "mfaOff": "Disabled",
+      "created": "Created",
+      "actions": "Actions",
+      "suspend": "Suspend",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "colName": "Name",
+      "colRole": "Role",
+      "colMfa": "MFA",
+      "colStatus": "Status",
+      "colLastLogin": "Last login",
+      "status": {
+        "active": "Active",
+        "suspended": "Suspended",
+        "deactivated": "Deactivated",
+        "locked": "Locked"
+      }
+    },
+    "roles": {
+      "system": "System roles",
+      "custom": "Custom roles",
+      "permissions": "Permissions",
+      "members": "Members",
+      "type": "Type",
+      "permissionMatrix": "Permission matrix"
+    },
+    "permissions": {
+      "subtitle": "The canonical permission catalog by domain (02_Domain_Model §6.1).",
+      "domain": {
+        "iam": "Identity & Access",
+        "fleet": "Fleet",
+        "tracking": "Tracking",
+        "media": "Media & Video",
+        "driver": "Driver",
+        "trip": "Trip",
+        "maintenance": "Maintenance",
+        "compliance": "Compliance",
+        "fuel": "Fuel",
+        "telemetry": "Telematics",
+        "asset": "Asset",
+        "analytics": "Analytics",
+        "notification": "Notification",
+        "billing": "Billing",
+        "audit": "Audit"
+      }
+    },
+    "settings": {
+      "locale": "Locale & Format",
+      "units": "Units",
+      "branding": "Branding & Retention",
+      "language": "Language",
+      "timezone": "Timezone",
+      "dateFormat": "Date format",
+      "distance": "Distance",
+      "volume": "Volume",
+      "temperature": "Temperature",
+      "orgName": "Organization name",
+      "retention": "Retention",
+      "retentionDays": "days",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "lang": {
+        "en": "English",
+        "fa": "فارسی"
+      }
+    },
+    "audit": {
+      "allActions": "All actions",
+      "allCategories": "All categories",
+      "search": "Search actor / target / correlation…",
+      "integrityOk": "Chain verified",
+      "export": "Export",
+      "exporting": "Exporting…",
+      "colTime": "Time",
+      "colAction": "Action",
+      "colActor": "Actor",
+      "colTarget": "Target",
+      "colService": "Service",
+      "colHash": "Integrity hash",
+      "action": {
+        "create": "Create",
+        "update": "Update",
+        "delete": "Delete",
+        "read": "Read",
+        "execute": "Execute",
+        "login": "Login",
+        "logout": "Logout",
+        "authorize": "Authorize",
+        "deny": "Deny",
+        "export": "Export",
+        "import": "Import",
+        "config_change": "Config change",
+        "system": "System"
+      },
+      "category": {
+        "authentication": "Authentication",
+        "authorization": "Authorization",
+        "fleet": "Fleet",
+        "vehicle": "Vehicle",
+        "driver": "Driver",
+        "trip": "Trip",
+        "fuel": "Fuel",
+        "maintenance": "Maintenance",
+        "compliance": "Compliance",
+        "notification": "Notification",
+        "billing": "Billing",
+        "tenant": "Tenant",
+        "analytics": "Analytics",
+        "asset": "Asset",
+        "system": "System"
+      }
     }
   },
   "profile": {

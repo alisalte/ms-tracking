@@ -1,8 +1,8 @@
 /**
- * Global styles for the FleetVision web dashboard.
+ * Global styles for the FleetVision web dashboard (v2 — premium dark SaaS).
  *
- * App-wide keyframes and resets that live outside the MUI theme. Imported once
- * in main.tsx.
+ * App-wide keyframes, scrollbars, selection, and resets that live outside the
+ * MUI theme. Imported once in main.tsx.
  */
 
 /* Freshness-dot pulse for live indicators (UI_UX_Design.md §0.6). */
@@ -18,7 +18,54 @@
   }
 }
 
-/* MapLibre attribution + controls fit the calm aesthetic. */
+/* Subtle fade-in for page transitions + content mounts. */
+@keyframes fv-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Premium scrollbars ────────────────────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+  background-clip: padding-box;
+}
+
+/* ── Text selection ────────────────────────────────────────────────────── */
+
+::selection {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+/* ── MapLibre ──────────────────────────────────────────────────────────── */
+
 .maplibregl-ctrl-attrib {
   font-size: 10px;
 }

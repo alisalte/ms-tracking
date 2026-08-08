@@ -133,17 +133,34 @@ export function AppLayout() {
           }}
         >
           {drawerOpen && (
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 700,
-                fontSize: '1rem',
-                color: 'primary.main',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              FleetVision
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #3B82F6 0%, #6366F1 100%)',
+                  boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
+                  flexShrink: 0,
+                }}
+              >
+                <Truck size={18} color="#fff" />
+              </Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  letterSpacing: '-0.02em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                FleetVision
+              </Typography>
+            </Box>
           )}
           <IconButton
             size="small"
@@ -176,16 +193,6 @@ export function AppLayout() {
                     minHeight: 40,
                     justifyContent: drawerOpen ? 'initial' : 'center',
                     px: 2,
-                    '&.Mui-selected': {
-                      backgroundColor: 'primary.main',
-                      color: 'primary.contrastText',
-                      '&:hover': {
-                        backgroundColor: 'primary.dark',
-                      },
-                      '& .MuiListItemIcon-root': {
-                        color: 'primary.contrastText',
-                      },
-                    },
                   }}
                 >
                   <ListItemIcon
@@ -236,10 +243,17 @@ export function AppLayout() {
                 flex: 1,
                 maxWidth: 480,
                 backgroundColor: 'action.hover',
-                borderRadius: 2,
+                borderRadius: 10,
                 px: 1.5,
                 py: 0.5,
                 mx: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                transition: 'all 0.2s ease',
+                '&:focus-within': {
+                  borderColor: 'primary.main',
+                  boxShadow: '0 0 0 3px rgba(59,130,246,0.12)',
+                },
               }}
             >
               <Search size={18} style={{ color: 'text.secondary', flexShrink: 0 }} />
@@ -260,7 +274,7 @@ export function AppLayout() {
             {/* Right section */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Tooltip title={t('common.alerts')}>
-                <IconButton size="small" aria-label="alerts">
+                <IconButton size="small" aria-label="alerts" onClick={() => navigate('/alarms')}>
                   <Bell size={20} />
                 </IconButton>
               </Tooltip>

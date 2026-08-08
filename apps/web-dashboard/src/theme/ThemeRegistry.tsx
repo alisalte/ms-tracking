@@ -36,14 +36,12 @@ const THEME_STORAGE_KEY = 'fleetvision_theme_mode';
 /**
  * Detect the initial color mode:
  * 1. User's persisted preference (localStorage)
- * 2. OS preference (prefers-color-scheme)
- * 3. Fallback to "light"
+ * 2. Fallback to "dark" (premium dark SaaS is the default look)
  */
 function getInitialMode(): ColorMode {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === 'dark' || stored === 'light') return stored;
-  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark';
-  return 'light';
+  return 'dark';
 }
 
 interface ThemeRegistryProps {

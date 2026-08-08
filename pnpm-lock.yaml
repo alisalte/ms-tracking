@@ -80,7 +80,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       tsx:
         specifier: 4.19.2
         version: 4.19.2
@@ -150,7 +150,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       tsx:
         specifier: 4.19.2
         version: 4.19.2
@@ -229,7 +229,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       tsx:
         specifier: 4.19.2
         version: 4.19.2
@@ -290,7 +290,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       tsx:
         specifier: 4.19.2
         version: 4.19.2
@@ -360,7 +360,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       tsx:
         specifier: 4.19.2
         version: 4.19.2
@@ -503,7 +503,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -537,7 +537,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -577,7 +577,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -602,6 +602,9 @@ importers:
       pino-http:
         specifier: 10.3.0
         version: 10.3.0
+      pino-pretty:
+        specifier: 11.3.0
+        version: 11.3.0
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -618,12 +621,9 @@ importers:
       jest:
         specifier: 29.7.0
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
-      pino-pretty:
-        specifier: 11.3.0
-        version: 11.3.0
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -669,7 +669,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -684,7 +684,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -721,7 +721,7 @@ importers:
         version: 29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0)
       ts-jest:
         specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3)
+        version: 29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -8476,7 +8476,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  ts-jest@29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@22.10.2)(babel-plugin-macros@3.1.0))(typescript@5.6.3):
+  ts-jest@29.2.5(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.6.3):
     dependencies:
       bs-logger: 0.2.6
       ejs: 3.1.10

@@ -1,9 +1,9 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
-import { clearTokens, getStoredTokens, saveTokens } from '@/auth/token.storage';
-import type { ApiErrorResponse, ApiResponse } from '@/types/api.types';
+import { clearTokens, getStoredTokens, getTenantId, saveTokens } from '@/auth/token.storage';
+import type { ApiResponse } from '@/types/api.types';
 import type { RefreshResponseWire, TokenPair } from '@/types/auth.types';
-import { ApiClientError } from './errors';
+import { normalizeApiError } from './errors';
 
 /**
  * Pre-configured Axios instance for FleetVision API calls.
@@ -70,8 +70,11 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (stored?.accessToken) {
     config.headers.set('Authorization', `Bearer ${stored.accessToken}`);
   }
-  if (stored?.tenantId) {
-    config.headers.set('X-Tenant-Id', stored.tenantId);
+  // Tenant ID: prefer the token pair, fall back to the standalone key so the
+  // header is present on the login request itself (tokens don't exist yet).
+  const tenantId = stored?.tenantId ?? getTenantId();
+  if (tenantId) {
+    config.headers.set('X-Tenant-Id', tenantId);
   }
   return config;
 });
@@ -115,14 +118,8 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Extract structured error message
-    const errorData = error.response?.data as ApiErrorResponse | undefined;
-    const message =
-      errorData?.errors?.[0]?.detail ?? errorData?.errors?.[0]?.title ?? error.message;
-
-    return Promise.reject(
-      new ApiClientError(error.response?.status ?? 0, errorData?.errors?.[0]?.code, message),
-    );
+    // Normalize every non-2xx response into a typed ApiClientError subclass.
+    return Promise.reject(normalizeApiError(error));
   },
 );
 

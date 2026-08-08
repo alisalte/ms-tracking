@@ -68,13 +68,13 @@ export function LoginPage() {
 
   return (
     <Card sx={{ width: '100%', maxWidth: 420 }}>
-      <CardContent sx={{ p: 4 }}>
+      <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
         {/* Branding */}
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography variant="h5" fontWeight={700} color="primary.main">
-            FleetVision
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.02em' }}>
+            {t('auth.login')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {t('auth.signInSubtitle')}
           </Typography>
         </Box>
@@ -161,7 +161,7 @@ export function LoginPage() {
             variant="contained"
             size="large"
             disabled={isLoading}
-            sx={{ mt: 2, mb: 2 }}
+            sx={{ mt: 3, mb: 2, py: 1.5, fontSize: '0.95rem' }}
           >
             {isLoading ? t('auth.loggingIn') : t('auth.login')}
           </Button>

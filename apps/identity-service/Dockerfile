@@ -1,11 +1,10 @@
 # Multi-stage Dockerfile for identity-service.
-# Stage 1 builds every workspace package + the app from a pnpm install; stage 2
-# copies only the compiled output + production deps into a distroless non-root
-# image (<200MB, no shell — DoD #6: runs as non-root).
+# Stage 1 builds the app from a full pnpm install; stage 2 installs only
+# production deps + copies the compiled output into a slim non-root image.
 #
 # Build context is the repo root so workspace packages resolve: build with
 # `docker build -f apps/identity-service/Dockerfile .` from the repo root.
-
+#
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: build ----------------------------------------------------------
@@ -25,28 +24,36 @@ COPY packages/cache-redis/package.json ./packages/cache-redis/
 COPY packages/health/package.json ./packages/health/
 COPY packages/web/package.json ./packages/web/
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
 
-# Copy source and build the whole composite graph (apps + packages).
+# Copy source and build the identity-service + its workspace package deps.
 COPY packages ./packages
 COPY apps/identity-service ./apps/identity-service
-RUN pnpm build
+RUN pnpm --filter @fleetvision/identity-service... build
 
-# Prune to production deps for the runtime image.
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm prune --prod
-
-# ---- Stage 2: runtime (distroless, non-root) --------------------------------
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+# ---- Stage 2: runtime (non-root) -------------------------------------------
+# NOTE: the canonical base is `gcr.io/distroless/nodejs22-debian12:nonroot`
+# (no shell, smaller). That registry is blocked from some regions (403), so we
+# fall back to the Docker-Hub slim image running as the built-in `node` user.
+FROM node:22-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Compiled output + production node_modules.
-COPY --from=builder --chown=nonroot:nonroot /app/node_modules ./node_modules
-COPY --from=builder --chown=nonroot:nonroot /app/packages ./packages
-COPY --from=builder --chown=nonroot:nonroot /app/apps/identity-service/dist ./dist
-COPY --from=builder --chown=nonroot:nonroot /app/apps/identity-service/package.json ./package.json
+# Install only production dependencies (workspace-aware). --ignore-scripts
+# skips the root `prepare` husky hook (not present in a prod install).
+COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/.npmrc ./
+COPY --from=builder /app/apps/identity-service/package.json ./apps/identity-service/
+COPY --from=builder /app/packages ./packages
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH"
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate \
+    && pnpm install --prod --frozen-lockfile --ignore-scripts \
+    && chown -R node:node /app
 
-# distroless runs as UID 65532 (nonroot) by default — no shell, no root.
-USER nonroot
+# Compiled output — kept under the app dir so Node's resolution finds the
+# app's own node_modules (pnpm workspace symlinks live there).
+COPY --from=builder --chown=node:node /app/apps/identity-service/dist ./apps/identity-service/dist
+
+USER node
+WORKDIR /app/apps/identity-service
 EXPOSE 3000
-CMD ["dist/main.js"]
+CMD ["node", "dist/main.js"]

@@ -131,6 +131,76 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── Application services ────────────────────────────────────────────────────
+  # identity-service — NestJS auth + IAM backend. Depends on postgres + redis
+  # being healthy (the bootstrap seed runs migrations + provisions the admin).
+  # Builds from the repo root so the workspace @fleetvision/* packages resolve.
+  identity-service:
+    build:
+      context: ../..
+      dockerfile: apps/identity-service/Dockerfile
+    container_name: fleetvision-identity
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      # In-container hostnames — resolve via the compose network.
+      DBURL: postgres://${POSTGRES_USER:-fleetvision}:${POSTGRES_PASSWORD:-fleetvision}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      # JWT / auth (HS256 MVP).
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900s}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-604800s}
+      # Password hashing (Argon2id).
+      ARGON2_MEMORY_KIB: ${ARGON2_MEMORY_KIB:-65536}
+      ARGON2_TIME: ${ARGON2_TIME:-3}
+      ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-1}
+      PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-12}
+      PASSWORD_HISTORY_COUNT: ${PASSWORD_HISTORY_COUNT:-5}
+      # Brute-force lockout.
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_SECONDS: ${LOGIN_LOCKOUT_SECONDS:-900}
+      # Kafka (audit outbox relay) — non-fatal at boot.
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_AUDIT_TOPIC: ${KAFKA_AUDIT_TOPIC:-fleetvision.audit.audit-entries.events}
+      KAFKA_CLIENT_ID: identity-service
+      # Bootstrap seed (first tenant + admin).
+      SEED_TENANT_NAME: ${SEED_TENANT_NAME:-FleetVision}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@fleetvision.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-ChangeMe!StrongPass123}
+    ports:
+      - "${IDENTITY_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # web-dashboard — Vite SPA served by nginx. Reverse-proxies /api →
+  # identity-service so the browser's relative /api/v1 calls reach the backend.
+  web-dashboard:
+    build:
+      context: ../..
+      dockerfile: apps/web-dashboard/Dockerfile
+    container_name: fleetvision-web
+    restart: unless-stopped
+    depends_on:
+      identity-service:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+
 volumes:
   postgres-data:
   redis-data:

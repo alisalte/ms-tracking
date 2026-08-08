@@ -85,10 +85,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         },
       });
 
-      // Fetch full user profile (with permissions)
+      // Fetch full user profile (with permissions). Preserve the email from the
+      // login response — the backend `GET /auth/me` currently returns an empty
+      // email string (a known gap); fall back to the login email if so.
       try {
         const fullUser = await loginApi.getMe();
-        set({ user: fullUser });
+        set({
+          user: {
+            ...fullUser,
+            email: fullUser.email || response.user.email,
+          },
+        });
       } catch {
         // Non-critical: login succeeded, user profile fetch failed
       }

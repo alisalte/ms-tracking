@@ -71,6 +71,7 @@
     "darkMode": "حالت تاریک",
     "lightMode": "حالت روشن",
     "language": "زبان",
+    "close": "بستن",
     "dashboard": {
       "title": "داشبورد",
       "welcome": "خوش آمدید"
@@ -266,6 +267,477 @@
       "idle": "درجا",
       "overspeed": "سرعت غیرمجاز",
       "geofence": "محدوده‌ی جغرافیایی"
+    }
+  },
+  "video": {
+    "title": "دیوار ویدیو",
+    "subtitle": "نظارت زنده‌ی چند دوربینی",
+    "empty": "هنوز دوربینی روی دیوار نیست",
+    "emptyHelp": "از سمت چپ دوربینی انتخاب کنید یا از پر کردن خودکار استفاده کنید.",
+    "divisions": {
+      "1": "۱ دوربین",
+      "4": "۴ دوربین",
+      "9": "۹ دوربین",
+      "16": "۱۶ دوربین",
+      "36": "۳۶ دوربین",
+      "64": "۶۴ دوربین"
+    },
+    "facing": {
+      "forward": "جلو",
+      "driver": "راننده",
+      "rear": "عقب",
+      "cargo": "بار",
+      "site": "دوربین"
+    },
+    "quality": {
+      "auto": "خودکار",
+      "high": "بالا (۱۰۸۰p)",
+      "medium": "متوسط (۷۲۰p)",
+      "low": "پایین (۳۶۰p)",
+      "audio-only": "فقط صدا"
+    },
+    "toolbar": {
+      "live": "زنده",
+      "cap": "سقف زنده",
+      "capHelp": "حداکثر جریان‌های زنده‌ی همزمان:",
+      "spotlight": "نمای برجسته",
+      "pauseRotation": "توقف چرخش",
+      "resumeRotation": "ادامه‌ی چرخش",
+      "fullscreenWall": "تمام‌صفحه‌ی دیوار",
+      "simulateAlert": "شبیه‌سازی هشدار",
+      "loadWall": "بارگذاری دیوار…",
+      "saveWall": "ذخیره‌ی دیوار"
+    },
+    "dock": {
+      "title": "دوربین‌ها",
+      "search": "جستجوی دوربین‌ها…",
+      "online": "آنلاین",
+      "onlineOnly": "فقط آنلاین‌ها",
+      "autoFill": "پر کردن خودکار",
+      "noResults": "هیچ دوربینی با فیلترهای شما مطابقت ندارد."
+    },
+    "tile": {
+      "empty": "افزودن دوربین",
+      "offline": "دوربین خاموش",
+      "noConsent": "دوربین غیرفعال (بدون رضایت)",
+      "queued": "در صف",
+      "clickToPromote": "برای دیدن زنده کلیک کنید",
+      "snapshot": "عکس فوری",
+      "mute": "بی‌صدا",
+      "unmute": "با صدا",
+      "quality": "کیفیت",
+      "fullscreen": "تمام‌صفحه",
+      "spotlight": "نمای برجسته",
+      "remove": "حذف",
+      "cabinCam": "دوربین کابین",
+      "signal": {
+        "good": "سیگنال: خوب",
+        "fair": "سیگنال: متوسط",
+        "poor": "سیگنال: ضعیف"
+      }
+    },
+    "snapshot": {
+      "saved": "عکس فوری ذخیره شد",
+      "failed": "عکس فوری ناموفق بود — دوباره تلاش کنید"
+    }
+  },
+  "alarms": {
+    "title": "مرکز هشدارها",
+    "subtitle": "مدیریت و تأیید هشدارهای زنده",
+    "empty": "هیچ هشداری با فیلترهای شما مطابقت ندارد.",
+    "stats": {
+      "active": "فعال",
+      "unacked": "بررسی‌نشده",
+      "escalated": "تشدیدشده"
+    },
+    "type": {
+      "sos": "SOS / اضطراری",
+      "overspeed": "سرعت غیرمجاز",
+      "geofence": "محدوده‌ی جغرافیایی",
+      "offline": "آفلاین",
+      "fuel-theft": "سرقت سوخت",
+      "temperature": "دما",
+      "collision": "تصادف",
+      "camera": "دوربین / هوش مصنوعی",
+      "other": "سایر"
+    },
+    "severity": {
+      "critical": "بحرانی",
+      "major": "مهم",
+      "minor": "جزئی",
+      "info": "اطلاعات"
+    },
+    "status": {
+      "raised": "ایجادشده",
+      "acked": "تأییدشده",
+      "escalated": "تشدیدشده",
+      "resolved": "حل‌شده"
+    },
+    "views": {
+      "list": "فهرست",
+      "timeline": "خط زمانی",
+      "map": "نقشه"
+    },
+    "filters": {
+      "type": "نوع",
+      "severity": "شدت",
+      "status": "وضعیت",
+      "all": "همه",
+      "search": "جستجوی خودرو / راننده / شناسه…"
+    },
+    "list": {
+      "colType": "هشدار",
+      "colVehicle": "خودرو",
+      "colSeverity": "شدت",
+      "colStatus": "وضعیت",
+      "colTime": "زمان"
+    },
+    "detail": {
+      "notFound": "هشدار یافت نشد.",
+      "vehicle": "خودرو",
+      "driver": "راننده",
+      "location": "موقعیت",
+      "raised": "ایجاد",
+      "acked": "تأیید",
+      "resolved": "حل",
+      "escalation": "تشدید",
+      "escalationStep": "مرحله‌ی {{step}}",
+      "description": "توضیحات",
+      "sourceEvents": "رویدادهای مبدأ",
+      "linked": "موارد مرتبط",
+      "viewClip": "مشاهده‌ی ویدیو",
+      "viewTrip": "مشاهده‌ی سفر"
+    },
+    "actions": {
+      "ack": "تأیید",
+      "resolve": "حل",
+      "contest": "اعتراض (مثبت کاذب)"
+    }
+  },
+  "assets": {
+    "title": "مدیریت دارایی‌ها",
+    "subtitle": "خودروها، رانندگان، دستگاه‌ها و گروه‌ها",
+    "empty": "هیچ دارایی‌ای با فیلترهای شما مطابقت ندارد.",
+    "count": "{{count}}",
+    "tabs": {
+      "vehicles": "خودروها",
+      "drivers": "رانندگان",
+      "devices": "دستگاه‌ها",
+      "groups": "گروه‌ها"
+    },
+    "filters": {
+      "allStatus": "همه‌ی وضعیت‌ها",
+      "allTypes": "همه‌ی انواع"
+    },
+    "vehicle": {
+      "notFound": "خودرو یافت نشد.",
+      "search": "جستجوی پلاک / شاسی / مدل…",
+      "vin": "VIN",
+      "fleet": "ناوگان",
+      "fuelType": "سوخت",
+      "device": "دستگاه",
+      "actions": "عملیات",
+      "toMaintenance": "ارسال به تعمیر",
+      "fromMaintenance": "بازگشت به فعال",
+      "colPlate": "پلاک",
+      "colVehicle": "خودرو",
+      "colType": "نوع",
+      "colStatus": "وضعیت",
+      "colOdometer": "کیلومتر",
+      "type": {
+        "truck": "کامیون",
+        "van": "وانت",
+        "bus": "اتوبوس",
+        "car": "خودرو سواری"
+      },
+      "status": {
+        "active": "فعال",
+        "inactive": "غیرفعال",
+        "maintenance": "در تعمیر",
+        "decommissioned": "تسویه‌شده",
+        "sold": "فروخته‌شده"
+      },
+      "fuel": {
+        "diesel": "دیزل",
+        "gasoline": "بنزین",
+        "electric": "الکتریکی",
+        "hybrid": "هیبریدی",
+        "cng": "CNG",
+        "lpg": "LPG"
+      }
+    },
+    "driver": {
+      "notFound": "راننده یافت نشد.",
+      "search": "جستجوی نام / ایمیل / گواهینامه…",
+      "license": "گواهینامه",
+      "licenseExpiry": "انقضای گواهینامه",
+      "employeeId": "کد پرسنلی",
+      "phone": "تلفن",
+      "assigned": "خودروی تخصیص‌یافته",
+      "behavior": "رفتار",
+      "totalTrips": "سفرها",
+      "totalDistance": "مسافت",
+      "certifications": "گواهینامه‌های تکمیلی",
+      "colName": "راننده",
+      "colLicense": "گواهینامه",
+      "colStatus": "وضعیت",
+      "colScore": "امتیاز",
+      "status": {
+        "active": "فعال",
+        "inactive": "غیرفعال",
+        "suspended": "معلق",
+        "terminated": "پایان همکاری"
+      }
+    },
+    "device": {
+      "notFound": "دستگاه یافت نشد.",
+      "search": "جستجوی سریال / IMEI / خودرو…",
+      "firmware": "فیرم‌ور",
+      "reportingInterval": "بازه‌ی گزارش‌دهی",
+      "health": "سلامت",
+      "battery": "باتری",
+      "signal": "سیگنال",
+      "lastHeartbeat": "آخرین ضربان",
+      "targetFirmware": "فیرم‌ور هدف",
+      "colSerial": "سریال",
+      "colType": "نوع",
+      "colVehicle": "خودرو",
+      "colStatus": "وضعیت",
+      "colHealth": "سلامت",
+      "type": {
+        "obd2": "OBD-II",
+        "gps_tracker": "ردیاب GPS",
+        "dashcam": "دوربین داشبورد",
+        "custom_sensor": "سنسور سفارشی"
+      },
+      "status": {
+        "provisioned": "پیکربندی‌شده",
+        "active": "فعال",
+        "inactive": "غیرفعال",
+        "firmware_updating": "در حال به‌روزرسانی",
+        "faulted": "خراب",
+        "decommissioned": "تسویه‌شده"
+      }
+    },
+    "group": {
+      "members": "اعضا",
+      "typeFilter": "فیلتر نوع",
+      "status": {
+        "active": "فعال",
+        "archived": "بایگانی‌شده"
+      }
+    }
+  },
+  "reports": {
+    "title": "گزارش‌ها و تحلیل‌ها",
+    "subtitle": "شاخص‌های کلیدی، نمودارها و خروجی گزارش‌ها",
+    "target": "هدف",
+    "generate": "تولید",
+    "generateTitle": "تولید گزارش",
+    "generating": "در حال تولید…",
+    "cancel": "لغو",
+    "formats": "قالب‌ها",
+    "download": "دانلود",
+    "exportRaw": "خروجی داده‌ی خام",
+    "exporting": "در حال خروجی…",
+    "sections": {
+      "overview": "نمای کلی",
+      "reports": "گزارش‌ها",
+      "jobs": "کارها و خروجی‌ها",
+      "dashboards": "داشبوردها"
+    },
+    "filters": {
+      "allCategories": "همه‌ی دسته‌ها"
+    },
+    "category": {
+      "operational": "عملیاتی",
+      "safety": "ایمنی",
+      "compliance": "انطباق",
+      "maintenance": "تعمیر و نگهداری",
+      "fuel": "سوخت",
+      "financial": "مالی",
+      "asset": "دارایی",
+      "executive": "مدیریتی"
+    },
+    "kpi": {
+      "kpi-util": "به‌ره‌وری ناوگان",
+      "kpi-mpg": "مصرف سوخت ناوگان",
+      "kpi-safety": "امتیاز ایمنی",
+      "kpi-ontime": "تحویل به‌موقع",
+      "kpi-costkm": "هزینه به ازای کیلومتر"
+    },
+    "charts": {
+      "activity": "فعالیت ناوگان (۲۴ ساعت)",
+      "utilization": "تفکیک به‌ره‌وری",
+      "behavior": "رویدادهای رفتاری رانندگان",
+      "fuel": "روند مصرف سوخت",
+      "loading": "در حال بارگذاری…"
+    },
+    "jobs": {
+      "colReport": "گزارش",
+      "colFormats": "قالب‌ها",
+      "colStatus": "وضعیت",
+      "colCreated": "ایجاد",
+      "colActions": "عملیات",
+      "status": {
+        "pending": "در انتظار",
+        "running": "در حال اجرا",
+        "succeeded": "موفق",
+        "failed": "ناموفق",
+        "cancelled": "لغوشده"
+      }
+    },
+    "dashboards": {
+      "widgets": "ابزارک",
+      "shared": "مشترک",
+      "selectPrompt": "برای مشاهده، یک داشبورد انتخاب کنید."
+    }
+  },
+  "admin": {
+    "title": "پنل مدیریت",
+    "upcoming": "به‌زودی",
+    "empty": "هیچ رکوردی با فیلترهای شما مطابقت ندارد.",
+    "count": "{{count}}",
+    "nav": {
+      "organization": "سازمان",
+      "users": "کاربران و نقش‌ها",
+      "fleets": "ناوگان‌ها و خودروها",
+      "devices": "دستگاه‌ها",
+      "geofences": "محدوده‌های جغرافیایی",
+      "policies": "سیاست‌ها",
+      "notifications": "اعلان‌ها",
+      "integrations": "یکپارچه‌سازی‌ها",
+      "apikeys": "کلیدهای API",
+      "billing": "صورتحساب",
+      "audit": "گزارش ممیزی",
+      "settings": "تنظیمات",
+      "permissions": "مجوزها"
+    },
+    "users": {
+      "notFound": "کاربر یافت نشد.",
+      "search": "جستجوی نام / ایمیل / نام کاربری…",
+      "allStatus": "همه‌ی وضعیت‌ها",
+      "username": "نام کاربری",
+      "role": "نقش",
+      "authProvider": "ارائه‌دهنده‌ی احراز هویت",
+      "provider": {
+        "local": "محلی",
+        "sso": "SSO",
+        "scim": "SCIM"
+      },
+      "mfa": "احراز هویت دومرحله‌ای",
+      "mfaOn": "فعال",
+      "mfaOff": "غیرفعال",
+      "created": "ایجادشده",
+      "actions": "عملیات",
+      "suspend": "تعلیق",
+      "activate": "فعال‌سازی",
+      "deactivate": "غیرفعال‌سازی",
+      "colName": "نام",
+      "colRole": "نقش",
+      "colMfa": "MFA",
+      "colStatus": "وضعیت",
+      "colLastLogin": "آخرین ورود",
+      "status": {
+        "active": "فعال",
+        "suspended": "معلق",
+        "deactivated": "غیرفعال‌شده",
+        "locked": "قفل‌شده"
+      }
+    },
+    "roles": {
+      "system": "نقش‌های سیستمی",
+      "custom": "نقش‌های سفارشی",
+      "permissions": "مجوزها",
+      "members": "اعضا",
+      "type": "نوع",
+      "permissionMatrix": "ماتریس مجوزها"
+    },
+    "permissions": {
+      "subtitle": "کاتالوگ رسمی مجوزها به تفکیک دامنه (۰۲_Domain_Model §6.1).",
+      "domain": {
+        "iam": "هویت و دسترسی",
+        "fleet": "ناوگان",
+        "tracking": "رهگیری",
+        "media": "رسانه و ویدیو",
+        "driver": "راننده",
+        "trip": "سفر",
+        "maintenance": "تعمیر و نگهداری",
+        "compliance": "انطباق",
+        "fuel": "سوخت",
+        "telemetry": "تلماتیک",
+        "asset": "دارایی",
+        "analytics": "تحلیل‌ها",
+        "notification": "اعلان‌ها",
+        "billing": "صورتحساب",
+        "audit": "ممیزی"
+      }
+    },
+    "settings": {
+      "locale": "محلی و قالب",
+      "units": "واحدها",
+      "branding":"برندسازی و نگهداری",
+      "language": "زبان",
+      "timezone": "منطقه‌ی زمانی",
+      "dateFormat": "قالب تاریخ",
+      "distance": "مسافت",
+      "volume": "حجم",
+      "temperature": "دما",
+      "orgName": "نام سازمان",
+      "retention": "نگهداری",
+      "retentionDays": "روز",
+      "saving": "در حال ذخیره…",
+      "saved": "ذخیره شد",
+      "lang": {
+        "en": "English",
+        "fa": "فارسی"
+      }
+    },
+    "audit": {
+      "allActions": "همه‌ی عملیات",
+      "allCategories": "همه‌ی دسته‌ها",
+      "search": "جستجوی بازیگر / هدف / همبستگی…",
+      "integrityOk": "زنجیره تأیید شد",
+      "export": "خروجی",
+      "exporting": "در حال خروجی…",
+      "colTime": "زمان",
+      "colAction": "عملیات",
+      "colActor": "بازیگر",
+      "colTarget": "هدف",
+      "colService": "سرویس",
+      "colHash": "هش یکپارچگی",
+      "action": {
+        "create": "ایجاد",
+        "update": "به‌روزرسانی",
+        "delete": "حذف",
+        "read": "خواندن",
+        "execute": "اجرا",
+        "login": "ورود",
+        "logout": "خروج",
+        "authorize": "مجوز دادن",
+        "deny": "رد",
+        "export": "خروجی",
+        "import": "ورودی",
+        "config_change": "تغییر پیکربندی",
+        "system": "سیستم"
+      },
+      "category": {
+        "authentication": "احراز هویت",
+        "authorization": "مجوز",
+        "fleet": "ناوگان",
+        "vehicle": "خودرو",
+        "driver": "راننده",
+        "trip": "سفر",
+        "fuel": "سوخت",
+        "maintenance": "تعمیر و نگهداری",
+        "compliance": "انطباق",
+        "notification": "اعلان",
+        "billing": "صورتحساب",
+        "tenant": "مستأجر",
+        "analytics": "تحلیل",
+        "asset": "دارایی",
+        "system": "سیستم"
+      }
     }
   },
   "profile": {

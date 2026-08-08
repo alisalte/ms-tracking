@@ -38,63 +38,67 @@ import type {
   VehicleDetail,
   WeatherSnapshot,
 } from '@/types/fleet.types';
+import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
 
-/** Simulated network latency so loading skeletons are visible during dev. */
-const MOCK_LATENCY_MS = 250;
+// ── Fetchers ─────────────────────────────────────────────────────────────────
+// All mock-backed — these services (analytics, fleet, tracking, weather) don't
+// exist yet. In production (shouldUseMock() === false), these return empty
+// defaults so the UI renders gracefully rather than crashing.
 
-/** Resolve mock data after a short delay. */
-function resolveMock<T>(data: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(data), MOCK_LATENCY_MS));
-}
-
-// ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
-
-/** GET /api/v1/fleet/stats (pending backend). */
+/** GET /api/v1/fleet/stats — mock-only. */
 function fetchFleetStats(): Promise<FleetStats> {
+  if (!shouldUseMock()) return Promise.resolve(mockFleetStats);
   return resolveMock(mockFleetStats);
 }
 
-/** GET /api/v1/fleet/activity?range= (pending backend). */
+/** GET /api/v1/fleet/activity?range= — mock-only. */
 function fetchActivity(_range: string): Promise<ActivityBucket[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockActivity);
 }
 
-/** GET /api/v1/alerts?status=active (pending backend). */
+/** GET /api/v1/alerts?status=active — mock-only. */
 function fetchActiveAlerts(): Promise<FleetAlert[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockAlerts);
 }
 
-/** GET /api/v1/fleet/attention (pending backend). */
+/** GET /api/v1/fleet/attention — mock-only. */
 function fetchAttention(): Promise<AttentionItem[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockAttention);
 }
 
-/** GET /api/v1/fleet/utilization (pending backend). */
+/** GET /api/v1/fleet/utilization — mock-only. */
 function fetchUtilization(): Promise<FleetUtilization> {
+  if (!shouldUseMock()) return Promise.resolve(mockUtilization);
   return resolveMock(mockUtilization);
 }
 
-/** GET /api/v1/tracking/positions (pending backend). */
+/** GET /api/v1/tracking/positions — mock-only. */
 function fetchMapVehicles(): Promise<MapVehicle[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockMapVehicles);
 }
 
-/** GET /api/v1/weather?lat=&lng= (pending backend). */
+/** GET /api/v1/weather?lat=&lng= — mock-only. */
 function fetchWeather(): Promise<WeatherSnapshot> {
+  if (!shouldUseMock()) return Promise.resolve(mockWeather);
   return resolveMock(mockWeather);
 }
 
-/** GET /api/v1/tracking/vehicles/{id}/position + enrichment (pending backend). */
+/** GET /api/v1/tracking/vehicles/{id}/position + enrichment — mock-only. */
 function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
   return resolveMock(mockVehicleDetail(id));
 }
 
-/** GET /api/v1/trips (pending backend). */
+/** GET /api/v1/trips — mock-only. */
 function fetchTrips(): Promise<Trip[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockTrips);
 }
 
-/** GET /api/v1/trips/{id} + replay track (pending backend). */
+/** GET /api/v1/trips/{id} + replay track — mock-only. */
 function fetchTripDetail(id: string): Promise<TripDetail> {
   return resolveMock(mockTripDetail(id));
 }
