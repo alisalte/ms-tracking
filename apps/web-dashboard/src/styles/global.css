@@ -1,0 +1,24 @@
+/**
+ * Global styles for the FleetVision web dashboard.
+ *
+ * App-wide keyframes and resets that live outside the MUI theme. Imported once
+ * in main.tsx.
+ */
+
+/* Freshness-dot pulse for live indicators (UI_UX_Design.md §0.6). */
+@keyframes fv-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.3);
+  }
+}
+
+/* MapLibre attribution + controls fit the calm aesthetic. */
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}

@@ -1,0 +1,314 @@
+{
+  "auth": {
+    "login": "Sign In",
+    "email": "Email",
+    "password": "Password",
+    "tenantId": "Tenant ID",
+    "loggingIn": "Signing in...",
+    "signInSubtitle": "Sign in to your fleet workspace",
+    "rememberDevice": "Remember this device",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "signUp": "Sign up",
+    "createAccount": "Create account",
+    "username": "Username",
+    "usernameHelp": "3–64 characters, unique across the platform",
+    "displayName": "Display name (optional)",
+    "passwordPolicy": "At least 12 characters with upper, lower, digit, and symbol",
+    "confirmPassword": "Confirm password",
+    "haveAccount": "Already have an account?",
+    "featureNotAvailable": "This feature is not available yet.",
+    "forgotPasswordHelp": "Enter your email and we'll send a reset link if the account exists.",
+    "sendResetLink": "Send reset link",
+    "resetLinkSentTitle": "Check your email",
+    "resetLinkSentBody": "If an account exists for that email, a password reset link has been sent. The link expires in 30 minutes.",
+    "resetPassword": "Reset password",
+    "resetPasswordHelp": "Choose a new password for your account.",
+    "resetTokenMissing": "This reset link is incomplete.",
+    "resetTokenMissingHelp": "Use the link from the reset email, or request a new one.",
+    "newPassword": "New password",
+    "mfa": {
+      "verifyTitle": "Two-factor verification",
+      "verifyHelp": "Enter the 6-digit code from your authenticator app.",
+      "totp": "Authenticator",
+      "webauthn": "Security key",
+      "backupCode": "Backup code",
+      "verify": "Verify",
+      "noChallenge": "No verification in progress. Please sign in again.",
+      "codeIncomplete": "Enter all 6 digits.",
+      "rateLimitedHelp": "Too many attempts? Wait a minute and try again.",
+      "digitLabel": "Digit {{n}}"
+    },
+    "errors": {
+      "invalidCredentials": "Invalid email or password",
+      "networkError": "Unable to connect to server"
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "map": "Map",
+    "vehicles": "Vehicles",
+    "drivers": "Drivers",
+    "trips": "Trips",
+    "video": "Video",
+    "maintenance": "Maintenance",
+    "compliance": "Compliance",
+    "fuel": "Fuel",
+    "reports": "Reports"
+  },
+  "common": {
+    "search": "Search...",
+    "alerts": "Alerts",
+    "help": "Help",
+    "logout": "Sign Out",
+    "profile": "Profile",
+    "loading": "Loading...",
+    "notFound": "Page not found",
+    "submitting": "Submitting...",
+    "backToLogin": "Back to sign in",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
+    "language": "Language",
+    "dashboard": {
+      "title": "Dashboard",
+      "welcome": "Welcome back"
+    }
+  },
+  "dashboard": {
+    "title": "Fleet Dashboard",
+    "subtitle": "Live operational overview",
+    "live": "Live",
+    "noChange": "0",
+    "export": "Export",
+    "stats": {
+      "active": "Active",
+      "driving": "Driving",
+      "idle": "Idle",
+      "offline": "Offline",
+      "alerts": "Alerts",
+      "critical": "{{count}} CRIT"
+    },
+    "states": {
+      "driving": "Driving",
+      "idle": "Idle",
+      "stopped": "Stopped",
+      "offline": "Offline"
+    },
+    "range": {
+      "today": "Today",
+      "7d": "7d",
+      "30d": "30d"
+    },
+    "relative": {
+      "justNow": "now",
+      "minutes": "{{count}}m ago",
+      "hours": "{{count}}h ago"
+    },
+    "alerts": {
+      "overspeed": "Overspeed",
+      "idle": "Excess idle",
+      "geofence": "Geofence",
+      "fcw": "Forward collision",
+      "dtc": "Fault code",
+      "lowBattery": "Low battery"
+    },
+    "attention": {
+      "behavior": "Behavior",
+      "maintenance": "Maintenance",
+      "ai": "AI",
+      "device": "Device"
+    },
+    "map": {
+      "active": "Active",
+      "idle": "Idle",
+      "overspeed": "Overspeed",
+      "offline": "Offline"
+    },
+    "utilization": {
+      "utilized": "utilized"
+    },
+    "weather": {
+      "feelsLike": "Feels like {{value}}°",
+      "humidity": "{{value}}% humidity",
+      "wind": "{{value}} km/h wind",
+      "clear": "Clear",
+      "partly-cloudy": "Partly cloudy",
+      "cloudy": "Cloudy",
+      "rain": "Rain",
+      "storm": "Storm",
+      "snow": "Snow"
+    },
+    "widgets": {
+      "activity": "Fleet Activity (24h)",
+      "activityRange": "Activity time range",
+      "activeAlerts": "Active Alerts",
+      "attention": "Vehicles Needing Attention",
+      "utilization": "Fleet Utilization",
+      "mapPreview": "Fleet Map",
+      "openMap": "Open map",
+      "weather": "Weather",
+      "viewAll": "View all {{count}}"
+    },
+    "empty": {
+      "alerts": "No active alerts — fleet is quiet.",
+      "attention": "Nothing needs attention right now."
+    }
+  },
+  "map": {
+    "title": "Live Tracking",
+    "subtitle": "Real-time fleet positions",
+    "live": "Live",
+    "paused": "Paused",
+    "pauseLive": "Pause live",
+    "resumeLive": "Resume live",
+    "search": "Search vehicles",
+    "searchPlaceholder": "Search vehicle / driver / id…",
+    "clearSearch": "Clear search",
+    "fleet": "{{shown}} of {{total}} vehicles",
+    "clusterAlt": "{{count}} vehicles",
+    "noResults": "No vehicles match your filters.",
+    "filters": {
+      "all": "All"
+    },
+    "states": {
+      "driving": "Driving",
+      "idle": "Idle",
+      "stopped": "Stopped",
+      "offline": "Offline",
+      "overspeed": "Overspeed"
+    },
+    "list": {
+      "count": "{{shown}} of {{total}}"
+    },
+    "popup": {
+      "close": "Close",
+      "speed": "Speed",
+      "heading": "Heading",
+      "ignition": "Ignition",
+      "ignitionOn": "On",
+      "ignitionOff": "Off",
+      "odometer": "Odometer",
+      "driver": "Driver",
+      "unassigned": "Unassigned",
+      "trip": "Trip",
+      "address": "Address",
+      "updatedNow": "just now",
+      "updatedMin": "{{count}}m ago",
+      "updatedHour": "{{count}}h ago",
+      "actions": "Quick actions",
+      "follow": "Follow",
+      "liveVideo": "Live video",
+      "tripTimeline": "Trip timeline",
+      "sendMessage": "Message",
+      "history": "History",
+      "recentEvents": "Recent events",
+      "noEvents": "No recent events"
+    }
+  },
+  "trips": {
+    "title": "Trips",
+    "subtitle": "Fleet trip history and replay",
+    "status": {
+      "all": "All",
+      "completed": "Completed",
+      "in_progress": "In progress",
+      "planned": "Planned",
+      "cancelled": "Cancelled"
+    },
+    "list": {
+      "search": "Search trips",
+      "searchPlaceholder": "Search vehicle / driver / id…",
+      "colTrip": "Trip",
+      "colVehicle": "Vehicle",
+      "colRoute": "Route",
+      "colDate": "Date",
+      "colDistance": "Distance",
+      "colDuration": "Duration",
+      "colStatus": "Status",
+      "noResults": "No trips match your filters."
+    },
+    "detail": {
+      "back": "Back to trips",
+      "notFound": "Trip not found."
+    },
+    "summary": {
+      "distance": "Distance",
+      "duration": "Duration",
+      "maxSpeed": "Max speed",
+      "avgSpeed": "Avg speed",
+      "stops": "Stops",
+      "idleTime": "Idle time",
+      "fuel": "Fuel"
+    },
+    "replay": {
+      "vehicle": "Vehicle position",
+      "timeline": "Timeline",
+      "speedGraph": "Speed over time",
+      "legend": {
+        "route": "Route",
+        "stop": "Stop",
+        "idle": "Idle",
+        "overspeed": "Overspeed"
+      }
+    },
+    "timeline": {
+      "play": "Play",
+      "pause": "Pause",
+      "speed": "Playback speed",
+      "seek": "Seek"
+    },
+    "events": {
+      "title": "Events",
+      "none": "No events on this trip.",
+      "stop": "Stop",
+      "idle": "Idle",
+      "overspeed": "Overspeed",
+      "geofence": "Geofence"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "unknownUser": "Unknown user",
+    "tenant": "Tenant",
+    "editDisabled": "Editing unavailable",
+    "editDisabledHelp": "Self-service profile editing is not yet available.",
+    "userId": "User ID",
+    "email": "Email",
+    "rolesAndPermissions": "Roles & permissions",
+    "roles": "Roles",
+    "permissions": "Permissions",
+    "none": "None",
+    "noPermissions": "No permissions loaded",
+    "security": "Security",
+    "mfaStatus": "Multi-factor authentication",
+    "mfaNotEnforced": "Not enforced",
+    "mfaNotEnforcedHelp": "MFA is not yet active for this account."
+  },
+  "validation": {
+    "tenantId": {
+      "required": "Tenant ID is required"
+    },
+    "email": {
+      "required": "Email is required",
+      "invalid": "Enter a valid email address"
+    },
+    "password": {
+      "required": "Password is required",
+      "tooShort": "Must be at least 12 characters",
+      "lowercase": "Must include a lowercase letter",
+      "uppercase": "Must include an uppercase letter",
+      "digit": "Must include a digit",
+      "symbol": "Must include a symbol",
+      "mismatch": "Passwords do not match"
+    },
+    "username": {
+      "tooShort": "Must be at least 3 characters",
+      "tooLong": "Must be at most 64 characters"
+    },
+    "displayName": {
+      "tooLong": "Must be at most 128 characters"
+    }
+  }
+}

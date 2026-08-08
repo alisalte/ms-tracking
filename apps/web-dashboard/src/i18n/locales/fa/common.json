@@ -1,0 +1,314 @@
+{
+  "auth": {
+    "login": "ورود",
+    "email": "ایمیل",
+    "password": "رمز عبور",
+    "tenantId": "شناسه مستأجر",
+    "loggingIn": "در حال ورود...",
+    "signInSubtitle": "وارد فضای کاری ناوگان خود شوید",
+    "rememberDevice": "این دستگاه را به خاطر بسپار",
+    "forgotPassword": "رمز عبور را فراموش کرده‌اید؟",
+    "noAccount": "حساب کاربری ندارید؟",
+    "signUp": "ثبت‌نام",
+    "createAccount": "ایجاد حساب کاربری",
+    "username": "نام کاربری",
+    "usernameHelp": "۳ تا ۶۴ کاراکتر، یکتا در سراسر پلتفرم",
+    "displayName": "نام نمایشی (اختیاری)",
+    "passwordPolicy": "حداقل ۱۲ کاراکتر شامل حرف بزرگ، کوچک، عدد و نماد",
+    "confirmPassword": "تکرار رمز عبور",
+    "haveAccount": "از قبل حساب دارید؟",
+    "featureNotAvailable": "این قابلیت هنوز در دسترس نیست.",
+    "forgotPasswordHelp": "ایمیل خود را وارد کنید تا در صورت وجود حساب، لینک بازنشانی ارسال شود.",
+    "sendResetLink": "ارسال لینک بازنشانی",
+    "resetLinkSentTitle": "ایمیل خود را بررسی کنید",
+    "resetLinkSentBody": "اگر حسابی برای آن ایمیل وجود داشته باشد، لینک بازنشانی رمز ارسال شده است. این لینک طی ۳۰ دقیقه منقضی می‌شود.",
+    "resetPassword": "بازنشانی رمز عبور",
+    "resetPasswordHelp": "رمز عبور جدیدی برای حساب خود انتخاب کنید.",
+    "resetTokenMissing": "این لینک بازنشانی ناقص است.",
+    "resetTokenMissingHelp": "از لینک موجود در ایمیل بازنشانی استفاده کنید یا لینک جدیدی درخواست کنید.",
+    "newPassword": "رمز عبور جدید",
+    "mfa": {
+      "verifyTitle": "تأیید دو مرحله‌ای",
+      "verifyHelp": "کد ۶ رقمی را از برنامه احراز هویت خود وارد کنید.",
+      "totp": "برنامه احراز هویت",
+      "webauthn": "کلید امنیتی",
+      "backupCode": "کد پشتیبان",
+      "verify": "تأیید",
+      "noChallenge": "هیچ تأییدی در حال انجام نیست. لطفاً دوباره وارد شوید.",
+      "codeIncomplete": "هر ۶ رقم را وارد کنید.",
+      "rateLimitedHelp": "تلاش‌های زیادی انجام دادید؟ یک دقیقه صبر کنید و دوباره امتحان کنید.",
+      "digitLabel": "رقم {{n}}"
+    },
+    "errors": {
+      "invalidCredentials": "ایمیل یا رمز عبور نامعتبر است",
+      "networkError": "اتصال به سرور ممکن نیست"
+    }
+  },
+  "nav": {
+    "dashboard": "داشبورد",
+    "map": "نقشه",
+    "vehicles": "خودروها",
+    "drivers": "رانندگان",
+    "trips": "سفرها",
+    "video": "ویدیو",
+    "maintenance": "تعمیر و نگهداری",
+    "compliance": "انطباق",
+    "fuel": "سوخت",
+    "reports": "گزارش‌ها"
+  },
+  "common": {
+    "search": "جستجو...",
+    "alerts": "هشدارها",
+    "help": "راهنما",
+    "logout": "خروج",
+    "profile": "پروفایل",
+    "loading": "در حال بارگذاری...",
+    "notFound": "صفحه یافت نشد",
+    "submitting": "در حال ارسال...",
+    "backToLogin": "بازگشت به ورود",
+    "showPassword": "نمایش رمز عبور",
+    "hidePassword": "پنهان کردن رمز عبور",
+    "darkMode": "حالت تاریک",
+    "lightMode": "حالت روشن",
+    "language": "زبان",
+    "dashboard": {
+      "title": "داشبورد",
+      "welcome": "خوش آمدید"
+    }
+  },
+  "dashboard": {
+    "title": "داشبورد ناوگان",
+    "subtitle": "نمای کلی زنده‌ی عملیات",
+    "live": "زنده",
+    "noChange": "۰",
+    "export": "خروجی",
+    "stats": {
+      "active": "فعال",
+      "driving": "در حرکت",
+      "idle": "درجا",
+      "offline": "آفلاین",
+      "alerts": "هشدارها",
+      "critical": "{{count}} بحرانی"
+    },
+    "states": {
+      "driving": "در حرکت",
+      "idle": "درجا",
+      "stopped": "متوقف",
+      "offline": "آفلاین"
+    },
+    "range": {
+      "today": "امروز",
+      "7d": "۷ روز",
+      "30d": "۳۰ روز"
+    },
+    "relative": {
+      "justNow": "هم‌اکنون",
+      "minutes": "{{count}} دقیقه پیش",
+      "hours": "{{count}} ساعت پیش"
+    },
+    "alerts": {
+      "overspeed": "سرعت غیرمجاز",
+      "idle": "درجای طولانی",
+      "geofence": "محدوده‌ی جغرافیایی",
+      "fcw": "هشدار تصادف",
+      "dtc": "کد خطا",
+      "lowBattery": "باتری ضعیف"
+    },
+    "attention": {
+      "behavior": "رفتار",
+      "maintenance": "تعمیرات",
+      "ai": "هوش مصنوعی",
+      "device": "دستگاه"
+    },
+    "map": {
+      "active": "فعال",
+      "idle": "درجا",
+      "overspeed": "سرعت غیرمجاز",
+      "offline": "آفلاین"
+    },
+    "utilization": {
+      "utilized": "به‌کارگیری"
+    },
+    "weather": {
+      "feelsLike": "حس {{value}}°",
+      "humidity": "{{value}}٪ رطوبت",
+      "wind": "{{value}} km/h باد",
+      "clear": "آفتابی",
+      "partly-cloudy": "نیمه‌ابری",
+      "cloudy": "ابری",
+      "rain": "باران",
+      "storm": "طوفان",
+      "snow": "برف"
+    },
+    "widgets": {
+      "activity": "فعالیت ناوگان (۲۴ ساعت)",
+      "activityRange": "بازه‌ی زمانی فعالیت",
+      "activeAlerts": "هشدارهای فعال",
+      "attention": "خودروهای نیازمند توجه",
+      "utilization": "به‌کارگیری ناوگان",
+      "mapPreview": "نقشه‌ی ناوگان",
+      "openMap": "باز کردن نقشه",
+      "weather": "آب‌وهوا",
+      "viewAll": "مشاهده‌ی همه ({{count}})"
+    },
+    "empty": {
+      "alerts": "هیچ هشدار فعلی وجود ندارد — ناوگان آرام است.",
+      "attention": "در حال حاضر چیزی نیازمند توجه نیست."
+    }
+  },
+  "map": {
+    "title": "رهگیری زنده",
+    "subtitle": "موقعیت‌های لحظه‌ای ناوگان",
+    "live": "زنده",
+    "paused": "متوقف",
+    "pauseLive": "توقف زنده",
+    "resumeLive": "از سرگیری زنده",
+    "search": "جستجوی خودروها",
+    "searchPlaceholder": "جستجوی خودرو / راننده / شناسه…",
+    "clearSearch": "پاک کردن جستجو",
+    "fleet": "{{shown}} از {{total}} خودرو",
+    "clusterAlt": "{{count}} خودرو",
+    "noResults": "هیچ خودرو‌ای با فیلترهای شما مطابقت ندارد.",
+    "filters": {
+      "all": "همه"
+    },
+    "states": {
+      "driving": "در حرکت",
+      "idle": "درجا",
+      "stopped": "متوقف",
+      "offline": "آفلاین",
+      "overspeed": "سرعت غیرمجاز"
+    },
+    "list": {
+      "count": "{{shown}} از {{total}}"
+    },
+    "popup": {
+      "close": "بستن",
+      "speed": "سرعت",
+      "heading": "جهت",
+      "ignition": "احتراق",
+      "ignitionOn": "روشن",
+      "ignitionOff": "خاموش",
+      "odometer": "کیلومترشمار",
+      "driver": "راننده",
+      "unassigned": "بدون راننده",
+      "trip": "سفر",
+      "address": "آدرس",
+      "updatedNow": "هم‌اکنون",
+      "updatedMin": "{{count}} دقیقه پیش",
+      "updatedHour": "{{count}} ساعت پیش",
+      "actions": "اقدامات سریع",
+      "follow": "دنبال‌کردن",
+      "liveVideo": "ویدیوی زنده",
+      "tripTimeline": "خط زمانی سفر",
+      "sendMessage": "پیام",
+      "history": "تاریخچه",
+      "recentEvents": "رویدادهای اخیر",
+      "noEvents": "رویداد اخیری نیست"
+    }
+  },
+  "trips": {
+    "title": "سفرها",
+    "subtitle": "تاریخچه و پخش مجدد سفرهای ناوگان",
+    "status": {
+      "all": "همه",
+      "completed": "تکمیل‌شده",
+      "in_progress": "در حال انجام",
+      "planned": "برنامه‌ریزی‌شده",
+      "cancelled": "لغوشده"
+    },
+    "list": {
+      "search": "جستجوی سفرها",
+      "searchPlaceholder": "جستجوی خودرو / راننده / شناسه…",
+      "colTrip": "سفر",
+      "colVehicle": "خودرو",
+      "colRoute": "مسیر",
+      "colDate": "تاریخ",
+      "colDistance": "مسافت",
+      "colDuration": "مدت",
+      "colStatus": "وضعیت",
+      "noResults": "هیچ سفری با فیلترهای شما مطابقت ندارد."
+    },
+    "detail": {
+      "back": "بازگشت به سفرها",
+      "notFound": "سفر یافت نشد."
+    },
+    "summary": {
+      "distance": "مسافت",
+      "duration": "مدت",
+      "maxSpeed": "حداکثر سرعت",
+      "avgSpeed": "میانگین سرعت",
+      "stops": "توقف‌ها",
+      "idleTime": "زمان درجا",
+      "fuel": "سوخت"
+    },
+    "replay": {
+      "vehicle": "موقعیت خودرو",
+      "timeline": "خط زمانی",
+      "speedGraph": "سرعت در طول زمان",
+      "legend": {
+        "route": "مسیر",
+        "stop": "توقف",
+        "idle": "درجا",
+        "overspeed": "سرعت غیرمجاز"
+      }
+    },
+    "timeline": {
+      "play": "پخش",
+      "pause": "توقف",
+      "speed": "سرعت پخش",
+      "seek": "جابجایی"
+    },
+    "events": {
+      "title": "رویدادها",
+      "none": "رویدادی در این سفر نیست.",
+      "stop": "توقف",
+      "idle": "درجا",
+      "overspeed": "سرعت غیرمجاز",
+      "geofence": "محدوده‌ی جغرافیایی"
+    }
+  },
+  "profile": {
+    "title": "پروفایل",
+    "unknownUser": "کاربر ناشناخته",
+    "tenant": "مستأجر",
+    "editDisabled": "ویرایش در دسترس نیست",
+    "editDisabledHelp": "ویرایش پروفایل خودکار هنوز در دسترس نیست.",
+    "userId": "شناسه کاربر",
+    "email": "ایمیل",
+    "rolesAndPermissions": "نقش‌ها و دسترسی‌ها",
+    "roles": "نقش‌ها",
+    "permissions": "دسترسی‌ها",
+    "none": "هیچ",
+    "noPermissions": "دسترسی‌ای بارگذاری نشده",
+    "security": "امنیت",
+    "mfaStatus": "احراز هویت چندمرحله‌ای",
+    "mfaNotEnforced": "فعال نیست",
+    "mfaNotEnforcedHelp": "احراز هویت چندمرحله‌ای هنوز برای این حساب فعال نیست."
+  },
+  "validation": {
+    "tenantId": {
+      "required": "شناسه مستأجر الزامی است"
+    },
+    "email": {
+      "required": "ایمیل الزامی است",
+      "invalid": "یک آدرس ایمیل معتبر وارد کنید"
+    },
+    "password": {
+      "required": "رمز عبور الزامی است",
+      "tooShort": "حداقل ۱۲ کاراکتر لازم است",
+      "lowercase": "باید شامل حرف کوچک باشد",
+      "uppercase": "باید شامل حرف بزرگ باشد",
+      "digit": "باید شامل عدد باشد",
+      "symbol": "باید شامل نماد باشد",
+      "mismatch": "رمزهای عبور مطابقت ندارند"
+    },
+    "username": {
+      "tooShort": "حداقل ۳ کاراکتر لازم است",
+      "tooLong": "حداکثر ۶۴ کاراکتر مجاز است"
+    },
+    "displayName": {
+      "tooLong": "حداکثر ۱۲۸ کاراکتر مجاز است"
+    }
+  }
+}
