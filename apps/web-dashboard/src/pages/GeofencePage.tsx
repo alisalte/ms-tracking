@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useCreateGeofence, useDeleteGeofence, useGeofences } from '@/api/geofence.api';
 import { ErrorState } from '@/components/common/ErrorState';
+import { PageHeader } from '@/components/ui';
 import type { AlertOn, GeofenceType } from '@/types/geofence.types';
 import {
   Box,
@@ -53,21 +54,19 @@ export function GeofencePage() {
   return (
     <Stack gap={2}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" gap={2}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5">{t('geofences.title')}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('geofences.subtitle')}
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Plus size={16} />}
-          onClick={() => setShowCreate(true)}
-        >
-          {t('geofences.create')}
-        </Button>
-      </Stack>
+      <PageHeader
+        title={t('geofences.title')}
+        subtitle={t('geofences.subtitle')}
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Plus size={16} />}
+            onClick={() => setShowCreate(true)}
+          >
+            {t('geofences.create')}
+          </Button>
+        }
+      />
 
       {/* Geofence grid */}
       {(geofences ?? []).length === 0 ? (

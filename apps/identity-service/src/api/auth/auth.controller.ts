@@ -2,18 +2,25 @@
  * Auth controller — login, refresh, logout, /me, sessions. Base path
  * `/api/v1/auth` (ARR API-1, Authentication.md §5).
  *
- * Login/register/refresh are PUBLIC (no Bearer required). The tenant_id for
- * login is supplied as a header `X-Tenant-Id` (set by the gateway from the
- * client's selected tenant context — NOT from the body, per INV-I02).
+ * Login/register/refresh are PUBLIC (no Bearer required). The tenant is
+ * supplied via the `X-Tenant-Id` header, which may carry either a UUID or a
+ * tenant name/slug (e.g. "FleetVision"); the name is resolved server-side to
+ * the canonical UUID before reaching the use case (INV-I02: tenant_id is always
+ * server-verified, never trusted from the request body).
  */
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { LoginUseCase, LogoutUseCase, RefreshTokenUseCase } from '../../application/index.js';
+import { InvalidCredentialsError } from '../../domain/errors.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 import { loginSchema, refreshSchema } from './auth.dto.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Controller('api/v1/auth')
 export class AuthController {
@@ -21,7 +28,35 @@ export class AuthController {
     private readonly loginUseCase: LoginUseCase,
     private readonly refreshUseCase: RefreshTokenUseCase,
     private readonly logoutUseCase: LogoutUseCase,
+    private readonly tenants: TenantRepository,
   ) {}
+
+  /**
+   * Resolve the `X-Tenant-Id` header to a canonical tenant UUID.
+   *
+   * Accepts a UUID (passed through) or a tenant name/slug like "FleetVision"
+   * (resolved via `iam.tenants`, case-insensitive). This keeps INV-I02 intact —
+   * the tenant_id reaching the use case is always server-verified — while
+   * letting a human type a friendly name instead of an unguessable UUID. Throws
+   * a generic error (surfaced as 401 by the exception filter) when the tenant
+   * is missing/unknown, to avoid a tenant-enumeration oracle.
+   */
+  private async resolveTenantId(rawTenantId: string | undefined): Promise<string> {
+    if (!rawTenantId || !rawTenantId.trim()) {
+      // Missing header — still a credentials failure (generic, no oracle).
+      throw new InvalidCredentialsError();
+    }
+    const trimmed = rawTenantId.trim();
+    // Already a UUID — accept directly (the use case still verifies the tenant).
+    if (UUID_RE.test(trimmed)) return trimmed;
+    // Otherwise treat it as a tenant name/slug and resolve to the UUID.
+    const resolved = await this.tenants.resolveId(trimmed);
+    if (!resolved) {
+      // Unknown tenant — generic credentials error (no tenant enumeration).
+      throw new InvalidCredentialsError();
+    }
+    return resolved;
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -37,10 +72,7 @@ export class AuthController {
       user: { id: string; email: string; tenant_id: string; roles: readonly string[] };
     };
   }> {
-    const tenantId = req.headers['x-tenant-id'] as string;
-    if (!tenantId) {
-      throw new Error('X-Tenant-Id header is required.');
-    }
+    const tenantId = await this.resolveTenantId(req.headers['x-tenant-id'] as string | undefined);
     const result = await this.loginUseCase.execute({
       email: body.email,
       password: body.password,
@@ -70,10 +102,7 @@ export class AuthController {
     @Body(new ZodValidationPipe(refreshSchema)) body: { refresh_token: string },
     @Req() req: Request,
   ): Promise<{ data: { access_token: string; refresh_token: string; expires_in: number } }> {
-    const tenantId = req.headers['x-tenant-id'] as string;
-    if (!tenantId) {
-      throw new Error('X-Tenant-Id header is required.');
-    }
+    const tenantId = await this.resolveTenantId(req.headers['x-tenant-id'] as string | undefined);
     const result = await this.refreshUseCase.execute({
       refreshToken: body.refresh_token,
       tenantId,

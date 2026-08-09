@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { clearTokens, getStoredTokens, getTenantId, saveTenantId, saveTokens } from '@/auth/token.storage';
+import {
+  clearTokens,
+  getStoredTokens,
+  getTenantId,
+  saveTenantId,
+  saveTokens,
+} from '@/auth/token.storage';
 
 describe('Token storage', () => {
   beforeEach(() => {

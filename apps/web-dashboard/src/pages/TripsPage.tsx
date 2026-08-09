@@ -1,44 +1,31 @@
-import {
-  Box,
-  Chip,
-  InputBase,
-  Skeleton,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from '@mui/material';
-import { ArrowRight, Search } from 'lucide-react';
+import { Box, Card, Stack } from '@mui/material';
+import { ArrowRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
+import { PageHeader, StatusBadge, Toolbar, type Column } from '@/components/ui';
+import { DataTable } from '@/components/ui';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
-/** Status → chip color. */
-const STATUS_COLOR: Record<TripStatus, 'success' | 'info' | 'default' | 'error'> = {
+/** Status → StatusBadge tone. */
+const STATUS_TONE: Record<TripStatus, 'success' | 'info' | 'neutral' | 'danger'> = {
   completed: 'success',
   in_progress: 'info',
-  planned: 'default',
-  cancelled: 'error',
+  planned: 'neutral',
+  cancelled: 'danger',
 };
 
 const STATUSES: TripStatus[] = ['completed', 'in_progress', 'planned', 'cancelled'];
-
-/** Stable keys for the loading-state skeleton rows (static, never reordered). */
-const SKELETON_KEYS = ['sk1', 'sk2', 'sk3', 'sk4', 'sk5', 'sk6'] as const;
 
 /**
  * TripsPage — the fleet trip roster.
  *
  * A filterable table of trips (search by vehicle/driver + status chips). Row
  * click → trip detail with replay. Backed by `useTrips` (mock today, real
- * `GET /api/v1/trips` later).
+ * `GET /api/v1/trips` later). v3: restyled onto the unified DataTable + toolbar
+ * + PageHeader.
  */
 export function TripsPage() {
   const { t } = useTranslation();
@@ -64,177 +51,120 @@ export function TripsPage() {
     });
   }, [trips, query, statusFilter]);
 
+  const columns: Array<Column<Trip>> = [
+    {
+      id: 'trip',
+      headerKey: 'trips.list.colTrip',
+      render: (trip) => (
+        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{trip.id}</span>
+      ),
+    },
+    { id: 'vehicle', headerKey: 'trips.list.colVehicle', render: (trip) => trip.vehicleLabel },
+    {
+      id: 'route',
+      headerKey: 'trips.list.colRoute',
+      render: (trip) => (
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {trip.originLabel} → {trip.destinationLabel}
+        </span>
+      ),
+    },
+    {
+      id: 'date',
+      headerKey: 'trips.list.colDate',
+      render: (trip) => (
+        <span style={{ color: 'var(--mui-palette-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+          {new Date(trip.startTime).toLocaleDateString([], {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+      ),
+    },
+    {
+      id: 'distance',
+      headerKey: 'trips.list.colDistance',
+      align: 'right',
+      render: (trip) => (
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{trip.distanceKm} km</span>
+      ),
+    },
+    {
+      id: 'duration',
+      headerKey: 'trips.list.colDuration',
+      align: 'right',
+      render: (trip) => (
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatDuration(trip.durationMin)}</span>
+      ),
+    },
+    {
+      id: 'status',
+      headerKey: 'trips.list.colStatus',
+      render: (trip) => (
+        <StatusBadge
+          label={t(`trips.status.${trip.status}`)}
+          tone={STATUS_TONE[trip.status]}
+          variant={trip.status === 'planned' ? 'outlined' : 'solid'}
+        />
+      ),
+    },
+    {
+      id: 'open',
+      width: 32,
+      render: () => <ArrowRight size={16} color="var(--mui-palette-text-secondary)" />,
+    },
+  ];
+
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={700}>
-          {t('trips.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t('trips.subtitle')}
-        </Typography>
-      </Box>
+      <PageHeader
+        title={t('trips.title')}
+        subtitle={t('trips.subtitle')}
+      />
 
-      {/* Search + status filters */}
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        gap={1.5}
-        sx={{ mb: 2 }}
-        alignItems="center"
-        justifyContent="space-between"
-      >
-        <Stack direction="row" alignItems="center" gap={1} sx={{ flex: 1, maxWidth: 420 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 1.25,
-              py: 0.75,
-              borderRadius: 1.5,
-              backgroundColor: 'action.hover',
-              flex: 1,
-            }}
-          >
-            <Search size={16} color="var(--mui-palette-text-secondary)" />
-            <InputBase
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('trips.list.searchPlaceholder')}
-              inputProps={{ 'aria-label': t('trips.list.search') }}
-              sx={{ flex: 1, fontSize: '0.875rem' }}
-            />
-          </Box>
-        </Stack>
-        <Stack direction="row" gap={0.75} flexWrap="wrap">
-          <Chip
-            size="small"
-            label={t('trips.status.all')}
-            onClick={() => setStatusFilter('all')}
-            variant={statusFilter === 'all' ? 'filled' : 'outlined'}
-            color={statusFilter === 'all' ? 'primary' : 'default'}
-            sx={{ height: 28, fontWeight: 600 }}
-          />
-          {STATUSES.map((s) => (
-            <Chip
-              key={s}
-              size="small"
-              label={t(`trips.status.${s}`)}
-              onClick={() => setStatusFilter(s)}
-              variant={statusFilter === s ? 'filled' : 'outlined'}
-              color={statusFilter === s ? STATUS_COLOR[s] : 'default'}
-              sx={{ height: 28, fontWeight: 600 }}
-            />
-          ))}
-        </Stack>
-      </Stack>
-
-      {/* Table */}
-      <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'action.hover' }}>
-              <TableCell sx={{ fontWeight: 600 }}>{t('trips.list.colTrip')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('trips.list.colVehicle')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('trips.list.colRoute')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('trips.list.colDate')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }} align="right">
-                {t('trips.list.colDistance')}
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600 }} align="right">
-                {t('trips.list.colDuration')}
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('trips.list.colStatus')}</TableCell>
-              <TableCell sx={{ width: 40 }} />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isLoading
-              ? SKELETON_KEYS.map((sk) => (
-                  <TableRow key={sk}>
-                    <TableCell colSpan={8}>
-                      <Skeleton variant="text" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              : filtered.map((trip) => (
-                  <TripRow
-                    key={trip.id}
-                    trip={trip}
-                    t={t}
-                    onOpen={() => navigate(`/trips/${trip.id}`)}
-                  />
-                ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {!isLoading && filtered.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-          {t('trips.list.noResults')}
-        </Typography>
-      )}
+      <Card>
+        <Toolbar
+          search
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholderKey="trips.list.searchPlaceholder"
+          right={
+            <Stack direction="row" gap={0.75} flexWrap="wrap" alignItems="center">
+              <StatusBadge
+                label={t('trips.status.all')}
+                tone="neutral"
+                variant={statusFilter === 'all' ? 'solid' : 'outlined'}
+                active={statusFilter === 'all'}
+                onClick={() => setStatusFilter('all')}
+              />
+              {STATUSES.map((s) => (
+                <StatusBadge
+                  key={s}
+                  label={t(`trips.status.${s}`)}
+                  tone={STATUS_TONE[s]}
+                  variant={statusFilter === s ? 'solid' : 'outlined'}
+                  active={statusFilter === s}
+                  onClick={() => setStatusFilter(s)}
+                />
+              ))}
+            </Stack>
+          }
+        />
+        <DataTable
+          rows={filtered}
+          columns={columns}
+          rowKey={(trip) => trip.id}
+          loading={isLoading}
+          onRowClick={(trip) => navigate(`/trips/${trip.id}`)}
+          maxHeight="calc(100vh - 280px)"
+        />
+      </Card>
     </Box>
   );
 }
 
-/** A single trip row — hover highlights, click opens the detail. */
-function TripRow({
-  trip,
-  t,
-  onOpen,
-}: {
-  trip: Trip;
-  t: (k: string) => string;
-  onOpen: () => void;
-}) {
-  const date = new Date(trip.startTime).toLocaleDateString([], {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-  return (
-    <TableRow hover onClick={onOpen} sx={{ cursor: 'pointer', '&:last-child td': { border: 0 } }}>
-      <TableCell sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{trip.id}</TableCell>
-      <TableCell>{trip.vehicleLabel}</TableCell>
-      <TableCell>
-        <Typography variant="body2" noWrap>
-          {trip.originLabel} → {trip.destinationLabel}
-        </Typography>
-      </TableCell>
-      <TableCell>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
-          {date}
-        </Typography>
-      </TableCell>
-      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-        {trip.distanceKm} km
-      </TableCell>
-      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-        {formatDuration(trip.durationMin)}
-      </TableCell>
-      <TableCell>
-        <Chip
-          size="small"
-          label={t(`trips.status.${trip.status}`)}
-          color={STATUS_COLOR[trip.status]}
-          variant={trip.status === 'planned' ? 'outlined' : 'filled'}
-          sx={{ height: 22, fontSize: '0.72rem', fontWeight: 600, textTransform: 'none' }}
-        />
-      </TableCell>
-      <TableCell>
-        <ArrowRight size={16} color="var(--mui-palette-text-secondary)" />
-      </TableCell>
-    </TableRow>
-  );
-}
-
-/** Status badge dot color fallback (kept for the planned outlined chip). */
+/** Format minutes → compact duration string. */
 function formatDuration(min: number): string {
   if (min < 60) return `${min}m`;
   const h = Math.floor(min / 60);

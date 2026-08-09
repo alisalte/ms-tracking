@@ -1,9 +1,30 @@
 /**
- * Global styles for the FleetVision web dashboard (v2 — premium dark SaaS).
+ * Global styles for the FleetVision web dashboard (v3 — Limitless-inspired).
  *
- * App-wide keyframes, scrollbars, selection, and resets that live outside the
- * MUI theme. Imported once in main.tsx.
+ * App-wide font stacks (Roboto for Latin, Vazirmatn for Persian), keyframes,
+ * scrollbars, selection, and resets that live outside the MUI theme. Imported
+ * once in main.tsx.
  */
+
+/* ── Base typography ────────────────────────────────────────────────────── */
+
+html {
+  /* Base font size — Limitless ships a dense 13px body. */
+  font-size: 16px;
+}
+
+body {
+  font-family: 'Roboto', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
+    Arial, sans-serif;
+}
+
+/* Persian uses Vazirmatn (a clean, readable Persian/Latin face). */
+html[dir='rtl'] body {
+  font-family: 'Vazirmatn', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
+    Arial, sans-serif;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
 
 /* Freshness-dot pulse for live indicators (UI_UX_Design.md §0.6). */
 @keyframes fv-pulse {
@@ -30,16 +51,16 @@
   }
 }
 
-/* ── Premium scrollbars ────────────────────────────────────────────────── */
+/* ── Scrollbars ─────────────────────────────────────────────────────────── */
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+  scrollbar-color: rgba(120, 120, 120, 0.45) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 
 *::-webkit-scrollbar-track {
@@ -47,25 +68,36 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.35);
+  background: rgba(120, 120, 120, 0.4);
   border-radius: 99px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.55);
+  background: rgba(120, 120, 120, 0.6);
   background-clip: padding-box;
 }
 
 /* ── Text selection ────────────────────────────────────────────────────── */
 
 ::selection {
-  background: rgba(59, 130, 246, 0.25);
+  background: rgba(33, 150, 243, 0.22);
 }
 
 /* ── MapLibre ──────────────────────────────────────────────────────────── */
 
 .maplibregl-ctrl-attrib {
   font-size: 10px;
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────────────────────── */
+
+.fv-breadcrumb .fv-breadcrumb-sep {
+  color: var(--mui-palette-text-disabled, #b7b7b7);
+}
+
+/* In RTL the breadcrumb trail reads right→left; mirror the chevron separator. */
+html[dir='rtl'] .fv-breadcrumb .fv-breadcrumb-sep {
+  transform: scaleX(-1);
 }

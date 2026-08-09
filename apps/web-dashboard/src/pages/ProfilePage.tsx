@@ -13,6 +13,7 @@ import { Lock, ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/hooks/useAuth';
+import { PageHeader } from '@/components/ui';
 
 /**
  * ProfilePage — read-only account + security summary.
@@ -42,9 +43,9 @@ export function ProfilePage() {
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} sx={{ mb: 3 }}>
-        {t('profile.title')}
-      </Typography>
+      <PageHeader
+        title={t('profile.title')}
+      />
 
       {/* Identity card */}
       <Card sx={{ mb: 3 }}>

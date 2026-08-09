@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { emailSchema, passwordSchema, passwordWithConfirmSchema, usernameSchema } from '@/lib/validation';
+import {
+  emailSchema,
+  passwordSchema,
+  passwordWithConfirmSchema,
+  usernameSchema,
+} from '@/lib/validation';
 
 describe('Zod validation schemas', () => {
   // ── Email ──
@@ -57,13 +62,19 @@ describe('Zod validation schemas', () => {
   // ── Password + confirm ──
   it('passes when passwords match', () => {
     expect(
-      passwordWithConfirmSchema.safeParse({ password: 'Strong!Pass123', confirmPassword: 'Strong!Pass123' }).success,
+      passwordWithConfirmSchema.safeParse({
+        password: 'Strong!Pass123',
+        confirmPassword: 'Strong!Pass123',
+      }).success,
     ).toBe(true);
   });
 
   it('fails when passwords do not match', () => {
     expect(
-      passwordWithConfirmSchema.safeParse({ password: 'Strong!Pass123', confirmPassword: 'Different!Pass456' }).success,
+      passwordWithConfirmSchema.safeParse({
+        password: 'Strong!Pass123',
+        confirmPassword: 'Different!Pass456',
+      }).success,
     ).toBe(false);
   });
 });

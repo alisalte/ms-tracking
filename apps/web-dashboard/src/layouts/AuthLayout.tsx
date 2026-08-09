@@ -3,10 +3,11 @@ import { Activity, Camera, MapPin, ShieldCheck, Truck } from 'lucide-react';
 import { Outlet } from 'react-router';
 
 /**
- * AuthLayout — premium branded split-panel shell for unauthenticated pages.
+ * AuthLayout — branded split-panel shell for unauthenticated pages.
  *
- * v2: deep-navy gradient branding panel with floating feature icons + a glass
- * form panel. On mobile it collapses to a centered card.
+ * v3 (Limitless-inspired): keeps the FleetVision branded side panel (navy
+ * gradient + feature pills) but the form panel now reads as Limitless — clean
+ * light surface, 3px cards. On mobile it collapses to a centered card. RTL-safe.
  */
 export function AuthLayout() {
   const theme = useTheme();
@@ -32,7 +33,7 @@ export function AuthLayout() {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* ── Premium branding panel ── */}
+      {/* ── Branded panel ── */}
       <Box
         sx={{
           flex: 1.1,
@@ -42,31 +43,31 @@ export function AuthLayout() {
           p: 8,
           position: 'relative',
           overflow: 'hidden',
-          background: 'linear-gradient(160deg, #0B1120 0%, #131C31 40%, #1E3A5F 100%)',
+          background: 'linear-gradient(160deg, #1A2733 0%, #263238 45%, #37474F 100%)',
         }}
       >
         {/* Decorative radial glow */}
         <Box
           sx={{
             position: 'absolute',
-            top: '-10%',
-            right: '-5%',
-            width: 400,
-            height: 400,
+            top: '-12%',
+            insetInlineEnd: '-8%',
+            width: 420,
+            height: 420,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(33,150,243,0.22) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}
         />
         <Box
           sx={{
             position: 'absolute',
-            bottom: '-10%',
-            left: '-5%',
-            width: 350,
-            height: 350,
+            bottom: '-12%',
+            insetInlineStart: '-8%',
+            width: 360,
+            height: 360,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(63,81,181,0.18) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}
         />
@@ -81,14 +82,14 @@ export function AuthLayout() {
                 justifyContent: 'center',
                 width: 44,
                 height: 44,
-                borderRadius: 3,
-                background: 'linear-gradient(135deg, #3B82F6 0%, #6366F1 100%)',
-                boxShadow: '0 8px 24px rgba(59,130,246,0.4)',
+                borderRadius: 1,
+                background: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
+                boxShadow: '0 8px 24px rgba(33,150,243,0.4)',
               }}
             >
               <ShieldCheck size={24} color="#fff" />
             </Box>
-            <Typography variant="h4" fontWeight={800} sx={{ color: '#F1F5F9' }}>
+            <Typography variant="h4" fontWeight={700} sx={{ color: '#FFFFFF' }}>
               FleetVision
             </Typography>
           </Stack>
@@ -96,32 +97,24 @@ export function AuthLayout() {
           {/* Headline */}
           <Box>
             <Typography
-              variant="h3"
-              fontWeight={800}
               sx={{
-                color: '#F1F5F9',
+                color: '#FFFFFF',
                 lineHeight: 1.2,
-                fontSize: '2rem',
+                fontSize: '1.75rem',
+                fontWeight: 700,
                 mb: 1.5,
               }}
             >
               Enterprise Fleet Intelligence
             </Typography>
-            <Typography
-              sx={{
-                color: '#94A3B8',
-                fontSize: '1rem',
-                lineHeight: 1.7,
-                maxWidth: 380,
-              }}
-            >
-              Real-time tracking, video telematics, maintenance, and compliance — unified in one
-              calm, fast, secure dashboard.
+            <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', lineHeight: 1.7 }}>
+              Real-time tracking, video telematics, maintenance, and compliance — unified in one calm,
+              fast, secure dashboard.
             </Typography>
           </Box>
 
           {/* Feature pills */}
-          <Stack direction="row" gap={2} sx={{ flexWrap: 'wrap', mt: 2 }}>
+          <Stack direction="row" gap={1.5} sx={{ flexWrap: 'wrap', mt: 2 }}>
             {[
               { icon: Truck, label: 'Fleet Tracking' },
               { icon: MapPin, label: 'Live Map' },
@@ -136,13 +129,13 @@ export function AuthLayout() {
                 sx={{
                   px: 1.5,
                   py: 1,
-                  borderRadius: 10,
-                  backgroundColor: 'rgba(59,130,246,0.1)',
-                  border: '1px solid rgba(59,130,246,0.2)',
+                  borderRadius: 99,
+                  backgroundColor: 'rgba(33,150,243,0.14)',
+                  border: '1px solid rgba(33,150,243,0.28)',
                 }}
               >
-                <Icon size={15} color="#60A5FA" />
-                <Typography variant="caption" sx={{ color: '#CBD5E1', fontWeight: 500 }}>
+                <Icon size={15} color="#64B5F6" />
+                <Typography variant="caption" sx={{ color: '#ECEFF1', fontWeight: 500 }}>
                   {label}
                 </Typography>
               </Stack>

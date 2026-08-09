@@ -1,9 +1,11 @@
-import { Box, Button, Chip, Skeleton, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, Skeleton } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { LiveBadge } from '@/components/dashboard/LiveBadge';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { useFleetStats } from '@/api/fleet.api';
 import { status } from '@/theme/palette';
 import type { FleetStats } from '@/types/fleet.types';
@@ -12,7 +14,6 @@ import { ActiveAlertsPanel } from './ActiveAlertsPanel';
 import { FleetActivityChart } from './FleetActivityChart';
 import { FleetMapPreview } from './FleetMapPreview';
 import { FleetUtilizationPanel } from './FleetUtilizationPanel';
-import { LiveBadge } from './LiveBadge';
 import { StatCard } from './StatCard';
 import { VehiclesAttentionList } from './VehiclesAttentionList';
 import { WeatherWidget } from './WeatherWidget';
@@ -101,36 +102,23 @@ export function DashboardGrid() {
   return (
     <Box>
       {/* ── Header (§1.3): fleet name · live overview · live badge · export ── */}
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        alignItems={{ sm: 'center' }}
-        justifyContent="space-between"
-        gap={1}
-        sx={{ mb: 3 }}
-      >
-        <Stack direction="row" alignItems="center" gap={1.5}>
-          <Box>
-            <Typography variant="h4" fontWeight={700}>
-              {t('dashboard.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('dashboard.subtitle')}
-            </Typography>
-          </Box>
-          <LiveBadge />
-        </Stack>
-
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<Download size={16} />}
-          onClick={() => {
-            /* Export deferred (§1.5); placeholder action. */
-          }}
-        >
-          {t('dashboard.export')}
-        </Button>
-      </Stack>
+      <PageHeader
+        title={t('dashboard.title')}
+        subtitle={t('dashboard.subtitle')}
+        live={<LiveBadge />}
+        actions={
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Download size={16} />}
+            onClick={() => {
+              /* Export deferred (§1.5); placeholder action. */
+            }}
+          >
+            {t('dashboard.export')}
+          </Button>
+        }
+      />
 
       {/* ── Stat-card row (5 cards) ── */}
       <Box

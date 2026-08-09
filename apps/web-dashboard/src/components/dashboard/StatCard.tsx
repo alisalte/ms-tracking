@@ -26,13 +26,13 @@ interface StatCardProps {
 /**
  * StatCard — reusable KPI tile (UI_UX_Design.md §0.5, §1.4).
  *
- * Top row of the Fleet Dashboard: a label, a big value, a delta-vs-yesterday
- * chip, a 7-point sparkline, and an optional secondary line. The whole tile is
- * clickable to drill into the Map filtered to that status.
+ * Top row of the Fleet Dashboard: an uppercase Limitless label, a big value, a
+ * delta-vs-yesterday chip, a 7-point sparkline, and an optional secondary line.
+ * The whole tile is clickable to drill into the Map filtered to that status.
  *
- * Color is reserved for meaning (§0.1): the delta chip turns green/red by
- * direction, the accent tints the value + sparkline. Numbers use tabular-nums
- * so live updates don't jitter (§0.3).
+ * v3 (Limitless): uppercase tracked label, weight-700 tabular value, near-flat
+ * 3px card, color reserved for meaning (§0.1) — the delta chip turns green/red
+ * by direction, the accent tints the value + sparkline.
  */
 export function StatCard({
   titleKey,
@@ -63,18 +63,16 @@ export function StatCard({
         disabled={!onClick}
         sx={{ height: '100%', p: 2, alignItems: 'stretch', '&:hover': {} }}
       >
-        <Stack direction="column" gap={0.5} sx={{ height: '100%' }}>
+        <Stack direction="column" gap={0.75} sx={{ height: '100%' }}>
           <Typography
-            variant="body2"
-            color="text.secondary"
-            fontWeight={600}
-            textTransform="uppercase"
+            variant="overline"
+            sx={{ lineHeight: 1.6667, color: 'text.secondary' }}
           >
             {t(titleKey)}
           </Typography>
 
           {loading ? (
-            <Skeleton variant="text" width="60%" height={40} />
+            <Skeleton variant="text" width="60%" height={36} />
           ) : (
             <Typography
               variant="h4"
@@ -87,9 +85,9 @@ export function StatCard({
           )}
 
           {/* Secondary line: delta chip and/or meta */}
-          <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: 22 }}>
+          <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: 20 }}>
             {loading ? (
-              <Skeleton variant="rounded" width={56} height={18} />
+              <Skeleton variant="rounded" width={56} height={16} />
             ) : (
               <>
                 {delta !== undefined && <DeltaChip delta={delta} />}
@@ -100,12 +98,12 @@ export function StatCard({
 
           {/* Sparkline pinned to the bottom */}
           {!loading && (
-            <Box sx={{ mt: 'auto', height: 32, width: '100%' }}>
+            <Box sx={{ mt: 'auto', height: 30, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={accent} stopOpacity={0.4} />
+                      <stop offset="0%" stopColor={accent} stopOpacity={0.35} />
                       <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
@@ -155,7 +153,7 @@ function DeltaChip({ delta }: { delta: number }) {
       <Icon size={13} color={`var(--mui-palette-${up ? 'success' : 'error'}-main)`} />
       <Typography
         variant="caption"
-        fontWeight={600}
+        fontWeight={700}
         sx={{ color, fontVariantNumeric: 'tabular-nums' }}
       >
         {up ? '+' : ''}

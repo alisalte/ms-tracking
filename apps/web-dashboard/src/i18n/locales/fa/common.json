@@ -3,7 +3,7 @@
     "login": "ورود",
     "email": "ایمیل",
     "password": "رمز عبور",
-    "tenantId": "شناسه مستأجر",
+    "tenantId": "سازمان",
     "loggingIn": "در حال ورود...",
     "signInSubtitle": "وارد فضای کاری ناوگان خود شوید",
     "rememberDevice": "این دستگاه را به خاطر بسپار",
@@ -42,7 +42,8 @@
     "errors": {
       "invalidCredentials": "ایمیل یا رمز عبور نامعتبر است",
       "networkError": "اتصال به سرور ممکن نیست"
-    }
+    },
+    "tenantIdHelp": "نام سازمان شما (مثلاً FleetVision)"
   },
   "nav": {
     "dashboard": "داشبورد",
@@ -81,7 +82,14 @@
     "dashboard": {
       "title": "داشبورد",
       "welcome": "خوش آمدید"
-    }
+    },
+    "openMenu": "باز کردن منو",
+    "closeMenu": "بستن منو",
+    "expandNav": "باز کردن ناوبری",
+    "collapseNav": "جمع کردن ناوبری",
+    "noData": "داده‌ای برای نمایش وجود ندارد",
+    "rowCount": "{{count}} ردیف",
+    "showing": "نمایش {{count}}"
   },
   "errors": {
     "retry": "تلاش مجدد",
@@ -817,5 +825,14 @@
     "displayName": {
       "tooLong": "حداکثر ۱۲۸ کاراکتر مجاز است"
     }
+  },
+  "navGroups": {
+    "tracking": "رهگیری",
+    "video": "ویدیو",
+    "operations": "عملیات",
+    "assets": "دارایی‌ها",
+    "reporting": "گزارش‌گیری",
+    "maintenance": "تعمیر و نگهداری",
+    "administration": "مدیریت"
   }
 }

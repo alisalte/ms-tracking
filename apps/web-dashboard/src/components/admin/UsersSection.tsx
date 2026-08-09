@@ -8,21 +8,21 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { userStatusColor } from '@/components/admin/admin-meta';
+import { StatusBadge, Toolbar } from '@/components/ui';
 import type { AdminUserStatus } from '@/types/admin.types';
 import type { AdminUser } from '@/types/admin.types';
 import {
   Box,
-  Chip,
   MenuItem,
   Select,
   Skeleton,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 
@@ -73,50 +73,42 @@ export function UsersSection({
   if (loading) {
     const keys = ['usk-a', 'usk-b', 'usk-c', 'usk-d', 'usk-e', 'usk-f'];
     return (
-      <TableContainer>
-        <Table size="small">
-          <TableBody>
-            {keys.map((k) => (
-              <TableRow key={k}>
-                <TableCell colSpan={5}>
-                  <Skeleton height={26} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Stack sx={{ p: 2, gap: 1 }}>
+        {keys.map((k) => (
+          <Skeleton key={k} height={28} />
+        ))}
+      </Stack>
     );
   }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', gap: 1, p: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Select
-          size="small"
-          value={filterStatus}
-          onChange={(e) => onFilterStatus(e.target.value as AdminUserStatus | 'all')}
-          sx={{ height: 32, minWidth: 140, fontSize: '0.8rem' }}
-        >
-          {STATUSES.map((s) => (
-            <MenuItem key={s} value={s}>
-              {s === 'all' ? t('admin.users.allStatus') : t(`admin.users.status.${s}`)}
-            </MenuItem>
-          ))}
-        </Select>
-        <TextField
-          size="small"
-          placeholder={t('admin.users.search')}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          sx={{ minWidth: 240, flex: 1, maxWidth: 360 }}
-        />
-        <Box sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary">
-          {t('admin.count', { count: filtered.length })}
-        </Typography>
-      </Box>
-      <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
+      <Toolbar
+        search
+        searchValue={query}
+        onSearchChange={onQuery}
+        searchPlaceholderKey="admin.users.search"
+        left={
+          <Select
+            size="small"
+            value={filterStatus}
+            onChange={(e) => onFilterStatus(e.target.value as AdminUserStatus | 'all')}
+            sx={{ height: 32, minWidth: 140, fontSize: '0.8rem' }}
+          >
+            {STATUSES.map((s) => (
+              <MenuItem key={s} value={s}>
+                {s === 'all' ? t('admin.users.allStatus') : t(`admin.users.status.${s}`)}
+              </MenuItem>
+            ))}
+          </Select>
+        }
+        right={
+          <Typography variant="caption" color="text.secondary">
+            {t('admin.count', { count: filtered.length })}
+          </Typography>
+        }
+      />
+      <TableContainer sx={{ maxHeight: 'calc(100vh - 300px)' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
@@ -149,12 +141,7 @@ export function UsersSection({
                 </TableCell>
                 <TableCell>
                   {u.mfaEnabled ? (
-                    <Chip
-                      size="small"
-                      label="✓"
-                      color="success"
-                      sx={{ height: 18, minWidth: 28 }}
-                    />
+                    <StatusBadge label="✓" tone="success" variant="solid" />
                   ) : (
                     <Typography variant="caption" color="text.disabled">
                       —
@@ -162,16 +149,10 @@ export function UsersSection({
                   )}
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    size="small"
+                  <StatusBadge
                     label={t(`admin.users.status.${u.status}`)}
-                    sx={{
-                      height: 20,
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      color: '#fff',
-                      bgcolor: userStatusColor(u.status),
-                    }}
+                    color={userStatusColor(u.status)}
+                    variant="solid"
                   />
                 </TableCell>
                 <TableCell align="right">

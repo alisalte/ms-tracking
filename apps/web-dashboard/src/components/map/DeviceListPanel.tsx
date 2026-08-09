@@ -57,7 +57,7 @@ export function DeviceListPanel({
       sx={{
         height: '100%',
         backgroundColor: 'background.paper',
-        borderRight: '1px solid',
+        borderInlineEnd: '1px solid',
         borderColor: 'divider',
       }}
     >
@@ -153,7 +153,7 @@ export function DeviceListPanel({
                       padding: '8px 16px',
                       background: selected ? 'var(--mui-palette-action-selected)' : 'transparent',
                       border: 'none',
-                      borderLeft: selected
+                      borderInlineStart: selected
                         ? '3px solid var(--mui-palette-primary-main)'
                         : '3px solid transparent',
                       cursor: 'pointer',

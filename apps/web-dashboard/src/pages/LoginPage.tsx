@@ -97,7 +97,9 @@ export function LoginPage() {
                 autoFocus
                 disabled={isLoading}
                 error={Boolean(errors.tenantId)}
-                helperText={errors.tenantId ? t(errors.tenantId?.message ?? '') : ' '}
+                helperText={
+                  errors.tenantId ? t(errors.tenantId?.message ?? '') : t('auth.tenantIdHelp')
+                }
               />
             )}
           />

@@ -1,42 +1,61 @@
 /**
  * Mock-gate system — controls whether mock data is used instead of real API calls.
  *
- * In production builds (`import.meta.env.PROD`), mocks are ALWAYS disabled — the
- * mock modules are never imported, keeping the production bundle lean and
- * guaranteeing the app only talks to real backends.
+ * Most FleetVision data services (analytics, fleet, tracking, weather) are not
+ * implemented yet — only `identity-service` exists. So the dashboard/map/trips
+ * pages are mock-backed by default, in dev AND production, so the UI is fully
+ * demoable.
  *
- * In development/test, the `VITE_USE_MOCK` env var (default `true`) controls
- * the behavior:
- * - `true` (default): try the real API first; on network error, fall back to mock.
- * - `false`: always use the real API (no mock fallback).
+ * Controls (checked in order):
+ *   1. `localStorage.fleetvision_use_mock === 'false'` → mocks off (talk to real APIs).
+ *   2. `?useMock=false` query param → mocks off for this session (sets the flag).
+ *   3. `import.meta.env.VITE_USE_MOCK === 'false'` (build-time) → mocks off.
+ *   4. otherwise → mocks ON (default).
  *
  * Individual API modules use `shouldUseMock()` to decide, and `withMockFallback()`
  * to implement the try-real-then-fallback pattern.
  */
 
+const LS_KEY = 'fleetvision_use_mock';
+
+function readRuntimeFlag(): boolean | null {
+  // Query-param override (?useMock=false), persisted to localStorage so it
+  // survives navigation/refresh.
+  if (typeof window !== 'undefined') {
+    const qp = new URLSearchParams(window.location.search).get('useMock');
+    if (qp === 'false' || qp === '0') {
+      window.localStorage.setItem(LS_KEY, 'false');
+    } else if (qp === 'true' || qp === '1') {
+      window.localStorage.setItem(LS_KEY, 'true');
+    }
+    const ls = window.localStorage.getItem(LS_KEY);
+    if (ls === 'false' || ls === '0') return false;
+    if (ls === 'true' || ls === '1') return true;
+  }
+  return null;
+}
+
 /**
- * Whether mock data should be used at all.
- *
- * - Production: never (returns false unconditionally — tree-shakes mocks).
- * - Dev/test: true unless `VITE_USE_MOCK=false` is explicitly set.
+ * Whether mock data should be used. Default: TRUE (so the dashboard/map/trips
+ * render with data even when the backend services aren't deployed).
  */
 export function shouldUseMock(): boolean {
-  // Production builds NEVER use mock data.
-  if (import.meta.env.PROD) return false;
-
-  // Dev/test: respect VITE_USE_MOCK (default true).
+  const runtime = readRuntimeFlag();
+  if (runtime !== null) return runtime;
+  // Build-time override.
   const flag = import.meta.env.VITE_USE_MOCK;
   return flag !== 'false' && flag !== '0';
 }
 
 /**
  * Try a real API call first; if it fails with a network error (server not
- * running) in dev/test mode, fall back to the mock fetcher.
+ * running), fall back to the mock fetcher.
  *
- * In production, the mock fetcher is never called (it's behind `shouldUseMock`).
+ * When `shouldUseMock()` is false (operator opted into real APIs via
+ * `?useMock=false` or `VITE_USE_MOCK=false`), the mock fetcher is never called.
  *
  * @param realFetch The real API call (apiGet/apiPost).
- * @param mockFetch The mock data resolver (only called on network failure in dev).
+ * @param mockFetch The mock data resolver (only called on network failure).
  * @returns The data from the real call, or the mock fallback.
  */
 export async function withMockFallback<T>(

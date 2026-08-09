@@ -183,9 +183,9 @@ export function VideoWallPage() {
   return (
     <Stack
       sx={{
-        height: '100%',
-        // Neutralize the AppLayout content padding so the wall is full-bleed.
-        margin: -3,
+        // Full-bleed: break out of <main>'s padding by going absolute.
+        position: 'absolute',
+        inset: 0,
         backgroundColor: 'background.default',
       }}
     >

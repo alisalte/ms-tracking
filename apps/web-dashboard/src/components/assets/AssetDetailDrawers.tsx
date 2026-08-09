@@ -22,6 +22,7 @@ import {
   signalColor,
   vehicleStatusColor,
 } from '@/components/assets/asset-meta';
+import { StatusBadge } from '@/components/ui';
 import type { AssetTab } from '@/pages/AssetManagementPage';
 import {
   Box,
@@ -196,16 +197,10 @@ function VehicleDetailDrawer({
       subtitle={vehicle ? vehicle.licensePlate : ''}
       badge={
         vehicle ? (
-          <Chip
-            size="small"
+          <StatusBadge
             label={t(`assets.vehicle.status.${vehicle.status}`)}
-            sx={{
-              height: 22,
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              color: '#fff',
-              bgcolor: vehicleStatusColor(vehicle.status),
-            }}
+            color={vehicleStatusColor(vehicle.status)}
+            variant="solid"
           />
         ) : null
       }
@@ -301,16 +296,10 @@ function DriverDetailDrawer({
       subtitle={driver?.email}
       badge={
         driver ? (
-          <Chip
-            size="small"
+          <StatusBadge
             label={t(`assets.driver.status.${driver.status}`)}
-            sx={{
-              height: 22,
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              color: '#fff',
-              bgcolor: driverStatusColor(driver.status),
-            }}
+            color={driverStatusColor(driver.status)}
+            variant="solid"
           />
         ) : null
       }
@@ -410,16 +399,10 @@ function DeviceDetailDrawer({
       subtitle={device ? `${device.manufacturer} ${device.model}` : ''}
       badge={
         device ? (
-          <Chip
-            size="small"
+          <StatusBadge
             label={t(`assets.device.status.${device.status}`)}
-            sx={{
-              height: 22,
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              color: '#fff',
-              bgcolor: deviceStatusColor(device.status),
-            }}
+            color={deviceStatusColor(device.status)}
+            variant="solid"
           />
         ) : null
       }

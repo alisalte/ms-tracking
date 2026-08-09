@@ -49,7 +49,7 @@ describe('mergeLivePositions', () => {
 
   it('patches the vehicle with a live position', () => {
     const result = mergeLivePositions(baseVehicles, livePositions);
-    const v1 = result.find((v) => v.id === "v1");
+    const v1 = result.find((v) => v.id === 'v1')!;
     expect(v1.lat).toBe(35.72);
     expect(v1.lng).toBe(51.32);
     expect(v1.speed).toBe(75);
@@ -59,14 +59,14 @@ describe('mergeLivePositions', () => {
 
   it('leaves vehicles without live positions untouched', () => {
     const result = mergeLivePositions(baseVehicles, livePositions);
-    const v2 = result.find((v) => v.id === "v2");
+    const v2 = result.find((v) => v.id === 'v2')!;
     expect(v2.lat).toBe(35.8);
     expect(v2.speed).toBe(0);
   });
 
   it('preserves non-position fields (label, state, type)', () => {
     const result = mergeLivePositions(baseVehicles, livePositions);
-    const v1 = result.find((v) => v.id === "v1");
+    const v1 = result.find((v) => v.id === 'v1')!;
     expect(v1.label).toBe('Truck-1');
     expect(v1.state).toBe('driving');
     expect(v1.type).toBe('truck');

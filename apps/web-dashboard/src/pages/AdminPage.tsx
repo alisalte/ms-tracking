@@ -19,8 +19,9 @@ import { RolesSection } from '@/components/admin/RolesSection';
 import { SettingsSection } from '@/components/admin/SettingsSection';
 import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer';
 import { UsersSection } from '@/components/admin/UsersSection';
+import { PageHeader } from '@/components/ui';
 import type { AdminSection, AdminUserStatus } from '@/types/admin.types';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack } from '@mui/material';
 
 const ENABLED: AdminSection[] = ['users', 'roles', 'permissions', 'settings', 'audit'];
 
@@ -62,15 +63,13 @@ export function AdminPage() {
         sx={{
           width: 240,
           minWidth: 240,
-          borderRight: '1px solid',
+          borderInlineEnd: '1px solid',
           borderColor: 'divider',
           p: 1.5,
           overflowY: 'auto',
         }}
       >
-        <Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>
-          {t('admin.title')}
-        </Typography>
+        <PageHeader title={t('admin.title')} compact sx={{ mb: 1.5, px: 1 }} />
         <Box sx={{ mt: 0.5 }}>
           <AdminNav section={section} onSelect={setSection} />
         </Box>

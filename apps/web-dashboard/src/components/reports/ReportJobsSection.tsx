@@ -9,12 +9,12 @@
 import { useTranslation } from 'react-i18next';
 
 import { useExportRaw, useReportJobs } from '@/api/report.api';
+import { StatusBadge } from '@/components/ui';
 import { downloadBlob } from '@/lib/video-stream';
 import { status } from '@/theme/palette';
 import type { ReportJobStatus } from '@/types/report.types';
 import {
   Button,
-  Chip,
   CircularProgress,
   Stack,
   Table,
@@ -101,16 +101,10 @@ export function ReportJobsSection() {
                     <Typography variant="body2">{job.formats.join(', ')}</Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      size="small"
+                    <StatusBadge
                       label={t(`reports.jobs.status.${job.status}`)}
-                      sx={{
-                        height: 20,
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: '#fff',
-                        bgcolor: jobStatusColor(job.status),
-                      }}
+                      color={jobStatusColor(job.status)}
+                      variant="solid"
                     />
                   </TableCell>
                   <TableCell>

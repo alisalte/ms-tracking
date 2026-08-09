@@ -15,7 +15,8 @@ import { DashboardsSection } from '@/components/reports/DashboardsSection';
 import { ReportDefinitionsSection } from '@/components/reports/ReportDefinitionsSection';
 import { ReportJobsSection } from '@/components/reports/ReportJobsSection';
 import { ReportsOverview } from '@/components/reports/ReportsOverview';
-import { Box, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { PageHeader } from '@/components/ui';
+import { Box, Stack, Tab, Tabs } from '@mui/material';
 
 export type ReportSection = 'overview' | 'reports' | 'jobs' | 'dashboards';
 
@@ -46,14 +47,11 @@ export function ReportsPage() {
   return (
     <Stack sx={{ height: '100%' }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" gap={1} sx={{ pb: 1.5 }}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5">{t('reports.title')}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('reports.subtitle')}
-          </Typography>
-        </Box>
-      </Stack>
+      <PageHeader
+        compact
+        title={t('reports.title')}
+        subtitle={t('reports.subtitle')}
+      />
 
       {/* Section tabs */}
       <Tabs

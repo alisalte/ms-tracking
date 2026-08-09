@@ -3,7 +3,7 @@
     "login": "Sign In",
     "email": "Email",
     "password": "Password",
-    "tenantId": "Tenant ID",
+    "tenantId": "Organization",
     "loggingIn": "Signing in...",
     "signInSubtitle": "Sign in to your fleet workspace",
     "rememberDevice": "Remember this device",
@@ -42,7 +42,8 @@
     "errors": {
       "invalidCredentials": "Invalid email or password",
       "networkError": "Unable to connect to server"
-    }
+    },
+    "tenantIdHelp": "Your organization name (e.g. FleetVision)"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -81,7 +82,14 @@
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome back"
-    }
+    },
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "expandNav": "Expand navigation",
+    "collapseNav": "Collapse navigation",
+    "noData": "No data to display",
+    "rowCount": "{{count}} rows",
+    "showing": "Showing {{count}}"
   },
   "errors": {
     "retry": "Retry",
@@ -817,5 +825,14 @@
     "displayName": {
       "tooLong": "Must be at most 128 characters"
     }
+  },
+  "navGroups": {
+    "tracking": "Tracking",
+    "video": "Video",
+    "operations": "Operations",
+    "assets": "Assets",
+    "reporting": "Reporting",
+    "maintenance": "Maintenance",
+    "administration": "Administration"
   }
 }

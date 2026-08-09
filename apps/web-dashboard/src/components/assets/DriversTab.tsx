@@ -10,10 +10,10 @@ import { useTranslation } from 'react-i18next';
 
 import { SkeletonRows } from '@/components/assets/VehiclesTab';
 import { driverStatusColor } from '@/components/assets/asset-meta';
+import { StatusBadge } from '@/components/ui';
 import type { DriverStatus } from '@/types/asset.types';
 import {
   Box,
-  Chip,
   LinearProgress,
   MenuItem,
   Select,
@@ -149,16 +149,10 @@ export function DriversTab({
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      size="small"
+                    <StatusBadge
                       label={t(`assets.driver.status.${d.status}`)}
-                      sx={{
-                        height: 20,
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: '#fff',
-                        bgcolor: driverStatusColor(d.status),
-                      }}
+                      color={driverStatusColor(d.status)}
+                      variant="solid"
                     />
                   </TableCell>
                   <TableCell>

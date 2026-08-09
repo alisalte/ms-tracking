@@ -17,6 +17,7 @@ import { DevicesTab } from '@/components/assets/DevicesTab';
 import { DriversTab } from '@/components/assets/DriversTab';
 import { GroupsTab } from '@/components/assets/GroupsTab';
 import { VehiclesTab } from '@/components/assets/VehiclesTab';
+import { PageHeader } from '@/components/ui';
 import type { DeviceStatus, DeviceType, DriverStatus, VehicleStatus } from '@/types/asset.types';
 import type { VehicleType } from '@/types/fleet.types';
 import { Box, Stack, Tab, Tabs, Typography } from '@mui/material';
@@ -74,14 +75,11 @@ export function AssetManagementPage() {
   return (
     <Stack sx={{ height: '100%' }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" gap={1} sx={{ pb: 1.5 }}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5">{t('assets.title')}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('assets.subtitle')}
-          </Typography>
-        </Box>
-      </Stack>
+      <PageHeader
+        compact
+        title={t('assets.title')}
+        subtitle={t('assets.subtitle')}
+      />
 
       {/* Tabs */}
       <Tabs

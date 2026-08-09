@@ -15,10 +15,10 @@ import {
   deviceTypeIcon,
   signalColor,
 } from '@/components/assets/asset-meta';
+import { StatusBadge } from '@/components/ui';
 import type { DeviceStatus, DeviceType } from '@/types/asset.types';
 import {
   Box,
-  Chip,
   MenuItem,
   Select,
   Table,
@@ -173,16 +173,10 @@ export function DevicesTab({
                     <Typography variant="body2">{d.boundVehicleLabel ?? '—'}</Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      size="small"
+                    <StatusBadge
                       label={t(`assets.device.status.${d.status}`)}
-                      sx={{
-                        height: 20,
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: '#fff',
-                        bgcolor: deviceStatusColor(d.status),
-                      }}
+                      color={deviceStatusColor(d.status)}
+                      variant="solid"
                     />
                   </TableCell>
                   <TableCell>

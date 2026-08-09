@@ -18,6 +18,7 @@ import { AlarmList } from '@/components/alarms/AlarmList';
 import { AlarmMap } from '@/components/alarms/AlarmMap';
 import { AlarmTimeline } from '@/components/alarms/AlarmTimeline';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
+import { PageHeader } from '@/components/ui';
 import type { AlarmFilters, AlarmSeverity, AlarmStatus, AlarmType } from '@/types/alarm.types';
 import {
   Box,
@@ -30,7 +31,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
-  Typography,
 } from '@mui/material';
 
 type ViewMode = 'list' | 'timeline' | 'map';
@@ -110,20 +110,19 @@ export function AlarmCenterPage() {
   return (
     <Stack sx={{ height: '100%' }}>
       {/* Header: title + live stats */}
-      <Stack direction="row" alignItems="center" gap={2} sx={{ pb: 2 }}>
-        <Box sx={{ flex: 1 }}>
-          <Stack direction="row" alignItems="center" gap={1}>
-            <Typography variant="h5">{t('alarms.title')}</Typography>
-            <LiveBadge />
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            {t('alarms.subtitle')}
-          </Typography>
-        </Box>
-        <StatChip label={t('alarms.stats.active')} value={stats.active} color="primary" />
-        <StatChip label={t('alarms.stats.unacked')} value={stats.unacked} color="warning" />
-        <StatChip label={t('alarms.stats.escalated')} value={stats.escalated} color="error" />
-      </Stack>
+      <PageHeader
+        compact
+        title={t('alarms.title')}
+        subtitle={t('alarms.subtitle')}
+        live={<LiveBadge />}
+        actions={
+          <>
+            <StatChip label={t('alarms.stats.active')} value={stats.active} color="primary" />
+            <StatChip label={t('alarms.stats.unacked')} value={stats.unacked} color="warning" />
+            <StatChip label={t('alarms.stats.escalated')} value={stats.escalated} color="error" />
+          </>
+        }
+      />
 
       {/* Filter bar */}
       <Stack direction="row" alignItems="center" gap={1} sx={{ pb: 1.5, flexWrap: 'wrap' }}>

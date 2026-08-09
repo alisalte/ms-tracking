@@ -89,9 +89,11 @@ export function MapPage() {
   return (
     <Box
       sx={{
-        // Neutralize AppLayout's p:3 so the map is full-bleed (§2.2).
-        m: -3,
-        height: 'calc(100vh - 56px)',
+        // Full-bleed: break out of <main>'s padding by going absolute.
+        // The AppLayout <main> is position:relative, so inset:0 covers the
+        // padding box edge-to-edge regardless of box-sizing quirks.
+        position: 'absolute',
+        inset: 0,
         display: 'flex',
         overflow: 'hidden',
       }}

@@ -3,27 +3,26 @@
  *
  * Filterable by status/type + free-text search. Row click opens the vehicle
  * detail drawer (selection → detail, UI_UX §0.6). Renders the lifecycle status
- * as a colored chip (Fleet-Management §2 VehicleStatus).
+ * via the unified StatusBadge. v3: wrapped in a Limitless Card + Toolbar.
  */
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { vehicleStatusColor } from '@/components/assets/asset-meta';
+import { StatusBadge, Toolbar } from '@/components/ui';
 import type { VehicleStatus } from '@/types/asset.types';
 import type { VehicleType } from '@/types/fleet.types';
 import {
   Box,
-  Chip,
   MenuItem,
   Select,
-  Skeleton,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 
@@ -84,44 +83,46 @@ export function VehiclesTab({
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', gap: 1, p: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Select
-          size="small"
-          value={filterStatus}
-          onChange={(e) => onFilterStatus(e.target.value as VehicleStatus | 'all')}
-          sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
-        >
-          {STATUSES.map((s) => (
-            <MenuItem key={s} value={s}>
-              {s === 'all' ? t('assets.filters.allStatus') : t(`assets.vehicle.status.${s}`)}
-            </MenuItem>
-          ))}
-        </Select>
-        <Select
-          size="small"
-          value={filterType}
-          onChange={(e) => onFilterType(e.target.value as VehicleType | 'all')}
-          sx={{ height: 32, minWidth: 110, fontSize: '0.8rem' }}
-        >
-          {TYPES.map((ty) => (
-            <MenuItem key={ty} value={ty}>
-              {ty === 'all' ? t('assets.filters.allTypes') : t(`assets.vehicle.type.${ty}`)}
-            </MenuItem>
-          ))}
-        </Select>
-        <TextField
-          size="small"
-          placeholder={t('assets.vehicle.search')}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          sx={{ minWidth: 220, flex: 1, maxWidth: 360 }}
-        />
-        <Box sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary">
-          {t('assets.count', { count: filtered.length })}
-        </Typography>
-      </Box>
-      <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
+      <Toolbar
+        search
+        searchValue={query}
+        onSearchChange={onQuery}
+        searchPlaceholderKey="assets.vehicle.search"
+        left={
+          <>
+            <Select
+              size="small"
+              value={filterStatus}
+              onChange={(e) => onFilterStatus(e.target.value as VehicleStatus | 'all')}
+              sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
+            >
+              {STATUSES.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {s === 'all' ? t('assets.filters.allStatus') : t(`assets.vehicle.status.${s}`)}
+                </MenuItem>
+              ))}
+            </Select>
+            <Select
+              size="small"
+              value={filterType}
+              onChange={(e) => onFilterType(e.target.value as VehicleType | 'all')}
+              sx={{ height: 32, minWidth: 110, fontSize: '0.8rem' }}
+            >
+              {TYPES.map((ty) => (
+                <MenuItem key={ty} value={ty}>
+                  {ty === 'all' ? t('assets.filters.allTypes') : t(`assets.vehicle.type.${ty}`)}
+                </MenuItem>
+              ))}
+            </Select>
+          </>
+        }
+        right={
+          <Typography variant="caption" color="text.secondary">
+            {t('assets.count', { count: filtered.length })}
+          </Typography>
+        }
+      />
+      <TableContainer sx={{ maxHeight: 'calc(100vh - 300px)' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
@@ -158,16 +159,10 @@ export function VehiclesTab({
                   <Typography variant="body2">{t(`assets.vehicle.type.${v.type}`)}</Typography>
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    size="small"
+                  <StatusBadge
                     label={t(`assets.vehicle.status.${v.status}`)}
-                    sx={{
-                      height: 20,
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      color: '#fff',
-                      bgcolor: vehicleStatusColor(v.status),
-                    }}
+                    color={vehicleStatusColor(v.status)}
+                    variant="solid"
                   />
                 </TableCell>
                 <TableCell align="right">
@@ -193,20 +188,21 @@ export function VehiclesTab({
 
 /** Skeleton loading rows shared by the tabs. */
 export function SkeletonRows({ cols }: { cols: number }) {
-  const keys = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e', 'sk-f', 'sk-g', 'sk-h'];
+  const rows = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e', 'sk-f', 'sk-g', 'sk-h'];
   return (
-    <TableContainer>
-      <Table size="small">
-        <TableBody>
-          {keys.map((k) => (
-            <TableRow key={k}>
-              <TableCell colSpan={cols}>
-                <Skeleton height={26} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Stack sx={{ p: 2, gap: 1 }}>
+      {rows.map((k, i) => (
+        <Box
+          key={k}
+          sx={{
+            height: 28,
+            borderRadius: 1,
+            background: 'var(--mui-palette-action-hover)',
+            opacity: 1 - i * 0.1,
+          }}
+        />
+      ))}
+      <Box sx={{ display: 'none' }}>{cols}</Box>
+    </Stack>
   );
 }

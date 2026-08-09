@@ -39,6 +39,27 @@ export class TenantRepository {
     });
   }
 
+  /**
+   * Resolve a tenant identifier to its canonical UUID.
+   *
+   * Accepts either a UUID (returned as-is when the tenant exists) or a tenant
+   * name/slug (case-insensitive exact match on `iam.tenants.name`). Used by the
+   * auth controller to turn the `X-Tenant-Id` header — which a human types as a
+   * name like "FleetVision" — into the verified UUID the security model requires
+   * (INV-I02: tenant_id is always derived from a server-verified source, never
+   * the request body). Returns `null` when no tenant matches.
+   */
+  public async resolveId(rawTenantId: string): Promise<string | null> {
+    const trimmed = rawTenantId.trim();
+    if (!trimmed) return null;
+    return withoutTenantContext(this.knex, async (trx) => {
+      const row = await trx<TenantRow>('iam.tenants')
+        .whereRaw('LOWER(name) = LOWER(?)', trimmed)
+        .first();
+      return row?.id ?? null;
+    });
+  }
+
   public async save(tenant: Tenant, ctx: EventContext): Promise<void> {
     const events = tenant.pullEvents();
     await withoutTenantContext(this.knex, async (trx) => {

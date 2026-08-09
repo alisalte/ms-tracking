@@ -2,7 +2,29 @@ import { create } from 'zustand';
 
 import * as loginApi from '@/api/auth.api';
 import type { User } from '@/types/auth.types';
-import { clearTokens, saveTenantId, saveTokens } from './token.storage';
+import { clearTokens, getStoredTokens, saveTenantId, saveTokens } from './token.storage';
+
+/**
+ * Synchronously hydrate from localStorage on store creation.
+ *
+ * Without this, a page refresh races the `ProtectedRoute` (which reads the
+ * initial state on the very first render) against `AuthProvider`'s async
+ * `useEffect` hydration — so the guard sees `accessToken: null` and bounces to
+ * /login before the stored tokens are loaded. Reading localStorage
+ * synchronously in the initial state closes that race.
+ */
+function readInitialAuth() {
+  const stored = getStoredTokens();
+  if (!stored) {
+    return { accessToken: null, refreshToken: null, tenantId: null, isAuthenticated: false };
+  }
+  return {
+    accessToken: stored.accessToken,
+    refreshToken: stored.refreshToken,
+    tenantId: stored.tenantId,
+    isAuthenticated: Boolean(stored.accessToken),
+  };
+}
 
 /** Auth store state. */
 interface AuthState {
@@ -45,12 +67,10 @@ export type AuthStore = AuthState & AuthActions;
  * Actions call the auth API layer and persist tokens via token.storage.
  */
 export const useAuthStore = create<AuthStore>((set, get) => ({
-  // State
-  accessToken: null,
-  refreshToken: null,
+  // State — synchronously hydrated from localStorage so a page refresh doesn't
+  // bounce through /login before the stored session is restored.
+  ...readInitialAuth(),
   user: null,
-  tenantId: null,
-  isAuthenticated: false,
   isLoading: false,
   error: null,
 

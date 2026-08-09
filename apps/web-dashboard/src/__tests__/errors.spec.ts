@@ -16,7 +16,10 @@ import {
 describe('API error normalization', () => {
   it('normalizes a 401 to UnauthorizedError', () => {
     const err = normalizeApiError({
-      response: { status: 401, data: { errors: [{ code: 'AUTH_EXPIRED', detail: 'Token expired' }] } },
+      response: {
+        status: 401,
+        data: { errors: [{ code: 'AUTH_EXPIRED', detail: 'Token expired' }] },
+      },
       message: 'Request failed',
     });
     expect(err).toBeInstanceOf(UnauthorizedError);
@@ -37,7 +40,10 @@ describe('API error normalization', () => {
   });
 
   it('normalizes a 409 to ConflictError', () => {
-    const err = normalizeApiError({ response: { status: 409, data: { errors: [{ detail: 'Duplicate' }] }, }, message: 'x' });
+    const err = normalizeApiError({
+      response: { status: 409, data: { errors: [{ detail: 'Duplicate' }] } },
+      message: 'x',
+    });
     expect(err).toBeInstanceOf(ConflictError);
     expect(err.message).toBe('Duplicate');
   });

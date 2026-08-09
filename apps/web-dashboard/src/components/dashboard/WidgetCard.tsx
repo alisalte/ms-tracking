@@ -26,11 +26,13 @@ interface WidgetCardProps {
 }
 
 /**
- * Shared widget shell: a titled MUI Card with an optional live badge, header
- * action slot, and consistent loading (skeleton) + empty states.
+ * Shared widget shell: a titled Limitless card with an optional live badge,
+ * header action slot, and consistent loading (skeleton) + empty states.
  *
- * Per UI_UX_Design.md §0.6, initial load uses skeletons (not spinners) and the
- * live badge is the pulsing freshness dot reserved for real-time panels.
+ * v3 (Limitless): weight-700 header, 20px body padding, near-flat 3px card
+ * (sourced from the MuiCard theme override). Per UI_UX_Design.md §0.6, initial
+ * load uses skeletons (not spinners) and the live badge is the pulsing freshness
+ * dot reserved for real-time panels.
  */
 export function WidgetCard({
   titleKey,
@@ -51,15 +53,15 @@ export function WidgetCard({
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
-          gap: 2,
-          p: 2.5,
-          '&:last-child': { pb: 2.5 },
+          gap: 1.5,
+          p: 2,
+          '&:last-child': { pb: 2 },
         }}
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-          <Stack direction="row" alignItems="center" gap={0.75}>
-            {Icon && <Icon size={18} />}
-            <Typography variant="subtitle2" fontWeight={600}>
+          <Stack direction="row" alignItems="center" gap={0.75} minWidth={0}>
+            {Icon && <Icon size={17} style={{ flexShrink: 0 }} />}
+            <Typography variant="subtitle2" fontWeight={700} noWrap>
               {t(titleKey)}
             </Typography>
             {live && <LiveBadge />}

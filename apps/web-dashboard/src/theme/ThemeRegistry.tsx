@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { isRTL } from '@/i18n/config';
 import { darkTheme } from './dark.theme';
 import { getRtlCache } from './rtl';
-import { lightTheme } from './theme';
+import { fontStackFor, lightTheme } from './theme';
 
 type ColorMode = 'light' | 'dark';
 
@@ -36,12 +36,14 @@ const THEME_STORAGE_KEY = 'fleetvision_theme_mode';
 /**
  * Detect the initial color mode:
  * 1. User's persisted preference (localStorage)
- * 2. Fallback to "dark" (premium dark SaaS is the default look)
+ * 2. Fallback to "light" — the Limitless Layout 1 reference is a light UI
+ *    (light navbar, #f5f5f5 content, white cards). Dark mode remains fully
+ *    supported via the toggle. (v3 redesign.)
  */
 function getInitialMode(): ColorMode {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === 'dark' || stored === 'light') return stored;
-  return 'dark';
+  return 'light';
 }
 
 interface ThemeRegistryProps {
@@ -73,10 +75,15 @@ export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
   }, [language, direction]);
 
   const theme = useMemo((): Theme => {
-    // Recreate the base theme so direction is baked into the palette; the light
-    // and dark themes are otherwise stateless modules.
+    // Recreate the base theme so direction + the direction-aware font stack are
+    // baked in. In RTL the body font becomes Vazirmatn (Persian) so MUI/Emotion
+    // applies it to every component — the `global.css` rule alone is overridden
+    // by MUI's per-component injected styles.
     const base = mode === 'dark' ? darkTheme : lightTheme;
-    return createTheme(base, { direction });
+    return createTheme(base, {
+      direction,
+      typography: { fontFamily: fontStackFor(direction) },
+    });
   }, [mode, direction]);
 
   const emotionCache = useMemo(() => getRtlCache(direction), [direction]);

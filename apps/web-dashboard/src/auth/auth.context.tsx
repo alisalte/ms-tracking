@@ -1,7 +1,6 @@
 import { type ReactNode, useEffect } from 'react';
 
 import { useAuthStore } from './auth.store';
-import { getStoredTokens } from './token.storage';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -10,27 +9,22 @@ interface AuthProviderProps {
 /**
  * AuthProvider hydrates the auth store from localStorage on app init.
  *
- * Must be rendered inside the Zustand store context (automatically via useAuthStore).
+ * The Zustand store now reads localStorage synchronously at creation (so a page
+ * refresh no longer races the ProtectedRoute). This provider's remaining job is
+ * to fetch the full user profile once a stored session is restored.
  */
 export function AuthProvider({ children }: AuthProviderProps) {
-  const hydrate = useAuthStore((s) => s.hydrate);
   const fetchUser = useAuthStore((s) => s.fetchUser);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const user = useAuthStore((s) => s.user);
 
+  // If we have a stored token but no user profile yet, fetch it.
   useEffect(() => {
-    const stored = getStoredTokens();
-    if (stored) {
-      hydrate(stored.accessToken, stored.refreshToken, stored.tenantId);
-    }
-  }, [hydrate]);
-
-  // If we have a stored token, fetch the full user profile
-  useEffect(() => {
-    if (accessToken && isAuthenticated) {
+    if (accessToken && isAuthenticated && !user) {
       fetchUser();
     }
-  }, [accessToken, isAuthenticated, fetchUser]);
+  }, [accessToken, isAuthenticated, user, fetchUser]);
 
   return <>{children}</>;
 }
