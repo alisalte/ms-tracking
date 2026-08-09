@@ -5,15 +5,19 @@
  * detail drawer (selection → detail, UI_UX §0.6). Renders the lifecycle status
  * via the unified StatusBadge. v3: wrapped in a Limitless Card + Toolbar.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { vehicleStatusColor } from '@/components/assets/asset-meta';
 import { StatusBadge, Toolbar } from '@/components/ui';
 import type { VehicleStatus } from '@/types/asset.types';
+import type { Vehicle } from '@/types/asset.types';
 import type { VehicleType } from '@/types/fleet.types';
 import {
   Box,
+  IconButton,
+  ListItemIcon,
+  Menu,
   MenuItem,
   Select,
   Stack,
@@ -25,9 +29,10 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
+import { Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 
 interface VehiclesTabProps {
-  vehicles: import('@/types/asset.types').Vehicle[];
+  vehicles: Vehicle[];
   loading?: boolean;
   selectedId?: string | null;
   onSelect: (id: string) => void;
@@ -37,6 +42,10 @@ interface VehiclesTabProps {
   onFilterStatus: (s: VehicleStatus | 'all') => void;
   onFilterType: (t: VehicleType | 'all') => void;
   onQuery: (q: string) => void;
+  /** Open the edit drawer for a vehicle. */
+  onEdit?: (vehicle: Vehicle) => void;
+  /** Open the delete confirmation for a vehicle. */
+  onDelete?: (id: string, name: string) => void;
 }
 
 const STATUSES: Array<VehicleStatus | 'all'> = [
@@ -60,8 +69,20 @@ export function VehiclesTab({
   onFilterStatus,
   onFilterType,
   onQuery,
+  onEdit,
+  onDelete,
 }: VehiclesTabProps) {
   const { t } = useTranslation();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuVehicle, setMenuVehicle] = useState<Vehicle | null>(null);
+  const openMenu = (e: React.MouseEvent<HTMLElement>, v: Vehicle) => {
+    setMenuVehicle(v);
+    setMenuAnchor(e.currentTarget);
+  };
+  const closeMenu = () => {
+    setMenuAnchor(null);
+    setMenuVehicle(null);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -128,9 +149,11 @@ export function VehiclesTab({
             <TableRow>
               <TableCell>{t('assets.vehicle.colPlate')}</TableCell>
               <TableCell>{t('assets.vehicle.colVehicle')}</TableCell>
+              <TableCell>VIN</TableCell>
               <TableCell>{t('assets.vehicle.colType')}</TableCell>
               <TableCell>{t('assets.vehicle.colStatus')}</TableCell>
               <TableCell align="right">{t('assets.vehicle.colOdometer')}</TableCell>
+              <TableCell align="right">{t('common.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -139,15 +162,14 @@ export function VehiclesTab({
                 key={v.id}
                 hover
                 selected={v.id === selectedId}
-                onClick={() => onSelect(v.id)}
                 sx={{ cursor: 'pointer' }}
               >
-                <TableCell>
+                <TableCell onClick={() => onSelect(v.id)}>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
                     {v.licensePlate}
                   </Typography>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={() => onSelect(v.id)}>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {v.make} {v.model}
                   </Typography>
@@ -155,24 +177,34 @@ export function VehiclesTab({
                     {v.year}
                   </Typography>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={() => onSelect(v.id)}>
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace' }} noWrap>
+                    {v.vin}
+                  </Typography>
+                </TableCell>
+                <TableCell onClick={() => onSelect(v.id)}>
                   <Typography variant="body2">{t(`assets.vehicle.type.${v.type}`)}</Typography>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={() => onSelect(v.id)}>
                   <StatusBadge
                     label={t(`assets.vehicle.status.${v.status}`)}
                     color={vehicleStatusColor(v.status)}
                     variant="solid"
                   />
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" onClick={() => onSelect(v.id)}>
                   <Typography variant="body2">{v.odometerKm.toLocaleString()} km</Typography>
+                </TableCell>
+                <TableCell align="right" sx={{ pr: 1 }}>
+                  <IconButton size="small" onClick={(e) => { e.stopPropagation(); openMenu(e, v); }} aria-label={t('common.actions')}>
+                    <MoreVertical size={18} />
+                  </IconButton>
                 </TableCell>
               </TableRow>
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={7}>
                   <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
                     {t('assets.empty')}
                   </Typography>
@@ -182,6 +214,37 @@ export function VehiclesTab({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Per-row action menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={closeMenu}
+        slotProps={{ paper: { sx: { minWidth: 180 } } }}
+      >
+        <MenuItem onClick={() => { if (menuVehicle) onSelect(menuVehicle.id); closeMenu(); }}>
+          <ListItemIcon><Eye size={16} /></ListItemIcon>
+          <Typography variant="body2">{t('common.view')}</Typography>
+        </MenuItem>
+        <MenuItem
+          onClick={() => { if (menuVehicle && onEdit) onEdit(menuVehicle); closeMenu(); }}
+          disabled={!onEdit}
+        >
+          <ListItemIcon><Pencil size={16} /></ListItemIcon>
+          <Typography variant="body2">{t('common.edit')}</Typography>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuVehicle && onDelete) onDelete(menuVehicle.id, `${menuVehicle.make} ${menuVehicle.model}`);
+            closeMenu();
+          }}
+          disabled={!onDelete}
+          sx={{ color: 'error.main' }}
+        >
+          <ListItemIcon><Trash2 size={16} /></ListItemIcon>
+          <Typography variant="body2">{t('common.delete')}</Typography>
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

@@ -21,5 +21,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
+    // Use "static" instead of the default "assets" so the SPA route /assets
+    // (the Asset Management page) doesn't collide with the static-asset path.
+    assetsDir: "static",
   },
 });

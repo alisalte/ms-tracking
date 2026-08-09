@@ -43,6 +43,7 @@ export const queryKeys = {
     devices: () => [...queryKeys.assets.all, 'devices'] as const,
     deviceDetail: (id: string) => [...queryKeys.assets.all, 'device', id] as const,
     groups: () => [...queryKeys.assets.all, 'groups'] as const,
+    groupDetail: (id: string) => [...queryKeys.assets.all, 'group', id] as const,
   },
   reports: {
     all: ['reports'] as const,

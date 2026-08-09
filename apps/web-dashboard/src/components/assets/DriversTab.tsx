@@ -5,16 +5,18 @@
  * Driver-Management §2) and license-expiry warning. Row click opens the driver
  * detail drawer.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
 import { SkeletonRows } from '@/components/assets/VehiclesTab';
 import { driverStatusColor } from '@/components/assets/asset-meta';
-import { StatusBadge } from '@/components/ui';
-import type { DriverStatus } from '@/types/asset.types';
+import { StatusBadge, Toolbar } from '@/components/ui';
+import type { Driver, DriverStatus } from '@/types/asset.types';
 import {
   Box,
+  IconButton,
   LinearProgress,
+  ListItemIcon,
+  Menu,
   MenuItem,
   Select,
   Table,
@@ -23,12 +25,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
+import { Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 
 interface DriversTabProps {
-  drivers: import('@/types/asset.types').Driver[];
+  drivers: Driver[];
   loading?: boolean;
   selectedId?: string | null;
   onSelect: (id: string) => void;
@@ -36,6 +38,8 @@ interface DriversTabProps {
   query: string;
   onFilterStatus: (s: DriverStatus | 'all') => void;
   onQuery: (q: string) => void;
+  onEdit?: (driver: Driver) => void;
+  onDelete?: (id: string, name: string) => void;
 }
 
 const STATUSES: Array<DriverStatus | 'all'> = [
@@ -62,8 +66,20 @@ export function DriversTab({
   query,
   onFilterStatus,
   onQuery,
+  onEdit,
+  onDelete,
 }: DriversTabProps) {
   const { t } = useTranslation();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuDriver, setMenuDriver] = useState<Driver | null>(null);
+  const openMenu = (e: React.MouseEvent<HTMLElement>, d: Driver) => {
+    setMenuDriver(d);
+    setMenuAnchor(e.currentTarget);
+  };
+  const closeMenu = () => {
+    setMenuAnchor(null);
+    setMenuDriver(null);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,35 +94,35 @@ export function DriversTab({
     });
   }, [drivers, filterStatus, query]);
 
-  if (loading) return <SkeletonRows cols={4} />;
+  if (loading) return <SkeletonRows cols={5} />;
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', gap: 1, p: 1.5, alignItems: 'center' }}>
-        <Select
-          size="small"
-          value={filterStatus}
-          onChange={(e) => onFilterStatus(e.target.value as DriverStatus | 'all')}
-          sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
-        >
-          {STATUSES.map((s) => (
-            <MenuItem key={s} value={s}>
-              {s === 'all' ? t('assets.filters.allStatus') : t(`assets.driver.status.${s}`)}
-            </MenuItem>
-          ))}
-        </Select>
-        <TextField
-          size="small"
-          placeholder={t('assets.driver.search')}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          sx={{ minWidth: 220, flex: 1, maxWidth: 360 }}
-        />
-        <Box sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary">
-          {t('assets.count', { count: filtered.length })}
-        </Typography>
-      </Box>
+      <Toolbar
+        search
+        searchValue={query}
+        onSearchChange={onQuery}
+        searchPlaceholderKey="assets.driver.search"
+        left={
+          <Select
+            size="small"
+            value={filterStatus}
+            onChange={(e) => onFilterStatus(e.target.value as DriverStatus | 'all')}
+            sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
+          >
+            {STATUSES.map((s) => (
+              <MenuItem key={s} value={s}>
+                {s === 'all' ? t('assets.filters.allStatus') : t(`assets.driver.status.${s}`)}
+              </MenuItem>
+            ))}
+          </Select>
+        }
+        right={
+          <Typography variant="caption" color="text.secondary">
+            {t('assets.count', { count: filtered.length })}
+          </Typography>
+        }
+      />
       <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
         <Table size="small" stickyHeader>
           <TableHead>
@@ -115,6 +131,7 @@ export function DriversTab({
               <TableCell>{t('assets.driver.colLicense')}</TableCell>
               <TableCell>{t('assets.driver.colStatus')}</TableCell>
               <TableCell>{t('assets.driver.colScore')}</TableCell>
+              <TableCell align="right">{t('common.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -126,10 +143,9 @@ export function DriversTab({
                   key={d.id}
                   hover
                   selected={d.id === selectedId}
-                  onClick={() => onSelect(d.id)}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell>
+                  <TableCell onClick={() => onSelect(d.id)}>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       {d.firstName} {d.lastName}
                     </Typography>
@@ -139,7 +155,7 @@ export function DriversTab({
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={() => onSelect(d.id)}>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                       {d.licenseClass} · {d.licenseNumber}
                     </Typography>
@@ -148,14 +164,14 @@ export function DriversTab({
                       {new Date(d.licenseExpiry).toLocaleDateString()}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={() => onSelect(d.id)}>
                     <StatusBadge
                       label={t(`assets.driver.status.${d.status}`)}
                       color={driverStatusColor(d.status)}
                       variant="solid"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={() => onSelect(d.id)}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
                       <LinearProgress
                         variant="determinate"
@@ -175,12 +191,17 @@ export function DriversTab({
                       </Typography>
                     </Box>
                   </TableCell>
+                  <TableCell align="right" sx={{ pr: 1 }}>
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openMenu(e, d); }} aria-label={t('common.actions')}>
+                      <MoreVertical size={18} />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               );
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={5}>
                   <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
                     {t('assets.empty')}
                   </Typography>
@@ -190,6 +211,37 @@ export function DriversTab({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Per-row action menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={closeMenu}
+        slotProps={{ paper: { sx: { minWidth: 180 } } }}
+      >
+        <MenuItem onClick={() => { if (menuDriver) onSelect(menuDriver.id); closeMenu(); }}>
+          <ListItemIcon><Eye size={16} /></ListItemIcon>
+          <Typography variant="body2">{t('common.view')}</Typography>
+        </MenuItem>
+        <MenuItem
+          onClick={() => { if (menuDriver && onEdit) onEdit(menuDriver); closeMenu(); }}
+          disabled={!onEdit}
+        >
+          <ListItemIcon><Pencil size={16} /></ListItemIcon>
+          <Typography variant="body2">{t('common.edit')}</Typography>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuDriver && onDelete) onDelete(menuDriver.id, `${menuDriver.firstName} ${menuDriver.lastName}`);
+            closeMenu();
+          }}
+          disabled={!onDelete}
+          sx={{ color: 'error.main' }}
+        >
+          <ListItemIcon><Trash2 size={16} /></ListItemIcon>
+          <Typography variant="body2">{t('common.delete')}</Typography>
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

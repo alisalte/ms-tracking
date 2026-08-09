@@ -63,3 +63,84 @@ export const passwordWithConfirmSchema = z
     message: 'validation.password.mismatch',
     path: ['confirmPassword'],
   });
+
+// ── Asset CRUD schemas ───────────────────────────────────────────────────────
+//
+// zod schemas for the Asset Management create/edit forms. Messages are i18n
+// keys translated via `t()`. Required fields use `min(1)` with a `.required`
+// message; enums validate against the domain status/type unions.
+
+/** Required non-empty trimmed string. */
+const reqStr = (key: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, { message: key });
+
+/** Vehicle create/edit form (CreateVehiclePayload). */
+export const vehicleSchema = z.object({
+  licensePlate: reqStr('validation.vehicle.plate.required'),
+  vin: z
+    .string()
+    .trim()
+    .min(1, { message: 'validation.vehicle.vin.required' })
+    .length(17, { message: 'validation.vehicle.vin.length' }),
+  make: reqStr('validation.vehicle.make.required'),
+  model: reqStr('validation.vehicle.model.required'),
+  year: z
+    .number()
+    .int()
+    .min(1900, { message: 'validation.vehicle.year.invalid' })
+    .max(new Date().getFullYear() + 1, { message: 'validation.vehicle.year.invalid' }),
+  type: z.enum(['truck', 'van', 'bus', 'car']),
+  fuelType: z.enum(['diesel', 'gasoline', 'electric', 'hybrid', 'cng', 'lpg']),
+  color: z.string().trim().optional().default(''),
+  status: z.enum(['active', 'inactive', 'maintenance', 'decommissioned', 'sold']),
+  groupId: z.string().optional(),
+  deviceId: z.string().optional(),
+});
+
+/** Driver create/edit form (CreateDriverPayload). */
+export const driverSchema = z.object({
+  firstName: reqStr('validation.driver.firstName.required'),
+  lastName: reqStr('validation.driver.lastName.required'),
+  email: emailSchema,
+  phone: reqStr('validation.driver.phone.required'),
+  employeeId: z.string().trim().optional(),
+  status: z.enum(['active', 'inactive', 'suspended', 'terminated']),
+  licenseNumber: reqStr('validation.driver.licenseNumber.required'),
+  licenseClass: reqStr('validation.driver.licenseClass.required'),
+  licenseExpiry: reqStr('validation.driver.licenseExpiry.required'),
+  assignedVehicleId: z.string().optional(),
+});
+
+/** Device create/edit form (CreateDevicePayload). */
+export const deviceSchema = z.object({
+  serialNumber: reqStr('validation.device.serial.required'),
+  deviceType: z.enum(['obd2', 'gps_tracker', 'dashcam', 'custom_sensor']),
+  manufacturer: reqStr('validation.device.manufacturer.required'),
+  model: reqStr('validation.device.model.required'),
+  imei: z
+    .string()
+    .trim()
+    .length(15, { message: 'validation.device.imei.length' })
+    .optional()
+    .or(z.literal('')),
+  firmwareVersion: reqStr('validation.device.firmware.required'),
+  reportingIntervalSec: z
+    .number()
+    .int()
+    .min(1, { message: 'validation.device.interval.invalid' })
+    .max(86_400, { message: 'validation.device.interval.invalid' }),
+  status: z.enum(['provisioned', 'active', 'inactive', 'firmware_updating', 'faulted', 'decommissioned']),
+  boundVehicleId: z.string().optional(),
+});
+
+/** Group create/edit form (CreateGroupPayload). */
+export const groupSchema = z.object({
+  name: reqStr('validation.group.name.required'),
+  description: z.string().trim().optional().default(''),
+  vehicleTypeFilter: z.enum(['truck', 'van', 'bus', 'car']).optional(),
+  status: z.enum(['active', 'archived']),
+});
+

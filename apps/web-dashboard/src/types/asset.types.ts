@@ -153,3 +153,78 @@ export interface AssetFilter<TStatus extends string = string> {
   status: TStatus | 'all';
   query: string;
 }
+
+// ── Create / Update payloads (camelCase, UI-facing) ──────────────────────────
+//
+// These are the typed contracts the create/edit forms submit and the asset API
+// hooks accept. They mirror the editable subset of each entity. Required vs
+// optional matches the domain model (identifying/registry fields required;
+// associations + lifecycle defaults optional).
+//
+// Wire (`*Wire`) snake_case variants + `mapX(wire)` mappers live in
+// `api/asset.api.ts` (single place for wire translation), ready for when the
+// fleet-management / driver-management / device-management services ship their
+// REST endpoints. See docs/frontend-crud.md.
+
+/** Create a vehicle (POST /fleet/vehicles). */
+export interface CreateVehiclePayload {
+  licensePlate: string;
+  vin: string;
+  make: string;
+  model: string;
+  year: number;
+  type: VehicleType;
+  fuelType: FuelType;
+  color: string;
+  status: VehicleStatus;
+  groupId?: string;
+  deviceId?: string;
+}
+
+/** Update a vehicle (PATCH /fleet/vehicles/:id) — every field optional. */
+export type UpdateVehiclePayload = Partial<CreateVehiclePayload>;
+
+/** Create a driver (POST /drivers). */
+export interface CreateDriverPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  employeeId?: string;
+  status: DriverStatus;
+  licenseNumber: string;
+  licenseClass: string;
+  licenseExpiry: string;
+  assignedVehicleId?: string;
+}
+
+/** Update a driver (PATCH /drivers/:id). */
+export type UpdateDriverPayload = Partial<CreateDriverPayload>;
+
+/** Create a device (POST /telemetry/devices). */
+export interface CreateDevicePayload {
+  serialNumber: string;
+  deviceType: DeviceType;
+  manufacturer: string;
+  model: string;
+  imei?: string;
+  firmwareVersion: string;
+  reportingIntervalSec: number;
+  status: DeviceStatus;
+  boundVehicleId?: string;
+}
+
+/** Update a device (PATCH /telemetry/devices/:id). */
+export type UpdateDevicePayload = Partial<CreateDevicePayload>;
+
+/** Create a group (POST /fleet/groups). */
+export interface CreateGroupPayload {
+  name: string;
+  description: string;
+  vehicleTypeFilter?: VehicleType;
+  status: GroupStatus;
+}
+
+/** Update a group (PATCH /fleet/groups/:id). */
+export type UpdateGroupPayload = Partial<CreateGroupPayload>;
+

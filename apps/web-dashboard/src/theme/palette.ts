@@ -1,20 +1,12 @@
 /**
- * FleetVision Design System — Color palette (v3 — Limitless-inspired).
+ * FleetVision Design System — Color palette (v4 — Limitless-faithful).
  *
- * Built on the Limitless Material-derived system palette (primary #2196F3,
- * status hues straight from Google's Material set) so the UI reads
- * "Limitless", while FleetVision's identity is carried by the brand mark and
- * domain UX — not by recoloring system tokens. See
- * docs/frontend-theme-migration.md.
- *
- * The signature Limitless silhouette (dark slate sidebar in both modes) lives
- * in `sidebar` below; navbar + content adapt to the active color mode.
+ * Exact Limitless admin template tokens. The UI reads "Limitless" through and
+ * through: Material Blue primary, dark slate sidebar, light grey page, 3px
+ * radius, near-flat cards. FleetVision identity carried by the brand mark only.
  */
 
-/**
- * Neutral ramp — Limitless leans on Bootstrap-4 neutrals for surfaces.
- * Body text is #333 (not pure black), muted text is #777.
- */
+/** Neutral ramp — Limitless uses Bootstrap-4 neutrals. */
 export const neutral = {
   0: '#FFFFFF',
   25: '#FAFAFA',
@@ -31,10 +23,7 @@ export const neutral = {
   950: '#1A1A1A',
 } as const;
 
-/**
- * Primary — Limitless blue (Material Blue 500). Hover/active use the
- * surrounding Material shades so every state is consistent.
- */
+/** Primary — Limitless Material Blue 500. */
 export const primary = {
   main: '#2196F3',
   light: '#64B5F6',
@@ -43,21 +32,12 @@ export const primary = {
   darker: '#1565C0',
   hover: '#1E88E5',
   pressed: '#1565C0',
-  /** Soft tinted background used for active nav rows, alpha chips, etc. */
   tint: 'rgba(33, 150, 243, 0.10)',
-  /** Brand gradient kept for the FleetVision logo mark only. */
   brandGradient: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
-  /** Alias for legacy call sites. */
   gradient: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
 } as const;
 
-/**
- * Status colors — Material palette at the 500 shade, matching Limitless.
- * Warning is Limitless's deep-orange (#FF5722), not amber.
- *
- * `green`/`amber`/`red`/`blue` aliases keep legacy call sites working during
- * the v3 redesign; they map to the Material status hues above.
- */
+/** Status colors — Limitless Material palette at the 500 shade. */
 export const status = {
   success: '#4CAF50',
   successLight: '#81C784',
@@ -80,35 +60,26 @@ export const status = {
   blue: '#2196F3',
 
   indigo: '#3F51B5',
-  purple: '#A855F7',
+  purple: '#AB47BC',
+  pink: '#E91E63',
+  teal: '#009688',
   slate: '#607D8B',
 } as const;
 
-/**
- * The signature Limitless dark slate sidebar. Kept constant across light/dark
- * modes so the shell always reads as Limitless Layout 1.
- */
+/** The signature Limitless dark slate sidebar (constant across modes). */
 export const sidebar = {
-  /** Base background — Material Blue Grey 900 (Limitless default). */
   bg: '#263238',
-  /** Group-header strip — slightly darker, like Limitless's rgba(0,0,0,0.1). */
-  groupBg: 'rgba(0, 0, 0, 0.18)',
-  /** Hover/active tint for nav rows. */
+  groupBg: 'rgba(0, 0, 0, 0.15)',
   hover: 'rgba(255, 255, 255, 0.06)',
   active: 'rgba(255, 255, 255, 0.10)',
-  /** Active left/right accent bar. */
   accent: '#2196F3',
-  /** Borders within the dark sidebar. */
   border: 'rgba(255, 255, 255, 0.08)',
-  /** Inactive nav text. */
   text: 'rgba(255, 255, 255, 0.75)',
-  /** Active/strong nav text. */
   textStrong: '#FFFFFF',
-  /** Group header label text. */
   textMuted: 'rgba(255, 255, 255, 0.45)',
 } as const;
 
-/** Light-mode surfaces — Limitless's near-white cards on #F5F5F5 pages. */
+/** Light-mode surfaces — Limitless near-white on #F5F5F5. */
 export const lightSurface = {
   bg: '#F5F5F5',
   paper: '#FFFFFF',
@@ -120,7 +91,7 @@ export const lightSurface = {
   divider: '#EEEEEE',
 } as const;
 
-/** Dark-mode surfaces — layered slate (Limitless dark theme family). */
+/** Dark-mode surfaces. */
 export const darkSurface = {
   bg: '#1F2730',
   paper: '#2A333D',
@@ -132,7 +103,6 @@ export const darkSurface = {
   divider: 'rgba(255, 255, 255, 0.08)',
 } as const;
 
-/** Map marker / route accents (kept stable across the redesign). */
 export const mapAccents = {
   vehicleActive: '#4CAF50',
   vehicleIdle: '#FFC107',
@@ -142,10 +112,6 @@ export const mapAccents = {
   selectedRoute: '#00BCD4',
 } as const;
 
-/**
- * Shadows — Limitless is near-flat by default. Cards rest on a barely-there
- * 1px shadow; elevation is opt-in for drawers/popovers/dialogs.
- */
 export const shadows = {
   card: '0 1px 2px rgba(0,0,0,0.05)',
   cardHover: '0 2px 8px rgba(0,0,0,0.08)',
@@ -156,5 +122,4 @@ export const shadows = {
   darkElevated: '0 8px 28px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30)',
 } as const;
 
-/** Common limit radius for pills, badges, rounded chips. */
 export const pillRadius = 100;

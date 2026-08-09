@@ -89,7 +89,29 @@
     "collapseNav": "جمع کردن ناوبری",
     "noData": "داده‌ای برای نمایش وجود ندارد",
     "rowCount": "{{count}} ردیف",
-    "showing": "نمایش {{count}}"
+    "showing": "نمایش {{count}}",
+    "cancel": "انصراف",
+    "delete": "حذف",
+    "edit": "ویرایش",
+    "add": "افزودن",
+    "save": "ذخیره",
+    "new": "جدید",
+    "actions": "عملیات",
+    "view": "مشاهده",
+    "create": "ایجاد",
+    "update": "به‌روزرسانی",
+    "irreversible": "این عمل قابل بازگشت نیست.",
+    "refresh": "به‌روزرسانی",
+    "confirm": "تأیید",
+    "all": "همه",
+    "searchPlaceholder": "جستجو...",
+    "assign": "انتساب",
+    "unassign": "لغو انتساب",
+    "configure": "پیکربندی",
+    "manageMembers": "مدیریت اعضا",
+    "sendCommand": "ارسال فرمان",
+    "optional": "اختیاری",
+    "required": "الزامی"
   },
   "errors": {
     "retry": "تلاش مجدد",
@@ -175,11 +197,28 @@
       "mapPreview": "نقشه‌ی ناوگان",
       "openMap": "باز کردن نقشه",
       "weather": "آب‌وهوا",
-      "viewAll": "مشاهده‌ی همه ({{count}})"
+      "alertTypes": "انواع هشدار",
+      "performance": "برترین خودروها بر اساس مسافت",
+      "viewAll": "مشاهده‌ی همه ({{count}})",
+      "traffic": "منابع ترافیک",
+      "sales": "آمار فروش",
+      "marketing": "کمپین‌های بازاریابی",
+      "support": "تیکت‌های پشتیبانی",
+      "latestPosts": "آخرین پست‌ها",
+      "dailyFinance": "مالی روزانه",
+      "myMessages": "پیام‌های من",
+      "overview": "نمای کلی ناوگان"
     },
     "empty": {
       "alerts": "هیچ هشدار فعلی وجود ندارد — ناوگان آرام است.",
-      "attention": "در حال حاضر چیزی نیازمند توجه نیست."
+      "attention": "در حال حاضر چیزی نیازمند توجه نیست.",
+      "performance": "هنوز داده‌ی سفری موجود نیست."
+    },
+    "kpi": {
+      "activeVehicles": "خودروهای فعال",
+      "totalDistance": "مسافت امروز",
+      "fuelConsumed": "مصرف سوخت",
+      "onlineDevices": "دستگاه‌های آنلاین"
     }
   },
   "map": {
@@ -551,6 +590,31 @@
         "active": "فعال",
         "archived": "بایگانی‌شده"
       }
+    },
+    "actions": {
+      "addVehicle": "افزودن خودرو",
+      "editVehicle": "ویرایش خودرو",
+      "deleteVehicle": "حذف خودرو",
+      "addDriver": "افزودن راننده",
+      "editDriver": "ویرایش راننده",
+      "deleteDriver": "حذف راننده",
+      "addDevice": "افزودن دستگاه",
+      "editDevice": "ویرایش دستگاه",
+      "deleteDevice": "حذف دستگاه",
+      "addGroup": "افزودن گروه",
+      "editGroup": "ویرایش گروه",
+      "deleteGroup": "حذف گروه",
+      "assignVehicle": "انتساب خودرو",
+      "unassignVehicle": "لغو انتساب خودرو",
+      "pendingBackend": "در انتظار بک‌اند"
+    },
+    "crud": {
+      "createSuccess": "{{name}} ایجاد شد.",
+      "updateSuccess": "{{name}} به‌روزرسانی شد.",
+      "deleteSuccess": "{{name}} حذف شد.",
+      "deleteConfirmTitle": "حذف {{name}}؟",
+      "deleteConfirmBody": "این عمل قابل بازگشت نیست.",
+      "bulkDeleteConfirm": "حذف {{count}} مورد انتخاب‌شده؟"
     }
   },
   "reports": {
@@ -824,6 +888,69 @@
     },
     "displayName": {
       "tooLong": "حداکثر ۱۲۸ کاراکتر مجاز است"
+    },
+    "vehicle": {
+      "plate": {
+        "required": "شماره پلاک الزامی است"
+      },
+      "vin": {
+        "required": "VIN الزامی است",
+        "length": "VIN باید ۱۷ کاراکتر باشد"
+      },
+      "make": {
+        "required": "برند الزامی است"
+      },
+      "model": {
+        "required": "مدل الزامی است"
+      },
+      "year": {
+        "invalid": "سال معتبر وارد کنید"
+      }
+    },
+    "driver": {
+      "firstName": {
+        "required": "نام الزامی است"
+      },
+      "lastName": {
+        "required": "نام خانوادگی الزامی است"
+      },
+      "phone": {
+        "required": "تلفن الزامی است"
+      },
+      "licenseNumber": {
+        "required": "شماره گواهینامه الزامی است"
+      },
+      "licenseClass": {
+        "required": "کلاس گواهینامه الزامی است"
+      },
+      "licenseExpiry": {
+        "required": "تاریخ انقضای گواهینامه الزامی است"
+      }
+    },
+    "device": {
+      "serial": {
+        "required": "شماره سریال الزامی است"
+      },
+      "manufacturer": {
+        "required": "سازنده الزامی است"
+      },
+      "model": {
+        "required": "مدل الزامی است"
+      },
+      "imei": {
+        "length": "IMEI باید ۱۵ رقم باشد"
+      },
+      "firmware": {
+        "required": "نسخه فریم‌ور الزامی است"
+      },
+      "interval": {
+        "invalid": "بازه معتبر وارد کنید (۱–۸۶۴۰۰ ثانیه)"
+      }
+    },
+    "group": {
+      "name": {
+        "required": "نام گروه الزامی است"
+      }
     }
   },
   "navGroups": {
@@ -833,6 +960,7 @@
     "assets": "دارایی‌ها",
     "reporting": "گزارش‌گیری",
     "maintenance": "تعمیر و نگهداری",
-    "administration": "مدیریت"
+    "administration": "مدیریت",
+    "main": "اصلی"
   }
 }

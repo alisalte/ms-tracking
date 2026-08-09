@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { mockDevices, mockDrivers, mockGroups, mockVehicles } from '@/mock/asset-data';
+import { ToastProvider } from '@/components/feedback/ToastProvider';
 import { AssetManagementPage } from '@/pages/AssetManagementPage';
 
 import { i18n } from '@/i18n';
@@ -21,12 +22,16 @@ function renderAssets(initialEntry = '/assets') {
       QueryClientProvider,
       { client },
       createElement(
-        I18nextProvider,
-        { i18n },
+        ToastProvider,
+        null,
         createElement(
-          MemoryRouter,
-          { initialEntries: [initialEntry] },
-          createElement(AssetManagementPage),
+          I18nextProvider,
+          { i18n },
+          createElement(
+            MemoryRouter,
+            { initialEntries: [initialEntry] },
+            createElement(AssetManagementPage),
+          ),
         ),
       ),
     ),

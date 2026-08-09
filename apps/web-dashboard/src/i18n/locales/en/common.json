@@ -89,7 +89,29 @@
     "collapseNav": "Collapse navigation",
     "noData": "No data to display",
     "rowCount": "{{count}} rows",
-    "showing": "Showing {{count}}"
+    "showing": "Showing {{count}}",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "save": "Save",
+    "new": "New",
+    "actions": "Actions",
+    "view": "View",
+    "create": "Create",
+    "update": "Update",
+    "irreversible": "This action cannot be undone.",
+    "refresh": "Refresh",
+    "confirm": "Confirm",
+    "all": "All",
+    "searchPlaceholder": "Search...",
+    "assign": "Assign",
+    "unassign": "Unassign",
+    "configure": "Configure",
+    "manageMembers": "Manage Members",
+    "sendCommand": "Send Command",
+    "optional": "Optional",
+    "required": "Required"
   },
   "errors": {
     "retry": "Retry",
@@ -175,11 +197,28 @@
       "mapPreview": "Fleet Map",
       "openMap": "Open map",
       "weather": "Weather",
-      "viewAll": "View all {{count}}"
+      "alertTypes": "Alert Types",
+      "performance": "Top Vehicles by Distance",
+      "viewAll": "View all {{count}}",
+      "traffic": "Traffic Sources",
+      "sales": "Sales Statistics",
+      "marketing": "Marketing Campaigns",
+      "support": "Support Tickets",
+      "latestPosts": "Latest Posts",
+      "dailyFinance": "Daily Financials",
+      "myMessages": "My Messages",
+      "overview": "Fleet Overview"
     },
     "empty": {
       "alerts": "No active alerts — fleet is quiet.",
-      "attention": "Nothing needs attention right now."
+      "attention": "Nothing needs attention right now.",
+      "performance": "No trip data yet."
+    },
+    "kpi": {
+      "activeVehicles": "Active Vehicles",
+      "totalDistance": "Distance Today",
+      "fuelConsumed": "Fuel Consumed",
+      "onlineDevices": "Online Devices"
     }
   },
   "map": {
@@ -551,6 +590,31 @@
         "active": "Active",
         "archived": "Archived"
       }
+    },
+    "actions": {
+      "addVehicle": "Add Vehicle",
+      "editVehicle": "Edit Vehicle",
+      "deleteVehicle": "Delete Vehicle",
+      "addDriver": "Add Driver",
+      "editDriver": "Edit Driver",
+      "deleteDriver": "Delete Driver",
+      "addDevice": "Add Device",
+      "editDevice": "Edit Device",
+      "deleteDevice": "Delete Device",
+      "addGroup": "Add Group",
+      "editGroup": "Edit Group",
+      "deleteGroup": "Delete Group",
+      "assignVehicle": "Assign Vehicle",
+      "unassignVehicle": "Unassign Vehicle",
+      "pendingBackend": "Waiting for backend"
+    },
+    "crud": {
+      "createSuccess": "{{name}} created.",
+      "updateSuccess": "{{name}} updated.",
+      "deleteSuccess": "{{name}} deleted.",
+      "deleteConfirmTitle": "Delete {{name}}?",
+      "deleteConfirmBody": "This action cannot be undone.",
+      "bulkDeleteConfirm": "Delete {{count}} selected items?"
     }
   },
   "reports": {
@@ -824,6 +888,69 @@
     },
     "displayName": {
       "tooLong": "Must be at most 128 characters"
+    },
+    "vehicle": {
+      "plate": {
+        "required": "Plate number is required"
+      },
+      "vin": {
+        "required": "VIN is required",
+        "length": "VIN must be 17 characters"
+      },
+      "make": {
+        "required": "Make is required"
+      },
+      "model": {
+        "required": "Model is required"
+      },
+      "year": {
+        "invalid": "Enter a valid year"
+      }
+    },
+    "driver": {
+      "firstName": {
+        "required": "First name is required"
+      },
+      "lastName": {
+        "required": "Last name is required"
+      },
+      "phone": {
+        "required": "Phone is required"
+      },
+      "licenseNumber": {
+        "required": "License number is required"
+      },
+      "licenseClass": {
+        "required": "License class is required"
+      },
+      "licenseExpiry": {
+        "required": "License expiry is required"
+      }
+    },
+    "device": {
+      "serial": {
+        "required": "Serial number is required"
+      },
+      "manufacturer": {
+        "required": "Manufacturer is required"
+      },
+      "model": {
+        "required": "Model is required"
+      },
+      "imei": {
+        "length": "IMEI must be 15 digits"
+      },
+      "firmware": {
+        "required": "Firmware version is required"
+      },
+      "interval": {
+        "invalid": "Enter a valid interval (1–86400 sec)"
+      }
+    },
+    "group": {
+      "name": {
+        "required": "Group name is required"
+      }
     }
   },
   "navGroups": {
@@ -833,6 +960,7 @@
     "assets": "Assets",
     "reporting": "Reporting",
     "maintenance": "Maintenance",
-    "administration": "Administration"
+    "administration": "Administration",
+    "main": "Main"
   }
 }
