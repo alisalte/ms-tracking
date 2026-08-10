@@ -54,16 +54,26 @@ export function parseJt1078Header(buf: Buffer): Jt1078Header {
   }
   // Skip the 0x30 0x31 start mark.
   let off = 2;
-  const length = buf.readUInt16BE(off); off += 2;
-  const seq = buf.readUInt16BE(off); off += 2;
-  const sim = bcdHex(buf.subarray(off, off + 6)); off += 6;
-  const logicalChannel = buf[off] ?? 0; off += 1;
-  const alarmFlag = buf.readUInt32BE(off); off += 4;
-  const sampleCount = buf[off] ?? 0; off += 1;
-  const timestamp = readBcdTimestamp(buf.subarray(off, off + 8)); off += 8;
-  const lastFrame = (buf[off] ?? 0) === 1; off += 1;
-  const dataType = buf[off] ?? 0; off += 1;
-  const streamTypeByte = buf[off] ?? 0; off += 1;
+  const length = buf.readUInt16BE(off);
+  off += 2;
+  const seq = buf.readUInt16BE(off);
+  off += 2;
+  const sim = bcdHex(buf.subarray(off, off + 6));
+  off += 6;
+  const logicalChannel = buf[off] ?? 0;
+  off += 1;
+  const alarmFlag = buf.readUInt32BE(off);
+  off += 4;
+  const sampleCount = buf[off] ?? 0;
+  off += 1;
+  const timestamp = readBcdTimestamp(buf.subarray(off, off + 8));
+  off += 8;
+  const lastFrame = (buf[off] ?? 0) === 1;
+  off += 1;
+  const dataType = buf[off] ?? 0;
+  off += 1;
+  const streamTypeByte = buf[off] ?? 0;
+  off += 1;
 
   const streamType = decodeStreamType(streamTypeByte);
   const bodyOffset = off;
@@ -73,9 +83,18 @@ export function parseJt1078Header(buf: Buffer): Jt1078Header {
   const bodyLength = Math.max(0, length - headerConsumed + 2);
 
   return {
-    length, seq, sim, logicalChannel, alarmFlag, sampleCount,
-    timestamp, lastFrame, dataType, streamType,
-    bodyOffset, bodyLength,
+    length,
+    seq,
+    sim,
+    logicalChannel,
+    alarmFlag,
+    sampleCount,
+    timestamp,
+    lastFrame,
+    dataType,
+    streamType,
+    bodyOffset,
+    bodyLength,
   };
 }
 
@@ -83,10 +102,7 @@ export function parseJt1078Header(buf: Buffer): Jt1078Header {
  * Parse a complete JT1078 frame into a canonical MediaFrame.
  * The `channelId` is assigned by the caller (from the logical channel → channel mapping).
  */
-export function parseJt1078Frame(
-  buf: Buffer,
-  channelId: string,
-): MediaFrame {
+export function parseJt1078Frame(buf: Buffer, channelId: string): MediaFrame {
   const h = parseJt1078Header(buf);
   if (!h.streamType) {
     throw new Error(`JT1078 unsupported stream type ${buf[h.bodyOffset - 1] ?? 0}.`);
@@ -162,7 +178,7 @@ function isIdrNalu(payload: Buffer, codec: StreamType): boolean {
     return (nalType & 0x1f) === 5; // IDR slice
   }
   if (codec === 'H265') {
-    return (nalType >> 1) === 19 || (nalType >> 1) === 20; // IDR_W_RADL / IDR_N_LP
+    return nalType >> 1 === 19 || nalType >> 1 === 20; // IDR_W_RADL / IDR_N_LP
   }
   return false;
 }

@@ -1,10 +1,7 @@
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
 import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { isRTL } from '@/i18n/config';
-import { lightSurface, darkSurface } from '@/theme/palette';
 import { useThemeContext } from '@/theme/ThemeRegistry';
 
 interface EChartProps {
@@ -36,46 +33,44 @@ interface EChartProps {
  */
 export function EChart({ option, height = 260, sx }: EChartProps) {
   const { mode } = useThemeContext();
-  const { i18n } = useTranslation();
-  const rtl = isRTL(i18n.language);
   const isDark = mode === 'dark';
 
   const merged = useMemo<EChartsOption>(() => {
-    const surface = isDark ? darkSurface : lightSurface;
-    const axisColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
-    const splitColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+    const axisColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(15,23,42,0.55)';
+    const splitColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)';
 
     const base: EChartsOption = {
       textStyle: {
         fontFamily: 'inherit',
         color: axisColor,
       },
-      // Dark tooltip with light text in dark mode, near-white card otherwise.
+      // Frosted-glass tooltip with blur and soft rounded corners (v5).
       tooltip: {
-        backgroundColor: surface.paper,
-        borderColor: surface.border,
+        backgroundColor: isDark ? 'rgba(42,51,61,0.85)' : 'rgba(255,255,255,0.85)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.60)',
         borderWidth: 1,
-        textStyle: { color: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)' },
-        extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.16); border-radius: 8px;',
+        textStyle: { color: isDark ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.85)' },
+        extraCssText:
+          'backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 28px rgba(0,0,0,0.16); border-radius: 12px; padding: 8px 12px;',
       },
       // Sensible axis defaults; callers may override per-axis.
       grid: { containLabel: true, left: 8, right: 16, top: 16, bottom: 8 },
       xAxis: {
         axisLine: { lineStyle: { color: splitColor } },
         axisTick: { show: false },
-        axisLabel: { color: axisColor },
+        axisLabel: { color: axisColor, fontSize: 11 },
         splitLine: { show: false },
       },
       yAxis: {
         axisLine: { show: false },
         axisTick: { show: false },
-        axisLabel: { color: axisColor },
+        axisLabel: { color: axisColor, fontSize: 11 },
         splitLine: { lineStyle: { color: splitColor, type: 'dashed' } },
       },
     };
 
     return { ...base, ...option };
-  }, [option, isDark, rtl]);
+  }, [option, isDark]);
 
   return (
     <ReactECharts

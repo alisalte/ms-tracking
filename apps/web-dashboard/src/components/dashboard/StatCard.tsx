@@ -64,10 +64,7 @@ export function StatCard({
         sx={{ height: '100%', p: 2, alignItems: 'stretch', '&:hover': {} }}
       >
         <Stack direction="column" gap={0.75} sx={{ height: '100%' }}>
-          <Typography
-            variant="overline"
-            sx={{ lineHeight: 1.6667, color: 'text.secondary' }}
-          >
+          <Typography variant="overline" sx={{ lineHeight: 1.6667, color: 'text.secondary' }}>
             {t(titleKey)}
           </Typography>
 

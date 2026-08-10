@@ -1,11 +1,11 @@
 import {
   Card,
   CardContent,
+  type CardOwnProps,
   Divider,
   Skeleton,
   Stack,
   Typography,
-  type CardOwnProps,
 } from '@mui/material';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -80,7 +80,7 @@ export function Panel({
         {Icon && <Icon size={17} style={{ flexShrink: 0 }} />}
         {(title ?? (titleKey ? t(titleKey) : null)) && (
           <Typography variant="subtitle2" fontWeight={700} noWrap>
-            {title ?? t(titleKey!)}
+            {title ?? (titleKey ? t(titleKey) : '')}
           </Typography>
         )}
         {live && <LiveBadge />}

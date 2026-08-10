@@ -1,6 +1,6 @@
 import { Box, Skeleton } from '@mui/material';
-import { PieChart as PieChartIcon } from 'lucide-react';
 import type { EChartsOption } from 'echarts';
+import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

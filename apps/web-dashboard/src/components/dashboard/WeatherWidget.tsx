@@ -49,15 +49,17 @@ export function WeatherWidget() {
           <Stack direction="row" alignItems="center" gap={2}>
             <Box
               sx={{
-                width: 52,
-                height: 52,
-                borderRadius: '50%',
-                backgroundColor: `${CONDITION_META[data.condition].color}1A`,
+                width: 56,
+                height: 56,
+                borderRadius: 3,
+                background: `linear-gradient(135deg, ${CONDITION_META[data.condition].color}33 0%, ${CONDITION_META[data.condition].color}12 100%)`,
+                border: `1px solid ${CONDITION_META[data.condition].color}40`,
                 color: CONDITION_META[data.condition].color,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
+                boxShadow: `inset 0 1px 0 ${CONDITION_META[data.condition].color}30`,
               }}
             >
               {(() => {
@@ -125,8 +127,11 @@ export function WeatherWidget() {
                     alignItems: 'center',
                     gap: 0.5,
                     py: 0.75,
-                    borderRadius: 1,
-                    backgroundColor: 'action.hover',
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    backgroundColor: 'rgba(255,255,255,0.40)',
+                    backdropFilter: 'blur(6px)',
                   }}
                 >
                   <Typography variant="caption" color="text.secondary" fontWeight={600}>

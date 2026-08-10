@@ -123,3 +123,57 @@ export const shadows = {
 } as const;
 
 export const pillRadius = 100;
+
+/**
+ * Glassmorphism tokens (v5 — modern dashboard).
+ *
+ * Additive-only: used exclusively by the dashboard. All other pages read the
+ * original tokens above and are unaffected. Values are tuned for a frosted,
+ * premium look in both light and dark modes.
+ */
+export const glass = {
+  /** Light-mode frosted card. */
+  light: {
+    bg: 'rgba(255, 255, 255, 0.65)',
+    bgSolid: 'rgba(255, 255, 255, 0.82)',
+    hover: 'rgba(255, 255, 255, 0.75)',
+    border: 'rgba(255, 255, 255, 0.60)',
+    borderGradient:
+      'linear-gradient(135deg, rgba(255,255,255,0.80) 0%, rgba(255,255,255,0.20) 100%)',
+    highlight: 'rgba(255, 255, 255, 0.90)',
+    shadow:
+      '0 4px 24px rgba(33, 150, 243, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255,255,255,0.50)',
+    shadowHover:
+      '0 12px 40px rgba(33, 150, 243, 0.12), 0 4px 8px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255,255,255,0.60)',
+    blur: 20,
+  },
+  /** Dark-mode frosted card. */
+  dark: {
+    bg: 'rgba(30, 39, 51, 0.60)',
+    bgSolid: 'rgba(42, 51, 61, 0.80)',
+    hover: 'rgba(50, 61, 72, 0.70)',
+    border: 'rgba(255, 255, 255, 0.10)',
+    borderGradient:
+      'linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 100%)',
+    highlight: 'rgba(255, 255, 255, 0.08)',
+    shadow:
+      '0 4px 24px rgba(0, 0, 0, 0.30), 0 1px 2px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(255,255,255,0.06)',
+    shadowHover:
+      '0 12px 40px rgba(0, 0, 0, 0.40), 0 4px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255,255,255,0.08)',
+    blur: 20,
+  },
+  /** The dashboard page background gradient (light). */
+  pageGradientLight: 'linear-gradient(135deg, #EEF4FF 0%, #F0F7FF 30%, #FAF5FF 65%, #FEF6F6 100%)',
+  /** The dashboard page background gradient (dark). */
+  pageGradientDark: 'linear-gradient(135deg, #141B26 0%, #161D2B 40%, #1A1726 70%, #1E181F 100%)',
+  /** Aurora blobs rendered behind the dashboard header. */
+  aurora: {
+    blue: 'rgba(33, 150, 243, 0.28)',
+    indigo: 'rgba(63, 81, 181, 0.22)',
+    cyan: 'rgba(0, 188, 212, 0.20)',
+  },
+  /** Radius for glass cards — softer than the flat 3px system default. */
+  radius: 16,
+  radiusSm: 12,
+  radiusLg: 20,
+} as const;

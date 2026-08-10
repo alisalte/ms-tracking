@@ -12,10 +12,10 @@
 import { Logger } from '@nestjs/common';
 import type { MediaConfig } from '../config/media.config.js';
 import { decideCodec } from '../domain/codec-strategy.js';
-import { mintSignalingToken, type SignalingToken } from '../domain/signaling-token.js';
+import { type SignalingToken, mintSignalingToken } from '../domain/signaling-token.js';
 import type { VideoChannel } from '../domain/video-channel.js';
-import type { MediaRouter } from '../infrastructure/media-router-port.js';
 import type { RedisSessionCache } from '../infrastructure/cache/redis-session-cache.js';
+import type { MediaRouter } from '../infrastructure/media-router-port.js';
 import type { SessionRepository } from '../infrastructure/persistence/session.repository.js';
 
 export interface StreamManagerDeps {
@@ -56,11 +56,14 @@ export class StreamManager {
    * token but does NOT pull the source yet (lazy activation — the source is
    * opened when the first viewer subscribes via addViewer).
    */
-  public async openSession(channel: VideoChannel, opts: {
-    userId?: string | null;
-    quality?: string;
-    mode?: string;
-  }): Promise<OpenStreamResult> {
+  public async openSession(
+    channel: VideoChannel,
+    opts: {
+      userId?: string | null;
+      quality?: string;
+      mode?: string;
+    },
+  ): Promise<OpenStreamResult> {
     const mode = (opts.mode ?? 'LIVE') as Parameters<typeof decideCodec>[1];
     const quality = (opts.quality ?? 'auto') as 'auto' | 'high' | 'medium' | 'low' | 'audio-only';
 

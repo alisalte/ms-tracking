@@ -12,8 +12,8 @@ import {
 import { Lock, ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui';
+import { useAuth } from '@/hooks/useAuth';
 
 /**
  * ProfilePage — read-only account + security summary.
@@ -43,9 +43,7 @@ export function ProfilePage() {
 
   return (
     <Box>
-      <PageHeader
-        title={t('profile.title')}
-      />
+      <PageHeader title={t('profile.title')} />
 
       {/* Identity card */}
       <Card sx={{ mb: 3 }}>

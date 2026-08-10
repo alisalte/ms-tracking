@@ -99,10 +99,11 @@ export function ActiveAlertsPanel() {
                 >
                   <span
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      backgroundColor: `${color}1A`, // 10% tint
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      background: `linear-gradient(135deg, ${color}33, ${color}12)`,
+                      border: `1px solid ${color}40`,
                       color,
                       display: 'inline-flex',
                       alignItems: 'center',

@@ -1,12 +1,3 @@
-/**
- * DriversTab — the driver registry table.
- *
- * Filterable by status + free-text search. Shows the behavior score (0–100,
- * Driver-Management §2) and license-expiry warning. Row click opens the driver
- * detail drawer.
- */
-import { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { SkeletonRows } from '@/components/assets/VehiclesTab';
 import { driverStatusColor } from '@/components/assets/asset-meta';
 import { StatusBadge, Toolbar } from '@/components/ui';
@@ -28,6 +19,15 @@ import {
   Typography,
 } from '@mui/material';
 import { Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+/**
+ * DriversTab — the driver registry table.
+ *
+ * Filterable by status + free-text search. Shows the behavior score (0–100,
+ * Driver-Management §2) and license-expiry warning. Row click opens the driver
+ * detail drawer.
+ */
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface DriversTabProps {
   drivers: Driver[];
@@ -192,7 +192,14 @@ export function DriversTab({
                     </Box>
                   </TableCell>
                   <TableCell align="right" sx={{ pr: 1 }}>
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openMenu(e, d); }} aria-label={t('common.actions')}>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openMenu(e, d);
+                      }}
+                      aria-label={t('common.actions')}
+                    >
                       <MoreVertical size={18} />
                     </IconButton>
                   </TableCell>
@@ -219,26 +226,41 @@ export function DriversTab({
         onClose={closeMenu}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <MenuItem onClick={() => { if (menuDriver) onSelect(menuDriver.id); closeMenu(); }}>
-          <ListItemIcon><Eye size={16} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            if (menuDriver) onSelect(menuDriver.id);
+            closeMenu();
+          }}
+        >
+          <ListItemIcon>
+            <Eye size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.view')}</Typography>
         </MenuItem>
         <MenuItem
-          onClick={() => { if (menuDriver && onEdit) onEdit(menuDriver); closeMenu(); }}
+          onClick={() => {
+            if (menuDriver && onEdit) onEdit(menuDriver);
+            closeMenu();
+          }}
           disabled={!onEdit}
         >
-          <ListItemIcon><Pencil size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Pencil size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.edit')}</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (menuDriver && onDelete) onDelete(menuDriver.id, `${menuDriver.firstName} ${menuDriver.lastName}`);
+            if (menuDriver && onDelete)
+              onDelete(menuDriver.id, `${menuDriver.firstName} ${menuDriver.lastName}`);
             closeMenu();
           }}
           disabled={!onDelete}
           sx={{ color: 'error.main' }}
         >
-          <ListItemIcon><Trash2 size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Trash2 size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.delete')}</Typography>
         </MenuItem>
       </Menu>

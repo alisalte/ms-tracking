@@ -227,4 +227,3 @@ export interface CreateGroupPayload {
 
 /** Update a group (PATCH /fleet/groups/:id). */
 export type UpdateGroupPayload = Partial<CreateGroupPayload>;
-

@@ -121,7 +121,8 @@ export function DataTable<Row>({
         <TableBody>
           {loading
             ? Array.from({ length: loadingRows }).map((_, i) => (
-                <TableRow key={`sk-${i}`}>
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder rows are static and never reorder
+                <TableRow key={`skeleton-${i}`}>
                   {columns.map((col) => (
                     <TableCell key={col.id} align={col.align ? ALIGN[col.align] : 'left'}>
                       <Skeleton height={18} />

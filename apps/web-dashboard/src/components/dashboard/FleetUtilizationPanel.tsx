@@ -1,6 +1,6 @@
 import { Box, Skeleton, Stack } from '@mui/material';
-import { GaugeCircle } from 'lucide-react';
 import type { EChartsOption } from 'echarts';
+import { GaugeCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

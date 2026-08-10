@@ -68,10 +68,11 @@ export function VehiclesAttentionList() {
                 >
                   <span
                     style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 6,
-                      backgroundColor: `${meta.color}1A`,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: `linear-gradient(135deg, ${meta.color}33, ${meta.color}12)`,
+                      border: `1px solid ${meta.color}40`,
                       color: meta.color,
                       display: 'inline-flex',
                       alignItems: 'center',

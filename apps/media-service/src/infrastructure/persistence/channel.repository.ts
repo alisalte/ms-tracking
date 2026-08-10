@@ -117,7 +117,8 @@ function toChannel(row: ChannelRow): VideoChannel {
     endpoint: row.endpoint,
     status: row.status as VideoChannel['status'],
     ptz: row.ptz,
-    capabilities: typeof row.capabilities === 'string' ? JSON.parse(row.capabilities) : row.capabilities,
+    capabilities:
+      typeof row.capabilities === 'string' ? JSON.parse(row.capabilities) : row.capabilities,
     version: row.version,
   });
 }

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
-import { PageHeader, StatusBadge, Toolbar, type Column } from '@/components/ui';
+import { type Column, PageHeader, StatusBadge, Toolbar } from '@/components/ui';
 import { DataTable } from '@/components/ui';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
@@ -73,7 +73,9 @@ export function TripsPage() {
       id: 'date',
       headerKey: 'trips.list.colDate',
       render: (trip) => (
-        <span style={{ color: 'var(--mui-palette-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+        <span
+          style={{ color: 'var(--mui-palette-text-secondary)', fontVariantNumeric: 'tabular-nums' }}
+        >
           {new Date(trip.startTime).toLocaleDateString([], {
             year: 'numeric',
             month: 'short',
@@ -95,7 +97,9 @@ export function TripsPage() {
       headerKey: 'trips.list.colDuration',
       align: 'right',
       render: (trip) => (
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatDuration(trip.durationMin)}</span>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {formatDuration(trip.durationMin)}
+        </span>
       ),
     },
     {
@@ -118,10 +122,7 @@ export function TripsPage() {
 
   return (
     <Box>
-      <PageHeader
-        title={t('trips.title')}
-        subtitle={t('trips.subtitle')}
-      />
+      <PageHeader title={t('trips.title')} subtitle={t('trips.subtitle')} />
 
       <Card>
         <Toolbar

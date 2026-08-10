@@ -107,9 +107,11 @@ export function AuthLayout() {
             >
               Enterprise Fleet Intelligence
             </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', lineHeight: 1.7 }}>
-              Real-time tracking, video telematics, maintenance, and compliance — unified in one calm,
-              fast, secure dashboard.
+            <Typography
+              sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', lineHeight: 1.7 }}
+            >
+              Real-time tracking, video telematics, maintenance, and compliance — unified in one
+              calm, fast, secure dashboard.
             </Typography>
           </Box>
 

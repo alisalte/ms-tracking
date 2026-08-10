@@ -114,7 +114,7 @@ export function FleetMapPreview() {
           position: 'relative',
           width: '100%',
           height: 220,
-          borderRadius: 1,
+          borderRadius: 2,
           overflow: 'hidden',
         }}
       >
@@ -125,13 +125,15 @@ export function FleetMapPreview() {
           gap={1.5}
           sx={{
             position: 'absolute',
-            bottom: 6,
-            start: 6,
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            px: 1,
+            bottom: 8,
+            start: 8,
+            backgroundColor: 'rgba(255,255,255,0.70)',
+            border: '1px solid rgba(255,255,255,0.60)',
+            px: 1.25,
             py: 0.5,
-            borderRadius: 1,
-            backdropFilter: 'blur(4px)',
+            borderRadius: 2,
+            backdropFilter: 'blur(12px) saturate(1.4)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
           }}
         >
           {(

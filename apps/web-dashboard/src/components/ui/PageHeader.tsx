@@ -1,4 +1,4 @@
-import { Stack, Typography, type StackOwnProps } from '@mui/material';
+import { Stack, type StackOwnProps, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 
 import { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
@@ -65,13 +65,7 @@ export function PageHeader({
         )}
       </Stack>
       {actions && (
-        <Stack
-          direction="row"
-          alignItems="center"
-          gap={1}
-          flexWrap="wrap"
-          sx={{ flexShrink: 0 }}
-        >
+        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap" sx={{ flexShrink: 0 }}>
           {actions}
         </Stack>
       )}

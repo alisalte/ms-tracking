@@ -12,7 +12,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { Bell, HelpCircle, LogOut, Menu as MenuIcon, Moon, Search, Sun, UserCircle } from 'lucide-react';
+import {
+  Bell,
+  HelpCircle,
+  LogOut,
+  Menu as MenuIcon,
+  Moon,
+  Search,
+  Sun,
+  UserCircle,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';

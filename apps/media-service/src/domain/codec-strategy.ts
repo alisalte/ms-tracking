@@ -1,3 +1,4 @@
+import type { StreamType } from './media-frame.js';
 /**
  * Codec strategy — the passthrough-vs-transcode decision (09 §6).
  *
@@ -12,7 +13,6 @@
  * whether to spin up a transcoder track.
  */
 import type { StreamMode } from './stream-session.js';
-import type { StreamType } from './media-frame.js';
 
 export type CodecAction = 'passthrough' | 'transcode';
 
@@ -32,13 +32,14 @@ const WEBRTC_AUDIO_NATIVE: ReadonlySet<StreamType> = new Set(['OPUS']);
  * Decide whether to passthrough or transcode for a given delivery mode.
  * Pure function (09 §6.1).
  */
-export function decideCodec(
-  cameraCodec: StreamType,
-  mode: StreamMode,
-): CodecDecision {
+export function decideCodec(cameraCodec: StreamType, mode: StreamMode): CodecDecision {
   // Recording always gets the raw, pre-transcode codec (09 §4.3 invariant #2).
   if (mode === 'RECORD') {
-    return { action: 'passthrough', outputCodec: cameraCodec, reason: 'recording preserves native codec' };
+    return {
+      action: 'passthrough',
+      outputCodec: cameraCodec,
+      reason: 'recording preserves native codec',
+    };
   }
 
   // Live/playback/AI paths go through the SFU → browser compatibility matters.
@@ -48,7 +49,11 @@ export function decideCodec(
     : WEBRTC_AUDIO_NATIVE.has(cameraCodec);
 
   if (isNative) {
-    return { action: 'passthrough', outputCodec: cameraCodec, reason: `${cameraCodec} is browser-native` };
+    return {
+      action: 'passthrough',
+      outputCodec: cameraCodec,
+      reason: `${cameraCodec} is browser-native`,
+    };
   }
 
   // Transcode to browser-compatible.

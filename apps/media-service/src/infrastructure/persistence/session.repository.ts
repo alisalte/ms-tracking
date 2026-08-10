@@ -19,17 +19,20 @@ export class SessionRepository {
     quality: string;
     streamerPod: string | null;
   }): Promise<void> {
-    await this.knex.withSchema(SCHEMA).from(TABLE).insert({
-      session_id: this.knex.raw('?::uuid', [input.sessionId]),
-      tenant_id: this.knex.raw('?::uuid', [input.tenantId]),
-      channel_id: this.knex.raw('?::uuid', [input.channelId]),
-      user_id: input.userId ? this.knex.raw('?::uuid', [input.userId]) : null,
-      mode: input.mode,
-      quality: input.quality,
-      state: 'CONNECTING',
-      streamer_pod: input.streamerPod,
-      viewer_count: 0,
-    });
+    await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .insert({
+        session_id: this.knex.raw('?::uuid', [input.sessionId]),
+        tenant_id: this.knex.raw('?::uuid', [input.tenantId]),
+        channel_id: this.knex.raw('?::uuid', [input.channelId]),
+        user_id: input.userId ? this.knex.raw('?::uuid', [input.userId]) : null,
+        mode: input.mode,
+        quality: input.quality,
+        state: 'CONNECTING',
+        streamer_pod: input.streamerPod,
+        viewer_count: 0,
+      });
   }
 
   public async close(sessionId: string): Promise<void> {

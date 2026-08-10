@@ -26,7 +26,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { MoreVertical, Pencil, Trash2, Eye, Users } from 'lucide-react';
+import { Eye, MoreVertical, Pencil, Trash2, Users } from 'lucide-react';
 
 interface GroupsTabProps {
   groups: VehicleGroup[];
@@ -134,7 +134,11 @@ export function GroupsTab({
                 <Box sx={{ flex: 1 }} />
                 <IconButton
                   size="small"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); openMenu(e, g); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    openMenu(e, g);
+                  }}
                   aria-label={t('common.actions')}
                 >
                   <MoreVertical size={18} />
@@ -161,15 +165,27 @@ export function GroupsTab({
         onClose={closeMenu}
         slotProps={{ paper: { sx: { minWidth: 200 } } }}
       >
-        <MenuItem onClick={() => { if (menuGroup) onSelect(menuGroup.id); closeMenu(); }}>
-          <ListItemIcon><Eye size={16} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            if (menuGroup) onSelect(menuGroup.id);
+            closeMenu();
+          }}
+        >
+          <ListItemIcon>
+            <Eye size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.view')}</Typography>
         </MenuItem>
         <MenuItem
-          onClick={() => { if (menuGroup && onEdit) onEdit(menuGroup); closeMenu(); }}
+          onClick={() => {
+            if (menuGroup && onEdit) onEdit(menuGroup);
+            closeMenu();
+          }}
           disabled={!onEdit}
         >
-          <ListItemIcon><Pencil size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Pencil size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.edit')}</Typography>
         </MenuItem>
         <MenuItem
@@ -180,13 +196,19 @@ export function GroupsTab({
           disabled={!onDelete}
           sx={{ color: 'error.main' }}
         >
-          <ListItemIcon><Trash2 size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Trash2 size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.delete')}</Typography>
         </MenuItem>
         <MenuItem disabled>
-          <ListItemIcon><Users size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Users size={16} />
+          </ListItemIcon>
           <Tooltip title={t('assets.actions.pendingBackend')} placement="right">
-            <Typography variant="body2" sx={{ opacity: 0.5 }}>{t('common.manageMembers')}</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.5 }}>
+              {t('common.manageMembers')}
+            </Typography>
           </Tooltip>
         </MenuItem>
       </Menu>

@@ -23,9 +23,9 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { CHANNEL_MANAGER, STREAM_MANAGER } from './tokens.js';
 import type { ChannelManager } from '../application/channel-manager.js';
 import type { StreamManager } from '../application/stream-manager.js';
+import { CHANNEL_MANAGER, STREAM_MANAGER } from './tokens.js';
 
 @Controller()
 export class StreamsController {
@@ -37,10 +37,7 @@ export class StreamsController {
   // --- Stream sessions ---
 
   @Post('streams')
-  public async openStream(
-    @Body() body: Record<string, unknown>,
-    @Req() req: Request,
-  ) {
+  public async openStream(@Body() body: Record<string, unknown>, @Req() req: Request) {
     const tenantId = tenantOf(req);
     const channelId = String(body.channelId ?? '');
     if (!channelId) throw new HttpException('channelId required', HttpStatus.BAD_REQUEST);
@@ -72,8 +69,17 @@ export class StreamsController {
     return {
       sessions: results.map((r, i) =>
         r.status === 'fulfilled'
-          ? { channelId: channelIds[i], ok: true, sessionId: r.value.sessionId, signalingToken: r.value.signalingToken.token }
-          : { channelId: channelIds[i], ok: false, error: r.reason instanceof Error ? r.reason.message : 'failed' },
+          ? {
+              channelId: channelIds[i],
+              ok: true,
+              sessionId: r.value.sessionId,
+              signalingToken: r.value.signalingToken.token,
+            }
+          : {
+              channelId: channelIds[i],
+              ok: false,
+              error: r.reason instanceof Error ? r.reason.message : 'failed',
+            },
       ),
     };
   }
@@ -130,6 +136,7 @@ function tenantOf(req: Request): string {
   const tid =
     (req.headers['tenant-id'] as string | undefined) ??
     (req.query['tenant-id'] as string | undefined);
-  if (!tid) throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
+  if (!tid)
+    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
   return tid;
 }

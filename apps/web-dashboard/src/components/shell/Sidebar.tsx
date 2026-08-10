@@ -1,6 +1,6 @@
 import { Box, Drawer, IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import { ChevronLeft, ChevronRight, Truck } from 'lucide-react';
 import { useTheme } from '@mui/material';
+import { ChevronLeft, ChevronRight, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 
@@ -186,6 +186,7 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
                 const navButton = (
                   <Stack
                     component="button"
+                    key={item.key}
                     direction="row"
                     alignItems="center"
                     gap={1.5}

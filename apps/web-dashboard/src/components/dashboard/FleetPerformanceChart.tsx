@@ -1,6 +1,6 @@
 import { Box, Skeleton } from '@mui/material';
-import { BarChart3 } from 'lucide-react';
 import type { EChartsOption } from 'echarts';
+import { BarChart3 } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { useTrips } from '@/api/fleet.api';

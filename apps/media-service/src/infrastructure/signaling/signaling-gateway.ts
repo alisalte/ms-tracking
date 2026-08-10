@@ -1,3 +1,4 @@
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * WebSocket signaling gateway — Socket.IO server for WebRTC negotiation
  * (09 §3.7; 10 §4).
@@ -7,9 +8,8 @@
  * tokens are verified on connect. Multi-pod fan-out via the Redis adapter.
  */
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { Server as IoServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import type { Redis } from '@fleetvision/cache-redis';
+import { Server as IoServer } from 'socket.io';
 import type { MediaConfig } from '../../config/media.config.js';
 import type { RedisSessionCache } from '../cache/redis-session-cache.js';
 
@@ -78,13 +78,13 @@ export class SignalingGateway implements OnApplicationBootstrap, OnApplicationSh
       this.logger.debug(`WS client connected: ${socket.id} session=${payload?.sessionId}`);
       if (payload?.sessionId) socket.join(`session:${payload.sessionId}`);
 
-      socket.on('stream.answer', (sdp: string) => {
+      socket.on('stream.answer', (_sdp: string) => {
         // Relay the browser's SDP answer to the media-router.
         // In stub mode this is a no-op; the real router calls completeNegotiation.
         this.logger.debug(`SDP answer received from ${socket.id}`);
       });
 
-      socket.on('ice.candidate', (candidate: unknown) => {
+      socket.on('ice.candidate', (_candidate: unknown) => {
         // Trickle ICE — relay to the media-router (stub: no-op).
         this.logger.debug(`ICE candidate from ${socket.id}`);
       });

@@ -1,5 +1,5 @@
-import type { EChartsOption } from 'echarts';
 import { Box, Skeleton, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import type { EChartsOption } from 'echarts';
 import { Activity } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +47,10 @@ export function FleetActivityChart() {
       legend: { show: false },
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'cross', label: { formatter: (p: { value: number }) => formatHour(Number(p.value)) } },
+        axisPointer: {
+          type: 'cross',
+          label: { formatter: (p: { value: number }) => formatHour(Number(p.value)) },
+        },
       },
       grid: { left: 8, right: 16, top: 16, bottom: 28, containLabel: true },
       xAxis: {

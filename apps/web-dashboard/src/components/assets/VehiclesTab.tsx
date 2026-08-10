@@ -158,12 +158,7 @@ export function VehiclesTab({
           </TableHead>
           <TableBody>
             {filtered.map((v) => (
-              <TableRow
-                key={v.id}
-                hover
-                selected={v.id === selectedId}
-                sx={{ cursor: 'pointer' }}
-              >
+              <TableRow key={v.id} hover selected={v.id === selectedId} sx={{ cursor: 'pointer' }}>
                 <TableCell onClick={() => onSelect(v.id)}>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
                     {v.licensePlate}
@@ -196,7 +191,14 @@ export function VehiclesTab({
                   <Typography variant="body2">{v.odometerKm.toLocaleString()} km</Typography>
                 </TableCell>
                 <TableCell align="right" sx={{ pr: 1 }}>
-                  <IconButton size="small" onClick={(e) => { e.stopPropagation(); openMenu(e, v); }} aria-label={t('common.actions')}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openMenu(e, v);
+                    }}
+                    aria-label={t('common.actions')}
+                  >
                     <MoreVertical size={18} />
                   </IconButton>
                 </TableCell>
@@ -222,26 +224,41 @@ export function VehiclesTab({
         onClose={closeMenu}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <MenuItem onClick={() => { if (menuVehicle) onSelect(menuVehicle.id); closeMenu(); }}>
-          <ListItemIcon><Eye size={16} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            if (menuVehicle) onSelect(menuVehicle.id);
+            closeMenu();
+          }}
+        >
+          <ListItemIcon>
+            <Eye size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.view')}</Typography>
         </MenuItem>
         <MenuItem
-          onClick={() => { if (menuVehicle && onEdit) onEdit(menuVehicle); closeMenu(); }}
+          onClick={() => {
+            if (menuVehicle && onEdit) onEdit(menuVehicle);
+            closeMenu();
+          }}
           disabled={!onEdit}
         >
-          <ListItemIcon><Pencil size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Pencil size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.edit')}</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (menuVehicle && onDelete) onDelete(menuVehicle.id, `${menuVehicle.make} ${menuVehicle.model}`);
+            if (menuVehicle && onDelete)
+              onDelete(menuVehicle.id, `${menuVehicle.make} ${menuVehicle.model}`);
             closeMenu();
           }}
           disabled={!onDelete}
           sx={{ color: 'error.main' }}
         >
-          <ListItemIcon><Trash2 size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Trash2 size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.delete')}</Typography>
         </MenuItem>
       </Menu>

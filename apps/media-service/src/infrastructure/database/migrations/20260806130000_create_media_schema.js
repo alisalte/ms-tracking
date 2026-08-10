@@ -30,13 +30,10 @@ export async function up(knex) {
     t.text('codec').notNullable().checkIn(['H264', 'H265', 'AAC', 'OPUS', 'G711', 'G726']);
     // RTSP endpoint or RTMP stream key (null for JT1078 which uses the device SIM).
     t.text('endpoint').nullable();
-    t.text('status').notNullable().checkIn([
-      'REGISTERED',
-      'ONLINE',
-      'DEGRADED',
-      'OFFLINE',
-      'DECOMMISSIONED',
-    ]).defaultTo('REGISTERED');
+    t.text('status')
+      .notNullable()
+      .checkIn(['REGISTERED', 'ONLINE', 'DEGRADED', 'OFFLINE', 'DECOMMISSIONED'])
+      .defaultTo('REGISTERED');
     t.boolean('ptz').notNullable().defaultTo(false);
     t.jsonb('capabilities').notNullable().defaultTo(JSON.stringify({}));
     t.integer('version').notNullable().defaultTo(1);
@@ -44,10 +41,10 @@ export async function up(knex) {
     t.timestamp('updated_at', { useTz: true }).notNullable().defaultTo(knex.fn.now());
   });
   await knex.raw(
-    'CREATE INDEX ix_channels_tenant_vehicle ON media.video_channels (tenant_id, vehicle_id) WHERE status != \'DECOMMISSIONED\'',
+    "CREATE INDEX ix_channels_tenant_vehicle ON media.video_channels (tenant_id, vehicle_id) WHERE status != 'DECOMMISSIONED'",
   );
   await knex.raw(
-    'CREATE INDEX ix_channels_tenant_site ON media.video_channels (tenant_id, site_id) WHERE status != \'DECOMMISSIONED\'',
+    "CREATE INDEX ix_channels_tenant_site ON media.video_channels (tenant_id, site_id) WHERE status != 'DECOMMISSIONED'",
   );
 
   // --- media.stream_sessions (09 §5.2, partitioned daily) ---
@@ -58,12 +55,10 @@ export async function up(knex) {
     t.uuid('user_id').nullable();
     t.text('mode').notNullable().checkIn(['LIVE', 'PLAYBACK', 'RECORD', 'AI']);
     t.text('quality').notNullable().defaultTo('auto');
-    t.text('state').notNullable().checkIn([
-      'CONNECTING',
-      'ACTIVE',
-      'DEGRADED',
-      'CLOSED',
-    ]).defaultTo('CONNECTING');
+    t.text('state')
+      .notNullable()
+      .checkIn(['CONNECTING', 'ACTIVE', 'DEGRADED', 'CLOSED'])
+      .defaultTo('CONNECTING');
     t.text('streamer_pod').nullable();
     t.integer('viewer_count').notNullable().defaultTo(0);
     t.timestamp('started_at', { useTz: true }).notNullable().defaultTo(knex.fn.now());

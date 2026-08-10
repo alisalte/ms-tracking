@@ -3,6 +3,9 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useThemeContext } from '@/theme/ThemeRegistry';
+import { glass } from '@/theme/palette';
+
 import { LiveBadge } from './LiveBadge';
 
 interface WidgetCardProps {
@@ -26,13 +29,14 @@ interface WidgetCardProps {
 }
 
 /**
- * Shared widget shell: a titled Limitless card with an optional live badge,
+ * Shared widget shell: a frosted-glass titled card with an optional live badge,
  * header action slot, and consistent loading (skeleton) + empty states.
  *
- * v3 (Limitless): weight-700 header, 20px body padding, near-flat 3px card
- * (sourced from the MuiCard theme override). Per UI_UX_Design.md §0.6, initial
- * load uses skeletons (not spinners) and the live badge is the pulsing freshness
- * dot reserved for real-time panels.
+ * v5 (Glassmorphism): every dashboard card is a frosted-glass surface —
+ * semi-transparent with a soft blur, a gradient highlight edge, a layered
+ * shadow, and a sheen sweep on hover. The icon sits in a tinted glass badge.
+ * Properties (titleKey/icon/live/action/loading/empty) are unchanged so all 8
+ * dashboard widgets + ReportChart inherit the new look without edits.
  */
 export function WidgetCard({
   titleKey,
@@ -46,22 +50,68 @@ export function WidgetCard({
   sx,
 }: WidgetCardProps) {
   const { t } = useTranslation();
+  const { mode } = useThemeContext();
+  const g = mode === 'dark' ? glass.dark : glass.light;
+
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', ...sx }}>
+    <Card
+      className="fv-glass fv-glass-edge fv-glass-sheen"
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: glass.radius,
+        backgroundColor: g.bg,
+        border: `1px solid ${g.border}`,
+        boxShadow: g.shadow,
+        transition: 'box-shadow 0.25s ease, transform 0.25s ease, background-color 0.25s ease',
+        '&:hover': {
+          boxShadow: g.shadowHover,
+          backgroundColor: g.hover,
+          transform: 'translateY(-2px)',
+        },
+        // Keep the glass classes' shimmer/edge pseudo-elements visible.
+        '&::before, &::after': { pointerEvents: 'none' },
+        ...sx,
+      }}
+    >
       <CardContent
         sx={{
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
           gap: 1.5,
-          p: 2,
-          '&:last-child': { pb: 2 },
+          p: 2.25,
+          '&:last-child': { pb: 2.25 },
+          position: 'relative',
+          zIndex: 3,
         }}
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-          <Stack direction="row" alignItems="center" gap={0.75} minWidth={0}>
-            {Icon && <Icon size={17} style={{ flexShrink: 0 }} />}
-            <Typography variant="subtitle2" fontWeight={700} noWrap>
+          <Stack direction="row" alignItems="center" gap={1} minWidth={0}>
+            {Icon && (
+              <Stack
+                alignItems="center"
+                justifyContent="center"
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: glass.radiusSm,
+                  background: g.highlight,
+                  border: `1px solid ${g.border}`,
+                  color: 'primary.main',
+                  flexShrink: 0,
+                }}
+              >
+                <Icon size={16} />
+              </Stack>
+            )}
+            <Typography
+              variant="subtitle2"
+              fontWeight={700}
+              noWrap
+              sx={{ letterSpacing: '-0.01em' }}
+            >
               {t(titleKey)}
             </Typography>
             {live && <LiveBadge />}
@@ -70,7 +120,10 @@ export function WidgetCard({
         </Stack>
 
         {loading ? (
-          <Skeleton variant="rounded" sx={{ flex: 1, minHeight: 120 }} />
+          <Skeleton
+            variant="rounded"
+            sx={{ flex: 1, minHeight: 120, borderRadius: glass.radiusSm }}
+          />
         ) : empty && emptyKey ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
             {t(emptyKey)}
