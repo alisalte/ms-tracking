@@ -34,12 +34,15 @@ import {
 import type { Request } from 'express';
 import type { ChannelManager } from '../application/channel-manager.js';
 import type { StreamManager } from '../application/stream-manager.js';
+<<<<<<< HEAD
 import {
   type OpenStreamDto,
   type RegisterChannelDto,
   openStreamSchema,
   registerChannelSchema,
 } from './media.dto.js';
+=======
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 import { CHANNEL_MANAGER, STREAM_MANAGER } from './tokens.js';
 
 @Controller()
@@ -53,10 +56,14 @@ export class StreamsController {
   // --- Stream sessions ---
 
   @Post('streams')
+<<<<<<< HEAD
   public async openStream(
     @Body(new ZodValidationPipe(openStreamSchema)) body: OpenStreamDto,
     @Req() req: Request,
   ) {
+=======
+  public async openStream(@Body() body: Record<string, unknown>, @Req() req: Request) {
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
     const tenantId = tenantOf(req);
     const channel = await this.channels.findById(body.channelId, tenantId);
     if (!channel) throw new HttpException('Channel not found', HttpStatus.NOT_FOUND);
@@ -168,5 +175,14 @@ export class StreamsController {
 
 /** Derive the tenant id from the verified JWT principal (INV-I02). */
 function tenantOf(req: Request): string {
+<<<<<<< HEAD
   return getPrincipal(req).tenantId;
+=======
+  const tid =
+    (req.headers['tenant-id'] as string | undefined) ??
+    (req.query['tenant-id'] as string | undefined);
+  if (!tid)
+    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
+  return tid;
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 }

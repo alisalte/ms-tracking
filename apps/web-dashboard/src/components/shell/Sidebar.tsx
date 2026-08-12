@@ -1,3 +1,8 @@
+<<<<<<< HEAD
+=======
+import { Box, Drawer, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { useTheme } from '@mui/material';
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 import { ChevronLeft, ChevronRight, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -113,6 +118,7 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
                   currentPath === item.path ||
                   (item.path !== '/dashboard' && currentPath.startsWith(item.path));
                 const Icon = item.icon;
+<<<<<<< HEAD
                 const label = t(`nav.${item.key}`);
 
                 const link = (
@@ -120,6 +126,15 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
                     key={item.key}
                     type="button"
                     data-active={isActive ? 'true' : 'false'}
+=======
+                const navButton = (
+                  <Stack
+                    component="button"
+                    key={item.key}
+                    direction="row"
+                    alignItems="center"
+                    gap={1.5}
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
                     onClick={() => handleNavigate(item.path)}
                     aria-current={isActive ? 'page' : undefined}
                     title={collapsed ? label : undefined}

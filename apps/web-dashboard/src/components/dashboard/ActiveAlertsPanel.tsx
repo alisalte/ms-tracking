@@ -78,8 +78,23 @@ export function ActiveAlertsPanel() {
               <Link to="/map" className="block no-underline">
                 <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
                   <span
+<<<<<<< HEAD
                     className="flex size-8 shrink-0 items-center justify-center rounded-md"
                     style={{ backgroundColor: `${color}1A`, color }}
+=======
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      background: `linear-gradient(135deg, ${color}33, ${color}12)`,
+                      border: `1px solid ${color}40`,
+                      color,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
                   >
                     <Icon size={16} />
                   </span>

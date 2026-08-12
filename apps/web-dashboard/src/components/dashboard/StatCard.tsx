@@ -63,6 +63,7 @@ export function StatCard({
         className="flex h-full w-full flex-col gap-3 p-4 text-start disabled:cursor-default"
         aria-label={t(titleKey)}
       >
+<<<<<<< HEAD
         <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-graydark-600">
           {t(titleKey)}
         </span>
@@ -77,6 +78,12 @@ export function StatCard({
             {value}
           </span>
         )}
+=======
+        <Stack direction="column" gap={0.75} sx={{ height: '100%' }}>
+          <Typography variant="overline" sx={{ lineHeight: 1.6667, color: 'text.secondary' }}>
+            {t(titleKey)}
+          </Typography>
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 
         {/* Secondary line: delta chip and/or meta */}
         <div className="flex min-h-5 items-center gap-2">

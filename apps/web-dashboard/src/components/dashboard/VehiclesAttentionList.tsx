@@ -48,8 +48,23 @@ export function VehiclesAttentionList() {
               <Link to="/vehicles" className="block no-underline">
                 <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
                   <span
+<<<<<<< HEAD
                     className="flex size-[30px] shrink-0 items-center justify-center rounded-md"
                     style={{ backgroundColor: `${meta.color}1A`, color: meta.color }}
+=======
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: `linear-gradient(135deg, ${meta.color}33, ${meta.color}12)`,
+                      border: `1px solid ${meta.color}40`,
+                      color: meta.color,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
                   >
                     <Icon size={15} />
                   </span>

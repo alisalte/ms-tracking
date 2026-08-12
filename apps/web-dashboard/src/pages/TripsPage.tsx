@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
+<<<<<<< HEAD
 import { ErrorState } from '@/components/common/ErrorState';
+=======
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 import { type Column, PageHeader, StatusBadge, Toolbar } from '@/components/ui';
 import { DataTable } from '@/components/ui';
 import type { Trip, TripStatus } from '@/types/fleet.types';

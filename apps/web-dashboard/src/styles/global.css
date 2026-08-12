@@ -101,3 +101,95 @@ html[dir="rtl"] body {
 html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
   transform: scaleX(-1);
 }
+
+/* ── Glassmorphism dashboard (v5) ─────────────────────────────────────── */
+
+/* Soft floating motion for aurora blobs behind the dashboard header. */
+@keyframes fv-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(20px, -16px) scale(1.06);
+  }
+  66% {
+    transform: translate(-14px, 12px) scale(0.96);
+  }
+}
+
+/* Subtle sheen sweep on glass card hover. */
+@keyframes fv-glass-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+/* Entrance for glass cards / KPI tiles. */
+@keyframes fv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Frosted-glass base. Applied to cards via the `.fv-glass` class. */
+.fv-glass {
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  position: relative;
+  overflow: hidden;
+}
+
+/* The top highlight line that gives glass cards their "lit edge" look. */
+.fv-glass-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.08));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Sweep sheen that animates across the card on hover. */
+.fv-glass-sheen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: translateX(-120%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.fv-glass-sheen:hover::after {
+  animation: fv-glass-shimmer 0.9s ease-out;
+}
+
+/* ── Dashboard list rows (alerts / attention) ──────────────────────────── */
+
+/* Subtle glass hover for alert + attention rows inside the dashboard widgets. */
+.fv-alert-row {
+  padding: 8px 10px !important;
+  border-radius: 10px;
+  transition: background-color 0.18s ease;
+}
+
+.fv-alert-row:hover {
+  background-color: rgba(33, 150, 243, 0.08);
+}

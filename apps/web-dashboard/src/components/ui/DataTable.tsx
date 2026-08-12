@@ -121,9 +121,14 @@ export function DataTable<Row>({
         <TableBody>
           {loading
             ? Array.from({ length: loadingRows }).map((_, i) => (
+<<<<<<< HEAD
                 // Skeleton rows are static (never reordered), so index keys are safe.
                 // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
                 <TableRow key={`sk-${i}`}>
+=======
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder rows are static and never reorder
+                <TableRow key={`skeleton-${i}`}>
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
                   {columns.map((col) => (
                     <TableCell key={col.id} align={col.align ? ALIGN[col.align] : 'left'}>
                       <Skeleton height={18} />

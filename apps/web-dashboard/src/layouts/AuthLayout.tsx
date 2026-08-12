@@ -57,12 +57,23 @@ export function AuthLayout() {
           <div>
             <h1 className="mb-2 text-[1.75rem] font-bold leading-tight text-white">
               Enterprise Fleet Intelligence
+<<<<<<< HEAD
             </h1>
             <p className="text-[0.95rem] leading-relaxed text-white/70">
               Real-time tracking, video telematics, maintenance, and compliance — unified in one
               calm, fast, secure dashboard.
             </p>
           </div>
+=======
+            </Typography>
+            <Typography
+              sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', lineHeight: 1.7 }}
+            >
+              Real-time tracking, video telematics, maintenance, and compliance — unified in one
+              calm, fast, secure dashboard.
+            </Typography>
+          </Box>
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 
           {/* Feature pills */}
           <div className="mt-2 flex flex-wrap gap-2.5">

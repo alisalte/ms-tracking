@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+import { Box, Skeleton, Stack } from '@mui/material';
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 import type { EChartsOption } from 'echarts';
 import { GaugeCircle } from 'lucide-react';
 import { useMemo } from 'react';

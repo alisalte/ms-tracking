@@ -46,12 +46,29 @@ export function WeatherWidget() {
       ) : (
         <div className="flex flex-col gap-4">
           {/* Current conditions */}
+<<<<<<< HEAD
           <div className="flex items-center gap-3">
             <div
               className="flex size-[52px] shrink-0 items-center justify-center rounded-full"
               style={{
                 backgroundColor: `${CONDITION_META[data.condition].color}1A`,
                 color: CONDITION_META[data.condition].color,
+=======
+          <Stack direction="row" alignItems="center" gap={2}>
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                borderRadius: 3,
+                background: `linear-gradient(135deg, ${CONDITION_META[data.condition].color}33 0%, ${CONDITION_META[data.condition].color}12 100%)`,
+                border: `1px solid ${CONDITION_META[data.condition].color}40`,
+                color: CONDITION_META[data.condition].color,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: `inset 0 1px 0 ${CONDITION_META[data.condition].color}30`,
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
               }}
             >
               {(() => {
@@ -96,7 +113,23 @@ export function WeatherWidget() {
               return (
                 <div
                   key={f.day}
+<<<<<<< HEAD
                   className="flex flex-1 flex-col items-center gap-1 rounded-lg bg-gray-50 py-3 dark:bg-white/5"
+=======
+                  sx={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    py: 0.75,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    backgroundColor: 'rgba(255,255,255,0.40)',
+                    backdropFilter: 'blur(6px)',
+                  }}
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
                 >
                   <span className="text-xs font-semibold text-gray-500 dark:text-graydark-600">
                     {f.day}

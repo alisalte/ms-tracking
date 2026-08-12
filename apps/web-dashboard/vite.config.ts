@@ -1,5 +1,8 @@
 import path from 'node:path';
+<<<<<<< HEAD
 import tailwindcss from '@tailwindcss/vite';
+=======
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 

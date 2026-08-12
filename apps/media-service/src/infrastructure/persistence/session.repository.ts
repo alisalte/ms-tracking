@@ -22,6 +22,7 @@ export class SessionRepository {
     quality: string;
     streamerPod: string | null;
   }): Promise<void> {
+<<<<<<< HEAD
     await withTenantContext(this.knex, input.tenantId, async (trx) => {
       await trx
         .withSchema(SCHEMA)
@@ -38,6 +39,22 @@ export class SessionRepository {
           viewer_count: 0,
         });
     });
+=======
+    await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .insert({
+        session_id: this.knex.raw('?::uuid', [input.sessionId]),
+        tenant_id: this.knex.raw('?::uuid', [input.tenantId]),
+        channel_id: this.knex.raw('?::uuid', [input.channelId]),
+        user_id: input.userId ? this.knex.raw('?::uuid', [input.userId]) : null,
+        mode: input.mode,
+        quality: input.quality,
+        state: 'CONNECTING',
+        streamer_pod: input.streamerPod,
+        viewer_count: 0,
+      });
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
   }
 
   public async close(tenantId: string, sessionId: string): Promise<void> {

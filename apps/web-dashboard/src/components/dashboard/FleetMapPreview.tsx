@@ -104,10 +104,40 @@ export function FleetMapPreview() {
         </Link>
       }
     >
+<<<<<<< HEAD
       <div className="relative h-[220px] w-full overflow-hidden rounded-lg">
         <div ref={containerRef} className="h-full w-full" />
         {/* Legend overlay (§0.7: never rely on color alone — pair with label). */}
         <div className="absolute bottom-1.5 start-1.5 flex gap-3 rounded-md bg-white/85 px-2 py-1 backdrop-blur-sm">
+=======
+      <Box
+        sx={{
+          position: 'relative',
+          width: '100%',
+          height: 220,
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}
+      >
+        <Box ref={containerRef} sx={{ width: '100%', height: '100%' }} />
+        {/* Legend overlay (§0.7: never rely on color alone — pair with label). */}
+        <Stack
+          direction="row"
+          gap={1.5}
+          sx={{
+            position: 'absolute',
+            bottom: 8,
+            start: 8,
+            backgroundColor: 'rgba(255,255,255,0.70)',
+            border: '1px solid rgba(255,255,255,0.60)',
+            px: 1.25,
+            py: 0.5,
+            borderRadius: 2,
+            backdropFilter: 'blur(12px) saturate(1.4)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+          }}
+        >
+>>>>>>> 5bdd11003cc6ed2a06307b253ebd40c49da3ea6e
           {(
             [
               ['active', mapAccents.vehicleActive],
