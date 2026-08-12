@@ -20,6 +20,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import { downloadBlob } from '@/lib/video-stream';
 import {
   PERMISSION_CATALOG,
@@ -78,7 +79,12 @@ function mapUser(wire: UserWire): AdminUser {
 async function fetchUsers(): Promise<AdminUser[]> {
   return withMockFallback(
     async () => {
-      const res = await apiGet<{ data: UserWire[]; meta: { total: number } }>('/iam/users');
+      // Backend returns the standard Page<T> shape { data, nextCursor }. The
+      // non-page hook loads the first page only (bounded by the default limit);
+      // use useUsersPage() for full cursor-paginated access.
+      const res = await apiGet<{ data: UserWire[]; nextCursor: string | null }>('/iam/users', {
+        limit: 100,
+      });
       return res.data.map(mapUser);
     },
     () => resolveMock(mockUsers),
@@ -124,6 +130,26 @@ async function fetchAudit(): Promise<import('@/types/admin.types').AuditEntry[]>
 
 export function useUsers() {
   return useQuery({ queryKey: queryKeys.admin.users(), queryFn: fetchUsers });
+}
+
+/**
+ * Cursor-paginated users list (real backend: GET /iam/users?limit=&cursor=).
+ * Falls back to mock on network error in mock mode. Use this for the users
+ * table to avoid unbounded client-side loading.
+ */
+export function useUsersPage() {
+  return useCursorPagination<AdminUser>(queryKeys.admin.users(), (cursor) =>
+    withMockFallback(
+      async () => {
+        const res = await apiGet<{ data: UserWire[]; nextCursor: string | null }>(
+          '/iam/users',
+          cursor ? { limit: 25, cursor } : { limit: 25 },
+        );
+        return { data: res.data.map(mapUser), nextCursor: res.nextCursor };
+      },
+      async () => ({ data: mockUsers, nextCursor: null }),
+    ),
+  );
 }
 export function useUserDetail(id: string | null) {
   return useQuery({
@@ -224,7 +250,8 @@ export function useAssignRole() {
 
 /**
  * User status action → `PATCH /iam/users/:id/status`.
- * Backend has no PATCH /status yet — mock optimistic update only.
+ * Backend has no PATCH /status yet — mock optimistic update only. In REAL mode
+ * the mutation REJECTS honestly instead of fabricating a persisted change.
  */
 export function useUserStatusAction() {
   const qc = useQueryClient();
@@ -235,6 +262,9 @@ export function useUserStatusAction() {
     { prev: AdminUser[] | undefined }
   >({
     mutationFn: async ({ id, status }) => {
+      if (!shouldUseMock()) {
+        throw new Error('User status changes are not available (backend not implemented).');
+      }
       const cached = qc.getQueryData<AdminUser[]>(queryKeys.admin.users());
       const base = cached?.find((u) => u.id === id);
       if (!base) throw new Error(`user ${id} not found`);
@@ -261,7 +291,8 @@ export function useUserStatusAction() {
 
 /**
  * Update tenant settings → `PUT /settings`.
- * No backend yet — mock optimistic update.
+ * No backend yet — mock optimistic update. In REAL mode the mutation REJECTS
+ * honestly instead of fabricating a persisted "Saved".
  */
 export function useUpdateSettings() {
   const qc = useQueryClient();
@@ -271,8 +302,12 @@ export function useUpdateSettings() {
     Partial<TenantSettings>,
     { prev: TenantSettings | undefined }
   >({
-    mutationFn: async (patch) =>
-      resolveMock({ ...mockSettings, ...patch } satisfies TenantSettings),
+    mutationFn: async (patch) => {
+      if (!shouldUseMock()) {
+        throw new Error('Settings changes are not available (settings backend not implemented).');
+      }
+      return resolveMock({ ...mockSettings, ...patch } satisfies TenantSettings);
+    },
     onMutate: async (patch) => {
       const key = queryKeys.admin.settings();
       await qc.cancelQueries({ queryKey: key });

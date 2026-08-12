@@ -1,0 +1,171 @@
+/**
+ * Tailwind CSS v4 — FleetVision × TailAdmin design system.
+ *
+ * Coexistence with MUI: we deliberately DO NOT enable Tailwind's Preflight
+ * (base reset). MUI's CssBaseline owns the document resets; enabling preflight
+ * would strip button/input/heading defaults and break MUI components globally.
+ * Importing only `theme` + `utilities` gives us the engine + generated
+ * utilities keyed off the `@theme` tokens below, with no cascade collisions.
+ *
+ * Dark mode is class-based: the `dark:` variant matches `.dark` on `<html>`.
+ * ThemeRegistry toggles that class alongside the MUI theme swap so one switch
+ * drives both systems. RTL is honored automatically via logical utilities
+ * (ps-/pe-/ms-/me-/start-/end-) which read `<html dir>`.
+ */
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+
+/* Class-based dark mode — `.dark` on <html> (toggled by ThemeRegistry). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Design tokens — TailAdmin React palette, FleetVoice-tuned.
+ * Brand = Indigo (task §18). Neutrals = TailAdmin gray + graydark (sidebar).
+ * ──────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Brand — TailAdmin indigo. */
+  --color-brand-25: #f2f7ff;
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #e0eaff;
+  --color-brand-200: #c7d8ff;
+  --color-brand-300: #a4bcfd;
+  --color-brand-400: #8199fd;
+  --color-brand-500: #465ffb; /* primary action */
+  --color-brand-600: #3641f5;
+  --color-brand-700: #2d31d4; /* hover deep */
+  --color-brand-800: #3c50e0; /* TailAdmin signature */
+  --color-brand-900: #1b1e6e;
+
+  /* Light neutrals — TailAdmin `gray`. */
+  --color-gray-25: #fcfcfd;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
+
+  /* Dark neutrals — TailAdmin `graydark` (sidebar + dark surfaces). */
+  --color-graydark-200: #1a222c;
+  --color-graydark-300: #333a48;
+  --color-graydark-400: #4a5568;
+  --color-graydark-500: #6b7280;
+  --color-graydark-600: #9aa5b5;
+  --color-graydark-700: #c1c8d4;
+  --color-graydark-800: #e1e6ea;
+  --color-graydark-900: #f3f4f6;
+
+  /* Status — TailAdmin semantic set. */
+  --color-success-50: #ecfdf3;
+  --color-success-100: #d1fadf;
+  --color-success-400: #36b37e;
+  --color-success-500: #12b76a;
+  --color-success-600: #039855;
+  --color-success-700: #027a48;
+
+  --color-warning-50: #fffaeb;
+  --color-warning-100: #fef0c7;
+  --color-warning-400: #fdb022;
+  --color-warning-500: #f79009;
+  --color-warning-600: #dc6803;
+  --color-warning-700: #b54708;
+
+  --color-danger-50: #fef3f2;
+  --color-danger-100: #fee4e2;
+  --color-danger-400: #fb7185;
+  --color-danger-500: #f04438;
+  --color-danger-600: #d92d20;
+  --color-danger-700: #b42318;
+
+  --color-info-50: #eff8ff;
+  --color-info-100: #d1e9ff;
+  --color-info-400: #2e90fa;
+  --color-info-500: #1570ef;
+  --color-info-600: #175cd3;
+  --color-info-700: #0944a3;
+
+  /* TailAdmin `meta` chart/accent ramp. */
+  --color-meta-1: #465fff;
+  --color-meta-2: #10b981;
+  --color-meta-3: #f79009;
+  --color-meta-4: #f04438;
+  --color-meta-5: #ee46bc;
+  --color-meta-6: #8b5cf6; /* violet accent */
+  --color-meta-7: #06b6d4;
+  --color-meta-8: #f59e0b;
+  --color-meta-9: #ec4899;
+
+  /* Fonts — preserve Roboto/Vazirmatn so Persian (RTL) stays readable. */
+  --font-sans: "Roboto", "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-persian: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Component classes — shared presentational primitives written in plain CSS
+ * so they work without Tailwind's @apply resolving against preflight. Used by
+ * the sidebar links, dashboard widgets, and the tailwind-ui barrel.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Sidebar nav link — TailAdmin pill with active + hover states. */
+.fv-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding-block: 0.5625rem;
+  padding-inline: 0.875rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-graydark-700);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: start;
+  white-space: nowrap;
+}
+.fv-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+.fv-sidebar-link[data-active="true"] {
+  background: var(--color-brand-800);
+  color: #ffffff;
+}
+
+/* Subtle focus ring for keyboard nav (a11y). */
+.fv-focus-ring:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Thin scrollbar for sidebar/widget scroll regions. */
+.fv-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.fv-scroll::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 140, 0.35);
+  border-radius: 99px;
+}
+.fv-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Freshness dot — live indicator (kept in sync with global.css @keyframes). */
+.fv-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--color-success-500);
+  animation: fv-pulse 1.8s ease-in-out infinite;
+}

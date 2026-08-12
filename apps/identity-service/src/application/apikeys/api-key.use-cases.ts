@@ -8,9 +8,10 @@ import { Injectable } from '@nestjs/common';
 import { ApiKey as ApiKeyClass, NotFoundError } from '../../domain/index.js';
 import type { ApiKeyRepository } from '../../infrastructure/persistence/api-key.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
+import type { AuditActor, AuditManager } from '../audit/audit-manager.js';
 import { buildEventContext } from '../shared/context.js';
 
-export interface CreateApiKeyInput {
+export interface CreateApiKeyInput extends Partial<AuditActor> {
   readonly tenantId: string;
   readonly name: string;
   readonly scopes: string[];
@@ -18,6 +19,7 @@ export interface CreateApiKeyInput {
   readonly expiresAt?: Date | null;
   readonly env?: string;
   readonly correlationId?: string;
+  readonly actorId?: string | null;
 }
 
 export interface CreatedApiKey {
@@ -31,6 +33,7 @@ export class CreateApiKeyUseCase {
   constructor(
     private readonly apiKeys: ApiKeyRepository,
     private readonly hasher: PasswordHasher,
+    private readonly audit: AuditManager,
   ) {}
 
   public async execute(input: CreateApiKeyInput): Promise<CreatedApiKey> {
@@ -55,19 +58,54 @@ export class CreateApiKeyUseCase {
       ctx,
     );
     await this.apiKeys.save(key, ctx);
+    // Audit — never log the plaintext key; only the id/prefix/scopes.
+    await this.audit.record({
+      tenantId: input.tenantId,
+      actorId: input.actorId ?? null,
+      actorType: input.actorId ? 'USER' : 'SYSTEM',
+      action: 'iam.apikey.create',
+      resourceType: 'api_key',
+      resourceId: id,
+      permission: 'iam.apikey.create',
+      outcome: 'SUCCESS',
+      after: { name: key.name, key_prefix: keyPrefix, scopes: key.scopes },
+      requestId: input.requestId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
     return { id, plaintext, keyPrefix };
   }
 }
 
 @Injectable()
 export class RevokeApiKeyUseCase {
-  constructor(private readonly apiKeys: ApiKeyRepository) {}
+  constructor(
+    private readonly apiKeys: ApiKeyRepository,
+    private readonly audit: AuditManager,
+  ) {}
 
-  public async execute(tenantId: string, keyId: string): Promise<void> {
+  public async execute(
+    tenantId: string,
+    keyId: string,
+    actor?: AuditActor & { actorId?: string | null },
+  ): Promise<void> {
     const key = await this.apiKeys.findById(tenantId, keyId);
     if (!key) throw new NotFoundError('API key');
     key.revoke(buildEventContext(tenantId, 'api_key'));
     await this.apiKeys.save(key, buildEventContext(tenantId, 'api_key'));
+    await this.audit.record({
+      tenantId,
+      actorId: actor?.actorId ?? null,
+      actorType: actor?.actorId ? 'USER' : 'SYSTEM',
+      action: 'iam.apikey.revoke',
+      resourceType: 'api_key',
+      resourceId: keyId,
+      permission: 'iam.apikey.revoke',
+      outcome: 'SUCCESS',
+      requestId: actor?.requestId ?? null,
+      ipAddress: actor?.ipAddress ?? null,
+      userAgent: actor?.userAgent ?? null,
+    });
   }
 }
 

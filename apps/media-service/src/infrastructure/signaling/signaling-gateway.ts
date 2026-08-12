@@ -1,3 +1,4 @@
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * WebSocket signaling gateway — Socket.IO server for WebRTC negotiation
  * (09 §3.7; 10 §4).
@@ -5,11 +6,20 @@
  * Carries offer/answer/ICE exchange and control commands ONLY — never video.
  * The actual RTP flow travels over WebRTC (UDP/SRTP). Per-stream signaling
  * tokens are verified on connect. Multi-pod fan-out via the Redis adapter.
+ *
+ * TENANT ISOLATION (Sprint 1): the per-stream signaling token is minted ONLY by
+ * an authenticated `POST /streams` call (JwtAuthGuard), which derives the
+ * tenant from the verified JWT principal. The token binds to a single session
+ * id, and the socket auto-joins only `session:<sessionId>` — there is no
+ * arbitrary room join. So a client can only receive signaling for a stream
+ * session whose channel belongs to its own tenant (verified at stream open via
+ * the tenant-scoped ChannelRepository under RLS). This is NOT a second
+ * authentication mechanism for users; it is a short-lived capability token for
+ * the already-authenticated stream session.
  */
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { Server as IoServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import type { Redis } from '@fleetvision/cache-redis';
+import { Server as IoServer } from 'socket.io';
 import type { MediaConfig } from '../../config/media.config.js';
 import type { RedisSessionCache } from '../cache/redis-session-cache.js';
 
@@ -78,13 +88,13 @@ export class SignalingGateway implements OnApplicationBootstrap, OnApplicationSh
       this.logger.debug(`WS client connected: ${socket.id} session=${payload?.sessionId}`);
       if (payload?.sessionId) socket.join(`session:${payload.sessionId}`);
 
-      socket.on('stream.answer', (sdp: string) => {
+      socket.on('stream.answer', (_sdp: string) => {
         // Relay the browser's SDP answer to the media-router.
         // In stub mode this is a no-op; the real router calls completeNegotiation.
         this.logger.debug(`SDP answer received from ${socket.id}`);
       });
 
-      socket.on('ice.candidate', (candidate: unknown) => {
+      socket.on('ice.candidate', (_candidate: unknown) => {
         // Trickle ICE — relay to the media-router (stub: no-op).
         this.logger.debug(`ICE candidate from ${socket.id}`);
       });

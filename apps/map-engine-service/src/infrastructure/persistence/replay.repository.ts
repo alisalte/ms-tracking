@@ -9,6 +9,7 @@
  * aggregate path (1d–7d) and S3 (>7d) are documented extension points.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { withTenantContext } from '@fleetvision/persistence-knex';
 
 const SCHEMA = 'tracking';
 const TABLE = 'vehicle_positions';
@@ -33,32 +34,34 @@ export class ReplayRepository {
     to: Date,
     limit = 5000,
   ): Promise<ReplayPoint[]> {
-    const rows = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .select('latitude', 'longitude', 'speed_kmh', 'heading_deg', 'captured_at', 'ignition_on')
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .whereRaw('vehicle_id = ?::uuid', [vehicleId])
-      .where('captured_at', '>=', from)
-      .where('captured_at', '<=', to)
-      .orderBy('captured_at', 'asc')
-      .limit(limit);
-    return (
-      rows as Array<{
-        latitude: number;
-        longitude: number;
-        speed_kmh: number;
-        heading_deg: number | null;
-        captured_at: Date | string;
-        ignition_on: boolean | null;
-      }>
-    ).map((r) => ({
-      latitude: Number(r.latitude),
-      longitude: Number(r.longitude),
-      speedKmh: Number(r.speed_kmh),
-      headingDeg: r.heading_deg !== null ? Number(r.heading_deg) : 0,
-      capturedAt: new Date(r.captured_at),
-      ignitionOn: r.ignition_on !== null ? Boolean(r.ignition_on) : null,
-    }));
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .select('latitude', 'longitude', 'speed_kmh', 'heading_deg', 'captured_at', 'ignition_on')
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .whereRaw('vehicle_id = ?::uuid', [vehicleId])
+        .where('captured_at', '>=', from)
+        .where('captured_at', '<=', to)
+        .orderBy('captured_at', 'asc')
+        .limit(limit);
+      return (
+        rows as Array<{
+          latitude: number;
+          longitude: number;
+          speed_kmh: number;
+          heading_deg: number | null;
+          captured_at: Date | string;
+          ignition_on: boolean | null;
+        }>
+      ).map((r) => ({
+        latitude: Number(r.latitude),
+        longitude: Number(r.longitude),
+        speedKmh: Number(r.speed_kmh),
+        headingDeg: r.heading_deg !== null ? Number(r.heading_deg) : 0,
+        capturedAt: new Date(r.captured_at),
+        ignitionOn: r.ignition_on !== null ? Boolean(r.ignition_on) : null,
+      }));
+    });
   }
 }

@@ -7,6 +7,8 @@
  * geofence FSM calls (PostGIS `ST_Covers`).
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { withTenantContext } from '@fleetvision/persistence-knex';
+import { type Page, toCursor } from '@fleetvision/shared-kernel';
 import type { Geofence } from '../../domain/geo-types.js';
 
 const SCHEMA = 'tracking';
@@ -23,6 +25,7 @@ interface GeofenceRow {
   alert_on: string[] | unknown;
   dwell_sec: number | null;
   metadata: Record<string, unknown> | string;
+  created_at: Date;
 }
 
 export class GeofenceRepository {
@@ -42,37 +45,69 @@ export class GeofenceRepository {
     metadata?: Record<string, unknown>;
   }): Promise<Geofence> {
     const geoJsonStr = JSON.stringify(input.boundaryGeoJson);
-    const [row] = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .insert({
-        tenant_id: this.knex.raw('?::uuid', [input.tenantId]),
-        name: input.name,
-        geofence_type: input.type,
-        boundary: this.knex.raw('ST_GeomFromGeoJSON(?)::geography', [geoJsonStr]),
-        center:
-          input.centerLat !== undefined && input.centerLng !== undefined
-            ? this.knex.raw('?::geography', [
-                `SRID=4326;POINT(${input.centerLng} ${input.centerLat})`,
-              ])
-            : null,
-        radius_m: input.radiusM ?? null,
-        alert_on: input.alertOn ?? ['ENTER', 'EXIT'],
-        dwell_sec: input.dwellSec ?? null,
-        metadata: JSON.stringify(input.metadata ?? {}),
-      })
-      .returning('*');
-    return toGeofence(row as GeofenceRow);
+    return withTenantContext(this.knex, input.tenantId, async (trx) => {
+      const [row] = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .insert({
+          tenant_id: trx.raw('?::uuid', [input.tenantId]),
+          name: input.name,
+          geofence_type: input.type,
+          boundary: trx.raw('ST_GeomFromGeoJSON(?)::geography', [geoJsonStr]),
+          center:
+            input.centerLat !== undefined && input.centerLng !== undefined
+              ? trx.raw('?::geography', [`SRID=4326;POINT(${input.centerLng} ${input.centerLat})`])
+              : null,
+          radius_m: input.radiusM ?? null,
+          alert_on: input.alertOn ?? ['ENTER', 'EXIT'],
+          dwell_sec: input.dwellSec ?? null,
+          metadata: JSON.stringify(input.metadata ?? {}),
+        })
+        .returning('*');
+      return toGeofence(row as GeofenceRow);
+    });
   }
 
   /** List geofences for a tenant. */
   public async list(tenantId: string): Promise<Geofence[]> {
-    const rows = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .orderBy('created_at', 'desc');
-    return (rows as GeofenceRow[]).map(toGeofence);
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .orderBy('created_at', 'desc');
+      return (rows as GeofenceRow[]).map(toGeofence);
+    });
+  }
+
+  /** Cursor-paginated list (keyset on `(created_at DESC, id)`). */
+  public async listPage(
+    tenantId: string,
+    limit: number,
+    cursor?: { createdAt: string; id: string },
+  ): Promise<Page<Geofence>> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      let query = trx.withSchema(SCHEMA).from(TABLE).whereRaw('tenant_id = ?::uuid', [tenantId]);
+      if (cursor) {
+        query = query.where((q) =>
+          q
+            .where('created_at', '<', cursor.createdAt)
+            .orWhere((q2) =>
+              q2.where('created_at', '=', cursor.createdAt).andWhere('id', '<', cursor.id),
+            ),
+        );
+      }
+      const rows = (await query
+        .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
+        .limit(limit + 1)) as GeofenceRow[];
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      const nextCursor =
+        hasMore && last ? toCursor('created_at', last.created_at.toISOString(), last.id) : null;
+      return { data: page.map(toGeofence), nextCursor };
+    });
   }
 
   /** Check which geofences contain a point (PostGIS ST_Covers). */
@@ -82,24 +117,28 @@ export class GeofenceRepository {
     longitude: number,
   ): Promise<string[]> {
     const pointWkt = `SRID=4326;POINT(${longitude} ${latitude})`;
-    const rows = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .select('id')
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .whereRaw('ST_Covers(boundary, ?::geography)', [pointWkt]);
-    return (rows as { id: string }[]).map((r) => String(r.id));
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .select('id')
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .whereRaw('ST_Covers(boundary, ?::geography)', [pointWkt]);
+      return (rows as { id: string }[]).map((r) => String(r.id));
+    });
   }
 
   /** Delete a geofence. */
   public async delete(id: string, tenantId: string): Promise<boolean> {
-    const deleted = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .whereRaw('id = ?::uuid', [id])
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .del();
-    return deleted > 0;
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const deleted = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .whereRaw('id = ?::uuid', [id])
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .del();
+      return deleted > 0;
+    });
   }
 }
 

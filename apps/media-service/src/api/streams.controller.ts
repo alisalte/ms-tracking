@@ -1,3 +1,11 @@
+import {
+  JwtAuthGuard,
+  type PageRequestDto,
+  ZodValidationPipe,
+  getPrincipal,
+  pageRequestSchema,
+} from '@fleetvision/auth';
+import { decodeCursor } from '@fleetvision/shared-kernel';
 /**
  * Streams + Channels REST API (09 §5; 10 §3.1).
  *
@@ -21,13 +29,21 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { CHANNEL_MANAGER, STREAM_MANAGER } from './tokens.js';
 import type { ChannelManager } from '../application/channel-manager.js';
 import type { StreamManager } from '../application/stream-manager.js';
+import {
+  type OpenStreamDto,
+  type RegisterChannelDto,
+  openStreamSchema,
+  registerChannelSchema,
+} from './media.dto.js';
+import { CHANNEL_MANAGER, STREAM_MANAGER } from './tokens.js';
 
 @Controller()
+@UseGuards(JwtAuthGuard)
 export class StreamsController {
   constructor(
     @Inject(CHANNEL_MANAGER) private readonly channels: ChannelManager,
@@ -38,18 +54,16 @@ export class StreamsController {
 
   @Post('streams')
   public async openStream(
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodValidationPipe(openStreamSchema)) body: OpenStreamDto,
     @Req() req: Request,
   ) {
     const tenantId = tenantOf(req);
-    const channelId = String(body.channelId ?? '');
-    if (!channelId) throw new HttpException('channelId required', HttpStatus.BAD_REQUEST);
-    const channel = await this.channels.findById(channelId, tenantId);
+    const channel = await this.channels.findById(body.channelId, tenantId);
     if (!channel) throw new HttpException('Channel not found', HttpStatus.NOT_FOUND);
     return this.streams.openSession(channel, {
-      userId: body.userId ? String(body.userId) : null,
-      quality: body.quality ? String(body.quality) : 'auto',
-      mode: body.mode ? String(body.mode) : 'LIVE',
+      userId: body.userId ?? null,
+      quality: body.quality ?? 'auto',
+      mode: body.mode ?? 'LIVE',
     });
   }
 
@@ -72,15 +86,27 @@ export class StreamsController {
     return {
       sessions: results.map((r, i) =>
         r.status === 'fulfilled'
-          ? { channelId: channelIds[i], ok: true, sessionId: r.value.sessionId, signalingToken: r.value.signalingToken.token }
-          : { channelId: channelIds[i], ok: false, error: r.reason instanceof Error ? r.reason.message : 'failed' },
+          ? {
+              channelId: channelIds[i],
+              ok: true,
+              sessionId: r.value.sessionId,
+              signalingToken: r.value.signalingToken.token,
+            }
+          : {
+              channelId: channelIds[i],
+              ok: false,
+              error: r.reason instanceof Error ? r.reason.message : 'failed',
+            },
       ),
     };
   }
 
   @Delete('streams/:id')
-  public async closeStream(@Param('id') id: string) {
-    await this.streams.closeSession(id);
+  public async closeStream(@Param('id') id: string, @Req() req: Request) {
+    // Verify the session belongs to the caller's tenant before closing (the
+    // internal closeSession path is tenant-scoped via the session's own record).
+    const ok = await this.streams.closeSessionForTenant(id, getPrincipal(req).tenantId);
+    if (!ok) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return { closed: true };
   }
 
@@ -89,12 +115,23 @@ export class StreamsController {
   @Get('channels')
   public async listChannels(
     @Query('vehicleId') vehicleId: string | undefined,
+    @Query(new ZodValidationPipe(pageRequestSchema)) page: PageRequestDto,
     @Req() req: Request,
   ) {
     const tenantId = tenantOf(req);
-    return vehicleId
-      ? this.channels.listByVehicle(tenantId, vehicleId)
-      : this.channels.listByTenant(tenantId);
+    // vehicle-scoped lookups are bounded (a vehicle has few channels) — return
+    // the full set; tenant-wide listings use cursor pagination.
+    if (vehicleId) {
+      const data = await this.channels.listByVehicle(tenantId, vehicleId);
+      return { data, nextCursor: null };
+    }
+    const cursor = page.cursor
+      ? (() => {
+          const c = decodeCursor(page.cursor);
+          return { createdAt: c.value, id: c.id ?? '' };
+        })()
+      : undefined;
+    return this.channels.listByTenantPage(tenantId, page.limit, cursor);
   }
 
   @Get('channels/:id')
@@ -105,18 +142,21 @@ export class StreamsController {
   }
 
   @Post('channels')
-  public async registerChannel(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  public async registerChannel(
+    @Body(new ZodValidationPipe(registerChannelSchema)) body: RegisterChannelDto,
+    @Req() req: Request,
+  ) {
     return this.channels.register({
       tenantId: tenantOf(req),
-      vehicleId: body.vehicleId ? String(body.vehicleId) : null,
-      siteId: body.siteId ? String(body.siteId) : null,
-      deviceId: body.deviceId ? String(body.deviceId) : null,
-      label: String(body.label ?? ''),
-      logicalChannel: body.logicalChannel ? Number(body.logicalChannel) : null,
-      protocol: String(body.protocol ?? 'RTSP'),
-      codec: String(body.codec ?? 'H264'),
-      endpoint: body.endpoint ? String(body.endpoint) : null,
-      ptz: body.ptz === true,
+      vehicleId: body.vehicleId ?? null,
+      siteId: body.siteId ?? null,
+      deviceId: body.deviceId ?? null,
+      label: body.label,
+      logicalChannel: body.logicalChannel ?? null,
+      protocol: body.protocol,
+      codec: body.codec,
+      endpoint: body.endpoint ?? null,
+      ptz: body.ptz ?? false,
     });
   }
 
@@ -126,10 +166,7 @@ export class StreamsController {
   }
 }
 
+/** Derive the tenant id from the verified JWT principal (INV-I02). */
 function tenantOf(req: Request): string {
-  const tid =
-    (req.headers['tenant-id'] as string | undefined) ??
-    (req.query['tenant-id'] as string | undefined);
-  if (!tid) throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
-  return tid;
+  return getPrincipal(req).tenantId;
 }

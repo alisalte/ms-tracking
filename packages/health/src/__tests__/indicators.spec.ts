@@ -7,7 +7,6 @@ describe('KnexPingIndicator', () => {
   it('reports healthy when SELECT 1 succeeds', async () => {
     const fakeKnex = { raw: async () => [{ ok: 1 }] };
     const indicator = new KnexPingIndicator(fakeKnex as never);
-    indicator.onModuleInit();
     const result = await indicator.isHealthy();
     expect(result[indicator.name]).toEqual({ status: 'up' });
   });
@@ -19,8 +18,13 @@ describe('KnexPingIndicator', () => {
       },
     };
     const indicator = new KnexPingIndicator(fakeKnex as never);
-    indicator.onModuleInit();
     await expect(indicator.isHealthy()).rejects.toBeInstanceOf(HealthCheckError);
+  });
+
+  it('reports healthy+skipped when no knex client is bound', async () => {
+    const indicator = new KnexPingIndicator(null);
+    const result = await indicator.isHealthy();
+    expect(result[indicator.name]?.status).toBe('up');
   });
 });
 

@@ -1,3 +1,4 @@
+import { JwtAuthGuard, getPrincipal } from '@fleetvision/auth';
 /**
  * Map REST API — clusters, heat map, replay, layers (08 §5).
  *
@@ -6,7 +7,16 @@
  *   GET /map/replay?vehicleId=&from=&to= — GeoJSON FeatureCollection.
  *   GET /map/layers                  — available map layers.
  */
-import { Controller, Get, HttpException, HttpStatus, Inject, Query, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import type { ClusterService } from '../application/cluster-service.js';
 import type { ReplayService } from '../application/replay-service.js';
@@ -14,6 +24,7 @@ import { parseBbox } from '../domain/geo-types.js';
 import { CLUSTER_SERVICE, REPLAY_SERVICE } from './tokens.js';
 
 @Controller('map')
+@UseGuards(JwtAuthGuard)
 export class MapController {
   constructor(
     @Inject(CLUSTER_SERVICE) private readonly clusterService: ClusterService,
@@ -29,7 +40,7 @@ export class MapController {
     const bb = parseBbox(bbox ?? '');
     if (!bb) throw new HttpException('Invalid bbox', HttpStatus.BAD_REQUEST);
     const z = zoom ? Number.parseInt(zoom, 10) : 10;
-    const tenantId = tenantOf(req);
+    const tenantId = getPrincipal(req as Request).tenantId;
     return this.clusterService.getClusters(tenantId, bb.minLng, bb.minLat, bb.maxLng, bb.maxLat, z);
   }
 
@@ -41,7 +52,7 @@ export class MapController {
     @Req() req?: Request,
   ) {
     if (!vehicleId) throw new HttpException('vehicleId required', HttpStatus.BAD_REQUEST);
-    const tenantId = tenantOf(req);
+    const tenantId = getPrincipal(req as Request).tenantId;
     const now = new Date();
     const fromTime = from ? new Date(from) : new Date(now.getTime() - 86_400_000);
     const toTime = to ? new Date(to) : now;
@@ -61,13 +72,4 @@ export class MapController {
       layers: ['traffic', 'satellite', 'weather', 'pois', 'geofences'],
     };
   }
-}
-
-function tenantOf(req?: Request): string {
-  const tid =
-    (req?.headers['tenant-id'] as string | undefined) ??
-    (req?.query['tenant-id'] as string | undefined);
-  if (!tid)
-    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
-  return tid;
 }

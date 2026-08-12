@@ -4,6 +4,8 @@
  * path reads Redis; this is the system of record.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
+import { Inject } from '@nestjs/common';
 import {
   type EventContext,
   RefreshTokenFamily as FamilyClass,
@@ -11,7 +13,7 @@ import {
   type RefreshTokenFamilyProps,
   type RefreshTokenRecord,
 } from '../../domain/index.js';
-import { withTenantContext, withoutTenantContext } from './tenant-context.js';
+import { withPlatformContext, withTenantContext } from './tenant-context.js';
 
 export interface AuthSessionRow {
   id: string;
@@ -42,7 +44,10 @@ export interface RefreshTokenRow {
 }
 
 export class AuthRepository {
-  constructor(private readonly knex: Knex) {}
+  constructor(
+    private readonly knex: Knex,
+    @Inject(PLATFORM_KNEX_TOKEN) private readonly platformKnex: Knex,
+  ) {}
 
   // --- Sessions -------------------------------------------------------------
 
@@ -72,12 +77,20 @@ export class AuthRepository {
     });
   }
 
-  public async listUserSessions(tenantId: string, userId: string): Promise<AuthSessionRow[]> {
+  /**
+   * Touch a session's last_seen_at on each authenticated request (best-effort
+   * — the durable PG mirror stays fresh for forensics instead of going stale at
+   * login). Returns the session row so the guard can re-validate status.
+   */
+  public async touchSession(tenantId: string, sessionId: string): Promise<AuthSessionRow | null> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
-      const rows = (await trx('iam.auth_sessions')
-        .where({ tenant_id: tenantId, user_id: userId })
-        .orderBy('issued_at', 'desc')) as AuthSessionRow[];
-      return rows;
+      await trx('iam.auth_sessions')
+        .where({ id: sessionId, tenant_id: tenantId })
+        .update({ last_seen_at: new Date() });
+      const row = (await trx('iam.auth_sessions')
+        .where({ id: sessionId, tenant_id: tenantId })
+        .first()) as AuthSessionRow | undefined;
+      return row ?? null;
     });
   }
 
@@ -135,7 +148,9 @@ export class AuthRepository {
 
   /** Rehydrate a family from its tokens (for the consume/refresh path). */
   public async findFamilyByTokenHash(tokenHash: string): Promise<RefreshTokenFamily | null> {
-    return withoutTenantContext(this.knex, async (trx) => {
+    // Cross-tenant lookup (a refresh token uniquely identifies a user/family
+    // regardless of tenant) — runs on the platform client under platform scope.
+    return withPlatformContext(this.platformKnex, async (trx) => {
       const tokenRow = (await trx('iam.refresh_tokens').where({ token_hash: tokenHash }).first()) as
         | RefreshTokenRow
         | undefined;

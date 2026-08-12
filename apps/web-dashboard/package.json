@@ -37,10 +37,12 @@
     "socket.io-client": "4.7.2",
     "stylis-plugin-rtl": "^2.1.1",
     "supercluster": "^8.0.1",
+    "tailwindcss": "^4.1.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@types/react": "^19.0.8",

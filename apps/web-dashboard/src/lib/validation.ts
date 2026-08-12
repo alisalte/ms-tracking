@@ -71,11 +71,7 @@ export const passwordWithConfirmSchema = z
 // message; enums validate against the domain status/type unions.
 
 /** Required non-empty trimmed string. */
-const reqStr = (key: string) =>
-  z
-    .string()
-    .trim()
-    .min(1, { message: key });
+const reqStr = (key: string) => z.string().trim().min(1, { message: key });
 
 /** Vehicle create/edit form (CreateVehiclePayload). */
 export const vehicleSchema = z.object({
@@ -132,7 +128,14 @@ export const deviceSchema = z.object({
     .int()
     .min(1, { message: 'validation.device.interval.invalid' })
     .max(86_400, { message: 'validation.device.interval.invalid' }),
-  status: z.enum(['provisioned', 'active', 'inactive', 'firmware_updating', 'faulted', 'decommissioned']),
+  status: z.enum([
+    'provisioned',
+    'active',
+    'inactive',
+    'firmware_updating',
+    'faulted',
+    'decommissioned',
+  ]),
   boundVehicleId: z.string().optional(),
 });
 
@@ -143,4 +146,3 @@ export const groupSchema = z.object({
   vehicleTypeFilter: z.enum(['truck', 'van', 'bus', 'car']).optional(),
   status: z.enum(['active', 'archived']),
 });
-

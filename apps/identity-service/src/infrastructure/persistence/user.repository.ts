@@ -8,6 +8,9 @@
  * violation surfaces as a CONFLICT at the application layer.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
+import { type Page, toCursor } from '@fleetvision/shared-kernel';
+import { Inject } from '@nestjs/common';
 import {
   type EventContext,
   type User,
@@ -15,7 +18,7 @@ import {
   type UserProps,
   type UserStatus,
 } from '../../domain/index.js';
-import { withTenantContext, withoutTenantContext } from './tenant-context.js';
+import { withPlatformContext, withTenantContext } from './tenant-context.js';
 
 /** Raw row shape in `iam.users`. */
 export interface UserRow {
@@ -37,7 +40,10 @@ export interface UserRow {
 }
 
 export class UserRepository {
-  constructor(private readonly knex: Knex) {}
+  constructor(
+    private readonly knex: Knex,
+    @Inject(PLATFORM_KNEX_TOKEN) private readonly platformKnex: Knex,
+  ) {}
 
   /** Find a user by id within a tenant. */
   public async findById(tenantId: string, id: string): Promise<User | null> {
@@ -61,7 +67,7 @@ export class UserRepository {
 
   /** Find a user by username platform-wide (INV-IAM-02 uniqueness check). */
   public async findByUsername(username: string): Promise<User | null> {
-    return withoutTenantContext(this.knex, async (trx) => {
+    return withPlatformContext(this.platformKnex, async (trx) => {
       const row = await trx<UserRow>('iam.users').where({ username }).first();
       if (!row) return null;
       const roleIds = await this.loadRoleIds(trx, row.tenant_id, row.id);
@@ -77,9 +83,13 @@ export class UserRepository {
     const tenantId = user.tenantId;
     const events = user.pullEvents();
 
-    const existing = await this.knex('iam.users')
-      .where({ id: user.id as string })
-      .first();
+    // Existence check on the platform client (the row may belong to a tenant the
+    // app role cannot see yet, e.g. during provisioning).
+    const existing = await withPlatformContext(this.platformKnex, async (trx) =>
+      trx('iam.users')
+        .where({ id: user.id as string })
+        .first(),
+    );
     if (!existing) {
       await this.insertUser(tenantId, user, events, ctx);
     } else {
@@ -111,6 +121,47 @@ export class UserRepository {
         }),
       );
       return { rows: users, total };
+    });
+  }
+
+  /**
+   * Cursor-paginated list (keyset on `(created_at ASC, id)` — stable ordering).
+   * Pass an undefined cursor for the first page. Returns a `Page<User>` whose
+   * `nextCursor` is null when exhausted.
+   */
+  public async listPage(
+    tenantId: string,
+    limit: number,
+    cursor?: { createdAt: string; id: string },
+  ): Promise<Page<User>> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      let query = trx<UserRow>('iam.users').where({ tenant_id: tenantId });
+      if (cursor) {
+        // Keyset: rows after the cursor on (created_at, id).
+        query = query.where((q) =>
+          q
+            .where('created_at', '>', cursor.createdAt)
+            .orWhere((q2) =>
+              q2.where('created_at', '=', cursor.createdAt).andWhere('id', '>', cursor.id),
+            ),
+        );
+      }
+      const rows = (await query
+        .orderBy('created_at', 'asc')
+        .orderBy('id', 'asc')
+        .limit(limit + 1)) as UserRow[];
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const users = await Promise.all(
+        page.map(async (r) => {
+          const roleIds = await this.loadRoleIds(trx, tenantId, r.id);
+          return this.toDomain(r, roleIds);
+        }),
+      );
+      const last = page[page.length - 1];
+      const nextCursor =
+        hasMore && last ? toCursor('created_at', last.created_at.toISOString(), last.id) : null;
+      return { data: users, nextCursor };
     });
   }
 
@@ -152,7 +203,10 @@ export class UserRepository {
     events: import('@fleetvision/shared-kernel').DomainEvent[],
     ctx: EventContext,
   ): Promise<void> {
-    await withoutTenantContext(this.knex, async (trx) => {
+    // Inserts may run during provisioning (new tenant, before any tenant context)
+    // or normal admin user creation. Use the platform client + platform flag so the
+    // tenant-aware WITH CHECK admits the row (its tenant_id is set explicitly).
+    await withPlatformContext(this.platformKnex, async (trx) => {
       await trx('iam.users').insert({
         id: user.id as string,
         tenant_id: tenantId,
@@ -183,6 +237,7 @@ export class UserRepository {
         .where({ id: user.id as string, tenant_id: tenantId })
         .update({
           email: user.email,
+          display_name: user.displayName,
           password_hash: user.passwordHash,
           status: user.status,
           last_login_at: user.lastLoginAt,

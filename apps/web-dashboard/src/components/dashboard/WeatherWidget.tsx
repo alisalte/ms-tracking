@@ -1,4 +1,3 @@
-import { Box, Skeleton, Stack, Typography } from '@mui/material';
 import {
   Cloud,
   CloudLightning,
@@ -31,9 +30,10 @@ const CONDITION_META: Record<WeatherCondition, { icon: LucideIcon; color: string
 /**
  * WeatherWidget — current conditions + 3-day forecast (independent widget).
  *
- * Added per the FE-3 plan (independent weather widget with mock data). Shows
- * current temperature, condition icon, feels-like, humidity, and wind, plus a
- * compact 3-day forecast row.
+ * Shows current temperature, condition icon, feels-like, humidity, and wind,
+ * plus a compact 3-day forecast row.
+ *
+ * Tailwind surface; `useWeather()` hook + condition metadata unchanged.
  */
 export function WeatherWidget() {
   const { t } = useTranslation();
@@ -42,117 +42,74 @@ export function WeatherWidget() {
   return (
     <WidgetCard titleKey="dashboard.widgets.weather" icon={CloudSun} loading={isLoading}>
       {isLoading || !data ? (
-        <Skeleton variant="rounded" sx={{ width: '100%', height: 160 }} />
+        <div className="h-40 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
       ) : (
-        <Stack gap={2}>
+        <div className="flex flex-col gap-4">
           {/* Current conditions */}
-          <Stack direction="row" alignItems="center" gap={2}>
-            <Box
-              sx={{
-                width: 52,
-                height: 52,
-                borderRadius: '50%',
+          <div className="flex items-center gap-3">
+            <div
+              className="flex size-[52px] shrink-0 items-center justify-center rounded-full"
+              style={{
                 backgroundColor: `${CONDITION_META[data.condition].color}1A`,
                 color: CONDITION_META[data.condition].color,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
               }}
             >
               {(() => {
                 const Icon = CONDITION_META[data.condition].icon;
                 return <Icon size={28} />;
               })()}
-            </Box>
-            <Stack gap={0.25}>
-              <Typography
-                variant="h3"
-                fontWeight={700}
-                sx={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}
-              >
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-3xl font-bold leading-none tabular-nums text-gray-900 dark:text-white">
                 {data.temperature}°
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
+              </span>
+              <span className="text-xs text-gray-500 dark:text-graydark-600">
                 {t(`dashboard.weather.${data.condition}`)} · {data.location}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
+              </span>
+              <span className="text-xs text-gray-500 dark:text-graydark-600">
                 {t('dashboard.weather.feelsLike', { value: data.feelsLike })}°
-              </Typography>
-            </Stack>
-          </Stack>
+              </span>
+            </div>
+          </div>
 
           {/* Humidity + wind */}
-          <Stack direction="row" gap={3}>
-            <Stack direction="row" alignItems="center" gap={0.75}>
-              <Droplets size={15} color="var(--mui-palette-text-secondary)" />
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontVariantNumeric: 'tabular-nums' }}
-              >
+          <div className="flex gap-6">
+            <div className="flex items-center gap-2">
+              <Droplets size={15} className="text-gray-400" />
+              <span className="text-sm tabular-nums text-gray-500 dark:text-graydark-600">
                 {t('dashboard.weather.humidity', { value: data.humidity })}
-              </Typography>
-            </Stack>
-            <Stack direction="row" alignItems="center" gap={0.75}>
-              <Wind size={15} color="var(--mui-palette-text-secondary)" />
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontVariantNumeric: 'tabular-nums' }}
-              >
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Wind size={15} className="text-gray-400" />
+              <span className="text-sm tabular-nums text-gray-500 dark:text-graydark-600">
                 {t('dashboard.weather.wind', { value: data.windSpeed })}
-              </Typography>
-            </Stack>
-          </Stack>
+              </span>
+            </div>
+          </div>
 
           {/* 3-day forecast */}
-          <Stack
-            direction="row"
-            gap={1}
-            sx={{ pt: 1, borderTop: '1px solid', borderColor: 'divider' }}
-          >
+          <div className="flex gap-2 border-t border-gray-100 pt-3 dark:border-white/5">
             {data.forecast.map((f) => {
               const meta = CONDITION_META[f.condition];
               const FIcon = meta.icon;
               return (
-                <Box
+                <div
                   key={f.day}
-                  sx={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    py: 0.75,
-                    borderRadius: 1,
-                    backgroundColor: 'action.hover',
-                  }}
+                  className="flex flex-1 flex-col items-center gap-1 rounded-lg bg-gray-50 py-3 dark:bg-white/5"
                 >
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  <span className="text-xs font-semibold text-gray-500 dark:text-graydark-600">
                     {f.day}
-                  </Typography>
-                  <FIcon size={18} color={meta.color} />
-                  <Typography
-                    variant="caption"
-                    fontWeight={600}
-                    sx={{ fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {f.high}°
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontVariantNumeric: 'tabular-nums', ml: 0.5 }}
-                    >
-                      {f.low}°
-                    </Typography>
-                  </Typography>
-                </Box>
+                  </span>
+                  <FIcon size={18} style={{ color: meta.color }} />
+                  <span className="text-xs font-semibold tabular-nums text-gray-800 dark:text-white">
+                    {f.high}°<span className="ms-1 tabular-nums text-gray-400">{f.low}°</span>
+                  </span>
+                </div>
               );
             })}
-          </Stack>
-        </Stack>
+          </div>
+        </div>
       )}
     </WidgetCard>
   );

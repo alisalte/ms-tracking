@@ -8,11 +8,20 @@
  * serves the REST history endpoint.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { withTenantContext } from '@fleetvision/persistence-knex';
 import type { PositionEvent } from '../../domain/position-event.js';
 import { QUALITY_CODE } from '../../domain/quality.js';
 
 const TABLE = 'vehicle_positions';
 const SCHEMA = 'tracking';
+
+/**
+ * Hard cap on a single position-history page. The history endpoint is a
+ * range-bounded replay, not a generic list, so it is intentionally allowed to
+ * exceed the standard list PAGE_SIZE — but it still must not return an
+ * unbounded slice of the hypertable (Phase 6).
+ */
+const POSITION_HISTORY_MAX = 5000;
 
 /** Latest-position read model returned to the API / cache-miss path. */
 export interface LatestPosition {
@@ -39,50 +48,57 @@ export class PositionRepository {
    */
   public async insert(event: PositionEvent): Promise<void> {
     const geom = `SRID=4326;POINT(${event.longitude} ${event.latitude})`;
-    await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .insert({
-        event_id: this.knex.raw('?::uuid', [event.messageId]),
-        vehicle_id: this.knex.raw('?::uuid', [event.vehicleId]),
-        tenant_id: this.knex.raw('?::uuid', [event.tenantId]),
-        captured_at: event.capturedAt,
-        ingested_at: event.ingestedAt,
-        geom: this.knex.raw('?::geography', [geom]),
-        latitude: event.latitude,
-        longitude: event.longitude,
-        altitude_m: event.altitudeM,
-        heading_deg: event.headingDeg,
-        speed_kmh: event.speedKph,
-        ignition_on: event.ignitionOn,
-        quality: QUALITY_CODE[event.quality],
-        metadata: this.knex.raw('?::jsonb', [JSON.stringify({ protocolId: event.protocolId })]),
-      })
-      .onConflict('event_id')
-      .ignore();
+    // Run under tenant context so the RLS WITH CHECK admits the row.
+    await withTenantContext(this.knex, event.tenantId, async (trx) => {
+      await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .insert({
+          event_id: trx.raw('?::uuid', [event.messageId]),
+          vehicle_id: trx.raw('?::uuid', [event.vehicleId]),
+          tenant_id: trx.raw('?::uuid', [event.tenantId]),
+          captured_at: event.capturedAt,
+          ingested_at: event.ingestedAt,
+          geom: trx.raw('?::geography', [geom]),
+          latitude: event.latitude,
+          longitude: event.longitude,
+          altitude_m: event.altitudeM,
+          heading_deg: event.headingDeg,
+          speed_kmh: event.speedKph,
+          ignition_on: event.ignitionOn,
+          quality: QUALITY_CODE[event.quality],
+          metadata: trx.raw('?::jsonb', [JSON.stringify({ protocolId: event.protocolId })]),
+        })
+        .onConflict('event_id')
+        .ignore();
+    });
   }
 
   /** Whether a position with this messageId is already persisted (dedupe fast-path). */
-  public async exists(messageId: string): Promise<boolean> {
-    const row = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .whereRaw('event_id = ?::uuid', [messageId])
-      .select(this.knex.raw('1'))
-      .first();
-    return row !== undefined;
+  public async exists(tenantId: string, messageId: string): Promise<boolean> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .whereRaw('event_id = ?::uuid', [messageId])
+        .select(trx.raw('1'))
+        .first();
+      return row !== undefined;
+    });
   }
 
   /** Latest position for a vehicle (cache-miss fallback). Null if none. */
   public async findLatest(tenantId: string, vehicleId: string): Promise<LatestPosition | null> {
-    const row = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .whereRaw('vehicle_id = ?::uuid', [vehicleId])
-      .orderBy('captured_at', 'desc')
-      .first();
-    return row ? toLatest(row) : null;
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .whereRaw('vehicle_id = ?::uuid', [vehicleId])
+        .orderBy('captured_at', 'desc')
+        .first();
+      return row ? toLatest(row) : null;
+    });
   }
 
   /** Range query for position history (REST endpoint). */
@@ -93,16 +109,21 @@ export class PositionRepository {
     to: Date,
     limit = 1000,
   ): Promise<LatestPosition[]> {
-    const rows = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .whereRaw('vehicle_id = ?::uuid', [vehicleId])
-      .where('captured_at', '>=', from)
-      .where('captured_at', '<=', to)
-      .orderBy('captured_at', 'asc')
-      .limit(limit);
-    return rows.map((r) => toLatest(r));
+    // Hard cap: a single history request can never pull an unbounded slice of
+    // the hypertable (Phase 6). 5000 rows covers a full-day 15s-tick replay.
+    const effectiveLimit = Math.max(1, Math.min(POSITION_HISTORY_MAX, Math.trunc(limit)));
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = await trx
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .whereRaw('vehicle_id = ?::uuid', [vehicleId])
+        .where('captured_at', '>=', from)
+        .where('captured_at', '<=', to)
+        .orderBy('captured_at', 'asc')
+        .limit(effectiveLimit);
+      return rows.map((r) => toLatest(r));
+    });
   }
 }
 

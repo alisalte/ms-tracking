@@ -21,6 +21,7 @@ export class Role extends AggregateRoot<Brand<string, 'RoleId'>> {
     this.props = { ...props, permissions: new Set(props.permissions) };
   }
 
+  /** @deprecated No use-case creates a custom role via this factory yet (Sprint 2). */
   public static create(
     id: string,
     init: { tenantId: string; name: string; description?: string; permissions?: string[] },
@@ -68,6 +69,7 @@ export class Role extends AggregateRoot<Brand<string, 'RoleId'>> {
     return this.props.permissions;
   }
 
+  /** @deprecated No role-edit use-case wires this yet (Sprint 2). */
   public grant(permission: string): void {
     if (this.props.isSystem) {
       throw new Error('System roles are immutable.');
@@ -75,6 +77,7 @@ export class Role extends AggregateRoot<Brand<string, 'RoleId'>> {
     this.props.permissions.add(permission);
   }
 
+  /** @deprecated No role-edit use-case wires this yet (Sprint 2). */
   public revoke(permission: string): void {
     if (this.props.isSystem) {
       throw new Error('System roles are immutable.');

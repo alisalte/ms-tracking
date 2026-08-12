@@ -12,10 +12,10 @@
 import { Logger } from '@nestjs/common';
 import type { MediaConfig } from '../config/media.config.js';
 import { decideCodec } from '../domain/codec-strategy.js';
-import { mintSignalingToken, type SignalingToken } from '../domain/signaling-token.js';
+import { type SignalingToken, mintSignalingToken } from '../domain/signaling-token.js';
 import type { VideoChannel } from '../domain/video-channel.js';
-import type { MediaRouter } from '../infrastructure/media-router-port.js';
 import type { RedisSessionCache } from '../infrastructure/cache/redis-session-cache.js';
+import type { MediaRouter } from '../infrastructure/media-router-port.js';
 import type { SessionRepository } from '../infrastructure/persistence/session.repository.js';
 
 export interface StreamManagerDeps {
@@ -56,11 +56,14 @@ export class StreamManager {
    * token but does NOT pull the source yet (lazy activation — the source is
    * opened when the first viewer subscribes via addViewer).
    */
-  public async openSession(channel: VideoChannel, opts: {
-    userId?: string | null;
-    quality?: string;
-    mode?: string;
-  }): Promise<OpenStreamResult> {
+  public async openSession(
+    channel: VideoChannel,
+    opts: {
+      userId?: string | null;
+      quality?: string;
+      mode?: string;
+    },
+  ): Promise<OpenStreamResult> {
     const mode = (opts.mode ?? 'LIVE') as Parameters<typeof decideCodec>[1];
     const quality = (opts.quality ?? 'auto') as 'auto' | 'high' | 'medium' | 'low' | 'audio-only';
 
@@ -139,7 +142,12 @@ export class StreamManager {
       this.logger.log(`Activating source for session ${sessionId} (first viewer).`);
     }
     await this.deps.router.subscribeViewer(sessionId, viewerId);
-    await this.deps.sessionRepo.updateViewerCount(sessionId, session.viewerCount, 'ACTIVE');
+    await this.deps.sessionRepo.updateViewerCount(
+      session.tenantId,
+      sessionId,
+      session.viewerCount,
+      'ACTIVE',
+    );
   }
 
   /** Remove a viewer; if last viewer, schedule idle close. */
@@ -152,8 +160,29 @@ export class StreamManager {
       // the full 5-min idle timer is a later refinement).
       await this.closeSession(sessionId);
     } else {
-      await this.deps.sessionRepo.updateViewerCount(sessionId, session.viewerCount, 'ACTIVE');
+      await this.deps.sessionRepo.updateViewerCount(
+        session.tenantId,
+        sessionId,
+        session.viewerCount,
+        'ACTIVE',
+      );
     }
+  }
+
+  /**
+   * Close a session on behalf of a caller, verifying the session belongs to the
+   * caller's tenant. Returns false when the session does not exist OR belongs to
+   * a different tenant (cross-tenant close attempt → treat as not-found to avoid
+   * an existence oracle). Used by the REST DELETE /streams/:id endpoint.
+   */
+  public async closeSessionForTenant(sessionId: string, tenantId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.tenantId !== tenantId) {
+      // Not found or cross-tenant — do not disclose which.
+      return false;
+    }
+    await this.closeSession(sessionId);
+    return true;
   }
 
   /** Close a session: tear down the source, persist the close, clean up. */
@@ -161,7 +190,7 @@ export class StreamManager {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     await this.deps.router.endStreamSession(sessionId);
-    await this.deps.sessionRepo.close(sessionId);
+    await this.deps.sessionRepo.close(session.tenantId, sessionId);
     await this.deps.sessionCache.deleteToken(sessionId);
     this.sessions.delete(sessionId);
     const set = this.channelSessions.get(session.channelId);

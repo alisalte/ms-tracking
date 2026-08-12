@@ -1,4 +1,3 @@
-import { Box, Skeleton, Stack, Typography } from '@mui/material';
 import { MapPin } from 'lucide-react';
 import { Map as MaplibreMap, Marker as MaplibreMarker, Popup as MaplibrePopup } from 'maplibre-gl';
 import { useEffect, useRef } from 'react';
@@ -15,12 +14,13 @@ import { WidgetCard } from './WidgetCard';
  * FleetMapPreview — a compact MapLibre GL mini-map for the dashboard.
  *
  * UI_UX_Design.md §1.4 / §1.3: a small live map with vehicle markers colored
- * by status (cyan=active, yellow=idle, rose=overspeed, slate=offline). It will
- * connect to the full Map dashboard (Sprint Map) when that lands; for now it is
- * a preview with free OSM tiles.
+ * by status (green=active, amber=idle, red=overspeed, slate=offline). Links to
+ * the full Map dashboard.
  *
- * Uses free OpenStreetMap raster tiles — no API key required, matches the
- * "maplibre-gl + free OSM tiles" decision in the FE-3 plan.
+ * Uses free OpenStreetMap raster tiles — no API key required.
+ *
+ * Tailwind shell; the MapLibre lifecycle (init + marker sync) is preserved
+ * verbatim — only the surrounding chrome (card, legend, link) was restyled.
  */
 export function FleetMapPreview() {
   const { t } = useTranslation();
@@ -98,42 +98,16 @@ export function FleetMapPreview() {
       action={
         <Link
           to="/map"
-          style={{
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            textDecoration: 'none',
-            color: 'var(--mui-palette-primary-main)',
-          }}
+          className="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"
         >
           {t('dashboard.widgets.openMap')} →
         </Link>
       }
     >
-      <Box
-        sx={{
-          position: 'relative',
-          width: '100%',
-          height: 220,
-          borderRadius: 1,
-          overflow: 'hidden',
-        }}
-      >
-        <Box ref={containerRef} sx={{ width: '100%', height: '100%' }} />
+      <div className="relative h-[220px] w-full overflow-hidden rounded-lg">
+        <div ref={containerRef} className="h-full w-full" />
         {/* Legend overlay (§0.7: never rely on color alone — pair with label). */}
-        <Stack
-          direction="row"
-          gap={1.5}
-          sx={{
-            position: 'absolute',
-            bottom: 6,
-            start: 6,
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            px: 1,
-            py: 0.5,
-            borderRadius: 1,
-            backdropFilter: 'blur(4px)',
-          }}
-        >
+        <div className="absolute bottom-1.5 start-1.5 flex gap-3 rounded-md bg-white/85 px-2 py-1 backdrop-blur-sm">
           {(
             [
               ['active', mapAccents.vehicleActive],
@@ -142,19 +116,18 @@ export function FleetMapPreview() {
               ['offline', mapAccents.vehicleOffline],
             ] as const
           ).map(([key, color]) => (
-            <Stack key={key} direction="row" alignItems="center" gap={0.25}>
-              <Box
-                component="span"
-                sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: color }}
-              />
-              <Typography variant="caption" color="text.secondary">
+            <span key={key} className="inline-flex items-center gap-1">
+              <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+              <span className="text-xs text-gray-500 dark:text-graydark-600">
                 {t(`dashboard.map.${key}`)}
-              </Typography>
-            </Stack>
+              </span>
+            </span>
           ))}
-        </Stack>
-        {isLoading && <Skeleton variant="rectangular" sx={{ position: 'absolute', inset: 0 }} />}
-      </Box>
+        </div>
+        {isLoading && (
+          <div className="absolute inset-0 animate-pulse bg-gray-100 dark:bg-white/5" />
+        )}
+      </div>
     </WidgetCard>
   );
 }

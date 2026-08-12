@@ -1,3 +1,9 @@
+import {
+  AuthCoreModule,
+  TOKEN_VERIFIER,
+  type TokenVerifier,
+  jwtAuthGuardProvider,
+} from '@fleetvision/auth';
 /**
  * GpsEngineModule — wires the GPS engine components (07 §1.5).
  *
@@ -49,7 +55,18 @@ export class GpsEngineModule {
   public static forRoot(config: GpsEngineConfig): DynamicModule {
     return {
       module: GpsEngineModule,
+      imports: [
+        // Verifies identity-issued HS256 JWTs and binds the SharedJwtVerifier to
+        // the TokenVerifier port; jwtAuthGuardProvider() builds the JwtAuthGuard
+        // the controllers apply via @UseGuards.
+        AuthCoreModule.forRoot({
+          jwtSecret: config.JWT_SECRET,
+          issuer: config.JWT_ISSUER,
+          audience: config.JWT_AUDIENCE,
+        }),
+      ],
       providers: [
+        jwtAuthGuardProvider(),
         { provide: GPS_ENGINE_CONFIG, useValue: config },
         { provide: SIGNAL_BUS, useClass: SignalBus },
         // Repositories (take the global knex client).
@@ -143,9 +160,13 @@ export class GpsEngineModule {
         // WebSocket broadcaster.
         {
           provide: REALTIME_GATEWAY,
-          inject: [GPS_ENGINE_CONFIG, REDIS_TOKEN, SIGNAL_BUS],
-          useFactory: (cfg: GpsEngineConfig, redis: Redis, signalBus: SignalBus) =>
-            new RealtimeGateway({ config: cfg, redis, signalBus }),
+          inject: [GPS_ENGINE_CONFIG, REDIS_TOKEN, SIGNAL_BUS, TOKEN_VERIFIER],
+          useFactory: (
+            cfg: GpsEngineConfig,
+            redis: Redis,
+            signalBus: SignalBus,
+            tokenVerifier: TokenVerifier,
+          ) => new RealtimeGateway({ config: cfg, redis, signalBus, tokenVerifier }),
         },
         PositionsController,
         DeviceStatusController,

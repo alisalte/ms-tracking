@@ -1,6 +1,5 @@
-import { ArrowDown, ArrowUp } from 'lucide-react';
-import { Box, Card, CardContent, Stack, Typography } from '@mui/material';
 import type { EChartsOption } from 'echarts';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,19 +30,21 @@ interface KpiCardProps {
 }
 
 /**
- * KpiCard — the Limitless stat card, upgraded with an ECharts sparkline.
+ * KpiCard — the TailAdmin stat card with an ECharts sparkline.
  *
- * Layout: circular icon badge (left) + a large headline value, small uppercase
+ * Layout: circular icon badge (start) + a large headline value, small uppercase
  * label, and a trend indicator (▲ green / ▼ red) with a percentage, followed
  * by a gradient sparkline along the bottom edge when `sparkline` data is
  * supplied. The sparkline color tracks the card's semantic `iconColor` so each
  * metric reads consistently with the rest of the dashboard.
+ *
+ * Tailwind surface; chart engine unchanged.
  */
 export function KpiCard({
   titleKey,
   value,
   icon,
-  iconColor = '#2196F3',
+  iconColor = '#465FFB',
   delta,
   deltaLabel,
   meta,
@@ -53,93 +54,70 @@ export function KpiCard({
   const { t } = useTranslation();
   const isUp = (delta ?? 0) > 0;
   const isDown = (delta ?? 0) < 0;
-  const trendColor = isUp ? '#4CAF50' : isDown ? '#F44336' : '#777';
+  const trendColor = isUp ? '#12B76A' : isDown ? '#F04438' : '#667085';
 
   const sparkOption = useSparkline(sparkline, iconColor);
 
-  return (
-    <Card
-      onClick={onClick}
-      sx={{
-        height: '100%',
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out',
-        '&:hover': onClick
-          ? { boxShadow: '0 4px 16px rgba(0,0,0,0.10)', transform: 'translateY(-1px)' }
-          : {},
-      }}
-    >
-      <CardContent sx={{ p: 2, '&:last-child': { pb: 1.5 } }}>
-        <Stack direction="row" alignItems="flex-start" gap={1.5}>
-          {/* Circular icon badge — Limitless signature */}
-          {icon && (
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.35rem',
-                flexShrink: 0,
-                backgroundColor: `${iconColor}1A`,
-              }}
-            >
-              <Typography component="span" sx={{ fontSize: '1.35rem', lineHeight: 1 }}>
-                {icon}
-              </Typography>
-            </Box>
-          )}
-          <Stack sx={{ minWidth: 0, flex: 1 }}>
-            <Typography
-              variant="overline"
-              sx={{ lineHeight: 1.5, color: 'text.secondary' }}
-            >
-              {t(titleKey)}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: '1.6rem',
-                fontWeight: 700,
-                lineHeight: 1.15,
-                fontVariantNumeric: 'tabular-nums',
-                color: 'text.primary',
-              }}
-            >
-              {value.toLocaleString()}
-            </Typography>
-            {/* Trend indicator */}
-            {delta !== undefined && (
-              <Stack direction="row" alignItems="center" gap={0.5} sx={{ mt: 0.25 }}>
-                {isUp && <ArrowUp size={14} color={trendColor} />}
-                {isDown && <ArrowDown size={14} color={trendColor} />}
-                <Typography
-                  variant="caption"
-                  sx={{ fontWeight: 600, color: trendColor, fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {isUp ? '+' : ''}
-                  {delta}
-                </Typography>
-                {deltaLabel && (
-                  <Typography variant="caption" color="text.secondary">
-                    {deltaLabel}
-                  </Typography>
-                )}
-                {meta}
-              </Stack>
-            )}
-          </Stack>
-        </Stack>
+  // When the card is interactive, render a <button> (keyboard-accessible by
+  // default); otherwise a plain <div>. Both share the same classes + content.
+  const Tag = onClick ? 'button' : 'div';
+  const interactiveProps = onClick
+    ? { type: 'button' as const, onClick, 'aria-label': t(titleKey) }
+    : {};
 
-        {/* Gradient sparkline — 7-point trend along the foot of the card */}
-        {sparkOption && (
-          <Box sx={{ mt: 0.5, height: 40, mx: -0.5 }}>
-            <EChart option={sparkOption} height={40} />
-          </Box>
+  return (
+    <Tag
+      {...interactiveProps}
+      className={[
+        'block h-full w-full rounded-xl border border-gray-200 bg-white p-4 text-start shadow-sm',
+        'dark:border-white/5 dark:bg-graydark-200',
+        onClick
+          ? 'cursor-pointer transition-shadow duration-150 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:border-white/10'
+          : '',
+      ].join(' ')}
+    >
+      <div className="flex items-start gap-3">
+        {/* Circular icon badge — TailAdmin signature */}
+        {icon && (
+          <div
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-[1.35rem] leading-none"
+            style={{ backgroundColor: `${iconColor}1A` }}
+          >
+            <span>{icon}</span>
+          </div>
         )}
-      </CardContent>
-    </Card>
+        <div className="min-w-0 flex-1">
+          <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-graydark-600">
+            {t(titleKey)}
+          </span>
+          <span className="block text-[1.6rem] font-bold leading-tight tabular-nums text-gray-900 dark:text-white">
+            {value.toLocaleString()}
+          </span>
+          {/* Trend indicator */}
+          {delta !== undefined && (
+            <div className="mt-0.5 flex items-center gap-1">
+              {isUp && <ArrowUp size={14} style={{ color: trendColor }} />}
+              {isDown && <ArrowDown size={14} style={{ color: trendColor }} />}
+              <span className="text-xs font-semibold tabular-nums" style={{ color: trendColor }}>
+                {isUp ? '+' : ''}
+                {delta}
+              </span>
+              {deltaLabel && (
+                <span className="text-xs text-gray-500 dark:text-graydark-600">{deltaLabel}</span>
+              )}
+              {meta}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Gradient sparkline — 7-point trend along the foot of the card */}
+      {sparkOption && (
+        <div className="-mx-1 mt-1 h-10">
+          <EChart option={sparkOption} height={40} />
+        </div>
+      )}
+    </Tag>
   );
 }
 

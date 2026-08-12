@@ -1,3 +1,4 @@
+import { AuthCoreModule, jwtAuthGuardProvider } from '@fleetvision/auth';
 /**
  * MediaModule — wires the media-service components (09 §1.5).
  */
@@ -30,7 +31,15 @@ export class MediaModule {
   public static forRoot(config: MediaConfig): DynamicModule {
     return {
       module: MediaModule,
+      imports: [
+        AuthCoreModule.forRoot({
+          jwtSecret: config.JWT_SECRET,
+          issuer: config.JWT_ISSUER,
+          audience: config.JWT_AUDIENCE,
+        }),
+      ],
       providers: [
+        jwtAuthGuardProvider(),
         { provide: MEDIA_CONFIG, useValue: config },
 
         // Repositories.

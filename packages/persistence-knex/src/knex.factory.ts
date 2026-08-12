@@ -44,7 +44,18 @@ export function createKnex(opts: KnexFactoryOptions): Knex {
 
   const config: Knex.Config = {
     client: 'pg',
-    connection: opts.url,
+    // When routing through PgBouncer in transaction mode, the `pg` driver MUST
+    // NOT use prepared statements — a later query may land on a different server
+    // connection than the one that prepared it, breaking/leaking state. The `pg`
+    // driver reads `prepare: false` from the connection config and disables
+    // implicit prepared statements (knex 3 forwards unknown connection keys to
+    // the `pg` Client). Without this, parameterized queries fail intermittently
+    // under PgBouncer (the bug the factory's comments always warned about).
+    // (Cast: knex's StaticConnectionConfig type omits the pg-specific `prepare`
+    // key, but knex forwards it to the pg Client at runtime.)
+    connection: throughPgBouncer
+      ? ({ connectionString: opts.url, prepare: false } as unknown as string)
+      : opts.url,
     pool: {
       min: opts.poolMin ?? 2,
       max: opts.poolMax ?? 10,
@@ -53,19 +64,7 @@ export function createKnex(opts: KnexFactoryOptions): Knex {
     debug: opts.debug ?? false,
   };
 
-  const client = knex(config);
-
-  // PgBouncer transaction mode: the `pg` driver must not use prepared statements,
-  // since a later query may run on a different server connection than the one
-  // that created the statement. Knex 3 exposes this via the dialect's pool.
-  if (throughPgBouncer) {
-    const pgPool = client.client.pool as unknown as {
-      clientDefaults?: Record<string, unknown>;
-    };
-    pgPool.clientDefaults = { ...(pgPool.clientDefaults ?? {}) };
-  }
-
-  return client;
+  return knex(config);
 }
 
 export type { Knex };

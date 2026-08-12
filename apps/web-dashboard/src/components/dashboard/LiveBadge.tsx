@@ -1,28 +1,20 @@
-import { Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
 /**
- * Live freshness indicator (UI_UX_Design.md §0.6): a pulsing 6px dot + "Live"
+ * Live freshness indicator (UI_UX_Design.md §0.6): a pulsing dot + "Live"
  * label, signaling data is real-time (<10s fresh).
+ *
+ * Tailwind version — the pulse keyframe lives in global.css (`fv-pulse`); the
+ * dot reuses `.fv-live-dot` from tailwind.css for a single source of truth.
  */
 export function LiveBadge() {
   const { t } = useTranslation();
   return (
-    <Stack direction="row" alignItems="center" gap={0.5}>
-      <Box
-        component="span"
-        sx={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          backgroundColor: 'success.main',
-          display: 'inline-block',
-          animation: 'fv-pulse 1.6s ease-in-out infinite',
-        }}
-      />
-      <Typography variant="caption" color="success.main" fontWeight={600}>
+    <span className="inline-flex items-center gap-1.5">
+      <span className="fv-live-dot" />
+      <span className="text-xs font-semibold text-success-600 dark:text-success-400">
         {t('dashboard.live')}
-      </Typography>
-    </Stack>
+      </span>
+    </span>
   );
 }

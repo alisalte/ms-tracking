@@ -392,10 +392,7 @@ export function useUpdateVehicle() {
   const qc = useQueryClient();
   return useMutation<Vehicle, Error, { id: string; changes: UpdateVehiclePayload }>({
     mutationFn: async ({ id, changes }) => {
-      const w = await apiPut<unknown, VehicleWire>(
-        `/fleet/vehicles/${id}`,
-        vehicleToWire(changes),
-      );
+      const w = await apiPut<unknown, VehicleWire>(`/fleet/vehicles/${id}`, vehicleToWire(changes));
       return mapVehicle(w);
     },
     onSuccess: (_data, { id }) => {
@@ -496,10 +493,7 @@ export function useCreateDevice() {
   const qc = useQueryClient();
   return useMutation<Device, Error, CreateDevicePayload>({
     mutationFn: async (payload) => {
-      const w = await apiPost<unknown, DeviceWire>(
-        '/telemetry/devices',
-        deviceToWire(payload),
-      );
+      const w = await apiPost<unknown, DeviceWire>('/telemetry/devices', deviceToWire(payload));
       return mapDevice(w);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),

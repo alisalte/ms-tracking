@@ -1,28 +1,29 @@
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import path from "node:path";
+import path from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   server: {
     port: 5173,
     proxy: {
-      "/api": {
-        target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:3000",
+      '/api': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3000',
         changeOrigin: true,
       },
     },
   },
   build: {
-    outDir: "dist",
+    outDir: 'dist',
     sourcemap: true,
     // Use "static" instead of the default "assets" so the SPA route /assets
     // (the Asset Management page) doesn't collide with the static-asset path.
-    assetsDir: "static",
+    assetsDir: 'static',
   },
 });

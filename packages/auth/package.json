@@ -1,0 +1,38 @@
+{
+  "name": "@fleetvision/auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FleetVision shared authentication primitives — JWT verification, the JwtAuthGuard, Principal, and the ZodValidationPipe. Generic and repo-agnostic: persistence (revocation, permission resolution) is injected via ports so every service can authenticate against the SAME identity-service JWT without dragging identity's graph in.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+  },
+  "dependencies": {
+    "@fleetvision/shared-kernel": "workspace:*",
+    "@nestjs/common": "10.4.15",
+    "@nestjs/core": "10.4.15",
+    "@nestjs/jwt": "10.2.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@jest/globals": "29.7.0",
+    "@types/express": "4.17.21",
+    "@types/node": "22.10.2",
+    "jest": "29.7.0",
+    "ts-jest": "29.2.5",
+    "typescript": "5.6.3"
+  }
+}

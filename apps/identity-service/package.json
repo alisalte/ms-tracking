@@ -2,7 +2,7 @@
   "name": "@fleetvision/identity-service",
   "version": "0.1.0",
   "private": true,
-  "description": "FleetVision identity-service — the reference service (registry #1). Sprint 1 proves the foundation: config → logger → health → PostgreSQL/knex migration → Redis, with graceful shutdown. No business/aggregate logic yet.",
+  "description": "FleetVision identity-service — authentication, authorization (RBAC), tenant provisioning, user/API-key management, and the hash-chained audit subsystem. Issues and verifies HS256 JWTs (shared with all services via @fleetvision/auth). Backed by PostgreSQL (RLS-enforced) and Redis (sessions/revocation/rate-limit).",
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
@@ -13,6 +13,7 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
+    "@fleetvision/auth": "workspace:*",
     "@fleetvision/cache-redis": "workspace:*",
     "@fleetvision/config": "workspace:*",
     "@fleetvision/health": "workspace:*",
@@ -33,10 +34,12 @@
   },
   "devDependencies": {
     "@jest/globals": "29.7.0",
+    "@testcontainers/postgresql": "10.16.0",
     "@types/cookie-parser": "1.4.7",
     "@types/express": "4.17.21",
     "@types/node": "22.10.2",
     "jest": "29.7.0",
+    "testcontainers": "10.16.0",
     "ts-jest": "29.2.5",
     "tsx": "4.19.2",
     "typescript": "5.6.3"

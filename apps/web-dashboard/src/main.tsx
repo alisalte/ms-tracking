@@ -6,6 +6,7 @@
  */
 import '@/i18n';
 import '@/styles/global.css';
+import '@/styles/tailwind.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import App from './App';
 

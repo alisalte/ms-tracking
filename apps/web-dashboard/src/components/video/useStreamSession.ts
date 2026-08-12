@@ -26,6 +26,13 @@ export interface StreamSessionHook {
   session: StreamSession | null;
   /** The MediaStream to attach to the <video>, or null while connecting. */
   stream: MediaStream | null;
+  /**
+   * Honest stream classification (Sprint 3):
+   * - `stub` — synthetic canvas stream (current; no real WebRTC backend yet).
+   * - `real` — a real WebRTC stream from the media-service (future).
+   * - `unavailable` — the session could not be opened.
+   */
+  streamKind: 'real' | 'stub' | 'unavailable';
   /** Switch the simulcast layer (10 §2.3). */
   setQuality: (q: StreamQuality) => void;
   /** Manually retry the connection (after an error). */
@@ -56,6 +63,11 @@ export function useStreamSession(
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [currentQuality, setCurrentQuality] = useState<StreamQuality>(quality);
   const [retryTrigger, setRetryTrigger] = useState(0);
+  // Sprint 3: classify the stream honestly. Today the session always uses the
+  // MockMediaSignalingClient (canvas-backed), so it's `stub`. When the session
+  // ends in `error` (retries exhausted), it becomes `unavailable`. A future real
+  // WebRTC path sets `real`.
+  const [errorState, setErrorState] = useState(false);
 
   const handleRef = useRef<StreamHandle | null>(null);
   const signalingRef = useRef(new MockMediaSignalingClient());
@@ -93,6 +105,7 @@ export function useStreamSession(
   const scheduleReconnect = useCallback(() => {
     if (retryCountRef.current >= MAX_RETRIES) {
       setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+      setErrorState(true);
       return;
     }
     const delay = RECONNECT_BASE_MS * 2 ** retryCountRef.current;
@@ -185,5 +198,13 @@ export function useStreamSession(
     setRetryTrigger((n) => n + 1);
   }, []);
 
-  return { session, stream, setQuality, retry };
+  // Compute the honest stream kind: error → unavailable; else stub (canvas).
+  // TODO(real-webrtc): when the real signaling path lands, classify as 'real'.
+  const streamKind: 'real' | 'stub' | 'unavailable' = errorState
+    ? 'unavailable'
+    : channel
+      ? 'stub'
+      : 'unavailable';
+
+  return { session, stream, streamKind, setQuality, retry };
 }

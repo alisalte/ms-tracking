@@ -228,7 +228,14 @@ export function DevicesTab({
                     </Box>
                   </TableCell>
                   <TableCell align="right" sx={{ pr: 1 }}>
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openMenu(e, d); }} aria-label={t('common.actions')}>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openMenu(e, d);
+                      }}
+                      aria-label={t('common.actions')}
+                    >
                       <MoreVertical size={18} />
                     </IconButton>
                   </TableCell>
@@ -256,15 +263,27 @@ export function DevicesTab({
         onClose={closeMenu}
         slotProps={{ paper: { sx: { minWidth: 200 } } }}
       >
-        <MenuItem onClick={() => { if (menuDevice) onSelect(menuDevice.id); closeMenu(); }}>
-          <ListItemIcon><Eye size={16} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            if (menuDevice) onSelect(menuDevice.id);
+            closeMenu();
+          }}
+        >
+          <ListItemIcon>
+            <Eye size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.view')}</Typography>
         </MenuItem>
         <MenuItem
-          onClick={() => { if (menuDevice && onEdit) onEdit(menuDevice); closeMenu(); }}
+          onClick={() => {
+            if (menuDevice && onEdit) onEdit(menuDevice);
+            closeMenu();
+          }}
           disabled={!onEdit}
         >
-          <ListItemIcon><Pencil size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Pencil size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.edit')}</Typography>
         </MenuItem>
         <MenuItem
@@ -275,19 +294,29 @@ export function DevicesTab({
           disabled={!onDelete}
           sx={{ color: 'error.main' }}
         >
-          <ListItemIcon><Trash2 size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Trash2 size={16} />
+          </ListItemIcon>
           <Typography variant="body2">{t('common.delete')}</Typography>
         </MenuItem>
         <MenuItem disabled>
-          <ListItemIcon><Settings size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <Settings size={16} />
+          </ListItemIcon>
           <Tooltip title={t('assets.actions.pendingBackend')} placement="right">
-            <Typography variant="body2" sx={{ opacity: 0.5 }}>{t('common.configure')}</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.5 }}>
+              {t('common.configure')}
+            </Typography>
           </Tooltip>
         </MenuItem>
         <MenuItem disabled>
-          <ListItemIcon><TerminalSquare size={16} /></ListItemIcon>
+          <ListItemIcon>
+            <TerminalSquare size={16} />
+          </ListItemIcon>
           <Tooltip title={t('assets.actions.pendingBackend')} placement="right">
-            <Typography variant="body2" sx={{ opacity: 0.5 }}>{t('common.sendCommand')}</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.5 }}>
+              {t('common.sendCommand')}
+            </Typography>
           </Tooltip>
         </MenuItem>
       </Menu>

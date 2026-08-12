@@ -52,6 +52,8 @@ function relativeTime(iso: string, t: TFunction) {
  * UI_UX_Design.md §1.4: WebSocket-fed panel sorted CRITICAL → warning → info,
  * each row showing a severity icon, type label, vehicle, and time. The footer
  * links to the full alert list. Colors use status.red / amber per §0.2.
+ *
+ * Tailwind surface; TanStack Query hook + alert-type icons unchanged.
  */
 export function ActiveAlertsPanel() {
   const { t } = useTranslation();
@@ -67,90 +69,33 @@ export function ActiveAlertsPanel() {
       empty={alerts.length === 0 && !isLoading}
       emptyKey="dashboard.empty.alerts"
     >
-      <ul
-        style={{
-          listStyle: 'none',
-          margin: 0,
-          padding: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4,
-        }}
-      >
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {alerts.slice(0, 6).map((alert) => {
           const Icon = ALERT_ICON[alert.type];
           const color = SEVERITY_COLOR[alert.severity];
           return (
             <li key={alert.id}>
-              <Link
-                to="/map"
-                style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
-              >
-                <span
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto 1fr auto',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '8px 4px',
-                    borderRadius: 6,
-                  }}
-                  className="fv-alert-row"
-                >
+              <Link to="/map" className="block no-underline">
+                <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
                   <span
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      backgroundColor: `${color}1A`, // 10% tint
-                      color,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md"
+                    style={{ backgroundColor: `${color}1A`, color }}
                   >
                     <Icon size={16} />
                   </span>
-                  <span style={{ minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: '0.8125rem',
-                        fontWeight: 600,
-                        color: 'var(--mui-palette-text-primary)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-gray-800 dark:text-white">
                       {t(`dashboard.alerts.${alert.type}`)}
-                      <span style={{ color: 'var(--mui-palette-text-secondary)', fontWeight: 500 }}>
+                      <span className="font-medium text-gray-500 dark:text-graydark-600">
                         {' · '}
                         {alert.vehicleLabel}
                       </span>
                     </span>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: '0.75rem',
-                        color: 'var(--mui-palette-text-secondary)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
+                    <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
                       {alert.detail}
                     </span>
                   </span>
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      color: 'var(--mui-palette-text-secondary)',
-                      whiteSpace: 'nowrap',
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
+                  <span className="whitespace-nowrap text-[0.7rem] tabular-nums text-gray-500 dark:text-graydark-600">
                     {relativeTime(alert.occurredAt, t)}
                   </span>
                 </span>
@@ -163,14 +108,7 @@ export function ActiveAlertsPanel() {
       {alerts.length > 0 && (
         <Link
           to="/map"
-          style={{
-            display: 'inline-block',
-            marginTop: 8,
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            textDecoration: 'none',
-            color: 'var(--mui-palette-primary-main)',
-          }}
+          className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"
         >
           {t('dashboard.widgets.viewAll', { count: alerts.length })} →
         </Link>

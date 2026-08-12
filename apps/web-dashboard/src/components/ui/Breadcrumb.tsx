@@ -1,8 +1,8 @@
 import { Box, Link as MuiLink } from '@mui/material';
 import { ChevronRight, Home } from 'lucide-react';
 import { Fragment } from 'react';
-import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 export interface BreadcrumbItem {
   /** i18n key OR raw label. */

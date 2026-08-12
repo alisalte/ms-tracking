@@ -1,10 +1,10 @@
-import { Box, Button, Chip, Stack } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useFleetStats } from '@/api/fleet.api';
+import { Button } from '@/components/tailwind-ui';
 import { status } from '@/theme/palette';
 
 import { ActiveAlertsPanel } from './ActiveAlertsPanel';
@@ -19,15 +19,16 @@ import { VehiclesAttentionList } from './VehiclesAttentionList';
 import { WeatherWidget } from './WeatherWidget';
 
 /**
- * DashboardGrid — the Fleet Dashboard, rebuilt as a Limitless-style dashboard.
+ * DashboardGrid — the Fleet Dashboard, rebuilt as a TailAdmin-style dashboard.
  *
- * Layout (Limitless Layout 1 default dashboard pattern):
+ * Layout (TailAdmin dashboard pattern):
  * 1. Page header: fleet name + live badge + export
- * 2. KPI card row — Limitless stat cards: circular icon badge + big value +
- *    label + trend %. Four headline metrics.
+ * 2. KPI card row — stat cards: circular icon badge + big value + label +
+ *    trend %. Five headline metrics.
  * 3. Two-column grid: Fleet Activity chart (wide) + Active Alerts (narrow)
- * 4. Three-column grid: Vehicles Attention + Fleet Utilization + Weather
- * 5. Full-width Fleet Map Preview
+ * 4. Three-column grid: Alert types + Fleet Utilization + Performance
+ * 5. Two-column grid: Vehicles Attention (wide) + Weather (narrow)
+ * 6. Full-width Fleet Map Preview
  *
  * All data is mock-backed (useFleetStats) so the dashboard is fully demoable.
  */
@@ -37,95 +38,84 @@ export function DashboardGrid() {
   const { data: stats } = useFleetStats();
 
   return (
-    <Box>
+    <div>
       {/* ── Header ── */}
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        alignItems={{ sm: 'center' }}
-        justifyContent="space-between"
-        gap={1}
-        sx={{ mb: 2 }}
-      >
-        <Stack direction="row" alignItems="center" gap={1.5}>
-          <Box>
-            <Box sx={{ fontSize: '1.3125rem', fontWeight: 500, lineHeight: 1.35 }}>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               {t('dashboard.title')}
-            </Box>
-            <Box sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-graydark-600">
               {t('dashboard.subtitle')}
-            </Box>
-          </Box>
+            </p>
+          </div>
           <LiveBadge />
-        </Stack>
+        </div>
         <Button
-          variant="outlined"
-          size="small"
-          startIcon={<Download size={16} />}
+          variant="outline"
+          size="sm"
+          leftIcon={<Download size={16} />}
           onClick={() => {
             /* Export deferred */
           }}
         >
           {t('dashboard.export')}
         </Button>
-      </Stack>
+      </div>
 
-      {/* ── KPI card row (Limitless stat cards) ── */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' },
-          gap: 2,
-          mb: 2,
-        }}
-      >
+      {/* ── KPI card row ── */}
+      <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
         {kpiCards(stats, t, navigate).map((card) => (
           <KpiCard key={card.titleKey} {...card} />
         ))}
-      </Box>
+      </div>
 
       {/* ── Activity (8) + Alerts (4) ── */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(12, 1fr)' }, gap: 2, mb: 2 }}>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 8' } }}>
+      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-8">
           <FleetActivityChart />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
+        </div>
+        <div className="lg:col-span-4">
           <ActiveAlertsPanel />
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       {/* ── Alert types (4) + Utilization (4) + Performance (4) ── */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(12, 1fr)' }, gap: 2, mb: 2 }}>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
+      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-4">
           <AlertTypeBreakdownChart />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
+        </div>
+        <div className="lg:col-span-4">
           <FleetUtilizationPanel />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
+        </div>
+        <div className="lg:col-span-4">
           <FleetPerformanceChart />
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       {/* ── Attention (8) + Weather (4) ── */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(12, 1fr)' }, gap: 2, mb: 2 }}>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 8' } }}>
+      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-8">
           <VehiclesAttentionList />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
+        </div>
+        <div className="lg:col-span-4">
           <WeatherWidget />
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       {/* ── Map preview (full width) ── */}
-      <Box>
-        <FleetMapPreview />
-      </Box>
-    </Box>
+      <FleetMapPreview />
+    </div>
   );
 }
 
 /** KPI card descriptors — circular icon + value + label + trend + sparkline. */
-function kpiCards(s: ReturnType<typeof useFleetStats>['data'] | undefined, _t: TFunction, _navigate: (p: string) => void) {
+function kpiCards(
+  s: ReturnType<typeof useFleetStats>['data'] | undefined,
+  _t: TFunction,
+  _navigate: (p: string) => void,
+) {
   return [
     {
       titleKey: 'dashboard.stats.active',
@@ -162,15 +152,12 @@ function kpiCards(s: ReturnType<typeof useFleetStats>['data'] | undefined, _t: T
       delta: s?.deltas?.alerts,
       deltaLabel: 'vs yesterday',
       sparkline: s?.sparklines?.alerts,
-      meta: s && s.criticalAlerts > 0 ? (
-        <Chip
-          label={`${s.criticalAlerts} CRIT`}
-          size="small"
-          color="error"
-          variant="outlined"
-          sx={{ height: 16, fontSize: '0.6rem' }}
-        />
-      ) : undefined,
+      meta:
+        s && s.criticalAlerts > 0 ? (
+          <span className="inline-flex items-center rounded-full border border-danger-300 px-1.5 py-0.5 text-[0.6rem] font-semibold text-danger-600">
+            {s.criticalAlerts} CRIT
+          </span>
+        ) : undefined,
     },
     {
       titleKey: 'dashboard.stats.offline',

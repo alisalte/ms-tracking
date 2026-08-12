@@ -17,6 +17,11 @@ export const mediaConfigSchema = baseConfigSchema.merge(
     /** Redis connection URL (signaling tokens + channel→pod affinity). */
     REDISURL: z.string().min(1),
 
+    // --- JWT verification (same HS256 token issued by identity-service) ---
+    JWT_SECRET: z.string().min(32),
+    JWT_ISSUER: z.string().min(1).default('fleetvision'),
+    JWT_AUDIENCE: z.string().min(1).default('fleetvision-identity'),
+
     // --- Kafka (media events) ---
     MEDIA_KAFKA_BROKERS: z.string().min(1).default('localhost:9092'),
     MEDIA_KAFKA_CLIENT_ID: z.string().min(1).default('media-service'),

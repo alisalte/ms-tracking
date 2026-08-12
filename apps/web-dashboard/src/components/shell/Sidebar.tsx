@@ -1,17 +1,16 @@
-import { Box, Drawer, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { ChevronLeft, ChevronRight, Truck } from 'lucide-react';
-import { useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 
+import { Tooltip } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
-import { sidebar as sidebarPalette } from '@/theme/palette';
+import { isRTL } from '@/i18n/config';
 import { NAV_GROUPS, filterNavByPermissions } from './nav.config';
 
-/** Expanded sidebar width (Limitless default = 270px). */
+/** Expanded sidebar width (TailAdmin default = 270px). */
 export const SIDEBAR_WIDTH = 270;
-/** Collapsed (mini) sidebar width (Limitless mini = 56px, icon-only). */
-export const SIDEBAR_COLLAPSED_WIDTH = 64;
+/** Collapsed (mini) sidebar width (icon-only). */
+export const SIDEBAR_COLLAPSED_WIDTH = 72;
 
 interface SidebarProps {
   /** Desktop: collapsed state. Mobile: open state. */
@@ -22,305 +21,175 @@ interface SidebarProps {
 }
 
 /**
- * Sidebar — the signature Limitless dark slate navigation drawer.
+ * Sidebar — the TailAdmin dark navigation drawer.
  *
- * Stays dark (`#263238`) in BOTH light and dark modes — the recognizable
- * Limitless Layout 1 silhouette. Limitless IA: grouped nav with uppercase
- * section labels on a darker strip; nav rows with icon + label, an active
- * accent bar + tinted background, and hover.
+ * Stays dark (`#1A222C` graydark) in BOTH light and dark modes — the
+ * recognizable TailAdmin silhouette. Grouped nav with section labels, an
+ * indigo active pill, hover surfaces, and icon-only collapse mode.
  *
  * Behavior:
- * - Desktop (≥lg): permanent drawer, 270px expanded / 64px collapsed (icons).
+ * - Desktop (≥lg): permanent drawer, 270px expanded / 72px collapsed (icons).
  * - Mobile (<lg): temporary off-canvas drawer (overlay), full 270px.
+ *
+ * Preserves the legacy export surface (`SIDEBAR_WIDTH`,
+ * `SIDEBAR_COLLAPSED_WIDTH`, props) so AppLayout and the router are untouched.
  */
 export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse }: SidebarProps) {
   const { t } = useTranslation();
-  const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
 
   const groups = filterNavByPermissions(NAV_GROUPS, user?.permissions ?? []);
   const currentPath = location.pathname;
+  const rtl = isRTL(typeof document !== 'undefined' ? document.documentElement.lang : 'en');
 
   const handleNavigate = (path: string) => {
     navigate(path);
     onMobileClose();
   };
 
-  // The inner content is shared between the desktop permanent drawer and the
-  // mobile temporary drawer so they look identical.
   const content = (
-    <Stack
-      sx={{
-        height: '100%',
-        backgroundColor: sidebarPalette.bg,
-        color: sidebarPalette.textStrong,
-        borderInlineEnd: `1px solid ${sidebarPalette.border}`,
-      }}
-    >
-      {/* Brand + collapse toggle (desktop only) */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent={collapsed ? 'center' : 'space-between'}
-        sx={{
-          height: 50,
-          px: collapsed ? 0 : 2,
-          borderBottom: `1px solid ${sidebarPalette.border}`,
-        }}
+    <div className="flex h-full flex-col text-white" style={{ backgroundColor: '#1A222C' }}>
+      {/* ── Brand + collapse toggle ── */}
+      <div
+        className={`flex h-16 shrink-0 items-center border-b border-white/5 ${
+          collapsed ? 'justify-center px-0' : 'justify-between ps-6 pe-4'
+        }`}
       >
         {collapsed ? (
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: 1,
-              background: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
-            }}
+          <div
+            className="flex size-9 items-center justify-center rounded-lg"
+            style={{ background: 'linear-gradient(135deg, #465FFB 0%, #6366F1 100%)' }}
           >
             <Truck size={18} color="#fff" />
-          </Box>
+          </div>
         ) : (
-          <Stack direction="row" alignItems="center" gap={1}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 32,
-                height: 32,
-                borderRadius: 1,
-                background: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
-                flexShrink: 0,
-              }}
+          <button
+            type="button"
+            onClick={() => handleNavigate('/dashboard')}
+            className="flex items-center gap-2.5 rounded-md py-1 fv-focus-ring"
+            aria-label="FleetVision home"
+          >
+            <div
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: 'linear-gradient(135deg, #465FFB 0%, #6366F1 100%)' }}
             >
               <Truck size={18} color="#fff" />
-            </Box>
-            <Typography
-              sx={{
-                fontWeight: 700,
-                fontSize: '1rem',
-                letterSpacing: '-0.01em',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              FleetVision
-            </Typography>
-          </Stack>
+            </div>
+            <span className="text-lg font-bold tracking-tight text-white">FleetVision</span>
+          </button>
         )}
 
-        {/* Collapse toggle (hidden on mobile drawer / when collapsed via hover) */}
-        <IconButton
+        {/* Collapse toggle (desktop only) */}
+        <button
+          type="button"
           onClick={onToggleCollapse}
           aria-label={collapsed ? t('common.expandNav') : t('common.collapseNav')}
-          sx={{
-            display: { xs: 'none', lg: 'inline-flex' },
-            color: sidebarPalette.text,
-            '&:hover': { color: sidebarPalette.textStrong, backgroundColor: sidebarPalette.hover },
-          }}
+          className="hidden lg:inline-flex size-7 items-center justify-center rounded-md text-graydark-600 hover:bg-white/5 hover:text-white transition-colors fv-focus-ring"
         >
-          {theme.direction === 'rtl' ? (
-            collapsed ? (
-              <ChevronLeft size={18} />
-            ) : (
-              <ChevronRight size={18} />
-            )
-          ) : collapsed ? (
-            <ChevronRight size={18} />
-          ) : (
-            <ChevronLeft size={18} />
-          )}
-        </IconButton>
-      </Stack>
+          {/* Chevron points in the "collapse" direction, mirrored in RTL. */}
+          {(() => {
+            if (rtl) return collapsed ? <ChevronLeft size={18} /> : <ChevronRight size={18} />;
+            return collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />;
+          })()}
+        </button>
+      </div>
 
-      {/* Navigation groups */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          py: 1,
-          '&::-webkit-scrollbar': { width: 6 },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(255,255,255,0.12)',
-            borderRadius: 99,
-          },
-        }}
-      >
+      {/* ── Navigation groups ── */}
+      <nav className="fv-scroll flex-1 overflow-y-auto overflow-x-hidden py-4">
         {groups.map((group, gi) => (
-          <Stack key={group.groupKey ?? `g-${gi}`} sx={{ mb: 0.5 }}>
+          <div key={group.groupKey ?? `g-${gi}`} className="mb-2">
             {group.groupKey && !collapsed && (
-              <Box
-                sx={{
-                  px: 2.5,
-                  py: 1.25,
-                  mt: gi === 0 ? 0 : 0.5,
-                  borderTop: gi === 0 ? 'none' : `1px solid ${sidebarPalette.border}`,
-                  borderBottom: `1px solid ${sidebarPalette.border}`,
-                  backgroundColor: sidebarPalette.groupBg,
-                }}
-              >
-                <Typography
-                  variant="overline"
-                  sx={{
-                    color: sidebarPalette.textMuted,
-                    lineHeight: 1.6667,
-                    fontSize: '0.65rem',
-                    letterSpacing: '0.08em',
-                  }}
-                >
+              <div className={`px-6 pt-3 pb-2 ${gi === 0 ? '' : 'mt-1'}`}>
+                <span className="text-[0.6875rem] font-semibold uppercase tracking-wider text-graydark-500">
                   {t(`navGroups.${group.groupKey}`)}
-                </Typography>
-              </Box>
+                </span>
+              </div>
             )}
-            <Stack sx={{ px: 1, mt: group.groupKey ? 0.5 : 0, gap: 0.25 }}>
+            <div className={`flex flex-col gap-0.5 ${collapsed ? 'px-3' : 'px-4'}`}>
               {group.items.map((item) => {
                 const isActive =
                   currentPath === item.path ||
                   (item.path !== '/dashboard' && currentPath.startsWith(item.path));
                 const Icon = item.icon;
-                const navButton = (
-                  <Stack
-                    component="button"
-                    direction="row"
-                    alignItems="center"
-                    gap={1.5}
+                const label = t(`nav.${item.key}`);
+
+                const link = (
+                  <button
+                    key={item.key}
+                    type="button"
+                    data-active={isActive ? 'true' : 'false'}
                     onClick={() => handleNavigate(item.path)}
-                    sx={{
-                      position: 'relative',
-                      width: '100%',
-                      border: 'none',
-                      background: isActive ? sidebarPalette.active : 'transparent',
-                      color: isActive ? sidebarPalette.textStrong : sidebarPalette.text,
-                      cursor: 'pointer',
-                      borderRadius: 1,
-                      px: collapsed ? 0 : 1.5,
-                      py: 1,
-                      minHeight: 38,
-                      justifyContent: collapsed ? 'center' : 'flex-start',
-                      transition: 'background-color 0.15s ease-in-out, color 0.15s ease-in-out',
-                      '&:hover': {
-                        backgroundColor: isActive ? sidebarPalette.active : sidebarPalette.hover,
-                        color: sidebarPalette.textStrong,
-                      },
-                      // Active accent bar (block-start side for RTL awareness).
-                      '&::before': isActive
-                        ? {
-                            content: '""',
-                            position: 'absolute',
-                            insetInlineStart: 0,
-                            top: 6,
-                            bottom: 6,
-                            width: 3,
-                            borderRadius: 99,
-                            backgroundColor: sidebarPalette.accent,
-                          }
-                        : {},
-                    }}
+                    aria-current={isActive ? 'page' : undefined}
+                    title={collapsed ? label : undefined}
+                    className="fv-sidebar-link fv-focus-ring"
+                    style={collapsed ? { justifyContent: 'center' } : undefined}
                   >
                     <Icon
-                      size={18}
-                      color={isActive ? sidebarPalette.accent : 'currentColor'}
-                      style={{ flexShrink: 0 }}
+                      size={20}
+                      className="shrink-0"
+                      color={isActive ? '#fff' : 'currentColor'}
                     />
-                    {!collapsed && (
-                      <Typography
-                        sx={{
-                          fontSize: '0.8125rem',
-                          fontWeight: isActive ? 600 : 400,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {t(`nav.${item.key}`)}
-                      </Typography>
-                    )}
-                  </Stack>
+                    {!collapsed && <span className="truncate">{label}</span>}
+                  </button>
                 );
+
                 return collapsed ? (
-                  <Tooltip
-                    key={item.key}
-                    title={t(`nav.${item.key}`)}
-                    placement="right"
-                    disableInteractive
-                  >
-                    {navButton}
+                  <Tooltip key={item.key} label={label} side="right">
+                    {link}
                   </Tooltip>
                 ) : (
-                  <Box key={item.key}>{navButton}</Box>
+                  link
                 );
               })}
-            </Stack>
-          </Stack>
+            </div>
+          </div>
         ))}
-      </Box>
+      </nav>
 
-      {/* Footer version strip */}
+      {/* ── Footer version strip ── */}
       {!collapsed && (
-        <Box
-          sx={{
-            px: 2.5,
-            py: 1,
-            borderTop: `1px solid ${sidebarPalette.border}`,
-            color: sidebarPalette.textMuted,
-          }}
-        >
-          <Typography variant="caption">FleetVision v0.1</Typography>
-        </Box>
+        <div className="shrink-0 border-t border-white/5 px-6 py-3">
+          <span className="text-xs text-graydark-500">FleetVision v0.1</span>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 
   return (
-    <Box
-      component="nav"
-      sx={{
-        flexShrink: { lg: 0 },
-        width: { lg: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH },
-        transition: (t) => t.transitions.create('width', { duration: 200 }),
-      }}
-    >
-      {/* Mobile drawer (off-canvas overlay) */}
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={onMobileClose}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: 'block', lg: 'none' },
-          '& .MuiDrawer-paper': {
-            width: SIDEBAR_WIDTH,
-            boxSizing: 'border-box',
-            border: 'none',
-            backgroundImage: 'none',
-          },
-        }}
-      >
-        {content}
-      </Drawer>
+    <>
+      {/* ── Mobile off-canvas drawer ── */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Scrim */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={onMobileClose}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') onMobileClose();
+            }}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close menu"
+          />
+          {/* Panel — slides in from the inline-start edge (RTL-aware via dir). */}
+          <div
+            className="absolute inset-y-0 start-0 w-[270px] shadow-2xl"
+            style={{ animation: 'fv-fade-in 0.2s ease' }}
+          >
+            {content}
+          </div>
+        </div>
+      )}
 
-      {/* Desktop permanent drawer */}
-      <Drawer
-        variant="permanent"
-        open
-        sx={{
-          display: { xs: 'none', lg: 'block' },
-          '& .MuiDrawer-paper': {
-            width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
-            boxSizing: 'border-box',
-            border: 'none',
-            backgroundColor: sidebarPalette.bg,
-            backgroundImage: 'none',
-            overflowX: 'hidden',
-            transition: (t) => t.transitions.create('width', { duration: 200 }),
-          },
-        }}
+      {/* ── Desktop permanent drawer ── */}
+      <aside
+        className="hidden lg:block shrink-0 transition-[width] duration-200"
+        style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
         {content}
-      </Drawer>
-    </Box>
+      </aside>
+    </>
   );
 }

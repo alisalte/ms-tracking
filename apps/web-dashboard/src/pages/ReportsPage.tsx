@@ -47,11 +47,7 @@ export function ReportsPage() {
   return (
     <Stack sx={{ height: '100%' }}>
       {/* Header */}
-      <PageHeader
-        compact
-        title={t('reports.title')}
-        subtitle={t('reports.subtitle')}
-      />
+      <PageHeader compact title={t('reports.title')} subtitle={t('reports.subtitle')} />
 
       {/* Section tabs */}
       <Tabs

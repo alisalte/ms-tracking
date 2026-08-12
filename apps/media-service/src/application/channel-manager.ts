@@ -34,6 +34,15 @@ export class ChannelManager {
     return this.deps.repo.listByTenant(tenantId);
   }
 
+  /** Cursor-paginated tenant channel list. */
+  public async listByTenantPage(
+    tenantId: string,
+    limit: number,
+    cursor?: { createdAt: string; id: string },
+  ) {
+    return this.deps.repo.listByTenantPage(tenantId, limit, cursor);
+  }
+
   public async listByVehicle(tenantId: string, vehicleId: string): Promise<VideoChannel[]> {
     return this.deps.repo.listByVehicle(tenantId, vehicleId);
   }

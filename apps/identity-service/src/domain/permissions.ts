@@ -37,6 +37,26 @@ export const IamPermissions = {
   // Tenant (platform SaaS-Ops)
   TENANT_READ: 'billing.tenant.read',
   TENANT_MANAGE: 'billing.tenant.manage',
+  // Telemetry gateway administration (device-gateway /admin/* endpoints)
+  GATEWAY_MANAGE: 'telemetry.gateway.manage',
+  // Alarm / Alert lifecycle (notification-service, 12_Alarm_Engine.md §5/§6)
+  ALERT_READ: 'notification.alert.read',
+  ALERT_ACKNOWLEDGE: 'notification.alert.ack',
+  ALERT_RESOLVE: 'notification.alert.resolve',
+  // Alarm rule management
+  ALERT_RULE_READ: 'notification.rule.read',
+  ALERT_RULE_CREATE: 'notification.rule.create',
+  ALERT_RULE_UPDATE: 'notification.rule.update',
+  ALERT_RULE_DELETE: 'notification.rule.delete',
+  // Fleet — Driver management (Sprint 6)
+  DRIVER_READ: 'fleet.driver.read',
+  DRIVER_CREATE: 'fleet.driver.create',
+  DRIVER_UPDATE: 'fleet.driver.update',
+  DRIVER_MANAGE: 'fleet.driver.manage',
+  // Fleet — Business Trip management
+  TRIP_READ: 'fleet.trip.read',
+  TRIP_CREATE: 'fleet.trip.create',
+  TRIP_UPDATE: 'fleet.trip.update',
 } as const;
 
 export type IamPermission = (typeof IamPermissions)[keyof typeof IamPermissions];
@@ -84,6 +104,22 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       IamPermissions.APIKEY_CREATE,
       IamPermissions.APIKEY_REVOKE,
       IamPermissions.AUDIT_READ,
+      // Alarm lifecycle (12_Alarm_Engine.md §5/§6)
+      IamPermissions.ALERT_READ,
+      IamPermissions.ALERT_ACKNOWLEDGE,
+      IamPermissions.ALERT_RESOLVE,
+      IamPermissions.ALERT_RULE_READ,
+      IamPermissions.ALERT_RULE_CREATE,
+      IamPermissions.ALERT_RULE_UPDATE,
+      IamPermissions.ALERT_RULE_DELETE,
+      // Fleet management (Sprint 6)
+      IamPermissions.DRIVER_READ,
+      IamPermissions.DRIVER_CREATE,
+      IamPermissions.DRIVER_UPDATE,
+      IamPermissions.DRIVER_MANAGE,
+      IamPermissions.TRIP_READ,
+      IamPermissions.TRIP_CREATE,
+      IamPermissions.TRIP_UPDATE,
     ],
     mfaRequired: false,
   },
@@ -95,6 +131,12 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       IamPermissions.ORG_READ,
       IamPermissions.APIKEY_READ,
       IamPermissions.AUDIT_READ,
+      // Alarm read-only
+      IamPermissions.ALERT_READ,
+      IamPermissions.ALERT_RULE_READ,
+      // Fleet read-only
+      IamPermissions.DRIVER_READ,
+      IamPermissions.TRIP_READ,
     ],
     mfaRequired: false,
   },

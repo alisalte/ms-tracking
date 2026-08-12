@@ -8,12 +8,7 @@
  */
 import type { StreamType } from './media-frame.js';
 
-export type ChannelStatus =
-  | 'REGISTERED'
-  | 'ONLINE'
-  | 'DEGRADED'
-  | 'OFFLINE'
-  | 'DECOMMISSIONED';
+export type ChannelStatus = 'REGISTERED' | 'ONLINE' | 'DEGRADED' | 'OFFLINE' | 'DECOMMISSIONED';
 
 export type ChannelProtocol = 'JT1078' | 'RTSP' | 'RTMP' | 'WEBRTC';
 

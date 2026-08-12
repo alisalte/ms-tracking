@@ -31,6 +31,7 @@ export class PoiService {
     tenantId: string | null,
     bbox: { minLng: number; minLat: number; maxLng: number; maxLat: number },
     category?: string,
+    limit?: number,
   ): Promise<Poi[]> {
     return this.deps.repo.findInBbox(
       tenantId,
@@ -39,6 +40,7 @@ export class PoiService {
       bbox.maxLng,
       bbox.maxLat,
       category,
+      limit,
     );
   }
 

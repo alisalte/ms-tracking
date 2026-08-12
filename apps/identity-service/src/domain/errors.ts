@@ -87,3 +87,8 @@ export class NotFoundError extends DomainError {
     super(`${resource} not found.`);
   }
 }
+
+/** A business rule / domain invariant was violated (maps to 422). */
+export class BusinessRuleViolationError extends DomainError {
+  public readonly code = 'BUSINESS_RULE_VIOLATION';
+}

@@ -14,14 +14,14 @@ html {
 }
 
 body {
-  font-family: 'Roboto', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
-    Arial, sans-serif;
+  font-family: "Roboto", "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Persian uses Vazirmatn (a clean, readable Persian/Latin face). */
-html[dir='rtl'] body {
-  font-family: 'Vazirmatn', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
-    Arial, sans-serif;
+html[dir="rtl"] body {
+  font-family: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 /* ── Keyframes ──────────────────────────────────────────────────────────── */
@@ -98,6 +98,6 @@ html[dir='rtl'] body {
 }
 
 /* In RTL the breadcrumb trail reads right→left; mirror the chevron separator. */
-html[dir='rtl'] .fv-breadcrumb .fv-breadcrumb-sep {
+html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
   transform: scaleX(-1);
 }

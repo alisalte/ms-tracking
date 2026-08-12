@@ -73,9 +73,4 @@ function mapRtpCodec(name: string): StreamType | null {
 }
 
 /** The RTSP control sequence the media-router follows (09 §3.3). Documented. */
-export const RTSP_SEQUENCE = [
-  'OPTIONS',
-  'DESCRIBE',
-  'SETUP',
-  'PLAY',
-] as const;
+export const RTSP_SEQUENCE = ['OPTIONS', 'DESCRIBE', 'SETUP', 'PLAY'] as const;

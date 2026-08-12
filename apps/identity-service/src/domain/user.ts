@@ -157,7 +157,11 @@ export class User extends AggregateRoot<Brand<string, 'UserId'>> {
     this.raise(new UserLockedEvent(this.eventContext(ctx)));
   }
 
-  /** INV-IAM-05: LOCKED → ACTIVE unlock. */
+  /**
+   * INV-IAM-05: LOCKED → ACTIVE unlock.
+   * @deprecated No use-case/admin endpoint wires this yet (Sprint 2). Will be
+   * exercised when the user-admin status-management endpoints land.
+   */
   public unlock(ctx: EventContext): void {
     this.requireTransition(['LOCKED'], 'ACTIVE');
     (this.props as { lockoutUntil: Date | null }).lockoutUntil = null;
@@ -166,12 +170,14 @@ export class User extends AggregateRoot<Brand<string, 'UserId'>> {
     this.raise(new UserActivatedEvent(this.eventContext(ctx)));
   }
 
+  /** @deprecated No use-case/admin endpoint wires this yet (Sprint 2). */
   public suspend(reason: string, ctx: EventContext): void {
     this.requireTransition(['ACTIVE', 'LOCKED'], 'SUSPENDED');
     (this.props as { status: UserStatus }).status = 'SUSPENDED';
     this.raise(new UserSuspendedEvent(this.eventContext(ctx), reason));
   }
 
+  /** @deprecated No use-case/admin endpoint wires this yet (Sprint 2). */
   public deactivate(ctx: EventContext): void {
     this.requireTransition(['ACTIVE', 'SUSPENDED', 'LOCKED'], 'DEACTIVATED');
     (this.props as { status: UserStatus }).status = 'DEACTIVATED';
@@ -206,10 +212,22 @@ export class User extends AggregateRoot<Brand<string, 'UserId'>> {
     (this.props as { email: string }).email = newEmail;
   }
 
+  /** Update the display name (profile edit — no domain event). */
+  public changeDisplayName(name: string | null): void {
+    (this.props as { displayName: string | null }).displayName = name;
+  }
+
+  /** @deprecated No password-change use-case wires this yet (Sprint 2). */
   public updatePasswordHash(hash: string): void {
     (this.props as { passwordHash: string | null }).passwordHash = hash;
   }
 
+  /**
+   * @deprecated The role-binding path currently goes through UserRepository
+   * .assignRole (raw INSERT) and bypasses this aggregate method, so the
+   * RoleAssignedEvent never fires in production (Sprint 2). Wire this when the
+   * role-binding path is refactored to go through the aggregate.
+   */
   public assignRole(roleId: string, scope: string | null, ctx: EventContext): void {
     if (!this.roleIds.includes(roleId)) {
       this.roleIds.push(roleId);
@@ -217,6 +235,7 @@ export class User extends AggregateRoot<Brand<string, 'UserId'>> {
     this.raise(new RoleAssignedEvent(this.eventContext(ctx), roleId, scope));
   }
 
+  /** @deprecated No use-case wires this yet (Sprint 2) — see assignRole. */
   public revokeRole(roleId: string, ctx: EventContext): void {
     this.roleIds = this.roleIds.filter((r) => r !== roleId);
     this.raise(new RoleRevokedEvent(this.eventContext(ctx), roleId));

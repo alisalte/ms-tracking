@@ -1,9 +1,54 @@
 # FleetVision — Enterprise Fleet Management Platform
 
-> **Status:** Architecture Design Phase — Implementation Ready  
-> **Version:** 1.0.0  
-> **Date:** 2026-08-02  
+> **Status:** Implementation in progress — post-stabilization hardening. See
+> **Implementation Status** below for what is actually built today versus what
+> remains planned. The aspirational sections further down describe the target
+> architecture and are marked PLANNED where the code does not yet exist.
+> **Version:** 1.0.0
+> **Date:** 2026-08-02
 > **Author:** Chief Software Architect
+
+---
+
+## Implementation Status (what actually runs today)
+
+This table is the authoritative, honest picture of the repository. Anything not
+listed here is **PLANNED** (not built). The aspirational sections below
+("Architecture at a Glance", "Technology Stack", the ADRs) describe the target
+state and were written during the design phase; where they name a technology
+that is not yet implemented, treat it as PLANNED, not as a current capability.
+
+Legend: **IMPLEMENTED** runs in code today · **PARTIAL** exists but incomplete · **PLANNED** not in the codebase.
+
+| Area | Status | Notes |
+|---|---|---|
+| Runtime / languages | IMPLEMENTED | **Node.js LTS + NestJS + TypeScript** (per ADR-021). *Not* Kotlin/Go/Python — that stack in the section below is the deferred design-phase target. |
+| Monorepo foundation | IMPLEMENTED | pnpm workspaces, composite TS project graph, Biome, Husky, CI. 8 services + 8 shared packages. |
+| Services (NestJS) | IMPLEMENTED | identity, fleet, gps-engine, device-gateway, map-engine, media, notification, web-dashboard (React). |
+| Shared packages | IMPLEMENTED | shared-kernel, config, observability, persistence-knex, cache-redis, health, web, auth. |
+| Database | IMPLEMENTED | PostgreSQL 16 + TimescaleDB + Redis 7. Knex migrations, RLS-enforced. |
+| Async messaging | IMPLEMENTED | Apache Kafka 3.7 (kafkajs producer/consumer). |
+| Realtime | IMPLEMENTED | WebSocket / Socket.IO (gps-engine realtime gateway, alarm + notification rooms). |
+| AuthN/AuthZ | PARTIAL | HS256 JWT (`@nestjs/jwt`) + argon2 + `PermissionsGuard` (RBAC). **Keycloak PLANNED. OPA PLANNED** (in-process permission evaluator is the fallback until OPA lands). |
+| Secrets | PARTIAL | Config via env + zod. **Vault PLANNED** (HS256→RS256/JWKS via Vault Transit deferred). |
+| Multi-tenancy | IMPLEMENTED | Single shared Postgres with **tenant-aware RLS** (`SET LOCAL app.current_tenant_id`, `fleetvision_app` NOBYPASSRLS role, FORCE RLS). |
+| Audit | PARTIAL | Hash-chained audit log (SHA-256), wired to most sensitive ops; a few ops still pending (see audit phase notes). |
+| REST APIs | IMPLEMENTED | Versioned REST (`/api/v1/...`); cursor pagination contract on list endpoints. |
+| Frontend | PARTIAL | React 18 + TS dashboard; mock-gate (real-first) with honest DEMO/PLANNED labels. Some pages mock-only (no backend yet). |
+| gRPC | **PLANNED** | Inter-service comms today are Kafka + in-process. No `.proto`/`@grpc/grpc-js` in the tree. |
+| Service mesh (Istio) | **PLANNED** | No manifests. |
+| API gateway (Kong) | **PLANNED** | No Kong service/config. |
+| GitOps (ArgoCD) | **PLANNED** | CI is GitHub Actions only. |
+| Kubernetes | **PLANNED** | Local dev is `docker compose`. No Helm/Kustomize/manifests. |
+| MongoDB | **PLANNED (removed)** | Removed per ADR-022 → PostgreSQL JSONB. |
+| ClickHouse | **PLANNED (deferred)** | Deferred per ADR-022 with a re-introduction trigger. |
+| Elasticsearch | **PLANNED (deferred)** | Deferred per ADR-022 (Postgres FTS + Loki instead). |
+| Mobile (React Native) | **PLANNED** | No mobile app in this repo. |
+
+> The docker-compose dev stack is intentionally lean: `postgres`, `redis`,
+> `zookeeper`, `kafka`, `identity-service`, `web-dashboard`. No Kong / Keycloak /
+> Vault / Istio / ArgoCD / ClickHouse / Mongo / Elasticsearch services are
+> defined — those are future infrastructure.
 
 ---
 
@@ -13,17 +58,22 @@ FleetVision is a **cloud-native, enterprise-grade Fleet Management Platform** de
 
 ## Architecture at a Glance
 
-| Aspect | Decision |
-|---|---|
-| **Architectural Styles** | DDD + Clean Architecture + CQRS + Event Sourcing + Microservices + Event-Driven |
-| **Communication** | REST (external) + gRPC (internal sync) + Kafka (async events) + WebSocket (real-time) + MQTT (IoT) |
-| **Languages** | Kotlin/Spring Boot 3.3 (core), Go (high-throughput), Python (ML/analytics) |
-| **Data Layer** | PostgreSQL 16, TimescaleDB, MongoDB, Redis, ClickHouse, Elasticsearch, Kafka |
-| **Platform** | Kubernetes (EKS/AKS/GKE) + Istio Service Mesh + ArgoCD (GitOps) |
-| **Security** | Zero-trust: Keycloak (IAM), OPA (authz), Vault (secrets), mTLS (service mesh) |
-| **Multi-Tenancy** | Hybrid: Dedicated Instance (Enterprise) + Schema Isolation (Professional) + RLS (Standard) |
-| **Observability** | OpenTelemetry + Prometheus + Grafana + Loki + Jaeger |
-| **14 Bounded Contexts** | Identity, Fleet Mgmt, Tracking, Telemetry, Maintenance, Driver, Fuel, Trip, Compliance, Analytics, Asset Lifecycle, Notification, Billing, Audit |
+> **Note:** the table below is the **target architecture** from the design phase.
+> Rows marked **PLANNED** are not implemented today — see *Implementation Status*
+> above for the current reality. The implemented runtime is Node.js + NestJS +
+> TypeScript on PostgreSQL/TimescaleDB/Redis/Kafka with JWT RBAC and tenant-aware RLS.
+
+| Aspect | Decision | Implemented? |
+|---|---|---|
+| **Architectural Styles** | DDD + Clean Architecture + Microservices + Event-Driven. (CQRS + Event Sourcing are PARTIAL/PLANNED for audit-critical aggregates.) | Partial |
+| **Communication** | REST (external) + Kafka (async events) + WebSocket (real-time). **gRPC (internal sync) PLANNED.** MQTT (IoT) PLANNED. | Partial |
+| **Languages (target)** | Design target: Kotlin/Spring Boot, Go, Python. **Implemented runtime: Node.js LTS + NestJS + TypeScript (ADR-021).** | Implemented (Node) — Kotlin/Go/Python PLANNED |
+| **Data Layer** | **Implemented: PostgreSQL 16, TimescaleDB, Redis, Kafka.** MongoDB (removed → JSONB), ClickHouse (deferred), Elasticsearch (deferred) — all PLANNED. | Partial |
+| **Platform** | Design target: Kubernetes + Istio + ArgoCD. **Today: `docker compose` for local dev.** All PLANNED. | Planned |
+| **Security** | **Implemented: HS256 JWT + argon2 + RBAC PermissionsGuard + tenant-aware RLS.** Keycloak (IAM) PLANNED · OPA (authz) PLANNED · Vault (secrets) PLANNED · mTLS (mesh) PLANNED. | Partial |
+| **Multi-Tenancy** | Implemented as single shared Postgres + tenant-aware **RLS** (`SET LOCAL app.current_tenant_id`, FORCE RLS, NOBYPASSRLS app role). Dedicated-instance/schema-isolation tiers PLANNED. | Partial |
+| **Observability** | Implemented: pino logger + W3C traceparent correlation + health checks. OTel/Prometheus/Grafana/Loki/Jaeger dashboards PLANNED. | Partial |
+| **14 Bounded Contexts** | Identity, Fleet Mgmt, Tracking, Telemetry, Maintenance, Driver, Fuel, Trip, Compliance, Analytics, Asset Lifecycle, Notification, Billing, Audit. (Code covers Identity, Fleet, Tracking/Telemetry, Map, Media, Notification, Audit; others PLANNED.) | Partial |
 
 ## Scale Targets
 
@@ -127,23 +177,45 @@ FleetVision is a **cloud-native, enterprise-grade Fleet Management Platform** de
 
 ## Technology Stack
 
+> **What runs today** (IMPLEMENTED) versus the **design-phase target**
+> (PLANNED). Only the rows marked IMPLEMENTED are present in the codebase /
+> docker-compose; the rest are future work tracked in the ADRs.
+
 ```
-Runtime:          Java 21 + Kotlin 2.0 (Spring Boot 3.3) | Go 1.22 | Python 3.12
-Frontend:         React 18 + TypeScript 5 | React Native (Mobile)
-Orchestration:    Kubernetes 1.29 (EKS/AKS/GKE)
-Service Mesh:     Istio 1.20 (ambient mesh)
-API Gateway:      Kong Enterprise 3.x
-Event Streaming:  Apache Kafka 3.7 (Confluent Platform)
-Databases:        PostgreSQL 16 | TimescaleDB | MongoDB 7 | Redis 7 | ClickHouse | Elasticsearch 8
-Cache/Sessions:   Redis 7 (Cluster Mode)
-Object Storage:   S3 / MinIO
-IAM:              Keycloak 24+
-Authorization:    Open Policy Agent (OPA)
-Secrets:          HashiCorp Vault
-Observability:    OpenTelemetry + Prometheus + Grafana + Loki + Jaeger
-CI/CD:            GitHub Actions + ArgoCD + Argo Rollouts
-IaC:              Terraform + Helm + Kustomize
-Container Reg:    Amazon ECR (Cosign signed)
+IMPLEMENTED (today):
+  Runtime:          Node.js 22 LTS + NestJS + TypeScript 5.6
+  Frontend:         React 18 + TypeScript 5 (web-dashboard)
+  Databases:        PostgreSQL 16 + TimescaleDB · Redis 7
+  Event Streaming:  Apache Kafka 3.7 (kafkajs)
+  Realtime:         WebSocket / Socket.IO
+  AuthN/AuthZ:      HS256 JWT (@nestjs/jwt) + argon2 + RBAC PermissionsGuard
+  Multi-Tenancy:    PostgreSQL tenant-aware RLS (FORCE, NOBYPASSRLS app role)
+  Migrations:       Knex
+  Lint/Format:      Biome
+  CI:               GitHub Actions
+  Local Infra:      docker compose (postgres, redis, zookeeper, kafka)
+
+PLANNED (target state — not yet in the codebase):
+  Runtime (target):   Kotlin/Spring Boot 3.3 | Go 1.22 | Python 3.12     (ADR-006, deferred)
+  Mobile:             React Native                                          (no mobile app yet)
+  Orchestration:      Kubernetes 1.29 (EKS/AKS/GKE)                        (no manifests)
+  Service Mesh:       Istio 1.20 (ambient mesh)                            (ADR-005)
+  API Gateway:        Kong Enterprise 3.x                                   (no config)
+  IAM:                Keycloak 24+                                          (ADR-009)
+  Authorization:      Open Policy Agent (OPA)                               (ADR-009; in-process evaluator today)
+  Secrets:            HashiCorp Vault                                       (RS256/JWKS via Vault Transit deferred)
+  CI/CD (target):     + ArgoCD + Argo Rollouts                              (ADR-010)
+  IaC:                Terraform + Helm + Kustomize
+  Container Reg:      Amazon ECR (Cosign signed)
+
+PLANNED (data stores — removed or deferred per ADR-022):
+  MongoDB:            REMOVED → PostgreSQL JSONB
+  ClickHouse:         DEFERRED (re-introduction trigger documented in ADR-022)
+  Elasticsearch:      DEFERRED (Postgres FTS + Loki instead)
+
+Observability (PARTIAL):
+  Implemented:        pino logger + W3C traceparent correlation + terminus health
+  Planned:            OpenTelemetry + Prometheus + Grafana + Loki + Jaeger
 ```
 
 ---
@@ -218,13 +290,13 @@ FleetVision/
 
 ---
 
-## Getting Started (Sprint 1)
+## Getting Started
 
-> Sprint 1 delivers a **runnable pnpm monorepo** realizing the architecture in
-> `docs/specs/22_Codebase_Architecture.md` and ADR-021/022 (Node.js LTS + NestJS +
-> TypeScript). One reference service — `identity-service` — boots end-to-end,
-> proving the foundation: config → logger → health → PostgreSQL/knex migration →
-> Redis, with graceful shutdown.
+> The workspace is a runnable pnpm monorepo realizing the architecture in
+> `docs/specs/22_Codebase_Architecture.md` and ADR-021/022 (Node.js LTS + NestJS
+> + TypeScript). Eight services boot end-to-end (identity, fleet, gps-engine,
+> device-gateway, map-engine, media, notification) plus the web-dashboard,
+> sharing Postgres/TimescaleDB, Redis, and Kafka.
 
 ### Prerequisites
 
@@ -241,11 +313,11 @@ FleetVision/
 # 1. Install dependencies (one deterministic lockfile)
 pnpm install
 
-# 2. Bring up the lean stack (Postgres+Timescale, Redis, Kafka, RabbitMQ, MinIO)
+# 2. Bring up the lean stack (Postgres+Timescale, Redis, Kafka)
 cp infra/docker/.env.example infra/docker/.env   # then edit secrets
 pnpm stack:up
 
-# 3. Run the reference service (auto-loads infra/docker/.env into the process env)
+# 3. Run a service (each auto-loads infra/docker/.env into the process env)
 pnpm dev          # boots identity-service on :3000
 
 # 4. Verify the foundation
@@ -266,23 +338,45 @@ pnpm test        # jest across the workspace
 
 ```
 packages/
-  shared-kernel/      DDD primitives, branded ids, value objects, tenancy
+  shared-kernel/      DDD primitives, branded ids, value objects, tenancy, pagination
   config/             zod-validated env loader (crash-fast)
   observability/      pino logger + W3C traceparent correlation
-  persistence-knex/   PgBouncer-aware knex client, BaseRepository, migrations runner
+  persistence-knex/   PgBouncer-aware knex client, BaseRepository, tenant-context (SET LOCAL), migrations runner
   cache-redis/        ioredis client + RedisModule
   health/             @nestjs/terminus /health/live + /health/ready
-  web/                JSON:API error envelope + global exception filter stub
+  web/                JSON:API error envelope + global exception filter
+  auth/               shared JWT verification, JwtAuthGuard, Principal, PermissionsGuard, ZodValidationPipe
 apps/
-  identity-service/   the reference service (registry #1)
+  identity-service/   auth (login/refresh/logout), IAM users/roles/api-keys, tenant provisioning, audit log
+  fleet-service/      drivers + business-trips
+  gps-engine-service/ position pipeline, device status, trips, engine-hours, realtime WS gateway
+  device-gateway-service/ JT808/etc. device protocol adapters, Kafka producer, admin hot-reload
+  map-engine-service/ geofences, POI, route, replay, map tiles/heat
+  media-service/      video channels, stream sessions, JT1078/RTSP adapters, signaling WS
+  notification-service/ alarm rules/evaluator, notifications + preferences + delivery channels
+  web-dashboard/      React 18 + TS dashboard (mock-gated, real-first)
 infra/docker/         compose stack + .env template
 ```
 
 ### Done vs. planned
 
-**Done (Sprint 1):** monorepo foundation, all 7 shared packages, the reference
-service, the full Docker stack, CI, graceful shutdown, health checks.
+> The list below supersedes the Sprint-1 scope notes above and reflects the
+> current repository state after the stabilization hardening pass.
 
-**Planned (Sprint 2+):** business/aggregate domain code, REST CRUD verticals,
-Kafka producers/consumers, gRPC, CQRS bus, event store, auth/OPA, the service
-generator, ArgoCD/Istio/Helm/Terraform, Pact contract tests, front-end.
+**Done:** monorepo foundation; all 8 shared packages; 8 NestJS services
+(identity, fleet, gps-engine, device-gateway, map-engine, media, notification)
+plus the React web-dashboard; Knex migrations with tenant-aware RLS; Kafka
+producer/consumer wiring; WebSocket realtime; JWT auth + RBAC; hash-chained
+audit log; cursor pagination; Biome lint/format; CI; quality gates
+(build/typecheck/lint/test) all green; unit + opt-in RLS integration tests.
+
+**Planned:** Keycloak (IAM), OPA (authz — in-process evaluator is the
+interim), Vault (secrets / RS256-JWKS), gRPC, CQRS bus, event store, the
+service generator, ArgoCD/Istio/Helm/Terraform/Kubernetes manifests, Pact
+contract tests, ClickHouse/Elasticsearch re-introduction (ADR-022 triggers),
+React Native mobile, dedicated-instance/schema multi-tenancy tiers.
+
+> **Rule of thumb for this repo:** if a technology is named in the design-phase
+> sections (Architecture at a Glance, Technology Stack, ADRs) but is **not** in
+> the *Implementation Status* table at the top, it is **PLANNED**, not a current
+> capability.

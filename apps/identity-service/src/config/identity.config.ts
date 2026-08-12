@@ -15,8 +15,19 @@ import { z } from 'zod';
  */
 export const identityConfigSchema = baseConfigSchema.merge(
   z.object({
-    /** Postgres connection URL (e.g. `postgres://fleetvision:pw@localhost:5432/fleetvision`). */
+    /**
+     * Runtime Postgres connection URL — connects as the non-superuser
+     * `fleetvision_app` role (subject to tenant-aware RLS). e.g.
+     * `postgres://fleetvision_app:pw@localhost:5432/fleetvision`.
+     */
     DBURL: z.string().min(1),
+    /**
+     * Privileged Postgres connection URL — connects as the `fleetvision_platform`
+     * role (BYPASSRLS) for platform/cross-tenant operations (tenant provisioning,
+     * audit writes, cross-tenant reads). Also used to RUN migrations (role/DDL
+     * creation). Falls back to DBURL when unset (dev/single-role).
+     */
+    DBURL_PLATFORM: z.string().min(1).optional(),
     /** Redis connection URL (e.g. `redis://localhost:6379/0`). */
     REDISURL: z.string().min(1),
 

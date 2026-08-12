@@ -15,9 +15,10 @@ import { useSearchParams } from 'react-router';
 import { useAlarms } from '@/api/alarm.api';
 import { AlarmDetailDrawer } from '@/components/alarms/AlarmDetailDrawer';
 import { AlarmList } from '@/components/alarms/AlarmList';
+import { AlarmLiveIndicator } from '@/components/alarms/AlarmLiveIndicator';
 import { AlarmMap } from '@/components/alarms/AlarmMap';
 import { AlarmTimeline } from '@/components/alarms/AlarmTimeline';
-import { LiveBadge } from '@/components/dashboard/LiveBadge';
+import { ErrorState } from '@/components/common/ErrorState';
 import { PageHeader } from '@/components/ui';
 import type { AlarmFilters, AlarmSeverity, AlarmStatus, AlarmType } from '@/types/alarm.types';
 import {
@@ -52,7 +53,7 @@ const STATUSES: Array<AlarmStatus | 'all'> = ['all', 'raised', 'acked', 'escalat
 export function AlarmCenterPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
-  const { data: alarms, isLoading } = useAlarms();
+  const { data: alarms, isLoading, isError, error, refetch } = useAlarms();
 
   const view = (params.get('view') as ViewMode) ?? 'list';
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -107,6 +108,15 @@ export function AlarmCenterPage() {
     setParams(next, { replace: true });
   };
 
+  if (isError) {
+    return (
+      <Stack sx={{ height: '100%' }}>
+        <PageHeader title={t('alarms.title')} subtitle={t('alarms.subtitle')} />
+        <ErrorState error={error} onRetry={() => refetch()} />
+      </Stack>
+    );
+  }
+
   return (
     <Stack sx={{ height: '100%' }}>
       {/* Header: title + live stats */}
@@ -114,7 +124,7 @@ export function AlarmCenterPage() {
         compact
         title={t('alarms.title')}
         subtitle={t('alarms.subtitle')}
-        live={<LiveBadge />}
+        live={<AlarmLiveIndicator />}
         actions={
           <>
             <StatChip label={t('alarms.stats.active')} value={stats.active} color="primary" />

@@ -103,6 +103,7 @@ export class ApiKey extends AggregateRoot<Brand<string, 'ApiKeyId'>> {
     return this.props.ipAllowlist;
   }
 
+  /** @deprecated No API-key verification endpoint wires this yet (Sprint 2). */
   public isActive(): boolean {
     if (this.props.status !== 'ACTIVE') return false;
     if (this.props.expiresAt && this.props.expiresAt <= new Date()) return false;
@@ -114,6 +115,7 @@ export class ApiKey extends AggregateRoot<Brand<string, 'ApiKeyId'>> {
     this.raise(new ApiKeyRevokedEvent(this.eventContext(ctx)));
   }
 
+  /** @deprecated No API-key verification endpoint stamps last-used yet (Sprint 2). */
   public stampUsed(): void {
     (this.props as { lastUsedAt: Date | null }).lastUsedAt = new Date();
   }

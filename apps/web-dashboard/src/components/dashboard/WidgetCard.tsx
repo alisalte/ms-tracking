@@ -1,6 +1,5 @@
-import { Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LiveBadge } from './LiveBadge';
@@ -21,18 +20,19 @@ interface WidgetCardProps {
   /** When true (and not loading), render the EmptyState instead of children. */
   empty?: boolean;
   children?: ReactNode;
-  /** Optional extra sx for the card root. */
+  /** Optional extra style for the card root (legacy MUI callers pass `sx`). */
   sx?: object;
+  className?: string;
 }
 
 /**
- * Shared widget shell: a titled Limitless card with an optional live badge,
+ * Shared widget shell: a titled TailAdmin card with an optional live badge,
  * header action slot, and consistent loading (skeleton) + empty states.
  *
- * v3 (Limitless): weight-700 header, 20px body padding, near-flat 3px card
- * (sourced from the MuiCard theme override). Per UI_UX_Design.md §0.6, initial
- * load uses skeletons (not spinners) and the live badge is the pulsing freshness
- * dot reserved for real-time panels.
+ * Tailwind version. Per UI_UX_Design.md §0.6, initial load uses skeletons (not
+ * spinners) and the live badge is the pulsing freshness dot reserved for
+ * real-time panels. Props mirror the legacy MUI WidgetCard so every consumer
+ * (ActiveAlertsPanel, FleetActivityChart, …) is drop-in compatible.
  */
 export function WidgetCard({
   titleKey,
@@ -44,41 +44,40 @@ export function WidgetCard({
   empty = false,
   children,
   sx,
+  className = '',
 }: WidgetCardProps) {
   const { t } = useTranslation();
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', ...sx }}>
-      <CardContent
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          gap: 1.5,
-          p: 2,
-          '&:last-child': { pb: 2 },
-        }}
-      >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-          <Stack direction="row" alignItems="center" gap={0.75} minWidth={0}>
-            {Icon && <Icon size={17} style={{ flexShrink: 0 }} />}
-            <Typography variant="subtitle2" fontWeight={700} noWrap>
-              {t(titleKey)}
-            </Typography>
-            {live && <LiveBadge />}
-          </Stack>
-          {action}
-        </Stack>
+    <div
+      className={`flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-graydark-200 ${className}`}
+      style={sx as CSSProperties | undefined}
+    >
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {Icon && (
+            <span className="shrink-0 text-gray-500 dark:text-graydark-600">
+              <Icon size={18} />
+            </span>
+          )}
+          <h3 className="truncate text-base font-semibold text-gray-800 dark:text-white">
+            {t(titleKey)}
+          </h3>
+          {live && <LiveBadge />}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
 
+      {/* Body */}
+      <div className="flex flex-1 flex-col">
         {loading ? (
-          <Skeleton variant="rounded" sx={{ flex: 1, minHeight: 120 }} />
+          <div className="min-h-[120px] flex-1 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
         ) : empty && emptyKey ? (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-            {t(emptyKey)}
-          </Typography>
+          <p className="py-2 text-sm text-gray-500 dark:text-graydark-600">{t(emptyKey)}</p>
         ) : (
           children
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

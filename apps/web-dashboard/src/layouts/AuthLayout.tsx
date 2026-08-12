@@ -1,164 +1,90 @@
-import { Box, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Activity, Camera, MapPin, ShieldCheck, Truck } from 'lucide-react';
 import { Outlet } from 'react-router';
 
 /**
  * AuthLayout — branded split-panel shell for unauthenticated pages.
  *
- * v3 (Limitless-inspired): keeps the FleetVision branded side panel (navy
- * gradient + feature pills) but the form panel now reads as Limitless — clean
- * light surface, 3px cards. On mobile it collapses to a centered card. RTL-safe.
+ * TailAdmin-inspired: a deep-indigo brand panel (feature pills + headline)
+ * beside a centered form panel. On mobile it collapses to a centered card.
+ * RTL-safe (logical spacing + direction-aware glow anchors). The form content
+ * (login/register/etc.) renders via `<Outlet />` — those pages remain on MUI
+ * this pass; they read fine under the indigo-tinted tokens.
  */
+const FEATURES = [
+  { icon: Truck, label: 'Fleet Tracking' },
+  { icon: MapPin, label: 'Live Map' },
+  { icon: Camera, label: 'Video Wall' },
+  { icon: Activity, label: 'Real-time Alerts' },
+];
+
 export function AuthLayout() {
-  const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-
-  if (!isDesktop) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          backgroundColor: 'background.default',
-          p: 2,
-        }}
-      >
-        <Outlet />
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* ── Branded panel ── */}
-      <Box
-        sx={{
-          flex: 1.1,
-          display: { xs: 'none', md: 'flex' },
-          flexDirection: 'column',
-          justifyContent: 'center',
-          p: 8,
-          position: 'relative',
-          overflow: 'hidden',
-          background: 'linear-gradient(160deg, #1A2733 0%, #263238 45%, #37474F 100%)',
+    <div className="flex min-h-screen bg-gray-50 dark:bg-graydark-200">
+      {/* ── Branded panel (desktop only) ── */}
+      <div
+        className="relative hidden flex-1 flex-col justify-center overflow-hidden p-16 md:flex"
+        style={{
+          background: 'linear-gradient(160deg, #1B1E6E 0%, #2D31D4 45%, #465FFB 100%)',
         }}
       >
-        {/* Decorative radial glow */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: '-12%',
-            insetInlineEnd: '-8%',
-            width: 420,
-            height: 420,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(33,150,243,0.22) 0%, transparent 70%)',
-            pointerEvents: 'none',
+        {/* Decorative radial glows */}
+        <div
+          className="pointer-events-none absolute -top-[12%] -end-[8%] size-[420px] rounded-full"
+          style={{
+            background: 'radial-gradient(circle, rgba(99,102,241,0.35) 0%, transparent 70%)',
           }}
         />
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: '-12%',
-            insetInlineStart: '-8%',
-            width: 360,
-            height: 360,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(63,81,181,0.18) 0%, transparent 70%)',
-            pointerEvents: 'none',
+        <div
+          className="pointer-events-none absolute -bottom-[12%] -start-[8%] size-[360px] rounded-full"
+          style={{
+            background: 'radial-gradient(circle, rgba(139,92,246,0.28) 0%, transparent 70%)',
           }}
         />
 
-        <Stack spacing={4} sx={{ maxWidth: 440, position: 'relative', zIndex: 1 }}>
+        <div className="relative z-10 flex max-w-md flex-col gap-8">
           {/* Logo */}
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 44,
-                height: 44,
-                borderRadius: 1,
-                background: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
-                boxShadow: '0 8px 24px rgba(33,150,243,0.4)',
-              }}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex size-11 items-center justify-center rounded-xl shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)' }}
             >
               <ShieldCheck size={24} color="#fff" />
-            </Box>
-            <Typography variant="h4" fontWeight={700} sx={{ color: '#FFFFFF' }}>
-              FleetVision
-            </Typography>
-          </Stack>
+            </div>
+            <span className="text-2xl font-bold text-white">FleetVision</span>
+          </div>
 
           {/* Headline */}
-          <Box>
-            <Typography
-              sx={{
-                color: '#FFFFFF',
-                lineHeight: 1.2,
-                fontSize: '1.75rem',
-                fontWeight: 700,
-                mb: 1.5,
-              }}
-            >
+          <div>
+            <h1 className="mb-2 text-[1.75rem] font-bold leading-tight text-white">
               Enterprise Fleet Intelligence
-            </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', lineHeight: 1.7 }}>
-              Real-time tracking, video telematics, maintenance, and compliance — unified in one calm,
-              fast, secure dashboard.
-            </Typography>
-          </Box>
+            </h1>
+            <p className="text-[0.95rem] leading-relaxed text-white/70">
+              Real-time tracking, video telematics, maintenance, and compliance — unified in one
+              calm, fast, secure dashboard.
+            </p>
+          </div>
 
           {/* Feature pills */}
-          <Stack direction="row" gap={1.5} sx={{ flexWrap: 'wrap', mt: 2 }}>
-            {[
-              { icon: Truck, label: 'Fleet Tracking' },
-              { icon: MapPin, label: 'Live Map' },
-              { icon: Camera, label: 'Video Wall' },
-              { icon: Activity, label: 'Real-time Alerts' },
-            ].map(({ icon: Icon, label }) => (
-              <Stack
+          <div className="mt-2 flex flex-wrap gap-2.5">
+            {FEATURES.map(({ icon: Icon, label }) => (
+              <div
                 key={label}
-                direction="row"
-                alignItems="center"
-                gap={0.75}
-                sx={{
-                  px: 1.5,
-                  py: 1,
-                  borderRadius: 99,
-                  backgroundColor: 'rgba(33,150,243,0.14)',
-                  border: '1px solid rgba(33,150,243,0.28)',
-                }}
+                className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5"
               >
-                <Icon size={15} color="#64B5F6" />
-                <Typography variant="caption" sx={{ color: '#ECEFF1', fontWeight: 500 }}>
-                  {label}
-                </Typography>
-              </Stack>
+                <Icon size={15} className="text-brand-200" />
+                <span className="text-xs font-medium text-white/90">{label}</span>
+              </div>
             ))}
-          </Stack>
-        </Stack>
-      </Box>
+          </div>
+        </div>
+      </div>
 
       {/* ── Form panel ── */}
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          p: 4,
-          backgroundColor: 'background.default',
-        }}
-      >
-        <Box sx={{ animation: 'fv-fade-in 0.4s ease', width: '100%', maxWidth: 420 }}>
+      <div className="flex flex-1 items-center justify-center p-6 md:p-10">
+        <div className="w-full max-w-[420px]" style={{ animation: 'fv-fade-in 0.4s ease' }}>
           <Outlet />
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 }

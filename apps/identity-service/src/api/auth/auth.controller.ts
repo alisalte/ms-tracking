@@ -15,6 +15,8 @@ import { LoginUseCase, LogoutUseCase, RefreshTokenUseCase } from '../../applicat
 import { InvalidCredentialsError } from '../../domain/errors.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
@@ -29,6 +31,7 @@ export class AuthController {
     private readonly refreshUseCase: RefreshTokenUseCase,
     private readonly logoutUseCase: LogoutUseCase,
     private readonly tenants: TenantRepository,
+    private readonly users: UserRepository,
   ) {}
 
   /**
@@ -126,7 +129,9 @@ export class AuthController {
       userId: p.userId,
       sessionId: p.sessionId,
       accessJti: p.jti,
-      accessTtlRemainingSeconds: 900,
+      // Size the blocklist entry to the token's REAL remaining lifetime so the
+      // jti dies exactly at natural expiry — no early un-block, no Redis waste.
+      accessTtlRemainingSeconds: accessTtlRemaining(p.exp),
       all: false,
     });
   }
@@ -141,14 +146,14 @@ export class AuthController {
       userId: p.userId,
       sessionId: p.sessionId,
       accessJti: p.jti,
-      accessTtlRemainingSeconds: 900,
+      accessTtlRemainingSeconds: accessTtlRemaining(p.exp),
       all: true,
     });
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  public me(@Req() req: Request): {
+  public async me(@Req() req: Request): Promise<{
     data: {
       id: string;
       email: string;
@@ -156,16 +161,32 @@ export class AuthController {
       roles: readonly string[];
       permissions: readonly string[];
     };
-  } {
+  }> {
     const p = getPrincipal(req);
+    // Hydrate the user from the DB so /me returns the real, current record.
+    // The JWT carries no email claim (kept lean by design), so re-read the row.
+    // If the user vanished mid-session (e.g. deleted), deny rather than emit null.
+    const user = await this.users.findById(p.tenantId, p.userId);
+    if (!user) {
+      throw new InvalidCredentialsError();
+    }
     return {
       data: {
         id: p.userId,
-        email: '', // email not carried in JWT; a use-case could hydrate it
+        email: user.email,
         tenant_id: p.tenantId,
         roles: p.roles,
         permissions: p.permissions,
       },
     };
   }
+}
+
+/**
+ * Remaining lifetime (seconds) of the access token from its `exp` claim. Clamped
+ * to ≥0 so an already-expired token (the guard would normally reject it, but a
+ * race between check and logout yields a small negative) blocks nothing extra.
+ */
+function accessTtlRemaining(exp: number): number {
+  return Math.max(0, exp - Math.floor(Date.now() / 1000));
 }

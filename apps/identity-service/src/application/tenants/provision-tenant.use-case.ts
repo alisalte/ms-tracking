@@ -21,9 +21,10 @@ import type { RoleRepository } from '../../infrastructure/persistence/role.repos
 import type { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
+import type { AuditActor, AuditManager } from '../audit/audit-manager.js';
 import { buildEventContext } from '../shared/context.js';
 
-export interface ProvisionTenantInput {
+export interface ProvisionTenantInput extends Partial<AuditActor> {
   readonly name: string;
   readonly tier: TenantTier;
   readonly region: string;
@@ -31,6 +32,7 @@ export interface ProvisionTenantInput {
   readonly adminUsername: string;
   readonly adminPassword: string;
   readonly correlationId?: string;
+  readonly actorId?: string | null;
 }
 
 export interface ProvisionedTenant {
@@ -46,6 +48,7 @@ export class ProvisionTenantUseCase {
     private readonly roles: RoleRepository,
     private readonly users: UserRepository,
     private readonly hasher: PasswordHasher,
+    private readonly audit: AuditManager,
   ) {}
 
   public async execute(input: ProvisionTenantInput): Promise<ProvisionedTenant> {
@@ -90,6 +93,28 @@ export class ProvisionTenantUseCase {
     );
     await this.users.save(admin, userCtx);
     await this.users.assignRole(tenantId, adminUserId, adminRoleId);
+
+    // Platform-scoped audit: provisioning is a cross-tenant operation.
+    await this.audit.record({
+      tenantId,
+      actorId: input.actorId ?? null,
+      actorType: input.actorId ? 'USER' : 'SYSTEM',
+      action: 'billing.tenant.provision',
+      resourceType: 'tenant',
+      resourceId: tenantId,
+      permission: 'billing.tenant.manage',
+      outcome: 'SUCCESS',
+      after: {
+        name: input.name,
+        tier: input.tier,
+        region: input.region,
+        admin_user_id: adminUserId,
+      },
+      requestId: input.requestId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+      platform: true,
+    });
 
     return { tenantId, adminUserId, adminRoleId };
   }

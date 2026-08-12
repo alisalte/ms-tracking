@@ -110,6 +110,11 @@ export class Tenant extends AggregateRoot<Brand<string, 'TenantId'>> {
     return this.props.status === 'ACTIVE';
   }
 
+  /**
+   * @deprecated The Organization aggregate is an unimplemented scaffold (Sprint 2):
+   * no OrganizationRepository/service/use-case exists. This setter has no
+   * production caller. Will be wired when organizations are implemented.
+   */
   public setRootOrg(orgId: string): void {
     (this.props as { rootOrgId: string | null }).rootOrgId = orgId;
   }

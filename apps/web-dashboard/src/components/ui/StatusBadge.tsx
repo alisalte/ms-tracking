@@ -75,10 +75,10 @@ export function StatusBadge({
   const sx = color
     ? // Raw color → derive solid/soft/outlined from the single hue.
       variant === 'solid'
-        ? { bgcolor: color, color: '#fff', border: 'transparent' }
-        : variant === 'outlined'
-          ? { bgcolor: 'transparent', color, borderColor: color }
-          : { bgcolor: `${color}1F`, color, borderColor: `${color}4D` }
+      ? { bgcolor: color, color: '#fff', border: 'transparent' }
+      : variant === 'outlined'
+        ? { bgcolor: 'transparent', color, borderColor: color }
+        : { bgcolor: `${color}1F`, color, borderColor: `${color}4D` }
     : variant === 'solid'
       ? { bgcolor: SOLID[tone].bg, color: SOLID[tone].fg, border: 'transparent' }
       : variant === 'outlined'

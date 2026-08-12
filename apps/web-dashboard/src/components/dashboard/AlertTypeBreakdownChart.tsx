@@ -1,10 +1,10 @@
-import { Box, Skeleton } from '@mui/material';
-import { PieChart as PieChartIcon } from 'lucide-react';
 import type { EChartsOption } from 'echarts';
+import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveAlerts } from '@/api/fleet.api';
+import { useThemeContext } from '@/theme/ThemeRegistry';
 import { status } from '@/theme/palette';
 import type { AlertType } from '@/types/fleet.types';
 
@@ -31,11 +31,16 @@ const TYPE_ORDER: AlertType[] = ['overspeed', 'fcw', 'idle', 'geofence', 'dtc', 
  * chart (radius scaled to count) so the dominant alert types stand out at a
  * glance. Colors map to the semantic status tokens so the panel reads
  * consistently with the Active Alerts feed and the KPI cards.
+ *
+ * Tailwind shell; aggregation + ECharts option unchanged.
  */
 export function AlertTypeBreakdownChart() {
   const { t } = useTranslation();
+  const { mode } = useThemeContext();
   const { data, isLoading } = useActiveAlerts();
   const alerts = data ?? [];
+
+  const legendColor = mode === 'dark' ? '#9AA5B5' : '#475467';
 
   const option = useMemo(() => {
     const counts = new Map<AlertType, number>();
@@ -59,7 +64,7 @@ export function AlertTypeBreakdownChart() {
         icon: 'circle',
         itemWidth: 8,
         itemHeight: 8,
-        textStyle: { fontSize: 11 },
+        textStyle: { fontSize: 11, color: legendColor },
       },
       series: [
         {
@@ -76,7 +81,7 @@ export function AlertTypeBreakdownChart() {
         },
       ],
     } as EChartsOption;
-  }, [alerts, t]);
+  }, [alerts, t, legendColor]);
 
   return (
     <WidgetCard
@@ -86,13 +91,13 @@ export function AlertTypeBreakdownChart() {
       empty={alerts.length === 0 && !isLoading}
       emptyKey="dashboard.empty.alerts"
     >
-      <Box sx={{ width: '100%', height: 220 }}>
+      <div className="h-[220px] w-full">
         {isLoading ? (
-          <Skeleton variant="rounded" sx={{ width: '100%', height: '100%' }} />
+          <div className="h-full w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
         ) : (
           <EChart option={option} height={220} />
         )}
-      </Box>
+      </div>
     </WidgetCard>
   );
 }

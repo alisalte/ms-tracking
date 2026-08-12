@@ -29,7 +29,12 @@ export class AppModule {
         }),
         LoggerModule.forRootFromConfig(config as BaseConfig),
         PersistenceModule.forRoot({
+          // Runtime client: connects as fleetvision_app (RLS-enforced).
           client: { url: config.DBURL },
+          // Migrations + platform ops: connects as fleetvision_platform (BYPASSRLS)
+          // or the bootstrap superuser. Falls back to DBURL in dev.
+          migrationsClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
+          platformClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
           },

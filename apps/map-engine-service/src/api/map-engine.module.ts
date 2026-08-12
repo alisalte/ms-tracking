@@ -1,3 +1,4 @@
+import { AuthCoreModule, jwtAuthGuardProvider } from '@fleetvision/auth';
 /**
  * MapEngineModule — wires the Map Engine components (08 §1.5).
  *
@@ -43,7 +44,15 @@ export class MapEngineModule {
   public static forRoot(config: MapEngineConfig): DynamicModule {
     return {
       module: MapEngineModule,
+      imports: [
+        AuthCoreModule.forRoot({
+          jwtSecret: config.JWT_SECRET,
+          issuer: config.JWT_ISSUER,
+          audience: config.JWT_AUDIENCE,
+        }),
+      ],
       providers: [
+        jwtAuthGuardProvider(),
         { provide: MAP_ENGINE_CONFIG, useValue: config },
 
         // --- Repositories (read/write the geo + tracking schemas) ---

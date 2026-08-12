@@ -60,6 +60,11 @@ export function useAlarmRealtime(tenantId: string | null, wsUrl?: string): Alarm
     if (!enabled) return;
 
     const channels: Array<[string, AlarmRealtimeEvent['type']]> = [
+      // Sprint 4 notification-service event names.
+      ['alarm.created', 'raised'],
+      ['alarm.acknowledged', 'acknowledged'],
+      ['alarm.resolved', 'resolved'],
+      // Legacy versioned names (backward compat).
       ['notification.alert.raised.v1', 'raised'],
       ['notification.alert.escalated.v1', 'escalated'],
       ['notification.alert.acknowledged.v1', 'acknowledged'],

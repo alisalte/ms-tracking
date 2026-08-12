@@ -8,8 +8,14 @@
     { "path": "packages/persistence-knex" },
     { "path": "packages/cache-redis" },
     { "path": "packages/health" },
+    { "path": "packages/auth" },
     { "path": "packages/web" },
     { "path": "apps/identity-service" },
-    { "path": "apps/device-gateway-service" }
+    { "path": "apps/device-gateway-service" },
+    { "path": "apps/gps-engine-service" },
+    { "path": "apps/map-engine-service" },
+    { "path": "apps/media-service" },
+    { "path": "apps/notification-service" },
+    { "path": "apps/fleet-service" }
   ]
 }

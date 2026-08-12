@@ -2,6 +2,7 @@
  * API key repository — maps the ApiKey aggregate to `iam.api_keys`.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { type Page, toCursor } from '@fleetvision/shared-kernel';
 import {
   type ApiKey,
   ApiKey as ApiKeyClass,
@@ -24,6 +25,7 @@ export interface ApiKeyRow {
   status: ApiKeyStatus;
   ip_allowlist: string[];
   version: number;
+  created_at: Date;
 }
 
 export class ApiKeyRepository {
@@ -42,6 +44,39 @@ export class ApiKeyRepository {
         .where({ tenant_id: tenantId })
         .orderBy('created_at', 'desc');
       return (rows as ApiKeyRow[]).map((r) => this.toDomain(r));
+    });
+  }
+
+  /**
+   * Cursor-paginated list (keyset on `(created_at DESC, id)` — newest first,
+   * stable via the id tiebreaker). Returns a `Page<ApiKey>`.
+   */
+  public async listPage(
+    tenantId: string,
+    limit: number,
+    cursor?: { createdAt: string; id: string },
+  ): Promise<Page<ApiKey>> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      let query = trx<ApiKeyRow>('iam.api_keys').where({ tenant_id: tenantId });
+      if (cursor) {
+        query = query.where((q) =>
+          q
+            .where('created_at', '<', cursor.createdAt)
+            .orWhere((q2) =>
+              q2.where('created_at', '=', cursor.createdAt).andWhere('id', '<', cursor.id),
+            ),
+        );
+      }
+      const rows = (await query
+        .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
+        .limit(limit + 1)) as ApiKeyRow[];
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      const nextCursor =
+        hasMore && last ? toCursor('created_at', last.created_at.toISOString(), last.id) : null;
+      return { data: page.map((r) => this.toDomain(r)), nextCursor };
     });
   }
 

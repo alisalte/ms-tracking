@@ -105,9 +105,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         },
       });
 
-      // Fetch full user profile (with permissions). Preserve the email from the
-      // login response — the backend `GET /auth/me` currently returns an empty
-      // email string (a known gap); fall back to the login email if so.
+      // Fetch full user profile (with permissions). The backend `/auth/me`
+      // returns the real user email (fixed in Sprint 1); the fallback to the
+      // login response email is kept as a safety net.
       try {
         const fullUser = await loginApi.getMe();
         set({

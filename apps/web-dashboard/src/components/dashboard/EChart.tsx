@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isRTL } from '@/i18n/config';
-import { lightSurface, darkSurface } from '@/theme/palette';
 import { useThemeContext } from '@/theme/ThemeRegistry';
+import { darkSurface, lightSurface } from '@/theme/palette';
 
 interface EChartProps {
   /** Full ECharts option object. */
@@ -40,6 +40,7 @@ export function EChart({ option, height = 260, sx }: EChartProps) {
   const rtl = isRTL(i18n.language);
   const isDark = mode === 'dark';
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rtl is consumed by echarts via the merged option
   const merged = useMemo<EChartsOption>(() => {
     const surface = isDark ? darkSurface : lightSurface;
     const axisColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';

@@ -9,7 +9,9 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import type { Knex } from '@fleetvision/persistence-knex';
-import { withoutTenantContext } from './tenant-context.js';
+import { PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
+import { Inject } from '@nestjs/common';
+import { withPlatformContext } from './tenant-context.js';
 
 export interface AuditEntry {
   readonly tenantId: string;
@@ -28,7 +30,15 @@ export interface AuditEntry {
 }
 
 export class AuditRepository {
-  constructor(private readonly knex: Knex) {}
+  /**
+   * @param knex the PLATFORM (BYPASSRLS) client. Audit writes happen inside a
+   * tenant/platform context opened by AuditManager (which passes the trx to
+   * append), and audit reads are cross-tenant administrative queries — both
+   * legitimately need platform scope. The RLS policy on audit.audit_entries
+   * still branches on app.is_platform / app.current_tenant_id, so writes remain
+   * tenant-attributed; the platform role just permits the write to land.
+   */
+  constructor(@Inject(PLATFORM_KNEX_TOKEN) private readonly knex: Knex) {}
 
   /**
    * Append an audit entry, computing the hash chain under a row lock. Call this
@@ -100,7 +110,7 @@ export class AuditRepository {
   ): Promise<{ rows: Record<string, unknown>[]; total: number }> {
     const limit = opts.limit ?? 50;
     const offset = opts.offset ?? 0;
-    return withoutTenantContext(this.knex, async (trx) => {
+    return withPlatformContext(this.knex, async (trx) => {
       const base = trx('audit.audit_entries').where({ tenant_id: tenantId });
       if (opts.resourceType) base.where({ resource_type: opts.resourceType });
       if (opts.resourceId) base.where({ resource_id: opts.resourceId });

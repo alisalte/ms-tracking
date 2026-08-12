@@ -97,4 +97,24 @@ export class TripRepository {
         lng: event.lng,
       });
   }
+
+  // --- Engine hours ---
+
+  /** Persist a flushed engine-hours window (ignition-on accumulated seconds). */
+  public async insertEngineHours(event: {
+    tenantId: string;
+    vehicleId: string;
+    accumulatedSec: number;
+    at: Date;
+  }): Promise<void> {
+    await this.knex
+      .withSchema(SCHEMA)
+      .from('engine_hours')
+      .insert({
+        tenant_id: this.knex.raw('?::uuid', [event.tenantId]),
+        vehicle_id: this.knex.raw('?::uuid', [event.vehicleId]),
+        accumulated_sec: event.accumulatedSec,
+        recorded_at: event.at,
+      });
+  }
 }

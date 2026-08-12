@@ -1,3 +1,5 @@
+import { type PageRequestDto, pageRequestSchema } from '@fleetvision/auth';
+import { type Page, decodeCursor } from '@fleetvision/shared-kernel';
 /**
  * API keys controller — issue/list/revoke. The plaintext secret is returned
  * exactly once at creation (16_Public-API-Platform.md §8.1). Base
@@ -11,6 +13,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -22,6 +25,7 @@ import { ApiKeyRepository } from '../../infrastructure/persistence/api-key.repos
 import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
 import { PermissionsGuard, RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
+import { actorFromRequest } from '../shared/request-context.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 import { createApiKeySchema } from './auth.dto.js';
 
@@ -36,11 +40,30 @@ export class ApiKeysController {
 
   @Get()
   @RequirePermissions('iam.apikey.read')
-  public async list(@Req() req: Request) {
+  public async list(
+    @Query(new ZodValidationPipe(pageRequestSchema)) page: PageRequestDto,
+    @Req() req: Request,
+  ): Promise<
+    Page<{
+      id: string;
+      name: string;
+      key_prefix: string;
+      scopes: readonly string[];
+      status: string;
+      expires_at: Date | null;
+      last_used_at: Date | null;
+    }>
+  > {
     const p = getPrincipal(req);
-    const keys = await this.apiKeys.list(p.tenantId);
+    const cursor = page.cursor
+      ? (() => {
+          const c = decodeCursor(page.cursor);
+          return { createdAt: c.value, id: c.id ?? '' };
+        })()
+      : undefined;
+    const result = await this.apiKeys.listPage(p.tenantId, page.limit, cursor);
     return {
-      data: keys.map((k) => ({
+      data: result.data.map((k) => ({
         id: k.id as string,
         name: k.name,
         key_prefix: k.keyPrefix,
@@ -49,6 +72,7 @@ export class ApiKeysController {
         expires_at: k.expiresAt,
         last_used_at: k.lastUsedAt,
       })),
+      nextCursor: result.nextCursor,
     };
   }
 
@@ -70,6 +94,7 @@ export class ApiKeysController {
       scopes: body.scopes,
       assignedUserId: body.assigned_user_id ?? undefined,
       expiresAt: body.expires_at ? new Date(body.expires_at) : null,
+      ...actorFromRequest(req),
     });
     // Plaintext returned once.
     return {
@@ -86,6 +111,6 @@ export class ApiKeysController {
   @RequirePermissions('iam.apikey.revoke')
   public async revoke(@Param('id') id: string, @Req() req: Request): Promise<void> {
     const p = getPrincipal(req);
-    await this.revokeUseCase.execute(p.tenantId, id);
+    await this.revokeUseCase.execute(p.tenantId, id, actorFromRequest(req));
   }
 }

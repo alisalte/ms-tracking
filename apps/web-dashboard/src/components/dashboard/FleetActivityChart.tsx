@@ -1,5 +1,4 @@
 import type { EChartsOption } from 'echarts';
-import { Box, Skeleton, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { Activity } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +33,8 @@ const SERIES = [
  * that doubles as a category key. Colors come from the semantic status tokens
  * — green for driving (active), amber for idle, slate for stopped — so the
  * chart shares meaning with the rest of the dashboard.
+ *
+ * Tailwind shell; ECharts option + `useFleetActivity(range)` hook unchanged.
  */
 export function FleetActivityChart() {
   const { t } = useTranslation();
@@ -47,7 +48,10 @@ export function FleetActivityChart() {
       legend: { show: false },
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'cross', label: { formatter: (p: { value: number }) => formatHour(Number(p.value)) } },
+        axisPointer: {
+          type: 'cross',
+          label: { formatter: (p: { value: number }) => formatHour(Number(p.value)) },
+        },
       },
       grid: { left: 8, right: 16, top: 16, bottom: 28, containLabel: true },
       xAxis: {
@@ -103,53 +107,46 @@ export function FleetActivityChart() {
       live={range === 'today'}
       loading={isLoading}
       action={
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={range}
-          onChange={(_, next: Range | null) => next && setRange(next)}
+        <fieldset
           aria-label={t('dashboard.widgets.activityRange')}
+          className="inline-flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-white/10 dark:bg-white/5"
         >
           {RANGES.map((r) => (
-            <ToggleButton
+            <button
               key={r}
-              value={r}
-              sx={{
-                px: 1.25,
-                py: 0.25,
-                fontSize: '0.75rem',
-                textTransform: 'none',
-                lineHeight: 1.4,
-              }}
+              type="button"
+              onClick={() => setRange(r)}
+              aria-pressed={range === r}
+              className={[
+                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                range === r
+                  ? 'bg-white text-brand-700 shadow-sm dark:bg-graydark-400 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-white',
+              ].join(' ')}
             >
               {t(`dashboard.range.${r}`)}
-            </ToggleButton>
+            </button>
           ))}
-        </ToggleButtonGroup>
+        </fieldset>
       }
     >
-      <Box sx={{ width: '100%', height: 260 }}>
+      <div className="h-[260px] w-full">
         {isLoading || !option ? (
-          <Skeleton variant="rounded" sx={{ width: '100%', height: '100%' }} />
+          <div className="h-full w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
         ) : (
           <EChart option={option} height={260} />
         )}
-      </Box>
+      </div>
 
       {/* Legend doubles as a filter (§1.4) — color + label, no interactivity yet. */}
-      <Stack direction="row" gap={2} sx={{ mt: 1, flexWrap: 'wrap' }}>
+      <div className="mt-2 flex flex-wrap gap-4">
         {SERIES.map((s) => (
-          <Stack key={s.key} direction="row" alignItems="center" gap={0.5}>
-            <Box
-              component="span"
-              sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: s.color }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {t(s.labelKey)}
-            </Typography>
-          </Stack>
+          <span key={s.key} className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+            <span className="text-xs text-gray-500 dark:text-graydark-600">{t(s.labelKey)}</span>
+          </span>
         ))}
-      </Stack>
+      </div>
     </WidgetCard>
   );
 }

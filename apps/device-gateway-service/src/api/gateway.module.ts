@@ -1,4 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import {
+  AuthCoreModule,
+  PERMISSION_RESOLVER,
+  PermissionsGuard,
+  jwtAuthGuardProvider,
+} from '@fleetvision/auth';
 /**
  * GatewayModule — wires the device-gateway components (06 §1.5 module structure).
  *
@@ -40,6 +46,7 @@ import {
   UdpServer,
 } from '../infrastructure/transport/index.js';
 import { AdminController } from './admin/admin.controller.js';
+import { GatewayAuditWriter } from './admin/gateway-audit-writer.js';
 import {
   ADAPTER_REGISTRY,
   CONNECTION_POOL,
@@ -63,6 +70,7 @@ export {
   INSTANCE_ID,
   GATEWAY_CONFIG,
 } from './tokens.js';
+import { DbPermissionResolver } from './db-permission-resolver.js';
 
 @Module({})
 export class GatewayModule implements OnApplicationBootstrap {
@@ -73,7 +81,27 @@ export class GatewayModule implements OnApplicationBootstrap {
 
     return {
       module: GatewayModule,
+      imports: [
+        // Verifies identity-issued HS256 JWTs. The admin API requires the
+        // telemetry.gateway.manage permission, resolved from the shared
+        // iam.role_permissions schema (DbPermissionResolver).
+        AuthCoreModule.forRoot({
+          jwtSecret: config.JWT_SECRET,
+          issuer: config.JWT_ISSUER,
+          audience: config.JWT_AUDIENCE,
+        }),
+      ],
       providers: [
+        // Permission resolver bound to the PERMISSION_RESOLVER token so the
+        // JwtAuthGuard resolves live permissions for RBAC on the admin API.
+        { provide: DbPermissionResolver, useClass: DbPermissionResolver },
+        {
+          provide: PERMISSION_RESOLVER,
+          useExisting: DbPermissionResolver,
+        },
+        // JwtAuthGuard (authenticated) + PermissionsGuard (RBAC) for /admin/*.
+        jwtAuthGuardProvider(),
+        PermissionsGuard,
         { provide: INSTANCE_ID, useValue: instanceId },
         { provide: GATEWAY_CONFIG, useValue: config },
         // Adapter registry + built-in adapters + plugin loader.
@@ -146,6 +174,9 @@ export class GatewayModule implements OnApplicationBootstrap {
         },
         // Raw packet storage.
         { provide: 'GATEWAY_RAW_STORAGE', useValue: new RawPacketStorage() },
+        // Audit writer for admin actions (adapter enable/disable). Shares the
+        // platform-wide hash-chained audit.audit_entries table.
+        GatewayAuditWriter,
         // Packet dispatcher.
         {
           provide: PACKET_DISPATCHER,

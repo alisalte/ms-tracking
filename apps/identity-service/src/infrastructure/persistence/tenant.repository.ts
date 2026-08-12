@@ -4,6 +4,8 @@
  * (before a tenant has any session context), so they run WITHOUT tenant scope.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
+import { Inject } from '@nestjs/common';
 import {
   type EventContext,
   type Tenant,
@@ -12,7 +14,7 @@ import {
   type TenantStatus,
   type TenantTier,
 } from '../../domain/index.js';
-import { withoutTenantContext } from './tenant-context.js';
+import { withPlatformContext } from './tenant-context.js';
 
 export interface TenantRow {
   id: string;
@@ -30,10 +32,12 @@ export interface TenantRow {
 }
 
 export class TenantRepository {
-  constructor(private readonly knex: Knex) {}
+  constructor(@Inject(PLATFORM_KNEX_TOKEN) private readonly knex: Knex) {}
 
   public async findById(id: string): Promise<Tenant | null> {
-    return withoutTenantContext(this.knex, async (trx) => {
+    // Cross-tenant read (platform operation) — runs on the BYPASSRLS client with
+    // the platform flag set so the iam.tenants policy admits any row.
+    return withPlatformContext(this.knex, async (trx) => {
       const row = await trx<TenantRow>('iam.tenants').where({ id }).first();
       return row ? this.toDomain(row) : null;
     });
@@ -52,7 +56,7 @@ export class TenantRepository {
   public async resolveId(rawTenantId: string): Promise<string | null> {
     const trimmed = rawTenantId.trim();
     if (!trimmed) return null;
-    return withoutTenantContext(this.knex, async (trx) => {
+    return withPlatformContext(this.knex, async (trx) => {
       const row = await trx<TenantRow>('iam.tenants')
         .whereRaw('LOWER(name) = LOWER(?)', trimmed)
         .first();
@@ -62,7 +66,7 @@ export class TenantRepository {
 
   public async save(tenant: Tenant, ctx: EventContext): Promise<void> {
     const events = tenant.pullEvents();
-    await withoutTenantContext(this.knex, async (trx) => {
+    await withPlatformContext(this.knex, async (trx) => {
       const row = this.toRow(tenant);
       const existing = await trx('iam.tenants')
         .where({ id: tenant.id as string })

@@ -25,7 +25,21 @@ export interface ApiErrorResponse {
   errors: ApiError[];
 }
 
-/** Paginated collection with cursor-based pagination. */
+/**
+ * A cursor-paginated page — matches the backend `Page<T>` shape
+ * (`{ data: T[]; nextCursor: string | null }`). `nextCursor` is null when
+ * the page is exhausted; pass it back as `?cursor=` to fetch the next page.
+ */
+export interface Page<T> {
+  data: T[];
+  nextCursor: string | null;
+}
+
+/**
+ * Paginated collection with cursor-based pagination.
+ * @deprecated Use {@link Page} (matches the backend shape). Retained for
+ * backward compatibility with existing callers that haven't migrated.
+ */
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {

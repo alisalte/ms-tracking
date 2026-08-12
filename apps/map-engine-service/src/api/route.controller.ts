@@ -4,6 +4,7 @@
  *   GET  /route?waypoints=&mode=  — route between waypoints.
  *   POST /route/match             — map-match a position sequence.
  */
+import { JwtAuthGuard, ZodValidationPipe, getPrincipal } from '@fleetvision/auth';
 import {
   Body,
   Controller,
@@ -14,12 +15,15 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type { ProviderRouter } from '../application/provider-router.js';
+import { type RouteMatchDto, routeMatchSchema } from './map-engine.dto.js';
 import { PROVIDER_ROUTER } from './tokens.js';
 
 @Controller('route')
+@UseGuards(JwtAuthGuard)
 export class RouteController {
   constructor(@Inject(PROVIDER_ROUTER) private readonly router: ProviderRouter) {}
 
@@ -33,7 +37,8 @@ export class RouteController {
     const pts = parseWaypoints(waypoints);
     if (pts.length < 2)
       throw new HttpException('At least 2 waypoints required', HttpStatus.BAD_REQUEST);
-    const provider = this.router.select({ tenantId: tenantOf(req) });
+    const tenantId = getPrincipal(req as Request).tenantId;
+    const provider = this.router.select({ tenantId });
     return provider.route({
       waypoints: pts,
       mode: (mode ?? 'static') as 'static' | 'live' | 'optimized',
@@ -41,11 +46,13 @@ export class RouteController {
   }
 
   @Post('match')
-  public async match(@Body() body: Record<string, unknown>, @Req() req?: Request) {
-    const points = (body.points as { lat: number; lng: number }[]) ?? [];
-    if (points.length === 0) throw new HttpException('points required', HttpStatus.BAD_REQUEST);
-    const provider = this.router.select({ tenantId: tenantOf(req) });
-    return provider.matchRoute(points, tenantOf(req));
+  public async match(
+    @Body(new ZodValidationPipe(routeMatchSchema)) body: RouteMatchDto,
+    @Req() req?: Request,
+  ) {
+    const tenantId = getPrincipal(req as Request).tenantId;
+    const provider = this.router.select({ tenantId });
+    return provider.matchRoute(body.points, tenantId);
   }
 }
 
@@ -58,13 +65,4 @@ function parseWaypoints(wp: string): { lat: number; lng: number }[] {
       return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
     })
     .filter((p): p is { lat: number; lng: number } => p !== null);
-}
-
-function tenantOf(req?: Request): string {
-  const tid =
-    (req?.headers['tenant-id'] as string | undefined) ??
-    (req?.query['tenant-id'] as string | undefined);
-  if (!tid)
-    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
-  return tid;
 }

@@ -1,10 +1,10 @@
-import { Box, Skeleton, Stack } from '@mui/material';
-import { GaugeCircle } from 'lucide-react';
 import type { EChartsOption } from 'echarts';
+import { GaugeCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFleetUtilization } from '@/api/fleet.api';
+import { useThemeContext } from '@/theme/ThemeRegistry';
 import { status } from '@/theme/palette';
 import type { VehicleState } from '@/types/fleet.types';
 
@@ -24,11 +24,19 @@ const STATE_COLOR: Record<VehicleState, string> = {
  *
  * UI_UX_Design.md §1.4: a donut with the headline utilization % in the center
  * and horizontal bars showing time-in-state breakdown (driving / idle / stopped
- * / offline). Rebuilt on ECharts for richer gradients and theme-aware styling.
+ * / offline).
+ *
+ * Tailwind shell; ECharts options + `useFleetUtilization()` hook unchanged
+ * except text colors now resolve explicitly from the active theme mode so the
+ * chart reads correctly without depending on MUI's injected CSS variables.
  */
 export function FleetUtilizationPanel() {
   const { t } = useTranslation();
+  const { mode } = useThemeContext();
   const { data, isLoading } = useFleetUtilization();
+
+  const textColor = mode === 'dark' ? '#E1E6EA' : '#101828';
+  const subColor = mode === 'dark' ? '#9AA5B5' : '#667085';
 
   const donutOption = useMemo(() => {
     if (!data) return null;
@@ -76,7 +84,7 @@ export function FleetUtilizationPanel() {
             text: `${data.utilization}%`,
             fontSize: 22,
             fontWeight: 700,
-            fill: 'var(--mui-palette-text-primary)',
+            fill: textColor,
             textAlign: 'center',
           },
         },
@@ -87,13 +95,13 @@ export function FleetUtilizationPanel() {
           style: {
             text: t('dashboard.utilization.utilized'),
             fontSize: 10,
-            fill: 'var(--mui-palette-text-secondary)',
+            fill: subColor,
             textAlign: 'center',
           },
         },
       ],
     } as EChartsOption;
-  }, [data, t]);
+  }, [data, t, textColor, subColor]);
 
   const barOption = useMemo(() => {
     if (!data) return null;
@@ -140,29 +148,29 @@ export function FleetUtilizationPanel() {
             formatter: '{c}%',
             fontSize: 11,
             fontWeight: 600,
-            color: 'var(--mui-palette-text-secondary)',
+            color: subColor,
           },
         },
       ],
     } as EChartsOption;
-  }, [data, t]);
+  }, [data, t, subColor]);
 
   return (
     <WidgetCard titleKey="dashboard.widgets.utilization" icon={GaugeCircle} loading={isLoading}>
       {isLoading || !donutOption || !barOption ? (
-        <Skeleton variant="rounded" sx={{ width: '100%', height: 220 }} />
+        <div className="h-[220px] w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
       ) : (
-        <Stack direction={{ xs: 'column', sm: 'row' }} gap={2} alignItems="center">
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
           {/* Donut with centered headline % */}
-          <Box sx={{ width: 140, height: 140, flexShrink: 0 }}>
+          <div className="size-[140px] shrink-0">
             <EChart option={donutOption} height={140} />
-          </Box>
+          </div>
 
           {/* Horizontal bars */}
-          <Box sx={{ flex: 1, width: '100%', minWidth: 0, height: 140 }}>
+          <div className="h-[140px] min-w-0 w-full flex-1">
             <EChart option={barOption} height={140} />
-          </Box>
-        </Stack>
+          </div>
+        </div>
       )}
     </WidgetCard>
   );

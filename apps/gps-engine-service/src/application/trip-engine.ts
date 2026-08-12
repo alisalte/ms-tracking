@@ -128,7 +128,13 @@ export class TripEngine {
         (e): e is import('../domain/trip/trip-types.js').TripBoundaryEvent =>
           e.type === 'trip.started' || e.type === 'trip.ended',
       );
-      await this.persistEvents(tripBoundaries, idleOut.events, parkingOut.events, ehOut.flushed);
+      await this.persistEvents(
+        position,
+        tripBoundaries,
+        idleOut.events,
+        parkingOut.events,
+        ehOut.flushed,
+      );
 
       // Save updated FSM state + scalars (best-effort).
       await this.saveState(
@@ -193,6 +199,7 @@ export class TripEngine {
 
   /** Persist emitted events to the projection tables (best-effort). */
   private async persistEvents(
+    position: PositionEvent,
     tripEvents: readonly import('../domain/trip/trip-types.js').TripBoundaryEvent[],
     idleEvents: readonly import('../domain/trip/trip-types.js').IdleEvent[],
     parkingEvents: readonly import('../domain/trip/trip-types.js').ParkingEvent[],
@@ -209,7 +216,15 @@ export class TripEngine {
     for (const e of parkingEvents) {
       await this.deps.tripRepo.insertParkingPeriod(e);
     }
-    void engineHoursFlushed;
+    // Persist the flushed engine-hours window (was previously discarded).
+    if (engineHoursFlushed !== null && engineHoursFlushed > 0) {
+      await this.deps.tripRepo.insertEngineHours({
+        tenantId: position.tenantId,
+        vehicleId: position.vehicleId,
+        accumulatedSec: engineHoursFlushed,
+        at: position.capturedAt,
+      });
+    }
   }
 
   /** Save the updated FSM state + scalars to Redis. */

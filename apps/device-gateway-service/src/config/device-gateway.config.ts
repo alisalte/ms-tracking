@@ -50,6 +50,11 @@ export const deviceGatewayConfigSchema = baseConfigSchema.merge(
       .min(1)
       .default('postgres://fleetvision:fleetvision@localhost:5432/fleetvision'),
 
+    // --- JWT verification (same HS256 token issued by identity-service) ---
+    JWT_SECRET: z.string().min(32),
+    JWT_ISSUER: z.string().min(1).default('fleetvision'),
+    JWT_AUDIENCE: z.string().min(1).default('fleetvision-identity'),
+
     // --- Kafka producer (06 §13.2; non-fatal at boot) ---
     GATEWAY_KAFKA_BROKERS: z.string().min(1).default('localhost:9092'),
     GATEWAY_KAFKA_CLIENT_ID: z.string().min(1).default('device-gateway-service'),

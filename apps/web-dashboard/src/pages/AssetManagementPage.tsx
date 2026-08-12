@@ -26,10 +26,7 @@ import {
   useVehicles,
 } from '@/api/asset.api';
 import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
-import {
-  AssetFormDrawer,
-  type AssetRecord,
-} from '@/components/assets/AssetFormDrawer';
+import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
 import { DevicesTab } from '@/components/assets/DevicesTab';
 import { DriversTab } from '@/components/assets/DriversTab';
 import { GroupsTab } from '@/components/assets/GroupsTab';
@@ -37,12 +34,7 @@ import { VehiclesTab } from '@/components/assets/VehiclesTab';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { PageHeader } from '@/components/ui';
-import type {
-  DeviceStatus,
-  DeviceType,
-  DriverStatus,
-  VehicleStatus,
-} from '@/types/asset.types';
+import type { DeviceStatus, DeviceType, DriverStatus, VehicleStatus } from '@/types/asset.types';
 import type { VehicleType } from '@/types/fleet.types';
 import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { Plus } from 'lucide-react';
@@ -153,7 +145,12 @@ export function AssetManagementPage() {
         title={t('assets.title')}
         subtitle={t('assets.subtitle')}
         actions={
-          <Button variant="contained" size="small" startIcon={<Plus size={16} />} onClick={openCreate}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<Plus size={16} />}
+            onClick={openCreate}
+          >
             {t('common.add')} {t(`assets.tabs.${tab}`)}
           </Button>
         }
@@ -182,7 +179,9 @@ export function AssetManagementPage() {
       </Tabs>
 
       {/* Active tab */}
-      <Box sx={{ flex: 1, minHeight: 0, border: '1px solid', borderColor: 'divider', borderTop: 0 }}>
+      <Box
+        sx={{ flex: 1, minHeight: 0, border: '1px solid', borderColor: 'divider', borderTop: 0 }}
+      >
         {tab === 'vehicles' && (
           <VehiclesTab
             vehicles={vehicles.data ?? []}

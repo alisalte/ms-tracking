@@ -23,6 +23,8 @@ const CATEGORY_META: Record<AttentionCategory, { icon: LucideIcon; color: string
  * UI_UX_Design.md §1.4: blends maintenance (DTCs), behavior, AI, and
  * device-health signals into a single prioritized queue. Each row shows a
  * category icon, vehicle label, and a short summary.
+ *
+ * Tailwind surface; hook + category metadata unchanged.
  */
 export function VehiclesAttentionList() {
   const { t } = useTranslation();
@@ -37,81 +39,29 @@ export function VehiclesAttentionList() {
       empty={items.length === 0 && !isLoading}
       emptyKey="dashboard.empty.attention"
     >
-      <ul
-        style={{
-          listStyle: 'none',
-          margin: 0,
-          padding: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4,
-        }}
-      >
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {items.map((item) => {
           const meta = CATEGORY_META[item.category];
           const Icon = meta.icon;
           return (
             <li key={item.id}>
-              <Link
-                to="/vehicles"
-                style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
-              >
-                <span
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto 1fr auto',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '8px 4px',
-                    borderRadius: 6,
-                  }}
-                >
+              <Link to="/vehicles" className="block no-underline">
+                <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
                   <span
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 6,
-                      backgroundColor: `${meta.color}1A`,
-                      color: meta.color,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
+                    className="flex size-[30px] shrink-0 items-center justify-center rounded-md"
+                    style={{ backgroundColor: `${meta.color}1A`, color: meta.color }}
                   >
                     <Icon size={15} />
                   </span>
-                  <span style={{ minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: '0.8125rem',
-                        fontWeight: 600,
-                        color: 'var(--mui-palette-text-primary)',
-                      }}
-                    >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800 dark:text-white">
                       {item.vehicleLabel}
                     </span>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: '0.75rem',
-                        color: 'var(--mui-palette-text-secondary)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
+                    <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
                       {item.summary}
                     </span>
                   </span>
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      color: 'var(--mui-palette-text-secondary)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <span className="whitespace-nowrap text-[0.7rem] text-gray-500 dark:text-graydark-600">
                     {t(`dashboard.attention.${item.category}`)}
                   </span>
                 </span>

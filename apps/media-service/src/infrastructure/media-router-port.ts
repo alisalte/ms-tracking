@@ -10,7 +10,7 @@
  * This is the same provider-abstraction pattern used by the Map Engine
  * (MapProvider) and the Device Gateway (ProtocolAdapter).
  */
-import type { StreamMode, Quality } from '../domain/stream-session.js';
+import type { Quality, StreamMode } from '../domain/stream-session.js';
 
 /** A request to create a stream session on the router. */
 export interface CreateSessionRequest {
@@ -78,7 +78,7 @@ export class StubMediaRouter implements MediaRouter {
       `o=- ${Date.now()} 1 IN IP4 0.0.0.0`,
       's=FleetVision-Stub',
       't=0 0',
-      `m=video 9 UDP/TLS/RTP/SAVPF 96`,
+      'm=video 9 UDP/TLS/RTP/SAVPF 96',
       'a=rtpmap:96 H264/90000',
       `a=label:${req.channelId}`,
       'a=mid:0',

@@ -32,6 +32,15 @@ export class GeofenceService {
     return this.deps.repo.list(tenantId);
   }
 
+  /** Cursor-paginated list (keyset on created_at DESC, id). */
+  public async listPage(
+    tenantId: string,
+    limit: number,
+    cursor?: { createdAt: string; id: string },
+  ) {
+    return this.deps.repo.listPage(tenantId, limit, cursor);
+  }
+
   /** Which geofences contain this point? (PostGIS ST_Covers). */
   public async containsPoint(
     tenantId: string,

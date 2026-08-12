@@ -1,4 +1,3 @@
-import { Box, Card, CardActionArea, Skeleton, Stack, Typography } from '@mui/material';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +10,7 @@ interface StatCardProps {
   value: number;
   /** 7-point sparkline series (oldest → newest). */
   sparkline: number[];
-  /** Accent color token for the value + sparkline gradient (theme path or hex). */
+  /** Accent color token for the value + sparkline gradient (hex). */
   accent?: string;
   /** Signed delta vs the previous period — rendered as an arrow + colored chip. */
   delta?: number;
@@ -26,19 +25,19 @@ interface StatCardProps {
 /**
  * StatCard — reusable KPI tile (UI_UX_Design.md §0.5, §1.4).
  *
- * Top row of the Fleet Dashboard: an uppercase Limitless label, a big value, a
+ * Top row of the Fleet Dashboard: an uppercase label, a big value, a
  * delta-vs-yesterday chip, a 7-point sparkline, and an optional secondary line.
  * The whole tile is clickable to drill into the Map filtered to that status.
  *
- * v3 (Limitless): uppercase tracked label, weight-700 tabular value, near-flat
- * 3px card, color reserved for meaning (§0.1) — the delta chip turns green/red
- * by direction, the accent tints the value + sparkline.
+ * Tailwind surface; Recharts sparkline preserved. Color reserved for meaning
+ * (§0.1) — the delta chip turns green/red by direction, the accent tints the
+ * value + sparkline.
  */
 export function StatCard({
   titleKey,
   value,
   sparkline,
-  accent = 'primary.main',
+  accent = '#465FFB',
   delta,
   meta,
   onClick,
@@ -50,79 +49,73 @@ export function StatCard({
   const gradId = `statcard-grad-${titleKey.replace(/[^a-z0-9]/gi, '')}`;
 
   return (
-    <Card
-      sx={{
-        height: '100%',
-        position: 'relative',
-        overflow: 'hidden',
-        ...(onClick && { cursor: 'pointer' }),
-      }}
+    <div
+      className={[
+        'relative h-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm',
+        'dark:border-white/5 dark:bg-graydark-200',
+        onClick ? 'cursor-pointer transition-shadow hover:shadow-md' : '',
+      ].join(' ')}
     >
-      <CardActionArea
+      <button
+        type="button"
         onClick={onClick}
         disabled={!onClick}
-        sx={{ height: '100%', p: 2, alignItems: 'stretch', '&:hover': {} }}
+        className="flex h-full w-full flex-col gap-3 p-4 text-start disabled:cursor-default"
+        aria-label={t(titleKey)}
       >
-        <Stack direction="column" gap={0.75} sx={{ height: '100%' }}>
-          <Typography
-            variant="overline"
-            sx={{ lineHeight: 1.6667, color: 'text.secondary' }}
+        <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-graydark-600">
+          {t(titleKey)}
+        </span>
+
+        {loading ? (
+          <div className="h-9 w-3/5 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+        ) : (
+          <span
+            className="text-[1.6rem] font-bold leading-tight tabular-nums"
+            style={{ color: accent }}
           >
-            {t(titleKey)}
-          </Typography>
+            {value}
+          </span>
+        )}
 
+        {/* Secondary line: delta chip and/or meta */}
+        <div className="flex min-h-5 items-center gap-2">
           {loading ? (
-            <Skeleton variant="text" width="60%" height={36} />
+            <div className="h-4 w-14 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
           ) : (
-            <Typography
-              variant="h4"
-              component="div"
-              fontWeight={700}
-              sx={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, color: accent }}
-            >
-              {value}
-            </Typography>
+            <>
+              {delta !== undefined && <DeltaChip delta={delta} />}
+              {meta}
+            </>
           )}
+        </div>
 
-          {/* Secondary line: delta chip and/or meta */}
-          <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: 20 }}>
-            {loading ? (
-              <Skeleton variant="rounded" width={56} height={16} />
-            ) : (
-              <>
-                {delta !== undefined && <DeltaChip delta={delta} />}
-                {meta}
-              </>
-            )}
-          </Stack>
-
-          {/* Sparkline pinned to the bottom */}
-          {!loading && (
-            <Box sx={{ mt: 'auto', height: 30, width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={accent} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="v"
-                    stroke={accent}
-                    strokeWidth={1.75}
-                    fill={`url(#${gradId})`}
-                    isAnimationActive={false}
-                    dot={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </Box>
-          )}
-        </Stack>
-      </CardActionArea>
-    </Card>
+        {/* Sparkline pinned to the bottom */}
+        {!loading && (
+          <div className="mt-auto h-[30px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={accent} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={accent}
+                  strokeWidth={1.75}
+                  fill={`url(#${gradId})`}
+                  isAnimationActive={false}
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -131,34 +124,24 @@ function DeltaChip({ delta }: { delta: number }) {
   const { t } = useTranslation();
   if (delta === 0) {
     return (
-      <Stack direction="row" alignItems="center" gap={0.25}>
-        <Minus size={13} color="var(--mui-palette-text-secondary)" />
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
-          {t('dashboard.noChange')}
-        </Typography>
-      </Stack>
+      <span className="inline-flex items-center gap-1 text-gray-500 dark:text-graydark-600">
+        <Minus size={13} />
+        <span className="tabular-nums">{t('dashboard.noChange')}</span>
+      </span>
     );
   }
   const up = delta > 0;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   // For fleet metrics, "more active" is context-dependent; here we simply
   // encode direction (green up / red down) and let the label carry meaning.
-  const color = up ? 'success.main' : 'error.main';
+  const color = up ? '#12B76A' : '#F04438';
   return (
-    <Stack direction="row" alignItems="center" gap={0.25}>
-      <Icon size={13} color={`var(--mui-palette-${up ? 'success' : 'error'}-main)`} />
-      <Typography
-        variant="caption"
-        fontWeight={700}
-        sx={{ color, fontVariantNumeric: 'tabular-nums' }}
-      >
+    <span className="inline-flex items-center gap-1">
+      <Icon size={13} style={{ color }} />
+      <span className="text-xs font-bold tabular-nums" style={{ color }}>
         {up ? '+' : ''}
         {delta}
-      </Typography>
-    </Stack>
+      </span>
+    </span>
   );
 }

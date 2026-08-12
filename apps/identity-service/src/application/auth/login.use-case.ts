@@ -28,6 +28,7 @@ import type { TenantRepository } from '../../infrastructure/persistence/tenant.r
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
 import type { TokenService } from '../../infrastructure/services/token-service.js';
+import type { AuditManager } from '../audit/audit-manager.js';
 import { buildEventContext } from '../shared/context.js';
 
 export interface LoginInput {
@@ -68,6 +69,7 @@ export class LoginUseCase {
     private readonly sessions: SessionStore,
     private readonly rateLimiter: RateLimiterStore,
     private readonly config: LoginConfig,
+    private readonly audit: AuditManager,
   ) {}
 
   public async execute(input: LoginInput): Promise<LoginResult> {
@@ -83,6 +85,7 @@ export class LoginUseCase {
     const user = await this.users.findByEmail(input.tenantId, input.email);
     if (!user) {
       // No user — but still consume time to avoid an oracle.
+      await this.auditFailedLogin(input, null);
       throw new InvalidCredentialsError();
     }
 
@@ -92,6 +95,7 @@ export class LoginUseCase {
       throw new InvalidCredentialsError();
     }
     if (await this.rateLimiter.isLocked(user.id as string)) {
+      await this.auditFailedLogin(input, user.id as string, 'LOCKED');
       throw new AccountLockedError();
     }
 
@@ -110,6 +114,7 @@ export class LoginUseCase {
       if (locked) {
         await this.rateLimiter.setLockout(user.id as string, this.config.lockoutSeconds);
       }
+      await this.auditFailedLogin(input, user.id as string);
       throw new InvalidCredentialsError();
     }
 
@@ -152,6 +157,39 @@ export class LoginUseCase {
       this.config.refreshTtlSeconds,
     );
 
+    // Durable PG session mirror (iam.auth_sessions) — Redis is the hot path; this
+    // is the system of record for forensics. Status ACTIVE; revoked on logout.
+    await this.auth.createSession({
+      id: sessionId,
+      tenant_id: input.tenantId,
+      user_id: user.id as string,
+      status: 'ACTIVE',
+      auth_provider: 'LOCAL',
+      aal: 1,
+      ip_address: input.ipAddress,
+      user_agent: input.userAgent,
+      refresh_token_family_id: refreshFamilyId,
+      issued_at: new Date(now),
+      last_seen_at: new Date(now),
+      absolute_expires_at: new Date(now + this.config.refreshTtlSeconds * 1000),
+      revoked_reason: null,
+    });
+
+    // Audit successful login.
+    await this.audit.record({
+      tenantId: input.tenantId,
+      actorId: user.id as string,
+      actorType: 'USER',
+      action: 'auth.login',
+      resourceType: 'auth_session',
+      resourceId: sessionId,
+      permission: null,
+      outcome: 'SUCCESS',
+      requestId: input.correlationId ?? null,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+
     return {
       accessToken: issued.accessToken,
       refreshToken: issued.refreshToken,
@@ -164,6 +202,32 @@ export class LoginUseCase {
         roles: user.roles,
       },
     };
+  }
+
+  /** Record a failed login attempt without leaking whether the user exists. */
+  private async auditFailedLogin(
+    input: LoginInput,
+    userId: string | null,
+    reason?: string,
+  ): Promise<void> {
+    try {
+      await this.audit.record({
+        tenantId: input.tenantId,
+        actorId: userId,
+        actorType: 'USER',
+        action: 'auth.login.failed',
+        resourceType: 'auth_session',
+        resourceId: null,
+        permission: null,
+        outcome: 'DENIED',
+        requestId: input.correlationId ?? null,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+        after: reason ? { reason } : undefined,
+      });
+    } catch {
+      // Audit failure must not mask the auth failure (which throws after).
+    }
   }
 
   private claims(user: User, tenant: Tenant, sessionId: string) {

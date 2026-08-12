@@ -1,3 +1,11 @@
+import {
+  JwtAuthGuard,
+  type PageRequestDto,
+  ZodValidationPipe,
+  getPrincipal,
+  pageRequestSchema,
+} from '@fleetvision/auth';
+import { decodeCursor } from '@fleetvision/shared-kernel';
 /**
  * Location + Geofence REST API (08 §5).
  *
@@ -23,15 +31,23 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type { GeofenceService } from '../application/geofence-service.js';
 import type { PoiService } from '../application/poi-service.js';
 import type { ProviderRouter } from '../application/provider-router.js';
 import { parseBbox } from '../domain/geo-types.js';
+import {
+  type CreateGeofenceDto,
+  type CreatePoiDto,
+  createGeofenceSchema,
+  createPoiSchema,
+} from './map-engine.dto.js';
 import { GEOFENCE_SERVICE, POI_SERVICE, PROVIDER_ROUTER } from './tokens.js';
 
 @Controller()
+@UseGuards(JwtAuthGuard)
 export class LocationController {
   constructor(
     @Inject(PROVIDER_ROUTER) private readonly router: ProviderRouter,
@@ -69,24 +85,35 @@ export class LocationController {
   public async listPois(
     @Query('bbox') bbox?: string,
     @Query('category') category?: string,
+    @Query('limit') limit?: string,
     @Req() req?: Request,
   ) {
     if (!bbox) return [];
     const bb = parseBbox(bbox);
     if (!bb) throw new HttpException('Invalid bbox', HttpStatus.BAD_REQUEST);
-    return this.poiService.findInBbox(tenantOf(req), bb, category);
+    // limit is clamped to [1, MAX_PAGE_SIZE] in the repository; bbox queries are
+    // spatial and never return an unbounded result set (Phase 6).
+    return this.poiService.findInBbox(
+      tenantOf(req),
+      bb,
+      category,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   @Post('location/pois')
-  public async createPoi(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  public async createPoi(
+    @Body(new ZodValidationPipe(createPoiSchema)) body: CreatePoiDto,
+    @Req() req: Request,
+  ) {
     return this.poiService.create({
-      tenantId: tenantOf(req),
-      name: String(body.name ?? ''),
-      category: String(body.category ?? 'UNKNOWN'),
-      latitude: Number(body.latitude ?? 0),
-      longitude: Number(body.longitude ?? 0),
-      radiusM: body.radiusM ? Number(body.radiusM) : 50,
-      metadata: (body.metadata as Record<string, unknown>) ?? {},
+      tenantId: tenantOf(req as Request),
+      name: body.name,
+      category: body.category,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      radiusM: body.radiusM ?? 50,
+      metadata: body.metadata ?? {},
     });
   }
 
@@ -115,22 +142,35 @@ export class LocationController {
   // --- Geofences ---
 
   @Get('location/geofences')
-  public async listGeofences(@Req() req: Request) {
-    return this.geofenceService.list(tenantOf(req));
+  public async listGeofences(
+    @Query(new ZodValidationPipe(pageRequestSchema)) page: PageRequestDto,
+    @Req() req: Request,
+  ) {
+    const tenantId = tenantOf(req as Request);
+    const cursor = page.cursor
+      ? (() => {
+          const c = decodeCursor(page.cursor);
+          return { createdAt: c.value, id: c.id ?? '' };
+        })()
+      : undefined;
+    return this.geofenceService.listPage(tenantId, page.limit, cursor);
   }
 
   @Post('location/geofences')
-  public async createGeofence(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  public async createGeofence(
+    @Body(new ZodValidationPipe(createGeofenceSchema)) body: CreateGeofenceDto,
+    @Req() req: Request,
+  ) {
     return this.geofenceService.create({
-      tenantId: tenantOf(req),
-      name: String(body.name ?? ''),
-      type: (body.type as 'POLYGON' | 'CIRCLE' | 'CORRIDOR') ?? 'POLYGON',
-      boundaryGeoJson: body.boundary as { type: 'Polygon'; coordinates: number[][][] },
-      centerLat: body.centerLat ? Number(body.centerLat) : undefined,
-      centerLng: body.centerLng ? Number(body.centerLng) : undefined,
-      radiusM: body.radiusM ? Number(body.radiusM) : undefined,
-      alertOn: body.alertOn ? (body.alertOn as string[]) : undefined,
-      dwellSec: body.dwellSec ? Number(body.dwellSec) : undefined,
+      tenantId: tenantOf(req as Request),
+      name: body.name,
+      type: body.type,
+      boundaryGeoJson: body.boundary,
+      centerLat: body.centerLat,
+      centerLng: body.centerLng,
+      radiusM: body.radiusM,
+      alertOn: body.alertOn,
+      dwellSec: body.dwellSec,
     });
   }
 
@@ -161,11 +201,7 @@ export class LocationController {
   }
 }
 
+/** Derive the tenant id from the verified JWT principal (INV-I02). */
 function tenantOf(req?: Request): string {
-  const tid =
-    (req?.headers['tenant-id'] as string | undefined) ??
-    (req?.query['tenant-id'] as string | undefined);
-  if (!tid)
-    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
-  return tid;
+  return getPrincipal(req as Request).tenantId;
 }

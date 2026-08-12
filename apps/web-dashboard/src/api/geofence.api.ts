@@ -15,6 +15,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
+import { useCursorPagination } from '@/lib/use-cursor-pagination';
+import type { Page } from '@/types/api.types';
 import type { CreateGeofencePayload, Geofence, GeofenceType } from '@/types/geofence.types';
 import { apiDelete, apiGet, apiPost } from './client';
 
@@ -46,6 +48,27 @@ async function fetchGeofences(): Promise<Geofence[]> {
 /** List all geofences. */
 export function useGeofences() {
   return useQuery({ queryKey: geofenceKeys.list(), queryFn: fetchGeofences });
+}
+
+/**
+ * Cursor-paginated geofences list (real backend: GET /location/geofences?limit=&cursor=).
+ * Falls back to empty on network error in dev.
+ */
+export function useGeofencesPage() {
+  return useCursorPagination<Geofence>(geofenceKeys.list(), async (cursor) => {
+    if (!shouldUseMock()) {
+      try {
+        return await apiGet<Page<Geofence>>('/location/geofences', {
+          limit: 25,
+          ...(cursor ? { cursor } : {}),
+        });
+      } catch {
+        return { data: [], nextCursor: null };
+      }
+    }
+    // Mock mode: return all mock geofences as a single page.
+    return resolveMock({ data: [], nextCursor: null });
+  });
 }
 
 /** Create a geofence → POST /location/geofences. */

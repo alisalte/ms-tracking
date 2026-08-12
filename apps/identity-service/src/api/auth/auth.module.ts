@@ -1,6 +1,6 @@
 import { REDIS_TOKEN } from '@fleetvision/cache-redis';
 import type { Redis } from '@fleetvision/cache-redis';
-import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
+import { KNEX_TOKEN, PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import type { Knex } from '@fleetvision/persistence-knex';
 import { Module } from '@nestjs/common';
 /**
@@ -12,6 +12,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import {
   AssignRoleUseCase,
+  AuditManager,
   CreateApiKeyUseCase,
   CreateUserUseCase,
   LoginUseCase,
@@ -19,6 +20,7 @@ import {
   ProvisionTenantUseCase,
   RefreshTokenUseCase,
   RevokeApiKeyUseCase,
+  TenantLifecycleUseCase,
   UpdateUserUseCase,
 } from '../../application/index.js';
 import type { IdentityConfig } from '../../config/identity.config.js';
@@ -74,12 +76,13 @@ export class AuthModule {
         // Repositories (constructed from the global knex/redis tokens).
         {
           provide: UserRepository,
-          inject: [KNEX_TOKEN],
-          useFactory: (knex: Knex) => new UserRepository(knex),
+          inject: [KNEX_TOKEN, PLATFORM_KNEX_TOKEN],
+          useFactory: (knex: Knex, platformKnex: Knex) => new UserRepository(knex, platformKnex),
         },
         {
           provide: TenantRepository,
-          inject: [KNEX_TOKEN],
+          // Platform client only — tenants is the documented RLS exception.
+          inject: [PLATFORM_KNEX_TOKEN],
           useFactory: (knex: Knex) => new TenantRepository(knex),
         },
         {
@@ -94,13 +97,18 @@ export class AuthModule {
         },
         {
           provide: AuthRepository,
-          inject: [KNEX_TOKEN],
-          useFactory: (knex: Knex) => new AuthRepository(knex),
+          inject: [KNEX_TOKEN, PLATFORM_KNEX_TOKEN],
+          useFactory: (knex: Knex, platformKnex: Knex) => new AuthRepository(knex, platformKnex),
         },
         {
           provide: AuditRepository,
-          inject: [KNEX_TOKEN],
+          inject: [PLATFORM_KNEX_TOKEN],
           useFactory: (knex: Knex) => new AuditRepository(knex),
+        },
+        {
+          provide: AuditManager,
+          inject: [PLATFORM_KNEX_TOKEN, AuditRepository],
+          useFactory: (knex: Knex, audit: AuditRepository) => new AuditManager(knex, audit),
         },
         // Cache stores.
         {
@@ -169,6 +177,7 @@ export class AuthModule {
             TokenService,
             SessionStore,
             RateLimiterStore,
+            AuditManager,
           ],
           useFactory: (
             u: UserRepository,
@@ -178,15 +187,26 @@ export class AuthModule {
             tk: TokenService,
             s: SessionStore,
             r: RateLimiterStore,
+            audit: AuditManager,
           ) =>
-            new LoginUseCase(u, t, a, h, tk, s, r, {
-              accessTtlSeconds: accessTtl,
-              refreshTtlSeconds: refreshTtl,
-              maxAttempts: config.LOGIN_MAX_ATTEMPTS,
-              lockoutSeconds: config.LOGIN_LOCKOUT_SECONDS,
-              rateLimitPerIp: 10,
-              rateLimitPerUser: 5,
-            }),
+            new LoginUseCase(
+              u,
+              t,
+              a,
+              h,
+              tk,
+              s,
+              r,
+              {
+                accessTtlSeconds: accessTtl,
+                refreshTtlSeconds: refreshTtl,
+                maxAttempts: config.LOGIN_MAX_ATTEMPTS,
+                lockoutSeconds: config.LOGIN_LOCKOUT_SECONDS,
+                rateLimitPerIp: 10,
+                rateLimitPerUser: 5,
+              },
+              audit,
+            ),
         },
         {
           provide: RefreshTokenUseCase,
@@ -201,45 +221,58 @@ export class AuthModule {
         },
         {
           provide: LogoutUseCase,
-          inject: [AuthRepository, SessionStore, RevocationStore],
-          useFactory: (a: AuthRepository, s: SessionStore, rv: RevocationStore) =>
-            new LogoutUseCase(a, s, rv),
+          inject: [AuthRepository, SessionStore, RevocationStore, AuditManager],
+          useFactory: (
+            a: AuthRepository,
+            s: SessionStore,
+            rv: RevocationStore,
+            audit: AuditManager,
+          ) => new LogoutUseCase(a, s, rv, audit),
         },
         {
           provide: CreateUserUseCase,
-          inject: [UserRepository, PasswordHasher],
-          useFactory: (u: UserRepository, h: PasswordHasher) =>
-            new CreateUserUseCase(u, h, { minLength: config.PASSWORD_MIN_LENGTH }),
+          inject: [UserRepository, PasswordHasher, AuditManager],
+          useFactory: (u: UserRepository, h: PasswordHasher, audit: AuditManager) =>
+            new CreateUserUseCase(u, h, { minLength: config.PASSWORD_MIN_LENGTH }, audit),
         },
         {
           provide: UpdateUserUseCase,
-          inject: [UserRepository],
-          useFactory: (u: UserRepository) => new UpdateUserUseCase(u),
+          inject: [UserRepository, AuditManager],
+          useFactory: (u: UserRepository, audit: AuditManager) => new UpdateUserUseCase(u, audit),
         },
         {
           provide: AssignRoleUseCase,
-          inject: [UserRepository],
-          useFactory: (u: UserRepository) => new AssignRoleUseCase(u),
+          inject: [UserRepository, AuditManager],
+          useFactory: (u: UserRepository, audit: AuditManager) => new AssignRoleUseCase(u, audit),
         },
         {
           provide: CreateApiKeyUseCase,
-          inject: [ApiKeyRepository, PasswordHasher],
-          useFactory: (a: ApiKeyRepository, h: PasswordHasher) => new CreateApiKeyUseCase(a, h),
+          inject: [ApiKeyRepository, PasswordHasher, AuditManager],
+          useFactory: (a: ApiKeyRepository, h: PasswordHasher, audit: AuditManager) =>
+            new CreateApiKeyUseCase(a, h, audit),
         },
         {
           provide: RevokeApiKeyUseCase,
-          inject: [ApiKeyRepository],
-          useFactory: (a: ApiKeyRepository) => new RevokeApiKeyUseCase(a),
+          inject: [ApiKeyRepository, AuditManager],
+          useFactory: (a: ApiKeyRepository, audit: AuditManager) =>
+            new RevokeApiKeyUseCase(a, audit),
         },
         {
           provide: ProvisionTenantUseCase,
-          inject: [TenantRepository, RoleRepository, UserRepository, PasswordHasher],
+          inject: [TenantRepository, RoleRepository, UserRepository, PasswordHasher, AuditManager],
           useFactory: (
             t: TenantRepository,
             r: RoleRepository,
             u: UserRepository,
             h: PasswordHasher,
-          ) => new ProvisionTenantUseCase(t, r, u, h),
+            audit: AuditManager,
+          ) => new ProvisionTenantUseCase(t, r, u, h, audit),
+        },
+        {
+          provide: TenantLifecycleUseCase,
+          inject: [TenantRepository, AuditManager],
+          useFactory: (t: TenantRepository, audit: AuditManager) =>
+            new TenantLifecycleUseCase(t, audit),
         },
         // Bootstrap seed.
         {

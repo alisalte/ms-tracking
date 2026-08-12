@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import type { RevocationStore, SessionStore } from '../../infrastructure/cache/session-store.js';
 import type { AuthRepository } from '../../infrastructure/persistence/auth.repository.js';
+import type { AuditManager } from '../audit/audit-manager.js';
 import { buildEventContext } from '../shared/context.js';
 
 export interface LogoutInput {
@@ -24,6 +25,7 @@ export class LogoutUseCase {
     private readonly auth: AuthRepository,
     private readonly sessions: SessionStore,
     private readonly revocation: RevocationStore,
+    private readonly audit: AuditManager,
   ) {}
 
   public async execute(input: LogoutInput): Promise<void> {
@@ -41,5 +43,20 @@ export class LogoutUseCase {
     }
     // Kill the current access token immediately.
     await this.revocation.revokeToken(input.accessJti, input.accessTtlRemainingSeconds);
+
+    // Audit the logout (single or all-sessions).
+    await this.audit.record({
+      tenantId: input.tenantId,
+      actorId: input.userId,
+      actorType: 'USER',
+      action: input.all ? 'auth.logout_all' : 'auth.logout',
+      resourceType: 'auth_session',
+      resourceId: input.sessionId,
+      permission: null,
+      outcome: 'SUCCESS',
+      requestId: input.correlationId ?? null,
+      ipAddress: null,
+      userAgent: null,
+    });
   }
 }

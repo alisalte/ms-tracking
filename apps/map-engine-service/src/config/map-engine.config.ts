@@ -16,6 +16,11 @@ export const mapEngineConfigSchema = baseConfigSchema.merge(
     /** Redis connection URL (three-tier geo cache). */
     REDISURL: z.string().min(1),
 
+    // --- JWT verification (same HS256 token issued by identity-service) ---
+    JWT_SECRET: z.string().min(32),
+    JWT_ISSUER: z.string().min(1).default('fleetvision'),
+    JWT_AUDIENCE: z.string().min(1).default('fleetvision-identity'),
+
     // --- Provider selection (08 §2.3) ---
     /** Default provider when no region/tenant pin applies: 'local' | 'mapbox'. */
     MAP_DEFAULT_PROVIDER: z.string().default('local'),

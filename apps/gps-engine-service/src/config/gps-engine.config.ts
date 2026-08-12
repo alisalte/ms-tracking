@@ -20,6 +20,14 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(
     /** Redis connection URL (last-position cache + device-status cache + WS adapter). */
     REDISURL: z.string().min(1),
 
+    // --- JWT verification (same HS256 token issued by identity-service) ---
+    /** HMAC signing secret — must match identity-service JWT_SECRET. */
+    JWT_SECRET: z.string().min(32),
+    /** Expected issuer claim (must match identity-service JWT_ISSUER). */
+    JWT_ISSUER: z.string().min(1).default('fleetvision'),
+    /** Expected audience claim (must match identity-service JWT_AUDIENCE). */
+    JWT_AUDIENCE: z.string().min(1).default('fleetvision-identity'),
+
     // --- Kafka (position consumer + session-lifecycle consumer) ---
     /** Comma-separated broker list, e.g. `localhost:9092`. */
     GPS_KAFKA_BROKERS: z.string().min(1).default('localhost:9092'),
@@ -37,6 +45,12 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(
     GPS_WS_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
     /** Enable/disable the WebSocket broadcaster (graceful disable for headless testing). */
     GPS_WS_ENABLED: z.coerce.boolean().default(true),
+    /**
+     * CORS origin(s) for the WS server. '*' for dev; production sets this to the
+     * dashboard origin (comma-separated list is split by the gateway). The WS
+     * server also requires a valid JWT on the handshake.
+     */
+    GPS_WS_CORS_ORIGIN: z.string().default('*'),
 
     // --- Position quality + freshness (07 §3.3, §3.4) ---
     /**

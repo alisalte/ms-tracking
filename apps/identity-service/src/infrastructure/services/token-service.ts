@@ -21,6 +21,8 @@ export interface AccessTokenClaims {
   readonly aal: number;
   readonly session_id: string;
   readonly auth_time: number;
+  /** Expiry (Unix seconds) — added by jsonwebtoken at sign time. */
+  readonly exp: number;
 }
 
 export interface TokenServiceConfig {
@@ -49,7 +51,10 @@ export class TokenService {
   ) {}
 
   /** Issue an access + refresh token pair for an authenticated principal. */
-  public async issuePair(claims: AccessTokenClaims, sessionId: string): Promise<IssuedTokens> {
+  public async issuePair(
+    claims: Omit<AccessTokenClaims, 'exp'>,
+    sessionId: string,
+  ): Promise<IssuedTokens> {
     const now = Date.now();
     const accessJti = randomUUID();
     const accessExpiresAt = new Date(now + this.config.accessTtlSeconds * 1000);

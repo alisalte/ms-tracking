@@ -1,9 +1,10 @@
-import { Box, Skeleton } from '@mui/material';
-import { BarChart3 } from 'lucide-react';
 import type { EChartsOption } from 'echarts';
+import { BarChart3 } from 'lucide-react';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useTrips } from '@/api/fleet.api';
+import { useThemeContext } from '@/theme/ThemeRegistry';
 import { primary, status } from '@/theme/palette';
 
 import { EChart } from './EChart';
@@ -16,13 +17,19 @@ const TOP_N = 6;
  * FleetPerformanceChart — top vehicles by distance driven (ECharts).
  *
  * Aggregates completed/in-progress trip distance per vehicle from the trips
- * feed and ranks the top N as a rounded horizontal bar chart. Uses a blue
- * gradient matching the brand primary so it reads as "performance/positive".
+ * feed and ranks the top N as a rounded horizontal bar chart. Uses a brand
+ * gradient matching the indigo primary so it reads as "performance/positive".
  * Y-axis categories are reversed so the highest performer sits at the top.
+ *
+ * Tailwind shell; aggregation logic + `useTrips()` hook unchanged.
  */
 export function FleetPerformanceChart() {
+  const { t: _t } = useTranslation();
+  const { mode } = useThemeContext();
   const { data, isLoading } = useTrips();
   const trips = data ?? [];
+
+  const labelColor = mode === 'dark' ? '#9AA5B5' : '#667085';
 
   const option = useMemo(() => {
     // Aggregate distance by vehicle label.
@@ -59,7 +66,7 @@ export function FleetPerformanceChart() {
             value: r.km,
             itemStyle: {
               borderRadius: 6,
-              // Highlight the #1 in the success green, others in the brand blue.
+              // Highlight the #1 in the success green, others in the brand indigo.
               color:
                 i === ranked.length - 1
                   ? {
@@ -93,12 +100,12 @@ export function FleetPerformanceChart() {
             formatter: '{c} km',
             fontSize: 11,
             fontWeight: 600,
-            color: 'var(--mui-palette-text-secondary)',
+            color: labelColor,
           },
         },
       ],
     } as EChartsOption;
-  }, [trips]);
+  }, [trips, labelColor]);
 
   return (
     <WidgetCard
@@ -108,13 +115,13 @@ export function FleetPerformanceChart() {
       empty={trips.length === 0 && !isLoading}
       emptyKey="dashboard.empty.performance"
     >
-      <Box sx={{ width: '100%', height: 220 }}>
+      <div className="h-[220px] w-full">
         {isLoading ? (
-          <Skeleton variant="rounded" sx={{ width: '100%', height: '100%' }} />
+          <div className="h-full w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
         ) : (
           <EChart option={option} height={220} />
         )}
-      </Box>
+      </div>
     </WidgetCard>
   );
 }
