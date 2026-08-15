@@ -18,12 +18,10 @@ import { TerminusModule } from '@nestjs/terminus';
 import { HealthController } from './health.controller.js';
 import { KnexPingIndicator } from './knex-ping.indicator.js';
 import { RedisPingIndicator } from './redis-ping.indicator.js';
+import { EXTRA_READINESS_INDICATORS, type ReadinessIndicator } from './health.tokens.js';
 
-/** A terminus health-check function (`() => HealthIndicatorResult`). */
-export type ReadinessIndicator = () => Promise<import('@nestjs/terminus').HealthIndicatorResult>;
-
-/** DI token for service-provided extra readiness indicators (§35). */
-export const EXTRA_READINESS_INDICATORS = 'HEALTH_EXTRA_READINESS_INDICATORS';
+export { EXTRA_READINESS_INDICATORS };
+export type { ReadinessIndicator };
 
 export interface HealthModuleOptions {
   /**

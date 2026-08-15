@@ -29,21 +29,24 @@
  */
 const PREDICATE = "tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid";
 
+// NOTE: iam.role_permissions (pure join keyed by role_id) and iam.refresh_tokens
+// (scoped via family_id → iam.refresh_token_families) are intentionally absent —
+// neither has a tenant_id column in the schema, so a tenant_id predicate cannot
+// apply. Listing them made the migration fail on every real run (latent bug
+// surfaced by the Sprint E identity rebuild).
 const TABLES = [
   'iam.users',
   'iam.password_history',
   'iam.roles',
-  'iam.role_permissions',
   'iam.user_roles',
   'iam.organizations',
   'iam.api_keys',
   'iam.refresh_token_families',
-  'iam.refresh_tokens',
   'iam.auth_sessions',
   'audit.audit_entries',
 ];
 
-exports.up = async function up(knex) {
+export async function up(knex) {
   for (const qualified of TABLES) {
     const [schema, table] = qualified.split('.');
     await knex.raw(`DROP POLICY IF EXISTS "${table}_tenant_isolation" ON "${schema}"."${table}"`);
@@ -51,9 +54,9 @@ exports.up = async function up(knex) {
       `CREATE POLICY "${table}_tenant_isolation" ON "${schema}"."${table}" USING (${PREDICATE}) WITH CHECK (${PREDICATE})`,
     );
   }
-};
+}
 
-exports.down = async function down(knex) {
+export async function down(knex) {
   // Restore the permissive MVP stub.
   for (const qualified of TABLES) {
     const [schema, table] = qualified.split('.');

@@ -15,6 +15,9 @@ export const queryKeys = {
     mapVehicles: () => [...queryKeys.fleet.all, 'mapVehicles'] as const,
     weather: () => [...queryKeys.fleet.all, 'weather'] as const,
     vehicleDetail: (id: string) => [...queryKeys.fleet.all, 'vehicle', id] as const,
+    // Sprint E — real gps-engine bootstrap sources.
+    deviceStatuses: () => [...queryKeys.fleet.all, 'deviceStatuses'] as const,
+    latestPositions: () => [...queryKeys.fleet.all, 'latestPositions'] as const,
   },
   trips: {
     all: ['trips'] as const,

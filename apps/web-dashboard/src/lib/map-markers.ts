@@ -6,11 +6,32 @@
  * inline SVG data-URLs (no external assets) colored from the semantic palette
  * (UI_UX_Design.md §0.2 mapAccents).
  */
-import { mapAccents } from '@/theme/palette';
-import type { MapVehicle } from '@/types/fleet.types';
+import { mapAccents, neutral } from '@/theme/palette';
+import type { MapVehicle, VehiclePresence } from '@/types/fleet.types';
 
-/** Status → high-saturation map accent (UI_UX_Design.md §0.2 mapAccents). */
-export function vehicleColor(v: Pick<MapVehicle, 'state'>): string {
+/**
+ * Presence → map accent (§18). UNKNOWN renders as an offline-ish gray
+ * (slightly lighter so the legend can distinguish the two).
+ */
+export const PRESENCE_COLORS: Record<VehiclePresence, string> = {
+  ONLINE: mapAccents.vehicleActive,
+  STALE: mapAccents.vehicleIdle,
+  OFFLINE: mapAccents.vehicleOffline,
+  UNKNOWN: neutral[300],
+};
+
+/**
+ * Status → high-saturation map accent (UI_UX_Design.md §0.2 mapAccents).
+ *
+ * When a real connection state is present (Sprint E), presence tints the
+ * marker: OFFLINE/UNKNOWN → gray, STALE → amber; only ONLINE falls through to
+ * the movement state colors (driving cyan / idle yellow / overspeed rose).
+ */
+export function vehicleColor(
+  v: Pick<MapVehicle, 'state'> & Partial<Pick<MapVehicle, 'presence'>>,
+): string {
+  if (v.presence === 'OFFLINE' || v.presence === 'UNKNOWN') return PRESENCE_COLORS[v.presence];
+  if (v.presence === 'STALE') return PRESENCE_COLORS.STALE;
   if (v.state === 'overspeed') return mapAccents.vehicleOverspeed;
   if (v.state === 'driving') return mapAccents.vehicleActive;
   if (v.state === 'idle') return mapAccents.vehicleIdle;

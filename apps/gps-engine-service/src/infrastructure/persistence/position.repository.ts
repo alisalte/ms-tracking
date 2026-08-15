@@ -88,6 +88,24 @@ export class PositionRepository {
     return row ? toLatest(row) : null;
   }
 
+  /**
+   * Latest position PER VEHICLE for a whole tenant (Sprint E §12/§21) — one
+   * DISTINCT ON query instead of N per-vehicle lookups, so the live map can
+   * bootstrap in a single request. Bounded by `limit` (caller clamps).
+   */
+  public async findLatestForTenant(tenantId: string, limit = 500): Promise<LatestPosition[]> {
+    const rows = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .select('*')
+      .distinctOn('vehicle_id')
+      .orderBy('vehicle_id', 'desc')
+      .orderBy('captured_at', 'desc')
+      .limit(limit);
+    return rows.map((r) => toLatest(r));
+  }
+
   /** Range query for position history (REST endpoint). */
   public async findRange(
     tenantId: string,

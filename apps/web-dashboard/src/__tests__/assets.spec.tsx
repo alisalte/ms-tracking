@@ -3,16 +3,197 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
-import { mockDevices, mockDrivers, mockGroups, mockVehicles } from '@/mock/asset-data';
+import type { Device, Fleet, Vehicle } from '@/types/asset.types';
+import type { User } from '@/types/auth.types';
 import { AssetManagementPage } from '@/pages/AssetManagementPage';
 
 import { i18n } from '@/i18n';
 
+/**
+ * Sprint E — the Asset hub runs against the REAL fleet-management contracts
+ * (fleets / vehicles / devices). The api module is mocked wholesale with
+ * fixtures shaped EXACTLY like the backend records (uppercase lifecycle
+ * enums, imei/protocol device registry, vehicleId binding).
+ */
+const fx = vi.hoisted(() => {
+  const TS = '2026-01-01T00:00:00Z';
+  const fleets: Fleet[] = [
+    {
+      id: 'fleet-1',
+      tenantId: 'tenant-1',
+      name: 'North Fleet',
+      code: 'NORTH',
+      description: 'Northern operations',
+      status: 'ACTIVE',
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+    {
+      id: 'fleet-2',
+      tenantId: 'tenant-1',
+      name: 'South Fleet',
+      code: 'SOUTH',
+      description: null,
+      status: 'ARCHIVED',
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+  ];
+  const vehicles: Vehicle[] = [
+    {
+      id: 'veh-1',
+      tenantId: 'tenant-1',
+      fleetId: 'fleet-1',
+      name: 'Truck One',
+      code: 'V001',
+      plate: 'ABC-123',
+      vin: 'WP0ZZZ99ZTS392124',
+      status: 'ACTIVE',
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+    {
+      id: 'veh-2',
+      tenantId: 'tenant-1',
+      fleetId: 'fleet-1',
+      name: 'Truck Two',
+      code: 'V002',
+      plate: null,
+      vin: null,
+      status: 'ARCHIVED',
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+    {
+      id: 'veh-3',
+      tenantId: 'tenant-1',
+      fleetId: 'fleet-2',
+      name: 'Van Three',
+      code: 'V003',
+      plate: 'XYZ-789',
+      vin: null,
+      status: 'ACTIVE',
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+  ];
+  const devices: Device[] = [
+    {
+      id: 'dev-1',
+      tenantId: 'tenant-1',
+      // 15-digit, Luhn-valid (the backend validates both).
+      imei: '490154203237518',
+      serialNumber: 'SN-1001',
+      manufacturer: 'Teltonika',
+      model: 'FMB920',
+      protocol: 'gt06',
+      status: 'ACTIVE',
+      vehicleId: 'veh-1',
+      lastSeenAt: new Date().toISOString(),
+      connectedAt: null,
+      disconnectedAt: null,
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+    {
+      id: 'dev-2',
+      tenantId: 'tenant-1',
+      imei: '490154203237526',
+      serialNumber: 'SN-1002',
+      manufacturer: 'Huabao',
+      model: 'HB-T808',
+      protocol: 'jt808',
+      status: 'UNPAIRED',
+      vehicleId: null,
+      lastSeenAt: null,
+      connectedAt: null,
+      disconnectedAt: null,
+      version: 1,
+      createdAt: TS,
+      updatedAt: TS,
+    },
+  ];
+  return { fleets, vehicles, devices };
+});
+
+vi.mock('@/api/asset.api', () => {
+  const ok = (data: unknown) => ({
+    data,
+    isLoading: false,
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  const mutation = () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(() => Promise.resolve({})),
+    isPending: false,
+    reset: vi.fn(),
+  });
+  return {
+    useFleets: () => ok(fx.fleets),
+    useFleetDetail: (id: string | null) =>
+      ok(id ? fx.fleets.find((f) => f.id === id) : undefined),
+    useVehicles: () => ok(fx.vehicles),
+    useVehicleDetail: (id: string | null) =>
+      ok(id ? fx.vehicles.find((v) => v.id === id) : undefined),
+    useDevices: () => ok(fx.devices),
+    useDeviceDetail: (id: string | null) =>
+      ok(id ? fx.devices.find((d) => d.id === id) : undefined),
+    useVehicleDevices: (vehicleId: string | null) =>
+      ok(
+        (vehicleId ? fx.devices.filter((d) => d.vehicleId === vehicleId) : []).map((d) => ({
+          deviceId: d.id,
+          imei: d.imei,
+          manufacturer: d.manufacturer,
+          model: d.model,
+          protocol: d.protocol,
+          deviceStatus: d.status,
+          role: 'TRACKER',
+          isPrimary: true,
+          boundAt: d.createdAt,
+        })),
+      ),
+    useCreateFleet: mutation,
+    useUpdateFleet: mutation,
+    useArchiveFleet: mutation,
+    useCreateVehicle: mutation,
+    useUpdateVehicle: mutation,
+    useArchiveVehicle: mutation,
+    useDeleteVehicle: mutation,
+    useCreateDevice: mutation,
+    useUpdateDevice: mutation,
+    useDecommissionDevice: mutation,
+    useDeleteDevice: mutation,
+    useBindDeviceToVehicle: mutation,
+    useUnbindDeviceFromVehicle: mutation,
+  };
+});
+
 function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
+}
+
+function setUser(permissions: readonly string[]) {
+  const user = {
+    id: 'user-1',
+    email: 'op@example.com',
+    tenantId: 'tenant-1',
+    roles: ['operator'],
+    permissions,
+  } as User;
+  useAuthStore.setState({ user });
 }
 
 function renderAssets(initialEntry = '/assets') {
@@ -41,93 +222,127 @@ function renderAssets(initialEntry = '/assets') {
 describe('AssetManagementPage', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
+    // Full wildcard permissions so the permission-gated CRUD actions render.
+    setUser(['*']);
   });
 
-  it('renders the title + 4 tabs with counts', async () => {
+  it('renders the title + 3 real-registry tabs (no drivers/groups)', async () => {
     renderAssets();
     expect(await screen.findByText('Asset Management')).toBeInTheDocument();
-    // All four tab labels are present.
-    for (const tab of ['Vehicles', 'Drivers', 'Devices', 'Groups']) {
-      expect(screen.getByText(new RegExp(`^${tab}$`))).toBeInTheDocument();
+    for (const tab of ['Fleets', 'Vehicles', 'Devices']) {
+      expect(screen.getByRole('tab', { name: new RegExp(`^${tab}`) })).toBeInTheDocument();
     }
+    // The mock-era domains are gone entirely.
+    expect(screen.queryByRole('tab', { name: /Drivers/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Groups/ })).not.toBeInTheDocument();
   });
 
-  it('renders vehicle rows from mock data (default tab)', async () => {
+  it('renders vehicle rows with the real fields (default tab)', async () => {
     renderAssets();
-    // Wait for the vehicles query to resolve and render a license plate.
+    // Vehicle identity is name/code (not make/model) + resolved fleet name
+    // (both fleet-1 vehicles render "North Fleet" in the fleet column).
     await waitFor(() => {
-      expect(screen.getByText(mockVehicles[0].licensePlate)).toBeInTheDocument();
+      expect(screen.getByText('Truck One')).toBeInTheDocument();
+      expect(screen.getByText('V001')).toBeInTheDocument();
+      expect(screen.getAllByText('North Fleet').length).toBeGreaterThan(0);
+      expect(screen.getByText('WP0ZZZ99ZTS392124')).toBeInTheDocument();
     });
+    // The archived vehicle shows its lifecycle badge.
+    expect(screen.getByText('Archived')).toBeInTheDocument();
   });
 
-  it('filters vehicles by status', async () => {
+  it('filters vehicles by lifecycle status', async () => {
     renderAssets();
-    await waitFor(() => expect(screen.getByText(mockVehicles[0].licensePlate)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
 
-    // Open the status filter (the first Select) and pick "Maintenance".
+    // The status filter is the second combobox (fleet filter is first).
     const selects = screen.getAllByRole('combobox');
-    fireEvent.mouseDown(selects[0]);
-    fireEvent.click(screen.getByRole('option', { name: 'Maintenance' }));
+    fireEvent.mouseDown(selects[1]);
+    fireEvent.click(screen.getByRole('option', { name: 'Archived' }));
 
-    // After filtering, only maintenance vehicles remain. An active vehicle's
-    // plate disappears (the mock has a mix of statuses).
-    const active = mockVehicles.find((v) => v.status === 'active');
     await waitFor(() => {
-      if (active) expect(screen.queryByText(active.licensePlate)).not.toBeInTheDocument();
+      expect(screen.queryByText('Truck One')).not.toBeInTheDocument();
     });
+    expect(screen.getByText('Truck Two')).toBeInTheDocument();
   });
 
-  it('opens the vehicle detail drawer when a row is clicked', async () => {
+  it('opens the vehicle detail drawer with its bound devices', async () => {
     renderAssets();
-    await waitFor(() => expect(screen.getByText(mockVehicles[0].licensePlate)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(mockVehicles[0].licensePlate));
+    fireEvent.click(screen.getByText('Truck One'));
 
-    // The drawer renders the VIN label.
+    // The drawer opens (row + drawer both show the vehicle name) and the
+    // DEVICES section lists the bound device's IMEI.
     await waitFor(() => {
-      expect(screen.getByText('VIN')).toBeInTheDocument();
+      expect(screen.getAllByText('Truck One').length).toBeGreaterThan(1);
+      expect(screen.getByText('490154203237518')).toBeInTheDocument();
     });
   });
 
-  it('switches to the drivers tab and renders driver rows', async () => {
-    renderAssets();
-    await screen.findByText('Asset Management');
-
-    fireEvent.click(screen.getByRole('tab', { name: /Drivers/ }));
-    await waitFor(() => {
-      // The first driver's name appears once the query resolves.
-      const d = mockDrivers[0];
-      expect(screen.getByText(new RegExp(`${d.firstName}`))).toBeInTheDocument();
-    });
-  });
-
-  it('switches to the devices tab and renders device rows with health', async () => {
+  it('switches to the devices tab and renders the registry columns', async () => {
     renderAssets();
     await screen.findByText('Asset Management');
 
-    fireEvent.click(screen.getByRole('tab', { name: /Devices/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Devices/ }));
     await waitFor(() => {
-      expect(screen.getByText(mockDevices[0].serialNumber)).toBeInTheDocument();
+      expect(screen.getByText('490154203237518')).toBeInTheDocument();
+      expect(screen.getByText('490154203237526')).toBeInTheDocument();
     });
+    // Protocol badge + lifecycle status.
+    expect(screen.getByText('GT06')).toBeInTheDocument();
+    expect(screen.getByText('JT/T 808')).toBeInTheDocument();
+    expect(screen.getByText('Unpaired')).toBeInTheDocument();
+    // Never-seen unbound device → relative "never"; bound one shows a vehicle.
+    expect(screen.getByText('never')).toBeInTheDocument();
+    expect(screen.getByText('Truck One')).toBeInTheDocument();
   });
 
-  it('switches to the groups tab and renders group cards', async () => {
+  it('switches to the fleets tab and renders fleet rows', async () => {
     renderAssets();
     await screen.findByText('Asset Management');
 
-    fireEvent.click(screen.getByRole('tab', { name: /Groups/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Fleets/ }));
     await waitFor(() => {
-      expect(screen.getByText(mockGroups[0].name)).toBeInTheDocument();
+      expect(screen.getByText('North Fleet')).toBeInTheDocument();
+      expect(screen.getByText('NORTH')).toBeInTheDocument();
+    });
+    expect(screen.getByText('South Fleet')).toBeInTheDocument();
+  });
+
+  it('renders the devices tab when navigated with ?tab=devices', async () => {
+    renderAssets('/assets?tab=devices');
+    await waitFor(() => {
+      expect(screen.getByText('490154203237518')).toBeInTheDocument();
     });
   });
 
-  it('renders the vehicles tab when navigated with ?tab=vehicles', async () => {
-    renderAssets('/assets?tab=vehicles');
-    await waitFor(() => expect(screen.getByText(mockVehicles[0].licensePlate)).toBeInTheDocument());
+  it('confirms archiving with archive wording (soft delete)', async () => {
+    renderAssets();
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
+
+    // Open the first row's action menu and pick "Archive".
+    fireEvent.click(screen.getAllByRole('button', { name: 'Actions' })[0]);
+    fireEvent.click(screen.getByText('Archive'));
+
+    // The confirm dialog uses ARCHIVE semantics, not "delete".
+    await waitFor(() => {
+      expect(screen.getByText('Archive Truck One?')).toBeInTheDocument();
+    });
   });
 
-  it('uses mock data covering the vehicle lifecycle statuses', () => {
-    const statuses = new Set(mockVehicles.map((v) => v.status));
-    expect(statuses.size).toBeGreaterThan(1);
+  it('hides the add/write actions without the write permission', async () => {
+    setUser(['fleet.read']);
+    renderAssets();
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
+
+    // vehicle.write missing → no "+ Add Vehicles" on the vehicles tab.
+    expect(screen.queryByText('Add Vehicles')).not.toBeInTheDocument();
+
+    // Granting the permission re-renders the gated action.
+    setUser(['*']);
+    await waitFor(() => {
+      expect(screen.getByText('Add Vehicles')).toBeInTheDocument();
+    });
   });
 });

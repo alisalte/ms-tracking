@@ -205,7 +205,8 @@ function buildMockAlarms(): Alarm[] {
       detail: text.detail,
       sourceEvents,
       linkedClipId: type === 'collision' || type === 'camera' ? `clip-${v.id}-${i}` : undefined,
-      linkedTripId: v.tripId,
+      // No trips API yet — never fabricate a linked trip id (Sprint E §22).
+      linkedTripId: undefined,
     });
   }
 

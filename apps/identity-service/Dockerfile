@@ -14,14 +14,26 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
 # Copy workspace manifests first for deterministic, cached dependency install.
+# EVERY workspace member's manifest must be present before `pnpm install
+# --frozen-lockfile` — the lockfile's importers cover all apps + packages, and a
+# missing member makes pnpm prune that subtree's node_modules (surfaced by the
+# Sprint E rebuild: packages/auth built without @nestjs/common).
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json tsconfig.json biome.json .npmrc ./
+COPY apps/device-gateway-service/package.json ./apps/device-gateway-service/
+COPY apps/fleet-management-service/package.json ./apps/fleet-management-service/
+COPY apps/fleet-service/package.json ./apps/fleet-service/
+COPY apps/gps-engine-service/package.json ./apps/gps-engine-service/
 COPY apps/identity-service/package.json ./apps/identity-service/
+COPY apps/map-engine-service/package.json ./apps/map-engine-service/
+COPY apps/media-service/package.json ./apps/media-service/
+COPY apps/notification-service/package.json ./apps/notification-service/
 COPY packages/shared-kernel/package.json ./packages/shared-kernel/
 COPY packages/config/package.json ./packages/config/
 COPY packages/observability/package.json ./packages/observability/
 COPY packages/persistence-knex/package.json ./packages/persistence-knex/
 COPY packages/cache-redis/package.json ./packages/cache-redis/
 COPY packages/health/package.json ./packages/health/
+COPY packages/auth/package.json ./packages/auth/
 COPY packages/web/package.json ./packages/web/
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts

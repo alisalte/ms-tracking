@@ -39,8 +39,51 @@ export interface MapVehicle {
   ignitionOn?: boolean;
   /** ISO 8601 timestamp of the last position fix. */
   updatedAt?: string;
-  /** Current trip id, if assigned. */
-  tripId?: string;
+  /** Optional marker additions (Sprint E — from real gps-engine data). */
+  deviceId?: string;
+  /** Real connection state from gps-engine's device_status projection. */
+  presence?: VehiclePresence;
+  /** Backend-provided last-seen (ISO) — never fabricated client-side. */
+  lastSeenAt?: string;
+}
+
+// ── Sprint E: REAL gps-engine wire types (live tracking bootstrap) ───────────
+
+/** Device connection state (gps-engine tracking.device_status). */
+export type DeviceConnectionState = 'ONLINE' | 'OFFLINE' | 'STALE';
+
+/**
+ * Vehicle presence shown in the UI (§18): the three real backend states plus
+ * UNKNOWN = "no status record" (device never connected / not bound).
+ */
+export type VehiclePresence = DeviceConnectionState | 'UNKNOWN';
+
+/** A device's connection status row (GET /tracking/devices/status). */
+export interface DeviceConnection {
+  deviceId: string;
+  tenantId: string;
+  state: DeviceConnectionState;
+  protocolId: string | null;
+  reason: string | null;
+  lastSeenAt: string;
+}
+
+/** Latest position row (GET /positions/latest, GET /positions/:id/latest). */
+export interface LatestPosition {
+  vehicleId: string;
+  tenantId: string;
+  latitude: number;
+  longitude: number;
+  speedKph: number;
+  headingDeg: number;
+  altitudeM: number | null;
+  ignitionOn: boolean | null;
+  /** Device event time (§22 — never overwritten by server time). */
+  capturedAt: string;
+  /** Gateway ingestion time. */
+  ingestedAt: string;
+  /** Numeric quality code: 0 REJECTED, 1 VALID, 2 STALE, 3 LOW_ACCURACY, 4 SUSPECT_JUMP. */
+  quality: number;
 }
 
 /** Recent event row in the device popup drawer (UI_UX_Design.md §2.5). */
@@ -68,30 +111,20 @@ export interface VehicleDetail extends MapVehicle {
   events: VehicleEvent[];
 }
 
-/** KPI summary — the top stat-card row (UI_UX_Design.md §1.3). */
+/**
+ * KPI summary — the top stat-card row (Sprint E §21: REAL backend data).
+ * Registry counts come from fleet-management GET /summary; the online/offline/
+ * stale split is gps-engine's device connection projection. `unknown` covers
+ * vehicles with no device status record (unbound / never connected).
+ */
 export interface FleetStats {
-  totalActive: number;
-  driving: number;
-  idle: number;
+  totalVehicles: number;
+  online: number;
   offline: number;
-  alerts: number;
-  criticalAlerts: number;
-  /** Delta vs yesterday, per metric (signed percentage points or count). */
-  deltas: {
-    totalActive: number;
-    driving: number;
-    idle: number;
-    offline: number;
-    alerts: number;
-  };
-  /** 7-point sparkline (oldest → newest) per card. */
-  sparklines: {
-    totalActive: number[];
-    driving: number[];
-    idle: number[];
-    offline: number[];
-    alerts: number[];
-  };
+  stale: number;
+  unknown: number;
+  totalFleets: number;
+  totalDevices: number;
 }
 
 /** One hour bucket of the 24h fleet-activity chart. */

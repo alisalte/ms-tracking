@@ -35,6 +35,12 @@ export interface DeviceRecord {
   readonly model: string | null;
   readonly protocol: Protocol;
   readonly status: DeviceStatus;
+  /**
+   * The vehicle this device is currently bound to (Sprint E) — null when
+   * unbound. Populated on LIST reads via a scalar subquery (no join, so the
+   * cursor pagination's `created_at` ordering stays unambiguous).
+   */
+  readonly vehicleId: string | null;
   readonly lastSeenAt: Date | null;
   readonly connectedAt: Date | null;
   readonly disconnectedAt: Date | null;

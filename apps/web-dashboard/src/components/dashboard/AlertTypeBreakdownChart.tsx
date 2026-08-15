@@ -4,7 +4,8 @@ import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveAlerts } from '@/api/fleet.api';
+import { useActiveAlarms } from '@/api/fleet.api';
+import { ErrorState } from '@/components/common/ErrorState';
 import { status } from '@/theme/palette';
 import type { AlertType } from '@/types/fleet.types';
 
@@ -27,14 +28,14 @@ const TYPE_ORDER: AlertType[] = ['overspeed', 'fcw', 'idle', 'geofence', 'dtc', 
 /**
  * AlertTypeBreakdownChart — rose/donut of active alerts grouped by type.
  *
- * Counts the live active-alert feed by category and renders an ECharts rose
- * chart (radius scaled to count) so the dominant alert types stand out at a
- * glance. Colors map to the semantic status tokens so the panel reads
- * consistently with the Active Alerts feed and the KPI cards.
+ * Counts the REAL active-alarm feed (notification-service, via useActiveAlarms)
+ * by category and renders an ECharts rose chart (radius scaled to count) so the
+ * dominant alert types stand out at a glance. When the notification service is
+ * unreachable the chart shows an honest error state (§22) — no fabricated data.
  */
 export function AlertTypeBreakdownChart() {
   const { t } = useTranslation();
-  const { data, isLoading } = useActiveAlerts();
+  const { data, isLoading, isError, error, refetch } = useActiveAlarms();
   const alerts = data ?? [];
 
   const option = useMemo(() => {
@@ -82,12 +83,14 @@ export function AlertTypeBreakdownChart() {
     <WidgetCard
       titleKey="dashboard.widgets.alertTypes"
       icon={PieChartIcon}
-      loading={isLoading}
-      empty={alerts.length === 0 && !isLoading}
+      loading={isLoading && !isError}
+      empty={alerts.length === 0 && !isLoading && !isError}
       emptyKey="dashboard.empty.alerts"
     >
       <Box sx={{ width: '100%', height: 220 }}>
-        {isLoading ? (
+        {isError ? (
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        ) : isLoading ? (
           <Skeleton variant="rounded" sx={{ width: '100%', height: '100%' }} />
         ) : (
           <EChart option={option} height={220} />

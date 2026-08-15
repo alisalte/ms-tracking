@@ -35,6 +35,8 @@ export interface DeviceRow {
   readonly model: string | null;
   readonly protocol: Protocol;
   readonly status: DeviceStatus;
+  /** Present on LIST reads only (bound vehicle subquery); undefined elsewhere. */
+  readonly vehicle_id?: string | null;
   readonly last_seen_at: Date | null;
   readonly connected_at: Date | null;
   readonly disconnected_at: Date | null;
@@ -116,7 +118,32 @@ export class DeviceRepository {
         [filters.vehicleId],
       );
     }
+    // Sprint E: include the bound vehicle on every list row so the dashboard can
+    // join device connection state (gps-engine) onto vehicles WITHOUT a second
+    // request per device. Scalar subquery (not a join): fleet.vehicle_devices
+    // shares column names (tenant_id/created_at/…) with devices, and a join
+    // would make listPaginated's unqualified `created_at` ORDER BY ambiguous.
+    base.select(
+      'devices.*',
+      this.knex.raw(
+        '(SELECT vd.vehicle_id FROM fleet.vehicle_devices vd WHERE vd.device_id = devices.id LIMIT 1) as vehicle_id',
+      ),
+    );
     return listPaginated<DeviceRow>(base, opts);
+  }
+
+  /** Row counts per lifecycle status for the tenant (Sprint E dashboard summary). */
+  public async countByStatus(tenantId: string): Promise<Record<string, number>> {
+    const rows = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .select('status')
+      .count<{ status: string; count: string | number }[]>({ count: '*' })
+      .groupBy('status');
+    const out: Record<string, number> = {};
+    for (const row of rows) out[row.status] = Number(row.count);
+    return out;
   }
 
   // --- Cross-tenant resolution (device-gateway) -----------------------------
@@ -275,6 +302,7 @@ export class DeviceRepository {
       model: row.model,
       protocol: row.protocol,
       status: row.status,
+      vehicleId: row.vehicle_id ?? null,
       lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at) : null,
       connectedAt: row.connected_at ? new Date(row.connected_at) : null,
       disconnectedAt: row.disconnected_at ? new Date(row.disconnected_at) : null,

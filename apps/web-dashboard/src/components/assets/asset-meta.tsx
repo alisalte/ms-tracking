@@ -1,113 +1,59 @@
 /**
- * Asset visual helpers — single source of truth for the status→color/icon and
- * type→icon maps shared by the four asset tabs and detail drawers. Colors come
- * from the semantic palette (`theme/palette.ts` `status.*`) so the UI never
+ * Asset visual helpers — single source of truth for the status/protocol →
+ * color maps shared by the asset tabs and detail drawers. Colors come from
+ * the semantic palette (`theme/palette.ts` `status.*`) so the UI never
  * hardcodes hex values.
+ *
+ * Sprint E: maps mirror the REAL fleet-management enums —
+ * FleetStatus/VehicleStatus = ACTIVE|ARCHIVED, DeviceStatus lifecycle =
+ * ACTIVE|SUSPENDED|DECOMMISSIONED|UNPAIRED, DeviceProtocol = the gateway's
+ * ingest adapters. The mock-era make/model/fuelType/battery/signal helpers
+ * are gone (no such fields on the real records).
  */
-import {
-  Battery,
-  BatteryFull,
-  BatteryLow,
-  Cpu,
-  HardDrive,
-  type LucideIcon,
-  Smartphone,
-  Truck,
-} from 'lucide-react';
+import { Truck } from 'lucide-react';
 
 import { status as palette } from '@/theme/palette';
-import type {
-  DeviceStatus,
-  DeviceType,
-  DriverStatus,
-  GroupStatus,
-  VehicleStatus,
-} from '@/types/asset.types';
+import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
 
-/** Vehicle status → semantic color (Fleet-Management §2). */
+/** Fleet lifecycle status → semantic color (ACTIVE green / ARCHIVED slate). */
+export function fleetStatusColor(s: FleetStatus): string {
+  return s === 'ACTIVE' ? palette.green : palette.slate;
+}
+
+/** Vehicle lifecycle status → semantic color (ACTIVE green / ARCHIVED slate). */
 export function vehicleStatusColor(s: VehicleStatus): string {
-  switch (s) {
-    case 'active':
-      return palette.green;
-    case 'maintenance':
-      return palette.amber;
-    case 'inactive':
-      return palette.slate;
-    case 'decommissioned':
-    case 'sold':
-      return palette.red;
-    default:
-      return palette.slate;
-  }
+  return s === 'ACTIVE' ? palette.green : palette.slate;
 }
 
-/** Driver status → semantic color (Driver-Management §2). */
-export function driverStatusColor(s: DriverStatus): string {
-  switch (s) {
-    case 'active':
-      return palette.green;
-    case 'suspended':
-      return palette.red;
-    case 'terminated':
-      return palette.slate;
-    default:
-      return palette.amber;
-  }
-}
-
-/** Device status → semantic color (Telemetry §2). */
+/** Device REGISTRY lifecycle status → semantic color. */
 export function deviceStatusColor(s: DeviceStatus): string {
   switch (s) {
-    case 'active':
+    case 'ACTIVE':
       return palette.green;
-    case 'firmware_updating':
-      return palette.blue;
-    case 'provisioned':
+    case 'SUSPENDED':
       return palette.amber;
-    case 'faulted':
+    case 'DECOMMISSIONED':
       return palette.red;
+    case 'UNPAIRED':
+      return palette.blue;
     default:
       return palette.slate;
   }
 }
 
-/** Group status → semantic color (Fleet-Management §2 GroupStatus). */
-export function groupStatusColor(s: GroupStatus): string {
-  return s === 'active' ? palette.green : palette.slate;
-}
-
-/** Device hardware type → lucide icon (Telemetry §2 DeviceType). */
-export function deviceTypeIcon(t: DeviceType): LucideIcon {
-  switch (t) {
-    case 'obd2':
-      return Cpu;
-    case 'gps_tracker':
-      return Smartphone;
-    case 'dashcam':
-      return HardDrive;
+/** Ingest protocol → badge color (distinguishes the gateway adapters). */
+export function deviceProtocolColor(p: DeviceProtocol): string {
+  switch (p) {
+    case 'gt06':
+      return palette.blue;
+    case 'jt808':
+      return palette.purple;
+    case 'meitrack':
+      return palette.teal;
     default:
-      return Cpu;
+      return palette.slate;
   }
 }
 
-/** Battery level → lucide icon + color (device-health indicator). */
-export function batteryMeta(level: number | undefined): {
-  icon: LucideIcon;
-  color: string;
-} | null {
-  if (level === undefined) return null;
-  if (level > 60) return { icon: BatteryFull, color: palette.green };
-  if (level > 20) return { icon: Battery, color: palette.amber };
-  return { icon: BatteryLow, color: palette.red };
-}
-
-/** Signal strength (dBm) → color (device-health indicator). */
-export function signalColor(dbm: number | undefined): string {
-  if (dbm === undefined) return palette.slate;
-  if (dbm > -70) return palette.green;
-  if (dbm > -85) return palette.amber;
-  return palette.red;
-}
-
-/** Vehicle body-type icon (reused across map/dashboard/assets). */
+/** Vehicle body icon (reused across map/dashboard/assets). */
 export { Truck as VehicleIcon };

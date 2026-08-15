@@ -56,7 +56,7 @@ function mapStatus(status: string): AlarmStatus {
 // ── Fetchers ─────────────────────────────────────────────────────────────────
 
 /** GET /notification/alerts — real backend; mock fallback in dev. */
-async function fetchAlarms(): Promise<Alarm[]> {
+export async function fetchAlarms(): Promise<Alarm[]> {
   if (shouldUseMock()) return resolveMock(mockAlarms);
   return withMockFallback(
     async () => {

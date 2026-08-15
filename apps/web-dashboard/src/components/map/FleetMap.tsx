@@ -25,6 +25,12 @@ interface FleetMapProps {
   onDeselect?: () => void;
   /** When true, freeze live updates — markers stop syncing (UI_UX_Design.md §2.7). */
   paused?: boolean;
+  /**
+   * §17 selection sync: selecting a list row focuses the map. Each token change
+   * flies to the referenced vehicle (nonce bumped per request so re-selecting
+   * the same vehicle re-focuses).
+   */
+  focus?: { id: string; nonce: number } | null;
 }
 
 /** Freshness "age" of the last position fix, locale-aware. */
@@ -54,11 +60,16 @@ export function FleetMap({
   onSelect,
   onDeselect,
   paused = false,
+  focus = null,
 }: FleetMapProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const markersRef = useRef<MaplibreMarker[]>([]);
+
+  // The latest fleet for the focus effect (which must not re-run on data change).
+  const vehiclesRef = useRef(vehicles);
+  vehiclesRef.current = vehicles;
 
   // Keep the latest callbacks in refs so the map init effect stays mount-once
   // and the marker effect depends only on data (not on changing function refs).
@@ -192,6 +203,16 @@ export function FleetMap({
       map.off('moveend', onMove);
     };
   }, [vehicles, selectedId, paused, t]);
+
+  // §17 selection sync: a list-row selection flies the camera to the vehicle.
+  // Depends only on the focus token so live position deltas never re-trigger it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    const v = vehiclesRef.current.find((veh) => veh.id === focus.id);
+    if (!v || (v.lat === 0 && v.lng === 0)) return; // no fix yet — nothing to focus
+    map.flyTo({ center: [v.lng, v.lat], zoom: Math.max(map.getZoom(), 14) });
+  }, [focus]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }

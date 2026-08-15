@@ -1,24 +1,26 @@
 /**
  * Shared types for the Live Tracking map page.
  *
- * Co-located here so the page, list panel, and filters agree on the filter
+ * Colocated here so the page, list panel, and filters agree on the filter
  * state shape without importing each other.
  */
-import type { MapVehicle } from '@/types/fleet.types';
+import type { VehiclePresence } from '@/types/fleet.types';
 
-/** Status facets shown as filter chips + the legend. `'all'` = no filter. */
-export type StatusFilter = MapVehicle['state'] | 'overspeed' | 'all';
+/**
+ * Status facets shown as filter chips + the legend (§18/§20): the REAL device
+ * connection presence. `'all'` = no filter. A vehicle with no status record
+ * buckets as UNKNOWN.
+ */
+export type PresenceFilter = VehiclePresence | 'all';
 
-export const STATUS_FILTERS: StatusFilter[] = [
-  'all',
-  'driving',
-  'idle',
-  'overspeed',
-  'offline',
-  'stopped',
-];
+export const PRESENCE_FILTERS: PresenceFilter[] = ['all', 'ONLINE', 'OFFLINE', 'STALE', 'UNKNOWN'];
 
-/** Localized label key for a status filter value. */
-export function statusLabelKey(value: StatusFilter): string {
-  return value === 'all' ? 'map.filters.all' : `map.states.${value}`;
+/** Localized label key for a presence filter value. */
+export function presenceLabelKey(value: PresenceFilter): string {
+  return value === 'all' ? 'map.filters.all' : `map.presence.${value}`;
+}
+
+/** Resolve a vehicle's presence, defaulting missing status records to UNKNOWN. */
+export function presenceOf(v: { presence?: VehiclePresence }): VehiclePresence {
+  return v.presence ?? 'UNKNOWN';
 }

@@ -83,9 +83,10 @@
 > - **Observability**: Prometheus `/metrics` on gateway + gps-engine (bounded labels);
 >   Kafka readiness added to `/health/ready` (liveness stays dependency-free); graceful gateway
 >   shutdown (listeners → sessions → producer — TCP/UDP listeners were previously never closed).
-> - **Tests**: gateway 156 (was 124), gps-engine 114 incl. a **real-Kafka → real-Timescale →
->   real-WebSocket E2E**; the Sprint A/B integration suites that silently skipped now execute
->   (16 real-PG tests). typecheck/build/test/lint GREEN.
+> - **Tests**: gateway 160 (16 suites; was 124), gps-engine 122 (21 suites) incl. a
+>   **real-Kafka → real-Timescale → real-WebSocket E2E**; the Sprint A/B integration suites that
+>   silently skipped now execute (16 real-PG tests). typecheck/build/test/lint GREEN
+>   (re-verified 2026-08-15 after the checkall4-line merge).
 
 
 ## 0. TL;DR
@@ -95,14 +96,16 @@ end-to-end vertical (device ingest → Kafka → GPS processing → TimescaleDB 
 real authentication/IAM service and a polished (but **mock-backed**) React dashboard. The
 implemented slices are production-quality scaffolding with good tests. **However**, most of the
 platform's business breadth is **not started**: video is a stub, routing is an approximation,
-several data-integrity bugs exist in the trip engine, the dashboard is mock-fed for all business
-data, and ~9 of the 14 documented bounded contexts have no
+the dashboard is mock-fed for all business data, and ~5 of the 14 documented bounded contexts
+(maintenance, fuel, compliance/HOS, analytics, billing) have no
 service at all. *(Sprint C added the Fleet Management context + a persistent device registry; the
-mock dashboard Fleet pages remain future work.)*
+merged parallel line added `fleet-service` (driver + business-trip management) and
+`notification-service` (alarm engine); the mock dashboard Fleet pages remain future work.)*
 
 **Build/typecheck/tests/lint: ALL GREEN (verified 2026-08-15, Sprint D).**
-**Estimated overall completion: ~28 %** (foundation + telemetry vertical production-grade;
-breadth low). Sprint D hardened the telemetry vertical end-to-end — reliability (retry+DLQ,
+**Estimated overall completion: ~35 %** (foundation + telemetry vertical production-grade;
+four more bounded contexts gained real services with the Sprint C + parallel-line additions;
+breadth still low). Sprint D hardened the telemetry vertical end-to-end — reliability (retry+DLQ,
 duplicate-connection enforcement, restart recovery), idempotent projections, out-of-order
 policy, WS back-pressure, metrics + Kafka readiness, and a real-Kafka→Timescale→WebSocket E2E.
 
@@ -112,24 +115,28 @@ policy, WS back-pressure, metrics + Kafka readiness, and a real-Kafka→Timescal
 
 ```
 fleetvision/                         (pnpm workspace, packageManager pnpm@9.15.0, node >=22)
-├── apps/                            6 deployables
+├── apps/                            9 apps (8 backend services + web)
 │   ├── identity-service/            Auth + IAM + tenants + API keys (NestJS) — REAL
-│   ├── device-gateway-service/      Multi-protocol TCP/UDP ingest → Kafka (NestJS) — REAL core
-│   ├── gps-engine-service/          Kafka → Timescale → Redis → WS pipeline (NestJS) — REAL core
+│   ├── device-gateway-service/      Multi-protocol TCP/UDP ingest → Kafka (NestJS) — HARDENED
+│   ├── fleet-management-service/    Fleet/Vehicle/Device CRUD + persistent registry (Sprint C) — REAL
+│   ├── fleet-service/               Driver + business-trip management (parallel line) — REAL core
+│   ├── gps-engine-service/          Kafka → Timescale → Redis → WS pipeline (NestJS) — HARDENED
+│   ├── notification-service/        Alarm engine: Kafka → rules → WS (parallel line) — REAL core
 │   ├── map-engine-service/          PostGIS POI/geofence + routing (NestJS) — PARTIAL
 │   ├── media-service/               Video control-plane (NestJS) — STUB media path
 │   └── web-dashboard/               React 19 + Vite + MUI SPA — REAL UI, MOCK data
-├── packages/                        7 shared workspace libs (all foundational, all tested)
+├── packages/                        8 shared workspace libs (all foundational, all tested)
 │   ├── shared-kernel/   config/   observability/   persistence-knex/
-│   ├── cache-redis/    health/    web/
+│   ├── cache-redis/    health/    auth/    web/
 ├── infra/docker/                    docker-compose.yml (infra + identity + web), .env templates
 ├── docs/                            ~22 specs + 24 module docs + 4 ADRs (much is STALE Kotlin/K8s)
 ├── tools/generators/                service generator scaffolding (not exercised)
 └── .github/workflows/ci.yml         lint • typecheck • build • test
 ```
 
-**Composite TS graph** (`tsconfig.json`) references 7 packages + `identity-service` +
-`device-gateway-service` only. **gps-engine / map-engine / media-service are NOT in the root
+**Composite TS graph** (`tsconfig.json`) references 8 packages + `identity-service` +
+`device-gateway-service` + `fleet-management-service`. **gps-engine / fleet-service /
+notification / map-engine / media-service are NOT in the root
 `tsc -b` references** — they build independently via their own `tsc -b tsconfig.json`. They still
 typecheck/build fine, but are outside the root solution graph.
 
@@ -138,11 +145,14 @@ Per-app summary:
 | App | Tech | Responsibility | Build | Tests | Implementation | Integration |
 |---|---|---|---|---|---|---|
 | identity-service | NestJS 10 | Auth, IAM, RBAC, tenants, API keys | ✅ | 42 | COMPLETE (core) | Kafka outbox real |
-| device-gateway-service | NestJS + net | TCP/UDP ingest, GT06/JT808/Meitrack → Kafka | ✅ | 124 | PARTIAL (registry in-memory) | Kafka producer real |
-| gps-engine-service | NestJS + socket.io | Position pipeline, trip/idle/parking FSMs | ✅ | 58 | PARTIAL (data bugs) | Kafka consumer real |
+| device-gateway-service | NestJS + net | TCP/UDP ingest, GT06/JT808/Meitrack → Kafka | ✅ | 160 | HARDENED (persistent registry; Sprint D reliability) | Kafka producer real |
+| fleet-management-service | NestJS | Fleet/Vehicle/Device CRUD + persistent registry (Sprint C) | ✅ | 45 | COMPLETE (bounded scope) | Consumes session lifecycle; serves gateway registry |
+| fleet-service | NestJS | Driver + business-trip management (parallel line) | ✅ | 122 | COMPLETE (core, unreviewed breadth) | Builds on gps trip segmentation |
+| gps-engine-service | NestJS + socket.io | Position pipeline, trip/idle/parking FSMs | ✅ | 122 | HARDENED (Sprint A fixes + Sprint D reliability) | Kafka consumer real |
+| notification-service | NestJS | Alarm engine: Kafka → rules → occurrences → WS (parallel line) | ✅ | 40 | COMPLETE (core) | Kafka consumer real |
 | map-engine-service | NestJS + PostGIS | POI/geofence/cluster/replay, routing | ✅ | 26 | PARTIAL (routing≈, geocode broken) | PostGIS real |
 | media-service | NestJS + socket.io | Video channel + stream-session control-plane | ✅ | 58 | STUB (no real SFU/video) | Redis/PG real, media stub |
-| web-dashboard | React 19 + Vite | Full SPA fleet UI | ✅ | 107 | PARTIAL (UI complete, data MOCK) | Only auth is real |
+| web-dashboard | React 19 + Vite | Full SPA fleet UI | ✅ | 118 | PARTIAL (UI complete, data MOCK) | Only auth is real |
 
 ---
 
@@ -271,9 +281,10 @@ mechanics but **unauthenticated**.
 **Persistence (migration `20260103000000`):** only `telemetry.gateway_listeners` (protocol/port
 config, JSONB options). The gateway itself persists no devices or raw packets to PG.
 
-**Tests (10 suites, 124 cases — the highest in the repo):** gt06/jt808/meitrack decode,
+**Tests (16 suites, 160 cases — the highest in the repo):** gt06/jt808/meitrack decode,
 adapter-registry, auth-resolver, connection-pool, device-session, heartbeat, packet-dispatcher,
-session-manager. **Validate real binary decoding and pipeline behavior** — strong suite.
+session-manager, session-lifecycle-hardening, registry-resilience, admin-guard/audit + a real
+gateway E2E. **Validate real binary decoding and pipeline behavior** — strong suite.
 
 ---
 
@@ -435,7 +446,7 @@ unwrapping, typed error normalization. This is correctly wired against identity-
 MFA manage — each throws with the exact missing endpoint. `MaintenancePage` and `CommandCenterPage`
 are documented typed placeholders (no backend service exists).
 
-**Tests (14 files, 107 cases):** auth.api, auth.store, token.storage, validation, errors,
+**Tests (18 files, 118 cases):** auth.api, auth.store, token.storage, validation, errors,
 live-tracking, + page tests (dashboard, map, trips, reports, assets, admin, alarms, video-wall).
 jsdom; ECharts DOM-size warnings are benign. **Validate rendering/interactions against mock data,
 not real APIs.**
@@ -555,8 +566,8 @@ election). Not HA.
 
 **RabbitMQ — NOT USED in code.** No `amqp`/`rabbitmq` import anywhere. Pure infrastructure.
 
-**gRPC — NOT USED in code.** ADR-004 mandates gRPC for internal sync; the only "gRPC" reference
-(device registry) is an in-memory implementation behind a port. **DOCUMENTED_ONLY.**
+**gRPC — NOT USED in code.** ADR-004 mandates gRPC for internal sync; the device registry is
+served over HTTP (Sprint C `HttpDeviceRegistry`), not gRPC. **DOCUMENTED_ONLY.**
 
 **Internal eventing (gps-engine):** in-process `SignalBus` (EventEmitter) → WebSocket gateway.
 
@@ -591,14 +602,16 @@ in the frontend.
 | Suite | Files | Cases | Result |
 |---|---|---|---|
 | identity-service | 8 | 42 | ✅ pass |
-| device-gateway-service | 14 | 156 | ✅ pass (Sprint D: +32 reliability) |
-| gps-engine-service | 19 | 114 | ✅ pass (Sprint D: +56 incl. E2E/WS/DLQ; integration suites now EXECUTE — 16 real-PG tests that previously skipped) |
-| fleet-management-service | 5 | 45 | ✅ pass |
+| device-gateway-service | 16 | 160 | ✅ pass (Sprint D: +reliability, E2E device→Kafka) |
+| fleet-management-service | 5 | 45 | ✅ pass (incl. 2 real-PG integration suites) |
+| fleet-service (parallel line) | 21 | 122 | ✅ pass |
+| gps-engine-service | 21 | 122 | ✅ pass (Sprint D: incl. E2E/WS/DLQ; integration suites now EXECUTE — 16 real-PG tests that previously skipped) |
 | map-engine-service | 5 | 26 | ✅ pass |
 | media-service | 4 | 58 | ✅ pass |
-| packages (8 libs incl. auth) | ~10 | ~50 | ✅ pass |
-| web-dashboard (vitest) | 14 | 107 | ✅ pass |
-| **Total** | **~79** | **~548 backend + 107 web ≈ 655** | **all green** (2026-08-15) |
+| notification-service (parallel line) | 3 | 40 | ✅ pass |
+| packages (8 libs incl. auth) | 16 | 87 | ✅ pass |
+| web-dashboard (vitest) | 18 | 118 | ✅ pass |
+| **Total** | **~117** | **702 backend + 118 web ≈ 820** | **all green** (2026-08-15) |
 
 **Quality:** Tests **validate real behavior** in the strongest areas (binary protocol decoding,
 FSM transitions, refresh-token reuse detection, auth rate-limiting, pagination-cursor tamper
@@ -687,7 +700,7 @@ params). No obvious secrets committed beyond the documented dev placeholders.
 | DDD + Clean Architecture per service | ✅ Largely followed (`domain`/`application`/`infrastructure`/`api` layers, ports/adapters). |
 | CQRS + Event Sourcing | ❌ **Not implemented.** Simple CRUD repositories + insert/update projections. No command/query bus, no event store. (`trip_events` are projection rows, not an event-sourced aggregate.) |
 | Event-driven (Kafka) | ⚠️ **Partially.** Gateway→gps-engine telemetry pipeline is real. Most services are not event consumers. |
-| gRPC internal sync | ❌ **Not implemented** (in-memory registry behind a port). |
+| gRPC internal sync | ❌ **Not implemented** (registry served over HTTP since Sprint C). |
 | Hybrid multi-tenancy (3 tiers) | ⚠️ Single shared-schema + app-layer tenant_id + permissive RLS. No tier differentiation. |
 | Zero-trust (Keycloak/OPA/Vault/mTLS) | ❌ Self-issued HS256 JWT + in-process RBAC fallback. Keycloak/OPA/Vault/mTLS absent. |
 | Polyglot persistence (8 stores) | ❌ Lean PostgreSQL-only (ADR-022). Mongo/ClickHouse/ES/RabbitMQ unused. |
@@ -778,16 +791,17 @@ but the README's "Architecture at a Glance" overstates the implementation by a w
   CI, health, graceful shutdown).
 - **Sprint 2 (IAM/auth):** ✅ substantially complete (login/refresh/RBAC/API keys/tenants); ❌ MFA,
   password reset, audit writes, orgs incomplete.
-- **Sprint 3 (device gateway):** ✅ core complete (transport, protocols, dispatcher, Kafka); ⚠️
-  device registry in-memory, raw retention no-op.
-- **Sprint 7/8 (gps-engine):** ✅ pipeline + FSMs complete; ❌ trip-persistence bugs, engine-hours
-  unpersisted, no DLQ.
+- **Sprint 3 (device gateway):** ✅ core complete (transport, protocols, dispatcher, Kafka);
+  ✅ device registry now persistent via HTTP → fleet-management (Sprint C); ⚠️ raw retention
+  still no-op (gateway persists no raw packets by design).
+- **Sprint 7/8 (gps-engine):** ✅ pipeline + FSMs complete; ✅ trip-persistence bugs, engine-hours
+  persistence, and DLQ resolved (Sprint A + Sprint D).
 - **Sprint 9 (map-engine):** ⚠️ partial — PostGIS CRUD complete, routing/geocode/providers weak.
 - **Sprint 10 (media):** ⚠️ control-plane complete; ❌ actual video is a stub.
 - **Frontend:** ✅ UI breadth complete; ❌ business data is mock-only (real integration ≈ auth only).
 
 **Discrepancy:** code comments and `package.json` descriptions present services as more "delivered"
-than the integration reality (mocks, stubs, in-memory registry). The frontend is the clearest case:
+than the integration reality (mocks, stubs). The frontend is the clearest case:
 it looks complete but is a mock-backed demo shell.
 
 ---
@@ -891,7 +905,7 @@ integration. Applying this:
   strategy, signaling tokens, WebSocket signaling gateway, Redis session cache, health.
 - web-dashboard: full React 19 SPA — shell, routing, protected routes, i18n (en/fa + RTL), theming,
   **real auth client (login/refresh/logout with silent refresh)**, 19 pages, feedback components,
-  107 passing tests.
+  118 passing tests.
 - CI (lint/typecheck/build/test), Docker Compose lean stack, Postgres extensions, healthchecks.
 
 ---
@@ -900,10 +914,12 @@ integration. Applying this:
 
 - **identity breadth:** MFA (flag only), password reset/forgot/change (schema only), audit writes
   (repo unused), organizations (schema only), OPA (fallback only), user pagination, `/me` email.
-- **device-gateway:** device registry (in-memory), raw retention (no-op), command dispatch (none),
-  admin authz (none).
-- **gps-engine:** trip persistence (orphan trips + suspect SQL), engine-hours persistence, PTO
-  suppression (dead), stop.detected (dropped), Timescale policies, DLQ, WS authz.
+- **device-gateway:** raw retention (no-op by design — gateway persists no raw packets),
+  command dispatch (none — documented gap, Sprint D §31). *(Device registry resolved Sprint C;
+  admin authz resolved Sprint B.)*
+- **gps-engine:** *(all original gaps — trip persistence, engine-hours persistence, PTO
+  suppression, stop.detected, Timescale policies, DLQ, WS authz — RESOLVED in Sprints A/D; only
+  breadth items like replay APIs remain.)*
 - **map-engine:** routing/ETA/map-match (straight-line), forward geocode (0,0), external providers
   (none), heatmap (stub), layers (static).
 - **media-service:** actual video/SFU/RTSP/JT1078/recording/playback/HLS (stub/missing).
@@ -915,16 +931,17 @@ integration. Applying this:
 ## 20. NOT STARTED (no service / no code)
 
 Of the README's 14 bounded contexts, these have **no backing service at all**:
-- **Fleet / Asset / Vehicle management** (no vehicle/device CRUD service — the gateway's registry is
-  in-memory; frontend assets page is mock).
-- **Driver Management**
 - **Vehicle Maintenance** (frontend placeholder only)
 - **Fuel Management**
-- **Compliance & Safety (ELD/HOS)** (engine-hours isn't even persisted)
+- **Compliance & Safety (ELD/HOS)** (engine-hours ARE persisted since Sprint A, but no HOS
+  compliance module)
 - **Analytics & Reporting** (frontend reports page is mock)
-- **Notification & Alerting** (frontend types placeholder; alarms are mock)
 - **Billing & Tenant Management** (tenant provisioning exists in identity; no billing)
-- **Dedicated Trip service** (trip *detection* exists in gps-engine; no trip *management* service)
+
+*(Resolved since the original audit: Fleet/Asset/Vehicle/Device management —
+`fleet-management-service` + persistent registry, Sprint C; Driver Management and business-trip
+management — `fleet-service` (parallel line); Notification & Alerting / Alarm Engine —
+`notification-service` (parallel line).)*
 - **Dedicated Alarm engine** (alarms are produced to Kafka; no alarm-processing service consumes them)
 - **device-management-service** (referenced by gateway, not built)
 - **API Gateway** (Kong — not present; services are directly exposed, header-auth only)
@@ -1012,56 +1029,49 @@ NEXT EXECUTION PLAN
 NEXT ACTION:
 
 Task:
-  Fix the gps-engine trip-persistence data-integrity bugs (P0), then add the missing
-  TimescaleDB retention policy. These are the only currently-broken/risky pieces on the
-  real telemetry write path and they corrupt production data the moment live positions flow.
+  De-mock the web dashboard's live fleet pages (vehicles, assets, live tracking, trips)
+  against the NOW-PRODUCTION-GRADE backend APIs (fleet-management CRUD, gps-engine
+  positions/WS, fleet-service drivers/business-trips). The telemetry vertical was hardened
+  end-to-end in Sprints A–D, but the dashboard still renders mock data for every
+  non-auth page — the platform's real capability is invisible to users.
 
 Why:
-  typecheck/build/unit-tests are GREEN, which hides that the trip write path is unsound:
-   - completeTrip() emits UPDATE ... ORDER BY ... LIMIT 1, which PostgreSQL rejects
-     (no ORDER BY/LIMIT in UPDATE) — trip closes will fail or silently no-op.
-   - micro-trips discarded by the FSM never emit trip.ended, leaving ACTIVE rows orphaned.
-   - engine-hours are computed then discarded (void).
-   - the vehicle_positions hypertable has no retention/compression → unbounded growth.
-  None of this is caught by tests (no TripRepository / integration tests exist).
+  The original audit's P0 (gps-engine trip-persistence bugs, engine-hours, Timescale
+  retention/compression) was fully resolved by Sprint A: completeTrip now uses the
+  deterministic subquery, orphan ACTIVE rows are closed, engine_hours are persisted with
+  UNIQUE source_event_id, and compression (7d) + retention (180d) policies are live and
+  verified. Sprint D then hardened the whole telemetry vertical (retry+DLQ, idempotent
+  projections, duplicate-connection enforcement, WS back-pressure, metrics/readiness).
+  With the write path trustworthy, the highest-value next step is making the frontend
+  consume the real services it already has types for.
 
 Files (read first):
-  apps/gps-engine-service/src/infrastructure/persistence/trip.repository.ts        (completeTrip, lines 40-60)
-  apps/gps-engine-service/src/application/trip-engine.ts                            (persistEvents, line ~204, ~212)
-  apps/gps-engine-service/src/application/fsm/trip-fsm.ts                            (micro-trip discard, lines 203-205)
-  apps/gps-engine-service/src/infrastructure/database/migrations/20260806110000_create_tracking_trip_schema.js
-  apps/gps-engine-service/src/infrastructure/database/migrations/20260806100000_create_tracking_position_schema.js
-  apps/gps-engine-service/src/__tests__/trip-fsm.spec.ts                             (existing FSM tests to extend)
+  apps/web-dashboard/src/hooks/useRealtimeSocket.ts        (real WS auth already proven here)
+  apps/web-dashboard/src/types/command.types.ts            (documents missing command API)
+  apps/web-dashboard/src/pages/                            (Assets/Trips/Dashboard mock feeds)
+  apps/fleet-management-service/src/api/                   (CRUD endpoints to consume)
+  apps/gps-engine-service/src/api/positions.controller.ts  (latest-position + auth contract)
 
 Concrete tasks:
-  1. Rewrite TripRepository.completeTrip to use a CTE/subquery:
-       UPDATE tracking.trip_events SET ...
-       WHERE id = (SELECT id FROM tracking.trip_events
-                   WHERE vehicle_id=? AND tenant_id=? AND status='ACTIVE'
-                   ORDER BY started_at DESC LIMIT 1);
-  2. Resolve orphan ACTIVE trips: when a micro-trip is discarded, either delete the
-     just-inserted ACTIVE row or emit a trip.ended to close it.
-  3. Persist engine-hours: add a tracking.engine_hours table (or column) and write the
-     flushed window instead of `void engineHoursFlushed;`.
-  4. Add Timescale retention + compression to vehicle_positions
-     (select_add_compression_policy + add_retention_policy in the position migration).
-  5. Add integration tests (TripRepository against a real/testcontainers PG) covering
-     start→complete, micro-trip discard, and engine-hours flush.
+  1. Replace the assets/vehicles page mock store with fleet-management REST calls
+     (JWT via existing auth client; keep tenant scoping server-side).
+  2. Wire live tracking to the gps-engine Socket.IO stream (subscribe tenant/vehicle
+     rooms; honor coalescing semantics — render latest position).
+  3. Wire trips pages to gps-engine trip APIs + fleet-service business trips.
+  4. Keep mock fallback behind a feature flag for offline demo.
 
 Dependencies:
-  None. Self-contained within gps-engine-service. Does not require other services or infra
-  changes beyond applying the updated migrations.
+  None blocking — all backend APIs exist and are tested; auth client is real.
 
 Expected result:
-  - Trips close correctly and deterministically in PostgreSQL.
-  - No orphan ACTIVE rows; engine-hours durable; hypertable bounded by retention.
-  - New integration tests prove the write path; `pnpm test` stays green; `pnpm build` green.
+  - Dashboard renders REAL tenant data end-to-end; only auth was real before.
+  - No backend changes required; `pnpm test:web` stays green.
 
 Do not start (yet):
-  - Do NOT begin device-management-service, frontend de-mocking, or media SFU work before this —
-    those are P1 roadmap items and depend on the tracking data being trustworthy.
-  - Do NOT refactor the FSM thresholds or touch the Kafka consumer beyond the DLQ noted in TD12.
-  - Do NOT modify any other service in this step.
+  - Do NOT begin media SFU, reporting/analytics, CMMS/maintenance, fuel, or video work —
+    those are later roadmap items.
+  - Do NOT redesign the map engine in the same step (its routing/geocode repair is a
+    separate, self-contained task).
 ```
 
 ---
@@ -1072,22 +1082,25 @@ Do not start (yet):
 PROJECT HEALTH
 
 Services (apps):
-- Total:        6  (identity, device-gateway, gps-engine, map-engine, media-service, web-dashboard)
-- Complete:     1  (identity-service, core)
-- Partial:      4  (device-gateway, gps-engine, map-engine, media-service)
+- Total:        9  (identity, device-gateway, fleet-management, fleet-service, gps-engine,
+                notification, map-engine, media-service, web-dashboard)
+- Complete:     2  (identity-service core; fleet-management bounded scope)
+- Hardened:     2  (device-gateway, gps-engine — Sprints A–D telemetry vertical)
+- Real core:    2  (fleet-service, notification-service — parallel line, tested, breadth unreviewed)
+- Partial:      1  (map-engine)
 - Stub:         1  (media-service media path)
-- Broken:       0 services offline, but gps-engine trip-persistence is at-risk (P0)
-- Missing:      ~9 bounded contexts have NO service (fleet/asset, driver, maintenance, fuel,
-                compliance, analytics, notification, billing, alarm engine, device-management)
+- Broken:       0 services offline (map geocode returns 0,0 — degraded, not down)
+- Missing:      ~5 bounded contexts have NO service (maintenance, fuel, compliance/HOS,
+                analytics, billing)
 
-Shared packages: 7/7 COMPLETE (foundational)
+Shared packages: 8/8 COMPLETE (foundational)
 
 Features (sampled ~50 across domains):
 - Complete:    ~22
 - Partial:     ~14
 - Stub:        ~7
 - Mock (UI):   ~8 (every non-auth frontend page)
-- Broken:      2 (map geocode 0,0; gps trip-end SQL)
+- Broken:      1 (map geocode 0,0 — gps trip-end SQL fixed in Sprint A)
 - Missing:     ~16
 
 Frontend:
@@ -1103,9 +1116,9 @@ Backend APIs:
 - Stub/broken: ~6 endpoints (map heat/layers/geocode/route; media stream SDP)
 
 Tests:
-- Test files:  ~79 (65 backend suites + 14 frontend files)
-- Test cases:  ~655 (548 backend + 107 frontend)
-- Passing:     ~655  (verified 2026-08-15)
+- Test files:  ~117 (99 backend suites + 18 frontend files)
+- Test cases:  ~820 (702 backend + 118 frontend)
+- Passing:     ~820  (verified 2026-08-15)
 - Failing:     0
 - Integration/E2E: 22+ real-PG integration + 1 real-Kafka→Timescale→WS E2E (Sprint D;
                   graceful skip without Docker)

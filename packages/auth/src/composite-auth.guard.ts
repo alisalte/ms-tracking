@@ -24,7 +24,8 @@ import {
 } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: NestJS DI needs the Reflector class value at runtime.
 import { Reflector } from '@nestjs/core';
-import type { JwtService } from '@nestjs/jwt';
+// biome-ignore lint/style/useImportType: value import required — NestJS DI reads constructor param types via emitDecoratorMetadata; a type-only import erases JwtService to Function and breaks injection at boot (latent bug surfaced by the Sprint E E2E).
+import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { ApiKeyVerifier, VerifiedApiKey } from './api-key-verifier.js';
 import type { AuthenticatedContext } from './authenticated-context.js';

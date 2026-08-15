@@ -2,8 +2,9 @@ import { CurrentTenant, RequirePermissions } from '@fleetvision/auth';
 /**
  * Positions REST API (07 §12.5 replay; last-position cache→DB fallback §13.5).
  *
- *   GET /positions/:vehicleId/latest        — last known position (Redis → DB).
- *   GET /positions/:vehicleId?from=&to=      — position history (hypertable scan).
+ *   GET /positions/latest                 — latest position per vehicle for the tenant (Sprint E).
+ *   GET /positions/:vehicleId/latest      — last known position (Redis → DB).
+ *   GET /positions/:vehicleId?from=&to=   — position history (hypertable scan).
  *
  * Sprint B: authentication + `tracking.read` are enforced by the global guards.
  * The tenant is taken from the verified JWT (INV-I02) — never a client header.
@@ -19,6 +20,22 @@ export class PositionsController {
     @Inject(POSITION_CACHE) private readonly cache: RedisPositionCache,
     @Inject(POSITION_REPOSITORY) private readonly repo: PositionRepository,
   ) {}
+
+  /**
+   * Latest position PER VEHICLE for the caller's tenant (Sprint E live-map
+   * bootstrap). Declared BEFORE `:vehicleId` routes so the static segment wins.
+   * One bounded query — the frontend must not do N per-vehicle lookups (§21).
+   */
+  @Get('latest')
+  @RequirePermissions('tracking.read')
+  public async latestForTenant(
+    @CurrentTenant() tenantId: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? Number.parseInt(limit, 10) : 500;
+    const max = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 2000) : 500;
+    return this.repo.findLatestForTenant(tenantId, max);
+  }
 
   /** Latest position: Redis cache → TimescaleDB fallback (07 §13.5). */
   @Get(':vehicleId/latest')

@@ -9,6 +9,8 @@ import { TripReplayMap } from '@/components/trips/TripReplayMap';
 import { TripSummary } from '@/components/trips/TripSummary';
 import { TripTimeline } from '@/components/trips/TripTimeline';
 import { useTripPlayback } from '@/components/trips/useTripPlayback';
+import { EmptyState } from '@/components/ui';
+import { shouldUseMock } from '@/lib/mock-gate';
 import type { TripEvent } from '@/types/fleet.types';
 import {
   Box,
@@ -40,6 +42,11 @@ const EVENT_COLOR: Record<TripEvent['type'], string> = {
  * 2-column grid with the replay map (left) and speed graph (right), the
  * transport timeline (full width), and an events list. The shared playback
  * hook drives the map marker, the speed-graph playhead, and the timeline.
+ *
+ * REAL mode: the trips API does not exist yet, so `useTripDetail` resolves to
+ * null and this page shows its honest "not available yet" empty state (§22 —
+ * never fake data). In explicit dev/demo mock mode (`?useMock=true`) the
+ * deterministic fixtures load and the full replay UI works.
  */
 export function TripDetailPage() {
   const { t } = useTranslation();
@@ -67,12 +74,32 @@ export function TripDetailPage() {
 
   if (!trip) {
     return (
-      <Stack alignItems="center" gap={2} sx={{ py: 8 }}>
-        <Typography variant="h6">{t('trips.detail.notFound')}</Typography>
-        <Button component={Link} to="/trips" startIcon={<ArrowLeft size={16} />}>
-          {t('trips.detail.back')}
-        </Button>
-      </Stack>
+      <Box sx={{ py: 6 }}>
+        <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 1 }}>
+          <Button
+            component={Link}
+            to="/trips"
+            startIcon={<ArrowLeft size={16} />}
+            size="small"
+            sx={{ textTransform: 'none' }}
+          >
+            {t('trips.detail.back')}
+          </Button>
+        </Stack>
+        {shouldUseMock() ? (
+          <EmptyState
+            icon={MapPin}
+            title={t('trips.detail.notFound')}
+            description={t('trips.detail.notFoundHelp')}
+          />
+        ) : (
+          <EmptyState
+            icon={MapPin}
+            title={t('trips.empty.title')}
+            description={t('trips.empty.notAvailable')}
+          />
+        )}
+      </Box>
     );
   }
 

@@ -1,48 +1,58 @@
 /**
  * AssetManagementPage — the consolidated fleet-asset registry (`/assets`).
  *
- * Four tabs — Vehicles · Drivers · Devices · Groups — over the operational
- * asset entity models. Full CRUD: list/view/create/edit/delete + assignment
- * actions. The active tab + selection sync to the URL (`?tab=vehicles`). The
- * existing `/vehicles` and `/drivers` nav items redirect here.
+ * Three tabs — Fleets · Vehicles · Devices — over the REAL fleet-management
+ * contracts (Sprint E). Full CRUD: list/view/create/edit + soft-delete
+ * (fleets/vehicles = ARCHIVE, devices = DECOMMISSION). The active tab +
+ * selection sync to the URL (`?tab=vehicles`). Legacy `/fleets`, `/vehicles`
+ * and `/devices` routes redirect here.
  *
- * v3 (CRUD): an `+ Add` action opens the shared `AssetFormDrawer` in create
- * mode; per-row action menus in each tab open it in edit mode and trigger
- * delete via a confirm dialog. All mutations use the real hooks in
- * `asset.api.ts` (with mock fallback) — see docs/frontend-crud.md.
+ * Write actions (+ Add, edit, archive/decommission) are gated per tab via
+ * <PermissionGate> (`fleet.write` / `vehicle.write` / `device.write`) — the
+ * backend enforces the same strings (Sprint E §23/§24).
  */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import {
-  useDeleteDevice,
-  useDeleteDriver,
-  useDeleteGroup,
-  useDeleteVehicle,
+  useArchiveFleet,
+  useArchiveVehicle,
+  useDecommissionDevice,
   useDevices,
-  useDrivers,
-  useGroups,
+  useFleets,
   useVehicles,
 } from '@/api/asset.api';
+import { PermissionGate, PERMISSIONS } from '@/auth/permissions';
 import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
 import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
 import { DevicesTab } from '@/components/assets/DevicesTab';
-import { DriversTab } from '@/components/assets/DriversTab';
-import { GroupsTab } from '@/components/assets/GroupsTab';
+import { FleetsTab } from '@/components/assets/FleetsTab';
 import { VehiclesTab } from '@/components/assets/VehiclesTab';
+import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { PageHeader } from '@/components/ui';
-import type { DeviceStatus, DeviceType, DriverStatus, VehicleStatus } from '@/types/asset.types';
-import type { VehicleType } from '@/types/fleet.types';
+import type {
+  DeviceProtocol,
+  DeviceStatus,
+  FleetStatus,
+  VehicleStatus,
+} from '@/types/asset.types';
 import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { Plus } from 'lucide-react';
 
-/** The four asset-class tabs. */
-export type AssetTab = 'vehicles' | 'drivers' | 'devices' | 'groups';
+/** The three real asset-class tabs. */
+export type AssetTab = 'fleets' | 'vehicles' | 'devices';
 
-const TABS: AssetTab[] = ['vehicles', 'drivers', 'devices', 'groups'];
+const TABS: AssetTab[] = ['fleets', 'vehicles', 'devices'];
+
+/** Per-tab write permission (gates + Add / edit / archive). */
+const WRITE_PERMISSION: Record<AssetTab, string> = {
+  fleets: PERMISSIONS.fleetWrite,
+  vehicles: PERMISSIONS.vehicleWrite,
+  devices: PERMISSIONS.deviceWrite,
+};
 
 /** Clamp the tab from URL params to a valid tab (default: vehicles). */
 function readTab(value: string | null): AssetTab {
@@ -58,33 +68,29 @@ export function AssetManagementPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Per-tab filter state (kept here so switching tabs preserves filters).
-  const [vStatus, setVStatus] = useState<VehicleStatus | 'all'>('all');
-  const [vType, setVType] = useState<VehicleType | 'all'>('all');
-  const [vQuery, setVQuery] = useState('');
-  const [dStatus, setDStatus] = useState<DriverStatus | 'all'>('all');
-  const [dQuery, setDQuery] = useState('');
+  const [fleetStatus, setFleetStatus] = useState<FleetStatus | 'all'>('all');
+  const [fleetQuery, setFleetQuery] = useState('');
+  const [vehFleet, setVehFleet] = useState<string | 'all'>('all');
+  const [vehStatus, setVehStatus] = useState<VehicleStatus | 'all'>('all');
+  const [vehQuery, setVehQuery] = useState('');
   const [devStatus, setDevStatus] = useState<DeviceStatus | 'all'>('all');
-  const [devType, setDevType] = useState<DeviceType | 'all'>('all');
+  const [devProtocol, setDevProtocol] = useState<DeviceProtocol | 'all'>('all');
   const [devQuery, setDevQuery] = useState('');
 
-  const vehicles = useVehicles();
-  const drivers = useDrivers();
-  const devices = useDevices();
-  const groups = useGroups();
+  const fleetsQuery = useFleets();
+  const vehiclesQuery = useVehicles();
+  const devicesQuery = useDevices();
 
-  // Delete hooks (one per entity; dispatched by the active tab).
-  const deleteVehicle = useDeleteVehicle();
-  const deleteDriver = useDeleteDriver();
-  const deleteDevice = useDeleteDevice();
-  const deleteGroup = useDeleteGroup();
+  const fleets = fleetsQuery.data ?? [];
+  const vehicles = vehiclesQuery.data ?? [];
+  const devices = devicesQuery.data ?? [];
+
+  // Soft-delete hooks (fleets/vehicles = archive, devices = decommission).
+  const archiveFleet = useArchiveFleet();
+  const archiveVehicle = useArchiveVehicle();
+  const decommissionDevice = useDecommissionDevice();
   const deleteMutation =
-    tab === 'vehicles'
-      ? deleteVehicle
-      : tab === 'drivers'
-        ? deleteDriver
-        : tab === 'devices'
-          ? deleteDevice
-          : deleteGroup;
+    tab === 'fleets' ? archiveFleet : tab === 'vehicles' ? archiveVehicle : decommissionDevice;
 
   // ── CRUD trigger state ──
   const [formOpen, setFormOpen] = useState(false);
@@ -94,13 +100,8 @@ export function AssetManagementPage() {
 
   // Tab counts for the tab badges.
   const counts = useMemo(
-    () => ({
-      vehicles: vehicles.data?.length ?? 0,
-      drivers: drivers.data?.length ?? 0,
-      devices: devices.data?.length ?? 0,
-      groups: groups.data?.length ?? 0,
-    }),
-    [vehicles.data, drivers.data, devices.data, groups.data],
+    () => ({ fleets: fleets.length, vehicles: vehicles.length, devices: devices.length }),
+    [fleets.length, vehicles.length, devices.length],
   );
 
   const setTab = (next: AssetTab) => {
@@ -122,37 +123,39 @@ export function AssetManagementPage() {
     setFormOpen(true);
   };
 
-  // ── Delete handler (confirm → hook) ──
-  // Resolve the record being deleted from the active registry to show its name.
-  const deleteName = deleteTarget?.name ?? '';
-
+  // ── Delete handler (confirm → hook). Backend DELETE is soft: fleets and
+  // vehicles are ARCHIVED, devices are DECOMMISSIONED.
+  const isDeviceTab = tab === 'devices';
   const onConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
       await deleteMutation.mutateAsync(deleteTarget.id);
-      toast.success(t('assets.crud.deleteSuccess', { name: deleteTarget.name }));
+      toast.success(
+        t(isDeviceTab ? 'assets.crud.decommissionSuccess' : 'assets.crud.archiveSuccess', {
+          name: deleteTarget.name,
+        }),
+      );
       setDeleteTarget(null);
     } catch (err) {
       toast.error(err);
     }
   };
 
+  const listQuery = tab === 'fleets' ? fleetsQuery : tab === 'vehicles' ? vehiclesQuery : devicesQuery;
+
   return (
     <Stack sx={{ height: '100%' }}>
-      {/* Header */}
+      {/* Header — + Add is permission-gated per tab. */}
       <PageHeader
         compact
         title={t('assets.title')}
         subtitle={t('assets.subtitle')}
         actions={
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<Plus size={16} />}
-            onClick={openCreate}
-          >
-            {t('common.add')} {t(`assets.tabs.${tab}`)}
-          </Button>
+          <PermissionGate requires={WRITE_PERMISSION[tab]}>
+            <Button variant="contained" size="small" startIcon={<Plus size={16} />} onClick={openCreate}>
+              {t('common.add')} {t(`assets.tabs.${tab}`)}
+            </Button>
+          </PermissionGate>
         }
       />
 
@@ -182,66 +185,72 @@ export function AssetManagementPage() {
       <Box
         sx={{ flex: 1, minHeight: 0, border: '1px solid', borderColor: 'divider', borderTop: 0 }}
       >
-        {tab === 'vehicles' && (
-          <VehiclesTab
-            vehicles={vehicles.data ?? []}
-            loading={vehicles.isLoading}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            filterStatus={vStatus}
-            filterType={vType}
-            query={vQuery}
-            onFilterStatus={setVStatus}
-            onFilterType={setVType}
-            onQuery={setVQuery}
-            onEdit={openEdit}
-            onDelete={(id, name) => setDeleteTarget({ id, name })}
-          />
-        )}
-        {tab === 'drivers' && (
-          <DriversTab
-            drivers={drivers.data ?? []}
-            loading={drivers.isLoading}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            filterStatus={dStatus}
-            query={dQuery}
-            onFilterStatus={setDStatus}
-            onQuery={setDQuery}
-            onEdit={openEdit}
-            onDelete={(id, name) => setDeleteTarget({ id, name })}
-          />
-        )}
-        {tab === 'devices' && (
-          <DevicesTab
-            devices={devices.data ?? []}
-            loading={devices.isLoading}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            filterStatus={devStatus}
-            filterType={devType}
-            query={devQuery}
-            onFilterStatus={setDevStatus}
-            onFilterType={setDevType}
-            onQuery={setDevQuery}
-            onEdit={openEdit}
-            onDelete={(id, name) => setDeleteTarget({ id, name })}
-          />
-        )}
-        {tab === 'groups' && (
-          <GroupsTab
-            groups={groups.data ?? []}
-            loading={groups.isLoading}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onEdit={openEdit}
-            onDelete={(id, name) => setDeleteTarget({ id, name })}
-          />
+        {listQuery.isError ? (
+          <ErrorState error={listQuery.error} onRetry={() => listQuery.refetch()} />
+        ) : (
+          <>
+            {tab === 'fleets' && (
+              <FleetsTab
+                fleets={fleets}
+                vehicles={vehicles}
+                loading={fleetsQuery.isLoading}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                filterStatus={fleetStatus}
+                query={fleetQuery}
+                onFilterStatus={setFleetStatus}
+                onQuery={setFleetQuery}
+                onEdit={openEdit}
+                onDelete={(id, name) => setDeleteTarget({ id, name })}
+              />
+            )}
+            {tab === 'vehicles' && (
+              <VehiclesTab
+                vehicles={vehicles}
+                fleets={fleets}
+                loading={vehiclesQuery.isLoading}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                filterStatus={vehStatus}
+                filterFleet={vehFleet}
+                query={vehQuery}
+                onFilterStatus={setVehStatus}
+                onFilterFleet={setVehFleet}
+                onQuery={setVehQuery}
+                onEdit={openEdit}
+                onDelete={(id, name) => setDeleteTarget({ id, name })}
+              />
+            )}
+            {tab === 'devices' && (
+              <DevicesTab
+                devices={devices}
+                vehicles={vehicles}
+                loading={devicesQuery.isLoading}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                filterStatus={devStatus}
+                filterProtocol={devProtocol}
+                query={devQuery}
+                onFilterStatus={setDevStatus}
+                onFilterProtocol={setDevProtocol}
+                onQuery={setDevQuery}
+                onEdit={openEdit}
+                onDelete={(id, name) => setDeleteTarget({ id, name })}
+              />
+            )}
+          </>
         )}
       </Box>
 
       {/* Detail drawer for the active tab */}
-      <AssetDetailDrawers tab={tab} selectedId={selectedId} onClose={() => setSelectedId(null)} />
+      <AssetDetailDrawers
+        tab={tab}
+        selectedId={selectedId}
+        onClose={() => setSelectedId(null)}
+        fleets={fleets}
+        vehicles={vehicles}
+        devices={devices}
+      />
 
       {/* Create / Edit form drawer */}
       <AssetFormDrawer
@@ -249,14 +258,21 @@ export function AssetManagementPage() {
         mode={formMode}
         entity={tab}
         record={editRecord}
+        fleets={fleets}
         onClose={() => setFormOpen(false)}
       />
 
-      {/* Delete confirmation */}
+      {/* Archive / Decommission confirmation (backend is soft-delete). */}
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={t('assets.crud.deleteConfirmTitle', { name: deleteName })}
-        message={t('assets.crud.deleteConfirmBody')}
+        title={t(
+          isDeviceTab ? 'assets.crud.decommissionConfirmTitle' : 'assets.crud.archiveConfirmTitle',
+          { name: deleteTarget?.name ?? '' },
+        )}
+        message={t(
+          isDeviceTab ? 'assets.crud.decommissionConfirmBody' : 'assets.crud.archiveConfirmBody',
+        )}
+        confirmLabelKey={isDeviceTab ? 'assets.actions.decommission' : 'assets.actions.archive'}
         loading={deleteMutation.isPending}
         onConfirm={onConfirmDelete}
         onClose={() => setDeleteTarget(null)}

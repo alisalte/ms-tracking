@@ -13,6 +13,7 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { BindingService } from '../application/binding.service.js';
 import { DeviceService } from '../application/device.service.js';
 import { FleetService } from '../application/fleet.service.js';
+import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
 import type { FleetManagementConfig } from '../config/fleet-management.config.js';
 import { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
@@ -24,6 +25,7 @@ import { FleetRepository } from '../infrastructure/persistence/fleet.repository.
 import { VehicleRepository } from '../infrastructure/persistence/vehicle.repository.js';
 import { DevicesController } from './devices.controller.js';
 import { FleetsController } from './fleets.controller.js';
+import { SummaryController } from './summary.controller.js';
 import {
   BINDING_SERVICE,
   DEVICE_REPOSITORY,
@@ -31,6 +33,7 @@ import {
   FLEET_MANAGEMENT_CONFIG,
   FLEET_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
+  SUMMARY_SERVICE,
   VEHICLE_SERVICE,
 } from './tokens.js';
 import { VehiclesController } from './vehicles.controller.js';
@@ -53,6 +56,14 @@ export class FleetManagementModule {
           provide: DEVICE_REPOSITORY,
           inject: [KNEX_TOKEN],
           useFactory: (knex: unknown) => new DeviceRepository(knex as never),
+        },
+        // Class-token alias for the services that inject `DeviceRepository`
+        // directly (DEVICE_SERVICE / BINDING_SERVICE) — without it Nest cannot
+        // resolve the class token at boot (latent wiring bug surfaced by the
+        // Sprint E E2E, the first full AppModule boot).
+        {
+          provide: DeviceRepository,
+          useExisting: DEVICE_REPOSITORY,
         },
         // Audit + remaining repos are stateless; construct directly via factories.
         {
@@ -126,6 +137,16 @@ export class FleetManagementModule {
             invalidation: RegistryInvalidationPublisher,
           ) => new BindingService(knex as never, vehicles, devices, bindings, audit, invalidation),
         },
+        // Dashboard count aggregate (Sprint E §21) — read-only, existing domains.
+        {
+          provide: SUMMARY_SERVICE,
+          inject: [FleetRepository, VehicleRepository, DEVICE_REPOSITORY],
+          useFactory: (
+            fleets: FleetRepository,
+            vehicles: VehicleRepository,
+            devices: DeviceRepository,
+          ) => new SummaryService(fleets, vehicles, devices),
+        },
         // Kafka session-lifecycle consumer (non-fatal at boot).
         {
           provide: SESSION_LIFECYCLE_CONSUMER,
@@ -134,7 +155,7 @@ export class FleetManagementModule {
             new SessionLifecycleConsumer(cfg, devices),
         },
       ],
-      controllers: [FleetsController, VehiclesController, DevicesController],
+      controllers: [FleetsController, VehiclesController, DevicesController, SummaryController],
     };
   }
 }

@@ -3,7 +3,8 @@
 **Scope:** `device-gateway-service`, `gps-engine-service`, `fleet-management-service`
 (registry-invalidation hooks only), `packages/observability` (metrics), `packages/health`
 (readiness extension). Tests, migrations, config. **Status: COMPLETE.**
-typecheck ✓ · build ✓ · test ✓ (494 backend + 107 web) · lint ✓.
+typecheck ✓ · build ✓ · test ✓ (702 backend + 118 web, re-verified 2026-08-15 after the
+parallel-line merge) · lint ✓.
 
 The objective was reliability of the EXISTING telemetry vertical
 (device → gateway → registry → Kafka → GPS engine → TimescaleDB → Redis → WebSocket),
@@ -269,8 +270,9 @@ Documented as a known gap, not claimed.
 
 ## Testing (§45/§46/§47)
 
-**Suite counts: gateway 14 suites/156 tests · gps-engine 19/114 · fleet 5/45 · identity 8/42 ·
-map 5/26 · media 4/58 · packages ~50 · web 14/107.**
+**Suite counts (re-verified 2026-08-15, post parallel-line merge): gateway 16 suites/160 tests ·
+gps-engine 21/122 · fleet-mgmt 5/45 · identity 8/42 ·
+map 5/26 · media 4/58 · packages 16/87 · web 18/118.**
 
 New Sprint D tests:
 - Gateway: `session-lifecycle-hardening.spec.ts` (12) — duplicate connection (local eviction,

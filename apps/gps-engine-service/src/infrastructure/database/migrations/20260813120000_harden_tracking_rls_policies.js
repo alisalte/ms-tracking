@@ -28,7 +28,7 @@ const TABLES = [
   'tracking.engine_hours',
 ];
 
-exports.up = async function up(knex) {
+export const up = async function up(knex) {
   for (const qualified of TABLES) {
     const [schema, table] = qualified.split('.');
     await knex.raw(`DROP POLICY IF EXISTS "${table}_tenant_isolation" ON "${schema}"."${table}"`);
@@ -38,7 +38,7 @@ exports.up = async function up(knex) {
   }
 };
 
-exports.down = async function down(knex) {
+export const down = async function down(knex) {
   for (const qualified of TABLES) {
     const [schema, table] = qualified.split('.');
     await knex.raw(`DROP POLICY IF EXISTS "${table}_tenant_isolation" ON "${schema}"."${table}"`);

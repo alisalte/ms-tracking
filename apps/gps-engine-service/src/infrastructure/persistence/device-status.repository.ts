@@ -55,6 +55,31 @@ export class DeviceStatusRepository {
   }
 
   /**
+   * List the connection state of EVERY device in the tenant (Sprint E §18/§19)
+   * — the live map's status/last-seen bootstrap. Live deltas then arrive over
+   * the `device.status` WebSocket event; no per-device N+1 lookups.
+   */
+  public async listForTenant(tenantId: string, limit = 1000): Promise<DeviceStatusRecord[]> {
+    const rows = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .orderBy('device_id', 'asc')
+      .limit(limit);
+    return rows.map(
+      (row) =>
+        new DeviceStatusRecord({
+          deviceId: String(row.device_id),
+          tenantId: String(row.tenant_id),
+          state: row.state,
+          protocolId: row.protocol_id ?? null,
+          reason: row.reason ?? null,
+          lastSeenAt: new Date(row.last_seen_at),
+        }),
+    );
+  }
+
+  /**
    * Refresh last_seen_at only (Sprint D §9). Called throttled from the position
    * pipeline (≈ once per GPS_LAST_SEEN_FLUSH_SECONDS per device — never per
    * packet). UPDATE-only: 0 rows when the lifecycle pipeline hasn't created the

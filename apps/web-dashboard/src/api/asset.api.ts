@@ -1,336 +1,263 @@
 /**
- * Asset Management API + data hooks.
+ * Asset registry API + data hooks — REAL fleet-management backend (Sprint E).
  *
- * The Asset Management page (Fleet/Driver/Telemetry module docs) needs the
- * vehicle, driver, device, and group registries + full CRUD (create/update/
- * delete) and a few status/assignment actions.
+ *   GET    /fleets                    (?cursor&limit&status&search)  → Page<Fleet>
+ *   POST   /fleets                    { name, code, description? }
+ *   GET    /fleets/:id
+ *   PATCH  /fleets/:id                (full replace: name+code required)
+ *   DELETE /fleets/:id                (204 — SOFT ARCHIVE)
+ *   GET    /vehicles                  (?cursor&limit&fleetId&status&search)
+ *   POST   /vehicles                  { fleetId, name, code, plate?, vin? }
+ *   PATCH  /vehicles/:id              (full replace)
+ *   DELETE /vehicles/:id              (204 — SOFT ARCHIVE)
+ *   GET    /devices                   (?cursor&limit&status&protocol&vehicleId&imei&search)
+ *   POST   /devices                   { imei, serialNumber?, manufacturer?, model?, protocol }
+ *   PATCH  /devices/:id               (imei immutable; status/manufacturer/… updatable)
+ *   DELETE /devices/:id               (204 — DECOMMISSION)
+ *   GET    /vehicles/:id/devices      → BoundDevice[] (the vehicle↔device binding)
+ *   POST   /vehicles/:id/devices/:deviceId   { role?, isPrimary? } (bind; 409 when already bound)
+ *   DELETE /vehicles/:id/devices/:deviceId   (unbind; 204)
  *
- * Backend status (as of this sprint): the fleet-management-service,
- * driver-management-service, and device-management-service REST endpoints are
- * NOT yet implemented — only identity-service (users/tenants) and map-engine
- * (geofences) have backends. So:
- *   - LIST/DETAIL fetchers use `withMockFallback` (try the real API first, fall
- *     back to mock data on a network error in dev). In production the mock
- *     gate is ON by default so the UI stays demoable; operators can opt into
- *     the real API via `?useMock=false`.
- *   - CREATE/UPDATE/DELETE/ASSIGN mutations call the real REST endpoints via
- *     apiPost/apiPut/apiDelete. They are typed contracts ready for the backend;
- *     in production without a backend they surface a network error honestly
- *     (no fake local mutations). See docs/frontend-crud.md.
- *
- * The wire (`*Wire`) snake_case variants + `mapX(wire)` mappers live below — the
- * single place where wire translation happens, ready for when the services ship.
+ * Lists paginate with an opaque cursor (`Page<T> { data, nextCursor }`); the
+ * registry hooks follow the cursor to the end (bounded) so existing DataTable
+ * UX keeps working — server-side pagination can come later without changing
+ * these contracts. Mock mode (`?useMock=true`, dev/demo only) substitutes the
+ * deterministic fixture dataset adapted to the REAL shapes; production is
+ * real-only (Sprint E §31).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
-import {
-  mockDeviceDetail,
-  mockDevices,
-  mockDriverDetail,
-  mockDrivers,
-  mockGroups,
-  mockVehicleDetail,
-  mockVehicles,
-} from '@/mock/asset-data';
+import { mockMapVehicles } from '@/mock/fleet-data';
 import type {
+  BindDevicePayload,
+  BoundDevice,
   CreateDevicePayload,
-  CreateDriverPayload,
-  CreateGroupPayload,
+  CreateFleetPayload,
   CreateVehiclePayload,
   Device,
-  Driver,
+  DeviceProtocol,
+  DeviceStatus,
+  Fleet,
+  FleetStatus,
   UpdateDevicePayload,
-  UpdateDriverPayload,
-  UpdateGroupPayload,
+  UpdateFleetPayload,
   UpdateVehiclePayload,
   Vehicle,
-  VehicleGroup,
+  VehicleStatus,
 } from '@/types/asset.types';
-import { apiDelete, apiGet, apiPost, apiPostNoContent, apiPut } from './client';
+import type { Page } from '@/types/api.types';
+import { apiDeleteNoContent, apiGet, apiPatch, apiPost } from './client';
 import { queryKeys } from './query-keys';
 
-// ── Wire mappers (snake_case ↔ camelCase) ────────────────────────────────────
-// Single place for wire translation; ready for when the services ship.
+// ── Cursor-pagination follower ───────────────────────────────────────────────
 
-interface VehicleWire {
-  id: string;
-  vin: string;
-  make: string;
-  model: string;
-  year: number;
-  license_plate: string;
-  color: string;
-  fuel_type: Vehicle['fuelType'];
-  type: Vehicle['type'];
-  status: Vehicle['status'];
-  fleet_id: string;
-  fleet_name: string;
-  group_id?: string;
-  group_name?: string;
-  device_id?: string;
-  odometer_km: number;
-  purchase_date?: string;
-  warranty_expiry?: string;
-  insurance_policy?: string;
-  updated_at: string;
-}
-function mapVehicle(w: VehicleWire): Vehicle {
-  return {
-    id: w.id,
-    vin: w.vin,
-    make: w.make,
-    model: w.model,
-    year: w.year,
-    licensePlate: w.license_plate,
-    color: w.color,
-    fuelType: w.fuel_type,
-    type: w.type,
-    status: w.status,
-    fleetId: w.fleet_id,
-    fleetName: w.fleet_name,
-    groupId: w.group_id,
-    groupName: w.group_name,
-    deviceId: w.device_id,
-    odometerKm: w.odometer_km,
-    purchaseDate: w.purchase_date,
-    warrantyExpiry: w.warranty_expiry,
-    insurancePolicy: w.insurance_policy,
-    updatedAt: w.updated_at,
-  };
-}
-/** Create/Update payload (camelCase) → wire (snake_case). Underscores set server-side are omitted. */
-function vehicleToWire(p: CreateVehiclePayload | UpdateVehiclePayload) {
-  return {
-    license_plate: p.licensePlate,
-    vin: p.vin,
-    make: p.make,
-    model: p.model,
-    year: p.year,
-    type: p.type,
-    fuel_type: p.fuelType,
-    color: p.color,
-    status: p.status,
-    group_id: p.groupId,
-    device_id: p.deviceId,
-  };
+const PAGE_SIZE = 200;
+const MAX_PAGES = 50; // hard bound (10k rows) — never loop a broken cursor forever
+
+/** Follow the cursor chain to exhaustion and return every row. */
+async function fetchAll<T>(path: string, params?: Record<string, unknown>): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: string | null | undefined;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const result = await apiGet<Page<T>>(path, { ...params, limit: PAGE_SIZE, cursor });
+    out.push(...result.data);
+    cursor = result.nextCursor;
+    if (!cursor) break;
+  }
+  return out;
 }
 
-interface DriverWire {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  employee_id?: string;
-  status: Driver['status'];
-  hire_date?: string;
-  license_number: string;
-  license_class: string;
-  license_expiry: string;
-  behavior_score: number;
-  total_trips: number;
-  total_distance_km: number;
-  assigned_vehicle_id?: string;
-  assigned_vehicle_label?: string;
-  certifications: string[];
-}
-function mapDriver(w: DriverWire): Driver {
-  return {
-    id: w.id,
-    firstName: w.first_name,
-    lastName: w.last_name,
-    email: w.email,
-    phone: w.phone,
-    employeeId: w.employee_id,
-    status: w.status,
-    hireDate: w.hire_date,
-    licenseNumber: w.license_number,
-    licenseClass: w.license_class,
-    licenseExpiry: w.license_expiry,
-    behaviorScore: w.behavior_score,
-    totalTrips: w.total_trips,
-    totalDistanceKm: w.total_distance_km,
-    assignedVehicleId: w.assigned_vehicle_id,
-    assignedVehicleLabel: w.assigned_vehicle_label,
-    certifications: w.certifications,
-  };
-}
-function driverToWire(p: CreateDriverPayload | UpdateDriverPayload) {
-  return {
-    first_name: p.firstName,
-    last_name: p.lastName,
-    email: p.email,
-    phone: p.phone,
-    employee_id: p.employeeId,
-    status: p.status,
-    license_number: p.licenseNumber,
-    license_class: p.licenseClass,
-    license_expiry: p.licenseExpiry,
-    assigned_vehicle_id: p.assignedVehicleId,
-  };
+// ── Dev/demo fixtures (REAL shapes, derived from the map dataset) ────────────
+
+function mockFleets(): Fleet[] {
+  const codes = ['NORTH', 'SOUTH', 'URBAN'];
+  return codes.map((code, i) => ({
+    id: `mock-fleet-${i + 1}`,
+    tenantId: 'mock-tenant',
+    name: `${code} Fleet`,
+    code,
+    description: null,
+    status: 'ACTIVE' as FleetStatus,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  }));
 }
 
-interface DeviceWire {
-  id: string;
-  serial_number: string;
-  imei?: string;
-  device_type: Device['deviceType'];
-  manufacturer: string;
-  model: string;
-  firmware_version: string;
-  target_firmware_version?: string;
-  status: Device['status'];
-  bound_vehicle_id?: string;
-  bound_vehicle_label?: string;
-  last_heartbeat_at?: string;
-  last_data_at?: string;
-  battery_level?: number;
-  signal_strength_dbm?: number;
-  reporting_interval_sec: number;
-}
-function mapDevice(w: DeviceWire): Device {
-  return {
-    id: w.id,
-    serialNumber: w.serial_number,
-    imei: w.imei,
-    deviceType: w.device_type,
-    manufacturer: w.manufacturer,
-    model: w.model,
-    firmwareVersion: w.firmware_version,
-    targetFirmwareVersion: w.target_firmware_version,
-    status: w.status,
-    boundVehicleId: w.bound_vehicle_id,
-    boundVehicleLabel: w.bound_vehicle_label,
-    lastHeartbeatAt: w.last_heartbeat_at,
-    lastDataAt: w.last_data_at,
-    batteryLevel: w.battery_level,
-    signalStrengthDbm: w.signal_strength_dbm,
-    reportingIntervalSec: w.reporting_interval_sec,
-  };
-}
-function deviceToWire(p: CreateDevicePayload | UpdateDevicePayload) {
-  return {
-    serial_number: p.serialNumber,
-    device_type: p.deviceType,
-    manufacturer: p.manufacturer,
-    model: p.model,
-    imei: p.imei,
-    firmware_version: p.firmwareVersion,
-    reporting_interval_sec: p.reportingIntervalSec,
-    status: p.status,
-    bound_vehicle_id: p.boundVehicleId,
-  };
+function mockVehicles(): Vehicle[] {
+  const fleets = mockFleets();
+  return mockMapVehicles.slice(0, 24).map((v, i) => ({
+    id: v.id,
+    tenantId: 'mock-tenant',
+    fleetId: fleets[i % fleets.length]?.id ?? fleets[0]?.id ?? '',
+    name: v.label,
+    code: `V${String(i + 1).padStart(3, '0')}`,
+    plate: v.label,
+    vin: null,
+    status: 'ACTIVE' as VehicleStatus,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: v.updatedAt ?? '2026-01-01T00:00:00Z',
+  }));
 }
 
-interface GroupWire {
-  id: string;
-  name: string;
-  description: string;
-  member_count: number;
-  vehicle_type_filter?: VehicleGroup['vehicleTypeFilter'];
-  status: VehicleGroup['status'];
-  created_at: string;
-}
-function mapGroup(w: GroupWire): VehicleGroup {
-  return {
-    id: w.id,
-    name: w.name,
-    description: w.description,
-    memberCount: w.member_count,
-    vehicleTypeFilter: w.vehicle_type_filter,
-    status: w.status,
-    createdAt: w.created_at,
-  };
-}
-function groupToWire(p: CreateGroupPayload | UpdateGroupPayload) {
-  return {
-    name: p.name,
-    description: p.description,
-    vehicle_type_filter: p.vehicleTypeFilter,
-    status: p.status,
-  };
+function mockDevices(): Device[] {
+  return mockMapVehicles.slice(0, 16).map((v, i) => ({
+    id: `mock-device-${i + 1}`,
+    tenantId: 'mock-tenant',
+    imei: `4901542032375${String(i).padStart(2, '0')}`,
+    serialNumber: `SN-${1000 + i}`,
+    manufacturer: 'Teltonika',
+    model: 'FMB920',
+    protocol: 'gt06' as DeviceProtocol,
+    status: 'ACTIVE' as DeviceStatus,
+    vehicleId: i < 12 ? v.id : null,
+    lastSeenAt: v.updatedAt ?? null,
+    connectedAt: null,
+    disconnectedAt: null,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  }));
 }
 
-// ── Fetchers (try real API → fall back to mock on network error in dev) ───────
+// ── Fetchers ─────────────────────────────────────────────────────────────────
 
-/** GET /api/v1/fleet/vehicles (pending backend). */
-function fetchVehicles(): Promise<Vehicle[]> {
-  if (shouldUseMock()) return resolveMock(mockVehicles);
+export interface AssetListFilters {
+  status?: VehicleStatus | DeviceStatus | FleetStatus;
+  search?: string;
+  fleetId?: string;
+  /** Device list only: devices bound to this vehicle. */
+  vehicleId?: string;
+  protocol?: DeviceProtocol;
+}
+
+function fetchFleets(filters?: AssetListFilters): Promise<Fleet[]> {
+  if (shouldUseMock()) return resolveMock(mockFleets());
   return withMockFallback(
-    async () => (await apiGet<VehicleWire[]>('/fleet/vehicles')).map(mapVehicle),
-    () => resolveMock(mockVehicles),
+    () => fetchAll<Fleet>('/fleets', { status: filters?.status, search: filters?.search }),
+    () => resolveMock(mockFleets()),
   );
 }
 
-/** GET /api/v1/fleet/vehicles/{id} (pending backend). */
+function fetchFleetDetail(id: string): Promise<Fleet | undefined> {
+  if (shouldUseMock()) return resolveMock(mockFleets().find((f) => f.id === id));
+  return withMockFallback(
+    async () => apiGet<Fleet>(`/fleets/${id}`),
+    async () => undefined,
+  );
+}
+
+function fetchVehicles(filters?: AssetListFilters): Promise<Vehicle[]> {
+  if (shouldUseMock()) return resolveMock(mockVehicles());
+  return withMockFallback(
+    () =>
+      fetchAll<Vehicle>('/vehicles', {
+        status: filters?.status,
+        search: filters?.search,
+        fleetId: filters?.fleetId,
+      }),
+    () => resolveMock(mockVehicles()),
+  );
+}
+
 function fetchVehicleDetail(id: string): Promise<Vehicle | undefined> {
-  if (shouldUseMock()) return resolveMock(mockVehicleDetail(id));
+  if (shouldUseMock()) return resolveMock(mockVehicles().find((v) => v.id === id));
   return withMockFallback(
-    async () => {
-      const w = await apiGet<VehicleWire>(`/fleet/vehicles/${id}`);
-      return mapVehicle(w);
-    },
-    () => resolveMock(mockVehicleDetail(id)),
+    async () => apiGet<Vehicle>(`/vehicles/${id}`),
+    async () => undefined,
   );
 }
 
-/** GET /api/v1/drivers (pending backend). */
-function fetchDrivers(): Promise<Driver[]> {
-  if (shouldUseMock()) return resolveMock(mockDrivers);
+function fetchDevices(filters?: AssetListFilters): Promise<Device[]> {
+  if (shouldUseMock()) return resolveMock(mockDevices());
   return withMockFallback(
-    async () => (await apiGet<DriverWire[]>('/drivers')).map(mapDriver),
-    () => resolveMock(mockDrivers),
+    () =>
+      fetchAll<Device>('/devices', {
+        status: filters?.status,
+        search: filters?.search,
+        vehicleId: filters?.vehicleId,
+        protocol: filters?.protocol,
+      }),
+    () => resolveMock(mockDevices()),
   );
 }
 
-/** GET /api/v1/drivers/{id} (pending backend). */
-function fetchDriverDetail(id: string): Promise<Driver | undefined> {
-  if (shouldUseMock()) return resolveMock(mockDriverDetail(id));
-  return withMockFallback(
-    async () => {
-      const w = await apiGet<DriverWire>(`/drivers/${id}`);
-      return mapDriver(w);
-    },
-    () => resolveMock(mockDriverDetail(id)),
-  );
-}
-
-/** GET /api/v1/telemetry/devices (pending backend). */
-function fetchDevices(): Promise<Device[]> {
-  if (shouldUseMock()) return resolveMock(mockDevices);
-  return withMockFallback(
-    async () => (await apiGet<DeviceWire[]>('/telemetry/devices')).map(mapDevice),
-    () => resolveMock(mockDevices),
-  );
-}
-
-/** GET /api/v1/telemetry/devices/{id} (pending backend). */
 function fetchDeviceDetail(id: string): Promise<Device | undefined> {
-  if (shouldUseMock()) return resolveMock(mockDeviceDetail(id));
+  if (shouldUseMock()) return resolveMock(mockDevices().find((d) => d.id === id));
   return withMockFallback(
-    async () => {
-      const w = await apiGet<DeviceWire>(`/telemetry/devices/${id}`);
-      return mapDevice(w);
-    },
-    () => resolveMock(mockDeviceDetail(id)),
+    async () => apiGet<Device>(`/devices/${id}`),
+    async () => undefined,
   );
 }
 
-/** GET /api/v1/fleet/groups (pending backend). */
-function fetchGroups(): Promise<VehicleGroup[]> {
-  if (shouldUseMock()) return resolveMock(mockGroups);
+/** Devices bound to a vehicle (GET /vehicles/:id/devices). */
+function fetchVehicleDevices(vehicleId: string): Promise<BoundDevice[]> {
+  if (shouldUseMock()) {
+    return resolveMock(
+      mockDevices()
+        .filter((d) => d.vehicleId === vehicleId)
+        .map<BoundDevice>((d) => ({
+          deviceId: d.id,
+          imei: d.imei,
+          manufacturer: d.manufacturer,
+          model: d.model,
+          protocol: d.protocol,
+          deviceStatus: d.status,
+          role: 'TRACKER',
+          isPrimary: true,
+          boundAt: d.createdAt,
+        })),
+    );
+  }
   return withMockFallback(
-    async () => (await apiGet<GroupWire[]>('/fleet/groups')).map(mapGroup),
-    () => resolveMock(mockGroups),
+    () => apiGet<BoundDevice[]>(`/vehicles/${vehicleId}/devices`),
+    () => resolveMock([]),
   );
+}
+
+/**
+ * The full vehicle + device registries in ONE call pair (map bootstrap helper
+ * used by fleet.api.ts). Bounded by the cursor follower.
+ */
+export async function fetchAllVehiclesAsMap(): Promise<{
+  vehicles: Array<Pick<Vehicle, 'id' | 'name' | 'code' | 'plate'>>;
+  devices: Array<Pick<Device, 'id' | 'vehicleId'>>;
+}> {
+  if (shouldUseMock()) {
+    return resolveMock({ vehicles: mockVehicles(), devices: mockDevices() });
+  }
+  const [vehicles, devices] = await Promise.all([
+    fetchAll<Vehicle>('/vehicles', { status: 'ACTIVE' }),
+    fetchAll<Device>('/devices'),
+  ]);
+  return { vehicles, devices };
 }
 
 // ── LIST/DETAIL hooks ────────────────────────────────────────────────────────
 
+/** Fleet registry. */
+export function useFleets(filters?: AssetListFilters) {
+  return useQuery({
+    queryKey: [...queryKeys.assets.all, 'fleets', filters ?? {}],
+    queryFn: () => fetchFleets(filters),
+  });
+}
+export function useFleetDetail(id: string | null) {
+  return useQuery({
+    queryKey: id ? [...queryKeys.assets.all, 'fleet', id] : ['assets', 'fleet', 'none'],
+    queryFn: () => fetchFleetDetail(id as string),
+    enabled: Boolean(id),
+  });
+}
+
 /** Vehicle registry. */
-export function useVehicles() {
-  return useQuery({ queryKey: queryKeys.assets.vehicles(), queryFn: fetchVehicles });
+export function useVehicles(filters?: AssetListFilters) {
+  return useQuery({
+    queryKey: [...queryKeys.assets.all, 'vehicles', filters ?? {}],
+    queryFn: () => fetchVehicles(filters),
+  });
 }
 export function useVehicleDetail(id: string | null) {
   return useQuery({
@@ -340,21 +267,12 @@ export function useVehicleDetail(id: string | null) {
   });
 }
 
-/** Driver registry. */
-export function useDrivers() {
-  return useQuery({ queryKey: queryKeys.assets.drivers(), queryFn: fetchDrivers });
-}
-export function useDriverDetail(id: string | null) {
-  return useQuery({
-    queryKey: id ? queryKeys.assets.driverDetail(id) : ['assets', 'driver', 'none'],
-    queryFn: () => fetchDriverDetail(id as string),
-    enabled: Boolean(id),
-  });
-}
-
 /** Device registry. */
-export function useDevices() {
-  return useQuery({ queryKey: queryKeys.assets.devices(), queryFn: fetchDevices });
+export function useDevices(filters?: AssetListFilters) {
+  return useQuery({
+    queryKey: [...queryKeys.assets.all, 'devices', filters ?? {}],
+    queryFn: () => fetchDevices(filters),
+  });
 }
 export function useDeviceDetail(id: string | null) {
   return useQuery({
@@ -364,270 +282,145 @@ export function useDeviceDetail(id: string | null) {
   });
 }
 
-/** Vehicle groups. */
-export function useGroups() {
-  return useQuery({ queryKey: queryKeys.assets.groups(), queryFn: fetchGroups });
+/** Devices bound to a vehicle (the assignment list). */
+export function useVehicleDevices(vehicleId: string | null) {
+  return useQuery({
+    queryKey: vehicleId
+      ? [...queryKeys.assets.all, 'vehicleDevices', vehicleId]
+      : ['assets', 'vehicleDevices', 'none'],
+    queryFn: () => fetchVehicleDevices(vehicleId as string),
+    enabled: Boolean(vehicleId),
+  });
+}
+
+// ── Fleet CRUD mutations ─────────────────────────────────────────────────────
+
+/** Create a fleet (POST /fleets). */
+export function useCreateFleet() {
+  const qc = useQueryClient();
+  return useMutation<Fleet, Error, CreateFleetPayload>({
+    mutationFn: (payload) => apiPost<CreateFleetPayload, Fleet>('/fleets', payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+  });
+}
+
+/** Update a fleet (PATCH /fleets/:id — full replace, 409 on version/code conflict). */
+export function useUpdateFleet() {
+  const qc = useQueryClient();
+  return useMutation<Fleet, Error, { id: string; changes: UpdateFleetPayload }>({
+    mutationFn: ({ id, changes }) => apiPatch<UpdateFleetPayload, Fleet>(`/fleets/${id}`, changes),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: [...queryKeys.assets.all, 'fleet', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.all });
+    },
+  });
+}
+
+/** Archive a fleet (DELETE /fleets/:id — soft archive, 204). */
+export function useArchiveFleet() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => apiDeleteNoContent(`/fleets/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+  });
 }
 
 // ── Vehicle CRUD mutations ───────────────────────────────────────────────────
-// Endpoints (pending fleet-management-service):
-//   POST   /fleet/vehicles
-//   PATCH  /fleet/vehicles/:id   (uses apiPut; backend should treat as partial)
-//   DELETE /fleet/vehicles/:id
 
-/** Create a vehicle (POST /fleet/vehicles). */
+/** Create a vehicle (POST /vehicles). */
 export function useCreateVehicle() {
   const qc = useQueryClient();
   return useMutation<Vehicle, Error, CreateVehiclePayload>({
-    mutationFn: async (payload) => {
-      const w = await apiPost<unknown, VehicleWire>('/fleet/vehicles', vehicleToWire(payload));
-      return mapVehicle(w);
-    },
+    mutationFn: (payload) => apiPost<CreateVehiclePayload, Vehicle>('/vehicles', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }
 
-/** Update a vehicle (PUT /fleet/vehicles/:id with a partial body). */
+/** Update a vehicle (PATCH /vehicles/:id — full replace). */
 export function useUpdateVehicle() {
   const qc = useQueryClient();
   return useMutation<Vehicle, Error, { id: string; changes: UpdateVehiclePayload }>({
-    mutationFn: async ({ id, changes }) => {
-      const w = await apiPut<unknown, VehicleWire>(`/fleet/vehicles/${id}`, vehicleToWire(changes));
-      return mapVehicle(w);
-    },
-    onSuccess: (_data, { id }) => {
+    mutationFn: ({ id, changes }) =>
+      apiPatch<UpdateVehiclePayload, Vehicle>(`/vehicles/${id}`, changes),
+    onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.assets.vehicleDetail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.vehicles() });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.all });
     },
   });
 }
 
-/** Delete a vehicle (DELETE /fleet/vehicles/:id). */
-export function useDeleteVehicle() {
+/** Archive a vehicle (DELETE /vehicles/:id — soft archive, 204). */
+export function useArchiveVehicle() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: (id) => apiDelete(`/fleet/vehicles/${id}`),
+    mutationFn: (id) => apiDeleteNoContent(`/vehicles/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }
+/** Backwards-compatible alias — DELETE = archive in the backend semantics. */
+export const useDeleteVehicle = useArchiveVehicle;
 
-// ── Driver CRUD + assignment mutations ───────────────────────────────────────
-// Endpoints (pending driver-management-service):
-//   POST   /drivers
-//   PATCH  /drivers/:id
-//   DELETE /drivers/:id
-//   POST   /drivers/:id/assign    { vehicle_id }   (204)
-//   POST   /drivers/:id/unassign                    (204)
+// ── Device CRUD mutations ────────────────────────────────────────────────────
 
-/** Create a driver (POST /drivers). */
-export function useCreateDriver() {
-  const qc = useQueryClient();
-  return useMutation<Driver, Error, CreateDriverPayload>({
-    mutationFn: async (payload) => {
-      const w = await apiPost<unknown, DriverWire>('/drivers', driverToWire(payload));
-      return mapDriver(w);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
-  });
-}
-
-/** Update a driver (PUT /drivers/:id). */
-export function useUpdateDriver() {
-  const qc = useQueryClient();
-  return useMutation<Driver, Error, { id: string; changes: UpdateDriverPayload }>({
-    mutationFn: async ({ id, changes }) => {
-      const w = await apiPut<unknown, DriverWire>(`/drivers/${id}`, driverToWire(changes));
-      return mapDriver(w);
-    },
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.drivers() });
-    },
-  });
-}
-
-/** Delete a driver (DELETE /drivers/:id). */
-export function useDeleteDriver() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, string>({
-    mutationFn: (id) => apiDelete(`/drivers/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
-  });
-}
-
-/** Assign a driver to a vehicle (POST /drivers/:id/assign, 204). */
-export function useAssignDriverVehicle() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, { driverId: string; vehicleId: string }>({
-    mutationFn: ({ driverId, vehicleId }) =>
-      apiPostNoContent(`/drivers/${driverId}/assign`, { vehicle_id: vehicleId }),
-    onSuccess: (_d, { driverId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(driverId) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.drivers() });
-    },
-  });
-}
-
-/** Unassign a driver from their vehicle (POST /drivers/:id/unassign, 204). */
-export function useUnassignDriverVehicle() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, string>({
-    mutationFn: (driverId) => apiPostNoContent(`/drivers/${driverId}/unassign`),
-    onSuccess: (_d, driverId) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(driverId) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.drivers() });
-    },
-  });
-}
-
-// ── Device CRUD + assignment mutations ───────────────────────────────────────
-// Endpoints (pending device-management-service):
-//   POST   /telemetry/devices
-//   PATCH  /telemetry/devices/:id
-//   DELETE /telemetry/devices/:id
-//   POST   /telemetry/devices/:id/bind     { vehicle_id }   (204)
-//   POST   /telemetry/devices/:id/unbind                      (204)
-
-/** Create a device (POST /telemetry/devices). */
+/** Create a device (POST /devices — imei must be 15-digit Luhn-valid). */
 export function useCreateDevice() {
   const qc = useQueryClient();
   return useMutation<Device, Error, CreateDevicePayload>({
-    mutationFn: async (payload) => {
-      const w = await apiPost<unknown, DeviceWire>('/telemetry/devices', deviceToWire(payload));
-      return mapDevice(w);
-    },
+    mutationFn: (payload) => apiPost<CreateDevicePayload, Device>('/devices', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }
 
-/** Update a device (PUT /telemetry/devices/:id). */
+/** Update a device (PATCH /devices/:id — imei immutable server-side). */
 export function useUpdateDevice() {
   const qc = useQueryClient();
   return useMutation<Device, Error, { id: string; changes: UpdateDevicePayload }>({
-    mutationFn: async ({ id, changes }) => {
-      const w = await apiPut<unknown, DeviceWire>(
-        `/telemetry/devices/${id}`,
-        deviceToWire(changes),
-      );
-      return mapDevice(w);
-    },
-    onSuccess: (_data, { id }) => {
+    mutationFn: ({ id, changes }) => apiPatch<UpdateDevicePayload, Device>(`/devices/${id}`, changes),
+    onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.assets.deviceDetail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.devices() });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.all });
     },
   });
 }
 
-/** Delete a device (DELETE /telemetry/devices/:id). */
-export function useDeleteDevice() {
+/** Decommission a device (DELETE /devices/:id — soft, 204). */
+export function useDecommissionDevice() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: (id) => apiDelete(`/telemetry/devices/${id}`),
+    mutationFn: (id) => apiDeleteNoContent(`/devices/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }
+/** Backwards-compatible alias — DELETE = decommission in the backend semantics. */
+export const useDeleteDevice = useDecommissionDevice;
 
-/** Bind a device to a vehicle (POST /telemetry/devices/:id/bind, 204). */
-export function useAssignDeviceVehicle() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, { deviceId: string; vehicleId: string }>({
-    mutationFn: ({ deviceId, vehicleId }) =>
-      apiPostNoContent(`/telemetry/devices/${deviceId}/bind`, { vehicle_id: vehicleId }),
-    onSuccess: (_d, { deviceId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.deviceDetail(deviceId) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.devices() });
-    },
-  });
-}
+// ── Vehicle ↔ Device binding (§11) ───────────────────────────────────────────
 
-/** Unbind a device from its vehicle (POST /telemetry/devices/:id/unbind, 204). */
-export function useUnassignDeviceVehicle() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, string>({
-    mutationFn: (deviceId) => apiPostNoContent(`/telemetry/devices/${deviceId}/unbind`),
-    onSuccess: (_d, deviceId) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.deviceDetail(deviceId) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.devices() });
-    },
-  });
-}
-
-// ── Group CRUD mutations ─────────────────────────────────────────────────────
-// Endpoints (pending fleet-management-service):
-//   POST   /fleet/groups
-//   PATCH  /fleet/groups/:id
-//   DELETE /fleet/groups/:id
-
-/** Create a group (POST /fleet/groups). */
-export function useCreateGroup() {
-  const qc = useQueryClient();
-  return useMutation<VehicleGroup, Error, CreateGroupPayload>({
-    mutationFn: async (payload) => {
-      const w = await apiPost<unknown, GroupWire>('/fleet/groups', groupToWire(payload));
-      return mapGroup(w);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
-  });
-}
-
-/** Update a group (PUT /fleet/groups/:id). */
-export function useUpdateGroup() {
-  const qc = useQueryClient();
-  return useMutation<VehicleGroup, Error, { id: string; changes: UpdateGroupPayload }>({
-    mutationFn: async ({ id, changes }) => {
-      const w = await apiPut<unknown, GroupWire>(`/fleet/groups/${id}`, groupToWire(changes));
-      return mapGroup(w);
-    },
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.groupDetail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.groups() });
-    },
-  });
-}
-
-/** Delete a group (DELETE /fleet/groups/:id). */
-export function useDeleteGroup() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, string>({
-    mutationFn: (id) => apiDelete(`/fleet/groups/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
-  });
-}
-
-// ── Optimistic vehicle status action (preserved UX) ──────────────────────────
 /**
- * Optimistic vehicle status action — transfer to another fleet or toggle
- * maintenance (Fleet-Management §5.1). Wraps `useUpdateVehicle` so the real
- * PATCH endpoint is used when present; falls back to an optimistic in-cache
- * update so the UI stays responsive while the request is in flight.
+ * Bind a device to a vehicle (POST /vehicles/:id/devices/:deviceId).
+ * 409 when the device is already bound or would duplicate the primary slot.
  */
-export function useVehicleStatusAction() {
+export function useBindDeviceToVehicle() {
   const qc = useQueryClient();
-  const update = useUpdateVehicle();
-  return useMutation<
-    Vehicle,
-    Error,
-    { id: string; status: Vehicle['status'] },
-    { prev: Vehicle[] | undefined }
-  >({
-    mutationFn: ({ id, status }) => update.mutateAsync({ id, changes: { status } }),
-    onMutate: async ({ id, status }) => {
-      const listKey = queryKeys.assets.vehicles();
-      await qc.cancelQueries({ queryKey: listKey });
-      const prev = qc.getQueryData<Vehicle[]>(listKey);
-      qc.setQueryData<Vehicle[]>(listKey, (old) =>
-        (old ?? []).map((v) =>
-          v.id === id ? { ...v, status, updatedAt: new Date().toISOString() } : v,
-        ),
-      );
-      qc.setQueryData<Vehicle | undefined>(queryKeys.assets.vehicleDetail(id), (old) =>
-        old ? { ...old, status } : old,
-      );
-      return { prev };
+  return useMutation<BoundDevice, Error, { vehicleId: string; deviceId: string } & BindDevicePayload>({
+    mutationFn: ({ vehicleId, deviceId, role, isPrimary }) =>
+      apiPost<BindDevicePayload, BoundDevice>(`/vehicles/${vehicleId}/devices/${deviceId}`, {
+        ...(role ? { role } : {}),
+        ...(isPrimary !== undefined ? { isPrimary } : {}),
+      }),
+    onSuccess: (_d, { vehicleId }) => {
+      qc.invalidateQueries({ queryKey: [...queryKeys.assets.all, 'vehicleDevices', vehicleId] });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.all });
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(queryKeys.assets.vehicles(), ctx.prev);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+  });
+}
+
+/** Unbind a device from its vehicle (DELETE /vehicles/:id/devices/:deviceId, 204). */
+export function useUnbindDeviceFromVehicle() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { vehicleId: string; deviceId: string }>({
+    mutationFn: ({ vehicleId, deviceId }) =>
+      apiDeleteNoContent(`/vehicles/${vehicleId}/devices/${deviceId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }

@@ -156,6 +156,22 @@ describe('TripsPage', () => {
       expect(rows.length - 1).toBe(plannedCount);
     });
   });
+
+  it('shows the honest "not available yet" empty state in REAL mode (§22)', async () => {
+    // Real mode: no mock fallback — useTrips resolves to [] (no trips API yet).
+    window.localStorage.setItem('fleetvision_use_mock', 'false');
+    try {
+      renderTripsList();
+      expect(await screen.findByText('No trips yet')).toBeInTheDocument();
+      expect(screen.getByText(/Trip history APIs are not available yet/)).toBeInTheDocument();
+      // The filter toolbar/table never render — there is nothing to filter.
+      expect(
+        screen.queryByPlaceholderText('Search vehicle / driver / id…'),
+      ).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.setItem('fleetvision_use_mock', 'true');
+    }
+  });
 });
 
 describe('TripDetailPage', () => {
@@ -202,5 +218,21 @@ describe('TripDetailPage', () => {
       screen.queryByText('No events on this trip.') ||
       screen.getAllByText(/Overspeed|Stop|Idle/).length > 0;
     expect(hasEvents).toBeTruthy();
+  });
+
+  it('shows the "not available yet" empty state in REAL mode (§22)', async () => {
+    // Real mode: useTripDetail resolves to null — no trips API exists yet, so
+    // the page honestly explains that instead of faking a replay.
+    window.localStorage.setItem('fleetvision_use_mock', 'false');
+    try {
+      renderTripDetail('TR-9999');
+      expect(await screen.findByText('No trips yet')).toBeInTheDocument();
+      expect(screen.getByText(/Trip history APIs are not available yet/)).toBeInTheDocument();
+      expect(screen.getByText('Back to trips')).toBeInTheDocument();
+      // The playback UI never renders without real data.
+      expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.setItem('fleetvision_use_mock', 'true');
+    }
   });
 });

@@ -1,149 +1,245 @@
 /**
- * Fleet dashboard API + data hooks.
+ * Fleet dashboard API + data hooks — REAL backend (Sprint E).
  *
- * The Fleet Dashboard (UI_UX_Design.md §1) needs fleet stats, 24h activity,
- * active alerts, attention list, utilization, map vehicles, and weather. None
- * of these endpoints exist in the backend yet — so each query resolves from
- * static mock data (`mock/fleet-data.ts`) with a small latency to mimic a real
- * fetch and exercise the loading skeleton states.
+ * Sources:
+ *   - fleet-management GET /summary            → registry counts (stat cards)
+ *   - fleet-management GET /vehicles (paged)   → the vehicle registry
+ *   - gps-engine      GET /tracking/devices/status → connection state (ONLINE/OFFLINE/STALE)
+ *   - gps-engine      GET /positions/latest    → latest position per vehicle (map bootstrap)
+ *   - gps-engine      GET /positions/:id/latest→ single-vehicle detail
+ *   - fleet-mgmt      GET /vehicles/:id/devices→ bound devices for the detail drawer
  *
- * When a real endpoint lands, replace the mock body of the matching function
- * with `apiGet<...Wire>('/...')` + a `mapXxxResponse(wire)` and keep the hook
- * untouched — the UI is already wired to these return types.
+ * Mock mode (`?useMock=true`, dev/demo only): the deterministic fixture
+ * dataset stands in so the UI stays demoable offline. Production is real-only
+ * — no unconditional mock returns remain (Sprint E §31).
+ *
+ * Wire notes:
+ *   - fleet-management wraps payloads in { data } (apiGet unwraps).
+ *   - gps-engine REST responds RAW (no envelope) — hence apiGetRaw.
+ *   - `latest` position `vehicleId` may carry the deviceId when a device is
+ *     UNBOUND (gps-engine fallback); bound devices carry the registry vehicleId.
  */
 import { useQuery } from '@tanstack/react-query';
 
-import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
-import {
-  mockActivity,
-  mockAlerts,
-  mockAttention,
-  mockFleetStats,
-  mockMapVehicles,
-  mockTripDetail,
-  mockTrips,
-  mockUtilization,
-  mockVehicleDetail,
-  mockWeather,
-} from '@/mock/fleet-data';
+import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
+import type { Alarm } from '@/types/alarm.types';
+import type { BoundDevice, FleetSummary } from '@/types/asset.types';
 import type {
-  ActivityBucket,
-  AttentionItem,
+  DeviceConnection,
   FleetAlert,
   FleetStats,
-  FleetUtilization,
+  LatestPosition,
   MapVehicle,
   Trip,
   TripDetail,
   VehicleDetail,
-  WeatherSnapshot,
+  VehiclePresence,
 } from '@/types/fleet.types';
+import { apiGet, apiGetRaw } from './client';
+import { fetchAllVehiclesAsMap } from './asset.api';
 import { queryKeys } from './query-keys';
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Derive the UI movement state from a position + connection state (§18). */
+function movementState(pos: LatestPosition | undefined, presence: VehiclePresence): MapVehicle['state'] {
+  if (presence === 'OFFLINE' || presence === 'UNKNOWN') return 'offline';
+  if (presence === 'STALE') return 'stopped';
+  if (!pos) return 'stopped';
+  if (pos.speedKph > 2) return 'driving';
+  return pos.ignitionOn === false ? 'stopped' : 'idle';
+}
+
+/** Build a map vehicle row from the real backend triple (registry + status + position). */
+function toMapVehicle(
+  vehicle: { id: string; name: string; code: string; plate: string | null },
+  presence: VehiclePresence,
+  pos: LatestPosition | undefined,
+  deviceId: string | undefined,
+  lastSeenAt: string | undefined,
+): MapVehicle {
+  return {
+    id: vehicle.id,
+    label: vehicle.plate ?? `${vehicle.name} (${vehicle.code})`,
+    state: movementState(pos, presence),
+    lat: pos?.latitude ?? 0,
+    lng: pos?.longitude ?? 0,
+    heading: pos?.headingDeg ?? 0,
+    speed: pos?.speedKph ?? 0,
+    ignitionOn: pos?.ignitionOn ?? undefined,
+    updatedAt: pos?.capturedAt,
+    deviceId,
+    presence,
+    lastSeenAt,
+  };
+}
+
 // ── Fetchers ─────────────────────────────────────────────────────────────────
-// All mock-backed — these services (analytics, fleet, tracking, weather) don't
-// exist yet. In production (shouldUseMock() === false), these return empty
-// defaults so the UI renders gracefully rather than crashing.
 
-/** GET /api/v1/fleet/stats — mock-only. */
+/** GET /tracking/devices/status — connection state for every tenant device. */
+export function fetchDeviceStatuses(): Promise<DeviceConnection[]> {
+  return withMockFallback(
+    () => apiGetRaw<DeviceConnection[]>('/tracking/devices/status'),
+    () => resolveMock([]),
+  );
+}
+
+/** GET /positions/latest — latest position per vehicle (one request, no N+1). */
+export function fetchLatestPositions(): Promise<LatestPosition[]> {
+  return withMockFallback(
+    () => apiGetRaw<LatestPosition[]>('/positions/latest'),
+    () => resolveMock([]),
+  );
+}
+
+/** GET /summary + /tracking/devices/status → the stat-card row (§21). */
 function fetchFleetStats(): Promise<FleetStats> {
-  if (!shouldUseMock()) return Promise.resolve(mockFleetStats);
-  return resolveMock(mockFleetStats);
+  if (shouldUseMock()) {
+    // Dev/demo fixture: derive the old-style counts from the map fixture.
+    const fleet = mockMapVehicles;
+    const online = fleet.filter((v) => v.state !== 'offline').length;
+    return resolveMock({
+      totalVehicles: fleet.length,
+      online,
+      offline: fleet.length - online,
+      stale: 0,
+      unknown: 0,
+      totalFleets: 0,
+      totalDevices: 0,
+    });
+  }
+  return withMockFallback(async () => {
+    const [summary, statuses] = await Promise.all([
+      apiGet<FleetSummary>('/summary'),
+      fetchDeviceStatuses(),
+    ]);
+    const online = statuses.filter((s) => s.state === 'ONLINE').length;
+    const offline = statuses.filter((s) => s.state === 'OFFLINE').length;
+    const stale = statuses.filter((s) => s.state === 'STALE').length;
+    // Vehicles without any device status record are UNKNOWN (never guessed).
+    const unknown = Math.max(0, summary.vehicles.active - statuses.length);
+    return {
+      totalVehicles: summary.vehicles.active,
+      online,
+      offline,
+      stale,
+      unknown,
+      totalFleets: summary.fleets.active,
+      totalDevices: summary.devices.total,
+    } satisfies FleetStats;
+  }, () => resolveMock({ totalVehicles: 0, online: 0, offline: 0, stale: 0, unknown: 0, totalFleets: 0, totalDevices: 0 }));
 }
 
-/** GET /api/v1/fleet/activity?range= — mock-only. */
-function fetchActivity(_range: string): Promise<ActivityBucket[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockActivity);
-}
-
-/** GET /api/v1/alerts?status=active — mock-only. */
-function fetchActiveAlerts(): Promise<FleetAlert[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockAlerts);
-}
-
-/** GET /api/v1/fleet/attention — mock-only. */
-function fetchAttention(): Promise<AttentionItem[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockAttention);
-}
-
-/** GET /api/v1/fleet/utilization — mock-only. */
-function fetchUtilization(): Promise<FleetUtilization> {
-  if (!shouldUseMock()) return Promise.resolve(mockUtilization);
-  return resolveMock(mockUtilization);
-}
-
-/** GET /api/v1/tracking/positions — mock-only. */
+/**
+ * The live map's base layer: registry vehicles joined with their latest
+ * positions + connection states. Live deltas then stream over the WebSocket.
+ */
 function fetchMapVehicles(): Promise<MapVehicle[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockMapVehicles);
+  if (shouldUseMock()) return resolveMock(mockMapVehicles);
+  return withMockFallback(async () => {
+    const { vehicles, devices } = await fetchAllVehiclesAsMap();
+    const [statuses, positions] = await Promise.all([
+      fetchDeviceStatuses(),
+      fetchLatestPositions(),
+    ]);
+    const statusByDevice = new Map(statuses.map((s) => [s.deviceId, s]));
+    const vehicleToDevice = new Map<string, { deviceId: string; lastSeenAt?: string }>();
+    for (const d of devices) {
+      if (d.vehicleId) {
+        const status = statusByDevice.get(d.id);
+        vehicleToDevice.set(d.vehicleId, { deviceId: d.id, lastSeenAt: status?.lastSeenAt });
+      }
+    }
+    const posByVehicle = new Map(positions.map((p) => [p.vehicleId, p]));
+    return vehicles.map((v) => {
+      const bound = vehicleToDevice.get(v.id);
+      const status = bound ? statusByDevice.get(bound.deviceId) : undefined;
+      const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
+      // Positions of unbound devices are keyed by deviceId (gps-engine fallback).
+      const pos = posByVehicle.get(v.id) ?? (bound ? posByVehicle.get(bound.deviceId) : undefined);
+      return toMapVehicle(v, presence, pos, bound?.deviceId, status?.lastSeenAt);
+    });
+  }, () => resolveMock([]));
 }
 
-/** GET /api/v1/weather?lat=&lng= — mock-only. */
-function fetchWeather(): Promise<WeatherSnapshot> {
-  if (!shouldUseMock()) return Promise.resolve(mockWeather);
-  return resolveMock(mockWeather);
-}
-
-/** GET /api/v1/tracking/vehicles/{id}/position + enrichment — mock-only. */
+/**
+ * Enriched vehicle detail (§10/§19): registry record + bound devices + the
+ * latest position + connection state. Real-only; throws when the backend is
+ * unreachable so the drawer can show an honest error state.
+ */
 function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
-  return resolveMock(mockVehicleDetail(id));
-}
-
-/** GET /api/v1/trips — mock-only. */
-function fetchTrips(): Promise<Trip[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockTrips);
-}
-
-/** GET /api/v1/trips/{id} + replay track — mock-only. */
-function fetchTripDetail(id: string): Promise<TripDetail> {
-  return resolveMock(mockTripDetail(id));
-}
-
-/** GET /api/v1/trips/active (pending backend). */
-function fetchActiveTrips(): Promise<Trip[]> {
-  return resolveMock(mockTrips.filter((t) => t.status === 'in_progress'));
+  return withMockFallback<VehicleDetail>(async () => {
+    const [vehicleWire, devicesWire, statusList] = await Promise.all([
+      apiGet<{ id: string; name: string; code: string; plate: string | null }>(`/vehicles/${id}`),
+      apiGet<BoundDevice[]>(`/vehicles/${id}/devices`),
+      fetchDeviceStatuses(),
+    ]);
+    const primary = devicesWire.find((d) => d.isPrimary) ?? devicesWire[0];
+    const status = primary
+      ? statusList.find((s) => s.deviceId === primary.deviceId)
+      : undefined;
+    let position: LatestPosition | undefined;
+    try {
+      position = await apiGetRaw<LatestPosition>(`/positions/${id}/latest`);
+    } catch {
+      // 404 when the vehicle has never reported — the drawer shows "never seen".
+      position = undefined;
+    }
+    const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
+    return {
+      id: vehicleWire.id,
+      label: vehicleWire.plate ?? `${vehicleWire.name} (${vehicleWire.code})`,
+      state: movementState(position, presence),
+      lat: position?.latitude ?? 0,
+      lng: position?.longitude ?? 0,
+      heading: position?.headingDeg ?? 0,
+      speed: position?.speedKph ?? 0,
+      ignitionOn: position?.ignitionOn ?? false,
+      updatedAt: position?.capturedAt ?? '',
+      presence,
+      deviceId: primary?.deviceId,
+      odometer: 0, // Not exposed by the backend yet — never fabricated.
+      address: '', // Reverse geocoding is a map-engine concern (out of scope).
+      events: [],
+    } satisfies VehicleDetail;
+  }, async (): Promise<VehicleDetail> => {
+    const fixture = mockMapVehicles.find((v) => v.id === id) ?? mockMapVehicles[0];
+    if (!fixture) throw new Error('mock fixture unavailable');
+    return {
+      ...fixture,
+      odometer: 0,
+      address: '',
+      ignitionOn: fixture.ignitionOn ?? false,
+      updatedAt: fixture.updatedAt ?? '',
+      events: [],
+    };
+  });
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
-/** Fleet KPI summary (stat-card row). */
+/** Fleet KPI summary (stat-card row) — real counts, single batched fetch. */
 export function useFleetStats() {
   return useQuery({ queryKey: queryKeys.fleet.stats(), queryFn: fetchFleetStats });
 }
 
-/** 24h fleet activity series for the stacked-area chart. */
-export function useFleetActivity(range: string) {
-  return useQuery({
-    queryKey: queryKeys.fleet.activity(range),
-    queryFn: () => fetchActivity(range),
-  });
+/** Connection state of every tenant device (map + dashboard). */
+export function useDeviceStatuses() {
+  return useQuery({ queryKey: queryKeys.fleet.deviceStatuses(), queryFn: fetchDeviceStatuses });
 }
 
-/** Severity-sorted active alerts. */
-export function useActiveAlerts() {
-  return useQuery({ queryKey: queryKeys.fleet.alerts(), queryFn: fetchActiveAlerts });
+/** Latest position per vehicle (map bootstrap, NOT per-vehicle polling). */
+export function useLatestPositions() {
+  return useQuery({ queryKey: queryKeys.fleet.latestPositions(), queryFn: fetchLatestPositions });
 }
 
-/** Vehicles needing attention (ranked). */
-export function useAttention() {
-  return useQuery({ queryKey: queryKeys.fleet.attention(), queryFn: fetchAttention });
-}
-
-/** Fleet utilization donut breakdown. */
-export function useFleetUtilization() {
-  return useQuery({ queryKey: queryKeys.fleet.utilization(), queryFn: fetchUtilization });
-}
-
-/** Latest vehicle positions for the map preview. */
+/** The live map's base layer (registry × status × position). */
 export function useMapVehicles() {
   return useQuery({ queryKey: queryKeys.fleet.mapVehicles(), queryFn: fetchMapVehicles });
 }
 
-/** Enriched vehicle detail for the device popup drawer. */
+/** Enriched vehicle detail for the map popup drawer. */
 export function useVehicleDetail(id: string | null) {
   return useQuery({
     queryKey: id ? queryKeys.fleet.vehicleDetail(id) : ['fleet', 'vehicle', 'none'],
@@ -152,12 +248,30 @@ export function useVehicleDetail(id: string | null) {
   });
 }
 
-/** Trip list for the Trips page. */
+// ── Trips (REAL backend endpoint pending — honest empty, never faked) ────────
+
+/**
+ * Trip history. gps-engine persists trip_events (Sprint A) but exposes no
+ * trips REST endpoint yet; in REAL mode these resolve to an EMPTY list and the
+ * Trips page shows its "no data yet" state. The deterministic fixture dataset
+ * stands in only in explicit dev/demo mock mode.
+ */
+function fetchTrips(): Promise<Trip[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
+  return resolveMock(mockTrips);
+}
+
+function fetchTripDetail(_id: string): Promise<TripDetail | null> {
+  if (!shouldUseMock()) return Promise.resolve(null);
+  return resolveMock(mockTripDetail(_id));
+}
+
+/** Trip list for the Trips page (empty until the backend ships a trips API). */
 export function useTrips() {
   return useQuery({ queryKey: queryKeys.trips.list(), queryFn: fetchTrips });
 }
 
-/** Enriched trip detail (replay track + events) for the Trip detail page. */
+/** Trip detail (replay track + events). Null in real mode until the API lands. */
 export function useTripDetail(id: string | null) {
   return useQuery({
     queryKey: id ? queryKeys.trips.detail(id) : ['trips', 'detail', 'none'],
@@ -166,12 +280,34 @@ export function useTripDetail(id: string | null) {
   });
 }
 
-/** Currently in-progress trips. */
-export function useActiveTrips() {
-  return useQuery({ queryKey: queryKeys.trips.active(), queryFn: fetchActiveTrips });
-}
-
-/** Current weather + forecast. */
-export function useWeather() {
-  return useQuery({ queryKey: queryKeys.fleet.weather(), queryFn: fetchWeather });
+/**
+ * Active alerts — REAL `/notification/alerts` (notification-service), adapted
+ * to the dashboard panel's FleetAlert shape. When the service is not deployed
+ * the query errors and the panel shows its error state (§22: no fake success).
+ */
+export function useActiveAlarms() {
+  return useQuery({
+    queryKey: queryKeys.fleet.alerts(),
+    queryFn: async (): Promise<FleetAlert[]> => {
+      const { fetchAlarms } = await import('./alarm.api');
+      const alarms = await fetchAlarms();
+      return alarms
+        .filter((a: Alarm) => a.status === 'raised' || a.status === 'escalated')
+        .map(
+          (a: Alarm): FleetAlert => ({
+            id: a.id,
+            type: a.type === 'overspeed' || a.type === 'geofence' ? a.type : 'geofence',
+            severity:
+              a.severity === 'critical'
+                ? 'critical'
+                : a.severity === 'major'
+                  ? 'warning'
+                  : 'info',
+            vehicleLabel: a.vehicleLabel || a.vehicleId,
+            detail: a.message || a.detail,
+            occurredAt: a.raisedAt,
+          }),
+        );
+    },
+  });
 }

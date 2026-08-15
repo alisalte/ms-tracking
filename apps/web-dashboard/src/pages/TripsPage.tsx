@@ -1,11 +1,11 @@
 import { Box, Card, Stack } from '@mui/material';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Route } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
-import { type Column, PageHeader, StatusBadge, Toolbar } from '@/components/ui';
+import { type Column, EmptyState, PageHeader, StatusBadge, Toolbar } from '@/components/ui';
 import { DataTable } from '@/components/ui';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
@@ -23,9 +23,11 @@ const STATUSES: TripStatus[] = ['completed', 'in_progress', 'planned', 'cancelle
  * TripsPage — the fleet trip roster.
  *
  * A filterable table of trips (search by vehicle/driver + status chips). Row
- * click → trip detail with replay. Backed by `useTrips` (mock today, real
- * `GET /api/v1/trips` later). v3: restyled onto the unified DataTable + toolbar
- * + PageHeader.
+ * click → trip detail with replay. Backed by `useTrips`: in REAL mode the
+ * backend exposes no trips API yet, so the page honestly shows its
+ * "not available yet" empty state (§22 — no fabricated rows); the deterministic
+ * fixtures still load in explicit dev/demo mock mode (`?useMock=true`) so the
+ * replay UX stays demoable.
  */
 export function TripsPage() {
   const { t } = useTranslation();
@@ -124,43 +126,55 @@ export function TripsPage() {
     <Box>
       <PageHeader title={t('trips.title')} subtitle={t('trips.subtitle')} />
 
-      <Card>
-        <Toolbar
-          search
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholderKey="trips.list.searchPlaceholder"
-          right={
-            <Stack direction="row" gap={0.75} flexWrap="wrap" alignItems="center">
-              <StatusBadge
-                label={t('trips.status.all')}
-                tone="neutral"
-                variant={statusFilter === 'all' ? 'solid' : 'outlined'}
-                active={statusFilter === 'all'}
-                onClick={() => setStatusFilter('all')}
-              />
-              {STATUSES.map((s) => (
+      {!isLoading && trips.length === 0 ? (
+        /* REAL mode: no trips API yet — honest empty state, never fake rows. */
+        <Card>
+          <EmptyState
+            icon={Route}
+            title={t('trips.empty.title')}
+            description={t('trips.empty.notAvailable')}
+            py={10}
+          />
+        </Card>
+      ) : (
+        <Card>
+          <Toolbar
+            search
+            searchValue={query}
+            onSearchChange={setQuery}
+            searchPlaceholderKey="trips.list.searchPlaceholder"
+            right={
+              <Stack direction="row" gap={0.75} flexWrap="wrap" alignItems="center">
                 <StatusBadge
-                  key={s}
-                  label={t(`trips.status.${s}`)}
-                  tone={STATUS_TONE[s]}
-                  variant={statusFilter === s ? 'solid' : 'outlined'}
-                  active={statusFilter === s}
-                  onClick={() => setStatusFilter(s)}
+                  label={t('trips.status.all')}
+                  tone="neutral"
+                  variant={statusFilter === 'all' ? 'solid' : 'outlined'}
+                  active={statusFilter === 'all'}
+                  onClick={() => setStatusFilter('all')}
                 />
-              ))}
-            </Stack>
-          }
-        />
-        <DataTable
-          rows={filtered}
-          columns={columns}
-          rowKey={(trip) => trip.id}
-          loading={isLoading}
-          onRowClick={(trip) => navigate(`/trips/${trip.id}`)}
-          maxHeight="calc(100vh - 280px)"
-        />
-      </Card>
+                {STATUSES.map((s) => (
+                  <StatusBadge
+                    key={s}
+                    label={t(`trips.status.${s}`)}
+                    tone={STATUS_TONE[s]}
+                    variant={statusFilter === s ? 'solid' : 'outlined'}
+                    active={statusFilter === s}
+                    onClick={() => setStatusFilter(s)}
+                  />
+                ))}
+              </Stack>
+            }
+          />
+          <DataTable
+            rows={filtered}
+            columns={columns}
+            rowKey={(trip) => trip.id}
+            loading={isLoading}
+            onRowClick={(trip) => navigate(`/trips/${trip.id}`)}
+            maxHeight="calc(100vh - 280px)"
+          />
+        </Card>
+      )}
     </Box>
   );
 }

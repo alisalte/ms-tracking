@@ -1,57 +1,109 @@
-import { Box, Button, Chip, Stack } from '@mui/material';
-import type { TFunction } from 'i18next';
+import { Box, Button, Card, CardContent, Skeleton, Stack } from '@mui/material';
 import {
-  Bell,
+  Cpu,
   Download,
+  HelpCircle,
+  History,
+  Layers,
   type LucideIcon,
-  ParkingSquare,
-  Route,
   Truck,
+  Wifi,
   WifiOff,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { useFleetStats } from '@/api/fleet.api';
+import { ErrorState } from '@/components/common/ErrorState';
 import { useThemeContext } from '@/theme/ThemeRegistry';
 import { glass, status } from '@/theme/palette';
 
 import { ActiveAlertsPanel } from './ActiveAlertsPanel';
 import { AlertTypeBreakdownChart } from './AlertTypeBreakdownChart';
-import { FleetActivityChart } from './FleetActivityChart';
 import { FleetMapPreview } from './FleetMapPreview';
-import { FleetPerformanceChart } from './FleetPerformanceChart';
-import { FleetUtilizationPanel } from './FleetUtilizationPanel';
 import { KpiCard } from './KpiCard';
 import { LiveBadge } from './LiveBadge';
-import { VehiclesAttentionList } from './VehiclesAttentionList';
-import { WeatherWidget } from './WeatherWidget';
 
 /** Section gap between dashboard rows. */
 const ROW_GAP = 2.25;
 
+/** A stat-card descriptor — REAL counts only, no fabricated deltas/sparklines. */
+interface StatCardSpec {
+  titleKey: string;
+  value: number;
+  icon: LucideIcon;
+  iconColor: string;
+}
+
 /**
- * DashboardGrid — the Fleet Dashboard, restyled with a glassmorphism + aurora
- * gradient look.
+ * DashboardGrid — the Fleet Dashboard on REAL backend data (Sprint E §21).
  *
  * Layout:
  * 1. Page header: title + subtitle + live badge + export, set against an aurora
  *    gradient banner with floating colored blobs.
- * 2. KPI row — five glass stat cards with Lucide icons, trend chips, sparklines.
- * 3. Two-column grid: Fleet Activity chart (wide) + Active Alerts (narrow)
- * 4. Three-column grid: Alert Types + Utilization + Performance
- * 5. Two-column grid: Vehicles Attention (wide) + Weather (narrow)
- * 6. Full-width Fleet Map Preview
+ * 2. KPI row — the §21 minimum (Total Vehicles, Online, Offline, Stale, Unknown)
+ *    from fleet-management GET /summary × gps-engine device statuses, plus two
+ *    honest extras (Fleets, Devices) from the same summary.
+ * 3. Two-column grid: Active Alerts (wide) + Alert Types (narrow) — both from
+ *    the real notification-service, with honest error/empty states.
+ * 4. Full-width Fleet Map Preview (registry × status × position join).
  *
- * All data is mock-backed (useFleetStats) so the dashboard is fully demoable.
+ * Widgets that have no backend (24h activity, utilization, performance,
+ * attention list, weather) were removed rather than faked (§22).
  */
 export function DashboardGrid() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { data: stats } = useFleetStats();
   const { mode } = useThemeContext();
+  const { data: stats, isLoading, isError, error, refetch } = useFleetStats();
 
   const pageGradient = mode === 'dark' ? glass.pageGradientDark : glass.pageGradientLight;
+
+  // §21 stat row — real counts; secondary registry counts rendered as smaller cards.
+  const primaryCards: StatCardSpec[] = [
+    {
+      titleKey: 'dashboard.stats.totalVehicles',
+      value: stats?.totalVehicles ?? 0,
+      icon: Truck,
+      iconColor: status.blue,
+    },
+    {
+      titleKey: 'dashboard.stats.online',
+      value: stats?.online ?? 0,
+      icon: Wifi,
+      iconColor: status.success,
+    },
+    {
+      titleKey: 'dashboard.stats.offline',
+      value: stats?.offline ?? 0,
+      icon: WifiOff,
+      iconColor: status.slate,
+    },
+    {
+      titleKey: 'dashboard.stats.stale',
+      value: stats?.stale ?? 0,
+      icon: History,
+      iconColor: status.amber,
+    },
+    {
+      titleKey: 'dashboard.stats.unknown',
+      value: stats?.unknown ?? 0,
+      icon: HelpCircle,
+      iconColor: status.slate,
+    },
+  ];
+  const secondaryCards: StatCardSpec[] = [
+    {
+      titleKey: 'dashboard.stats.fleets',
+      value: stats?.totalFleets ?? 0,
+      icon: Layers,
+      iconColor: status.indigo,
+    },
+    {
+      titleKey: 'dashboard.stats.devices',
+      value: stats?.totalDevices ?? 0,
+      icon: Cpu,
+      iconColor: status.teal,
+    },
+  ];
 
   return (
     <Box
@@ -172,21 +224,75 @@ export function DashboardGrid() {
         </Stack>
       </Box>
 
-      {/* ── KPI card row ── */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' },
-          gap: 2,
-          mb: ROW_GAP,
-        }}
-      >
-        {kpiCards(stats, t, navigate).map((card) => (
-          <KpiCard key={card.titleKey} {...card} />
-        ))}
-      </Box>
+      {/* ── KPI card row (§21) ── */}
+      {isError ? (
+        <Card
+          className="fv-glass"
+          sx={{ mb: ROW_GAP, borderRadius: glass.radius, backgroundColor: 'transparent' }}
+        >
+          <CardContent>
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: 'repeat(2, 1fr)',
+              sm: 'repeat(3, 1fr)',
+              md: 'repeat(5, 1fr)',
+            },
+            gap: 2,
+            mb: ROW_GAP,
+          }}
+        >
+          {['total', 'online', 'offline', 'stale', 'unknown'].map((slot) => (
+            <Card key={slot} className="fv-glass" sx={{ borderRadius: glass.radius }}>
+              <CardContent sx={{ p: 2 }}>
+                <Skeleton variant="rounded" width={46} height={46} sx={{ mb: 1.5 }} />
+                <Skeleton variant="text" width="60%" />
+                <Skeleton variant="text" width={72} height={40} />
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: 'repeat(2, 1fr)',
+              sm: 'repeat(3, 1fr)',
+              md: 'repeat(5, 1fr)',
+            },
+            gap: 2,
+            mb: ROW_GAP,
+          }}
+        >
+          {primaryCards.map((card) => (
+            <KpiCard key={card.titleKey} {...card} />
+          ))}
+        </Box>
+      )}
 
-      {/* ── Activity (8) + Alerts (4) ── */}
+      {/* ── Registry extras: Fleets + Devices (secondary, same /summary source) ── */}
+      {!isError && !isLoading && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 2,
+            mb: ROW_GAP,
+          }}
+        >
+          {secondaryCards.map((card) => (
+            <KpiCard key={card.titleKey} {...card} />
+          ))}
+        </Box>
+      )}
+
+      {/* ── Alerts (8) + Alert types (4) ── */}
       <Box
         sx={{
           display: 'grid',
@@ -196,47 +302,10 @@ export function DashboardGrid() {
         }}
       >
         <Box sx={{ gridColumn: { xs: '1', lg: 'span 8' } }}>
-          <FleetActivityChart />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
           <ActiveAlertsPanel />
         </Box>
-      </Box>
-
-      {/* ── Alert types (4) + Utilization (4) + Performance (4) ── */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: 'repeat(12, 1fr)' },
-          gap: 2,
-          mb: ROW_GAP,
-        }}
-      >
         <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
           <AlertTypeBreakdownChart />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
-          <FleetUtilizationPanel />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
-          <FleetPerformanceChart />
-        </Box>
-      </Box>
-
-      {/* ── Attention (8) + Weather (4) ── */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: 'repeat(12, 1fr)' },
-          gap: 2,
-          mb: ROW_GAP,
-        }}
-      >
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 8' } }}>
-          <VehiclesAttentionList />
-        </Box>
-        <Box sx={{ gridColumn: { xs: '1', lg: 'span 4' } }}>
-          <WeatherWidget />
         </Box>
       </Box>
 
@@ -246,69 +315,4 @@ export function DashboardGrid() {
       </Box>
     </Box>
   );
-}
-
-/** KPI card descriptors — Lucide icon + value + label + trend + sparkline. */
-function kpiCards(
-  s: ReturnType<typeof useFleetStats>['data'] | undefined,
-  _t: TFunction,
-  _navigate: (p: string) => void,
-) {
-  return [
-    {
-      titleKey: 'dashboard.stats.active',
-      value: s?.totalActive ?? 0,
-      icon: Truck as LucideIcon,
-      iconColor: status.success,
-      delta: s?.deltas?.totalActive,
-      deltaLabel: 'vs yesterday',
-      sparkline: s?.sparklines?.totalActive,
-    },
-    {
-      titleKey: 'dashboard.stats.driving',
-      value: s?.driving ?? 0,
-      icon: Route as LucideIcon,
-      iconColor: status.blue,
-      delta: s?.deltas?.driving,
-      deltaLabel: 'vs yesterday',
-      sparkline: s?.sparklines?.driving,
-    },
-    {
-      titleKey: 'dashboard.stats.idle',
-      value: s?.idle ?? 0,
-      icon: ParkingSquare as LucideIcon,
-      iconColor: status.amber,
-      delta: s?.deltas?.idle,
-      deltaLabel: 'vs yesterday',
-      sparkline: s?.sparklines?.idle,
-    },
-    {
-      titleKey: 'dashboard.stats.alerts',
-      value: s?.alerts ?? 0,
-      icon: Bell as LucideIcon,
-      iconColor: status.danger,
-      delta: s?.deltas?.alerts,
-      deltaLabel: 'vs yesterday',
-      sparkline: s?.sparklines?.alerts,
-      meta:
-        s && s.criticalAlerts > 0 ? (
-          <Chip
-            label={`${s.criticalAlerts} CRIT`}
-            size="small"
-            color="error"
-            variant="outlined"
-            sx={{ height: 16, fontSize: '0.6rem' }}
-          />
-        ) : undefined,
-    },
-    {
-      titleKey: 'dashboard.stats.offline',
-      value: s?.offline ?? 0,
-      icon: WifiOff as LucideIcon,
-      iconColor: status.slate,
-      delta: s?.deltas?.offline,
-      deltaLabel: 'vs yesterday',
-      sparkline: s?.sparklines?.offline,
-    },
-  ];
 }

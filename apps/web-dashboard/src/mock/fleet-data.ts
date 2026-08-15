@@ -9,7 +9,6 @@
  */
 import type {
   ActivityBucket,
-  AttentionItem,
   FleetAlert,
   FleetStats,
   FleetUtilization,
@@ -18,27 +17,24 @@ import type {
   TripDetail,
   TripEvent,
   TripWaypoint,
-  VehicleDetail,
+  VehiclePresence,
   VehicleType,
-  WeatherSnapshot,
 } from '@/types/fleet.types';
 
-/** Fleet KPI summary (wireframe: Active 312 / Driving 184 / Idle 41 / Offline 87 / Alerts 7 · 2 CRIT). */
+/**
+ * Fleet KPI summary — the REAL Sprint E shape (§21): registry counts from
+ * fleet-management + the gps-engine connection projection. The mock branch of
+ * `fetchFleetStats` derives the same numbers from `mockMapVehicles` below;
+ * these constants exist for tests/docs with plausible demo magnitudes.
+ */
 export const mockFleetStats: FleetStats = {
-  totalActive: 312,
-  driving: 184,
-  idle: 41,
+  totalVehicles: 312,
+  online: 225,
   offline: 87,
-  alerts: 7,
-  criticalAlerts: 2,
-  deltas: { totalActive: 12, driving: 4, idle: 5, offline: -3, alerts: 2 },
-  sparklines: {
-    totalActive: [295, 300, 298, 305, 308, 302, 312],
-    driving: [170, 178, 175, 182, 188, 180, 184],
-    idle: [30, 35, 33, 38, 40, 36, 41],
-    offline: [95, 92, 90, 88, 85, 90, 87],
-    alerts: [4, 5, 3, 6, 5, 8, 7],
-  },
+  stale: 0,
+  unknown: 0,
+  totalFleets: 6,
+  totalDevices: 298,
 };
 
 /** 24-hour fleet activity series (driving / idle / stopped counts per hour). */
@@ -134,45 +130,6 @@ export const mockAlerts: FleetAlert[] = [
   },
 ];
 
-/** Vehicles needing attention — ranked blend of maintenance/behavior/AI/device. */
-export const mockAttention: AttentionItem[] = [
-  {
-    id: 'v1',
-    vehicleLabel: 'Truck-42',
-    category: 'behavior',
-    summary: 'Overspeed · 14:31',
-    occurredAt: '2026-08-07T14:31:00',
-  },
-  {
-    id: 'v2',
-    vehicleLabel: 'Van-07',
-    category: 'behavior',
-    summary: 'Excess idle · 18m',
-    occurredAt: '2026-08-07T14:05:00',
-  },
-  {
-    id: 'v3',
-    vehicleLabel: 'Truck-19',
-    category: 'maintenance',
-    summary: 'DTC P0420 · catalytic',
-    occurredAt: '2026-08-07T13:40:00',
-  },
-  {
-    id: 'v4',
-    vehicleLabel: 'Truck-55',
-    category: 'ai',
-    summary: 'Forward collision warning',
-    occurredAt: '2026-08-07T14:18:00',
-  },
-  {
-    id: 'v5',
-    vehicleLabel: 'Bus-12',
-    category: 'device',
-    summary: 'Low battery · 11%',
-    occurredAt: '2026-08-07T13:22:00',
-  },
-];
-
 /** Fleet utilization breakdown (wireframe: 73% / Driving 59% / Idle 13% / Stopped 19% / Offline 9%). */
 export const mockUtilization: FleetUtilization = {
   utilization: 73,
@@ -257,6 +214,16 @@ function buildMockFleet(): MapVehicle[] {
     // Spread within ~±0.06° (~6 km) of the depot at [51.338, 35.719].
     const lat = +(35.719 + (rand() - 0.5) * 0.12).toFixed(5);
     const lng = +(51.338 + (rand() - 0.5) * 0.12).toFixed(5);
+    const updatedAt = new Date(now - Math.round(rand() * 600_000)).toISOString(); // last 0–10 min
+    // REAL Sprint E fields: the device connection projection (§18) mirrors the
+    // movement state offline/online split so the dashboard stat chips, the map
+    // presence filters, and the list rows agree in mock mode. Devices that are
+    // not transmitting report an older last-seen (§19).
+    const presence: VehiclePresence = state === 'offline' ? 'OFFLINE' : 'ONLINE';
+    const lastSeenAt =
+      presence === 'OFFLINE'
+        ? new Date(now - 6 * 3600_000 - Math.round(rand() * 3600_000)).toISOString() // 6–7h ago
+        : updatedAt;
     fleet.push({
       id: `mv${i + 1}`,
       label: `${TYPE_LABEL[type]}-${String(100 + i)}`,
@@ -268,68 +235,16 @@ function buildMockFleet(): MapVehicle[] {
       speed,
       driver: state === 'offline' ? undefined : DRIVERS[Math.floor(rand() * DRIVERS.length)],
       ignitionOn: state !== 'offline' && state !== 'stopped',
-      updatedAt: new Date(now - Math.round(rand() * 600_000)).toISOString(), // last 0–10 min
-      tripId: moving ? `TR-${4000 + i}` : undefined,
+      updatedAt,
+      deviceId: `mock-device-${i + 1}`,
+      presence,
+      lastSeenAt,
     });
   }
   return fleet;
 }
 
 export const mockMapVehicles: MapVehicle[] = buildMockFleet();
-
-/** Reverse-geocode-ish sample addresses, cycled deterministically per vehicle. */
-const SAMPLE_ADDRESSES = [
-  'Enqelab Ave, Tehran',
-  'Valiasr St, Tehran',
-  'Mirdamad Blvd, Tehran',
-  'Azadi Sq, Tehran',
-  'Niavaran Blvd, Tehran',
-  'Resalat Hwy, Tehran',
-  'Hemmat Hwy, Tehran',
-  'Chamran Expwy, Tehran',
-] as const;
-
-/**
- * Build enriched detail for the device popup drawer from a vehicle id.
- *
- * Mock: derives odometer/address/ignition/events deterministically from the id.
- * When `GET /api/v1/tracking/vehicles/{id}/...` lands, replace this with a real
- * apiGet + wire→camelCase mapping.
- */
-export function mockVehicleDetail(id: string): VehicleDetail {
-  const v = mockMapVehicles.find((m) => m.id === id) ?? mockMapVehicles[0];
-  const rand = seeded(Number.parseInt(id.replace(/\D/g, '') || '1', 10) * 7919);
-  const events = mockAlerts.slice(0, 3 + Math.floor(rand() * 3)).map((a, i) => ({
-    id: `${v.id}-ev${i}`,
-    type: a.type,
-    severity: a.severity,
-    detail: a.detail,
-    occurredAt: a.occurredAt,
-  }));
-  return {
-    ...v,
-    odometer: 12_000 + Math.floor(rand() * 480_000),
-    address: SAMPLE_ADDRESSES[Math.floor(rand() * SAMPLE_ADDRESSES.length)] ?? SAMPLE_ADDRESSES[0],
-    ignitionOn: v.ignitionOn ?? v.state !== 'offline',
-    updatedAt: v.updatedAt ?? new Date().toISOString(),
-    events,
-  };
-}
-
-/** Current weather + 3-day forecast for the weather widget. */
-export const mockWeather: WeatherSnapshot = {
-  location: 'Tehran Depot',
-  condition: 'clear',
-  temperature: 34,
-  feelsLike: 37,
-  humidity: 22,
-  windSpeed: 14,
-  forecast: [
-    { day: 'Sat', condition: 'clear', high: 36, low: 22 },
-    { day: 'Sun', condition: 'partly-cloudy', high: 34, low: 21 },
-    { day: 'Mon', condition: 'storm', high: 29, low: 19 },
-  ],
-};
 
 // ── Trips ────────────────────────────────────────────────────────────────────
 //

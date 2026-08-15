@@ -1,4 +1,21 @@
+/**
+ * AssetFormDrawer — one reusable right slide-over drawer for creating OR
+ * editing the three REAL asset entities (Fleet / Vehicle / Device).
+ *
+ * - Selects the right zod schema + field set per `entity` (Sprint E §10
+ *   contracts: fleet {name, code, description?}; vehicle {fleetId, name,
+ *   code, plate?, vin?}; device {imei, serialNumber?, manufacturer?, model?,
+ *   protocol} + status on edit — imei is immutable server-side, so edit mode
+ *   renders it read-only).
+ * - The IMEI is validated client-side: exactly 15 digits AND Luhn-valid
+ *   (the backend applies the same check; 422 otherwise).
+ * - Edit mode prefills from `record`; create mode starts empty.
+ * - Submits via the matching create/update hook; 409 ConflictError maps to a
+ *   friendly "code/IMEI clash" message, other backend errors surface via
+ *   getApiErrorMessage. Shown inline via `<FormAlert>` + toasted.
+ */
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import {
   Box,
   Button,
@@ -16,33 +33,32 @@ import { useTranslation } from 'react-i18next';
 
 import {
   useCreateDevice,
-  useCreateDriver,
-  useCreateGroup,
+  useCreateFleet,
   useCreateVehicle,
   useUpdateDevice,
-  useUpdateDriver,
-  useUpdateGroup,
+  useUpdateFleet,
   useUpdateVehicle,
 } from '@/api/asset.api';
+import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { FormAlert } from '@/components/form/FormAlert';
-import { deviceSchema, driverSchema, groupSchema, vehicleSchema } from '@/lib/validation';
 import type { AssetTab } from '@/pages/AssetManagementPage';
 import type {
   CreateDevicePayload,
-  CreateDriverPayload,
-  CreateGroupPayload,
+  CreateFleetPayload,
   CreateVehiclePayload,
   Device,
-  Driver,
+  DeviceProtocol,
+  DeviceStatus,
+  Fleet,
+  UpdateDevicePayload,
   Vehicle,
-  VehicleGroup,
 } from '@/types/asset.types';
 
 const DRAWER_WIDTH = 480;
 
 /** The discriminated record a drawer can edit (create omits the record). */
-export type AssetRecord = Vehicle | Driver | Device | VehicleGroup;
+export type AssetRecord = Fleet | Vehicle | Device;
 
 export interface AssetFormDrawerProps {
   open: boolean;
@@ -50,29 +66,113 @@ export interface AssetFormDrawerProps {
   entity: AssetTab;
   /** For edit mode: the record being edited. Omit for create. */
   record?: AssetRecord;
+  /** Fleet registry — powers the vehicle form's fleet select. */
+  fleets?: Fleet[];
   onClose: () => void;
   /** Invoked after a successful create/update (the hook already invalidated). */
   onSuccess?: () => void;
 }
 
-/**
- * AssetFormDrawer — one reusable right-slide-over drawer for creating OR editing
- * any of the four asset entities (Vehicle / Driver / Device / Group).
- *
- * - Selects the right zod schema + field set per `entity`.
- * - Edit mode prefills from `record`; create mode starts empty.
- * - Submits via the matching create/update hook, then fires a success toast +
- *   calls `onSuccess` + closes. Errors are shown inline via `<FormAlert>` and
- *   toasted.
- *
- * Field sets mirror the editable subset of each domain model (no invented
- * fields — see docs/frontend-crud.md).
- */
+// ── Validation schemas (messages are i18n keys translated via t()) ──────────
+
+/** Luhn checksum (ISO/IEC 7812-1) — required for real IMEIs. */
+function luhnValid(digits: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i += 1) {
+    let n = Number(digits[digits.length - 1 - i]);
+    if (Number.isNaN(n)) return false;
+    if (i % 2 === 1) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+  }
+  return sum % 10 === 0;
+}
+
+/** Short unique code — `[A-Za-z0-9_-]`, 1–64 (backend rule). */
+const codeSchema = (keys: { required: string; tooLong: string; invalid: string }) =>
+  z
+    .string()
+    .trim()
+    .min(1, { message: keys.required })
+    .max(64, { message: keys.tooLong })
+    .regex(/^[A-Za-z0-9_-]+$/, { message: keys.invalid });
+
+const optionalText = (max: number, tooLong: string) =>
+  z.string().trim().max(max, { message: tooLong });
+
+/** Fleet create/edit (CreateFleetPayload — PATCH is a full replace). */
+const fleetSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, { message: 'validation.fleet.nameRequired' })
+    .max(200, { message: 'validation.fleet.nameTooLong' }),
+  code: codeSchema({
+    required: 'validation.fleet.codeRequired',
+    tooLong: 'validation.fleet.codeTooLong',
+    invalid: 'validation.fleet.codeInvalid',
+  }),
+  description: optionalText(1000, 'validation.fleet.descriptionTooLong'),
+});
+
+/** Vehicle create/edit (CreateVehiclePayload). */
+const vehicleSchema = z.object({
+  fleetId: z.string().min(1, { message: 'validation.vehicle.fleetRequired' }),
+  name: z
+    .string()
+    .trim()
+    .min(1, { message: 'validation.vehicle.nameRequired' })
+    .max(200, { message: 'validation.vehicle.nameTooLong' }),
+  code: codeSchema({
+    required: 'validation.vehicle.codeRequired',
+    tooLong: 'validation.vehicle.codeTooLong',
+    invalid: 'validation.vehicle.codeInvalid',
+  }),
+  plate: optionalText(32, 'validation.vehicle.plateTooLong'),
+  /** 17 chars, no I/O/Q (ISO 3779) — empty allowed. */
+  vin: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || /^[A-HJ-NPR-Z0-9]{17}$/i.test(v), {
+      message: 'validation.vehicle.vinInvalid',
+    }),
+});
+
+/** Device create — IMEI is the immutable global identity: 15 digits + Luhn. */
+const deviceCreateSchema = z.object({
+  imei: z
+    .string()
+    .trim()
+    .regex(/^\d{15}$/, { message: 'validation.device.imeiFormat' })
+    .refine(luhnValid, { message: 'validation.device.imeiLuhn' }),
+  serialNumber: optionalText(64, 'validation.device.imeiFormat'),
+  manufacturer: optionalText(100, 'validation.device.imeiFormat'),
+  model: optionalText(100, 'validation.device.imeiFormat'),
+  protocol: z.enum(['gt06', 'jt808', 'meitrack', 'stub'], {
+    message: 'validation.device.protocolRequired',
+  }),
+});
+
+/** Device edit — imei read-only; registry fields + lifecycle status editable. */
+const deviceEditSchema = z.object({
+  serialNumber: optionalText(64, 'validation.device.imeiFormat'),
+  manufacturer: optionalText(100, 'validation.device.imeiFormat'),
+  model: optionalText(100, 'validation.device.imeiFormat'),
+  protocol: z.enum(['gt06', 'jt808', 'meitrack', 'stub']),
+  status: z.enum(['ACTIVE', 'SUSPENDED', 'DECOMMISSIONED', 'UNPAIRED']),
+});
+
+const PROTOCOL_OPTIONS: DeviceProtocol[] = ['gt06', 'jt808', 'meitrack', 'stub'];
+const DEVICE_STATUS_OPTIONS: DeviceStatus[] = ['ACTIVE', 'SUSPENDED', 'UNPAIRED', 'DECOMMISSIONED'];
+
 export function AssetFormDrawer({
   open,
   mode,
   entity,
   record,
+  fleets = [],
   onClose,
   onSuccess,
 }: AssetFormDrawerProps) {
@@ -81,28 +181,25 @@ export function AssetFormDrawer({
   const isEdit = mode === 'edit';
 
   // Per-entity create/update hooks.
+  const createFleet = useCreateFleet();
+  const updateFleet = useUpdateFleet();
   const createVehicle = useCreateVehicle();
   const updateVehicle = useUpdateVehicle();
-  const createDriver = useCreateDriver();
-  const updateDriver = useUpdateDriver();
   const createDevice = useCreateDevice();
   const updateDevice = useUpdateDevice();
-  const createGroup = useCreateGroup();
-  const updateGroup = useUpdateGroup();
 
   const schema = useMemo(
     () =>
-      entity === 'vehicles'
-        ? vehicleSchema
-        : entity === 'drivers'
-          ? driverSchema
-          : entity === 'devices'
-            ? deviceSchema
-            : groupSchema,
-    [entity],
+      entity === 'fleets'
+        ? fleetSchema
+        : entity === 'vehicles'
+          ? vehicleSchema
+          : isEdit
+            ? deviceEditSchema
+            : deviceCreateSchema,
+    [entity, isEdit],
   );
 
-  // Build default values from the record (edit) or sane create defaults.
   const defaultValues = useMemo(
     () => buildDefaults(entity, record, isEdit),
     [entity, record, isEdit],
@@ -113,8 +210,8 @@ export function AssetFormDrawer({
     handleSubmit,
     reset,
     formState: { errors },
-    // Form values are dynamic across entities (vehicle/driver/device/group),
-    // so the values type is intentionally loose; payloads are cast at the call site.
+    // Form values are dynamic across entities (fleet/vehicle/device), so the
+    // values type is intentionally loose; payloads are cast at the call site.
     // biome-ignore lint/suspicious/noExplicitAny: entity form shape varies
   } = useForm<Record<string, any>>({
     resolver: zodResolver(schema) as never,
@@ -129,71 +226,68 @@ export function AssetFormDrawer({
 
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Resolve the pending mutation + i18n labels for the active entity.
   const isPending =
-    entity === 'vehicles'
+    entity === 'fleets'
       ? isEdit
-        ? updateVehicle.isPending
-        : createVehicle.isPending
-      : entity === 'drivers'
+        ? updateFleet.isPending
+        : createFleet.isPending
+      : entity === 'vehicles'
         ? isEdit
-          ? updateDriver.isPending
-          : createDriver.isPending
-        : entity === 'devices'
-          ? isEdit
-            ? updateDevice.isPending
-            : createDevice.isPending
-          : isEdit
-            ? updateGroup.isPending
-            : createGroup.isPending;
+          ? updateVehicle.isPending
+          : createVehicle.isPending
+        : isEdit
+          ? updateDevice.isPending
+          : createDevice.isPending;
 
-  const entityLabelKey =
-    entity === 'vehicles'
-      ? 'assets.tabs.vehicles'
-      : entity === 'drivers'
-        ? 'assets.tabs.drivers'
-        : entity === 'devices'
-          ? 'assets.tabs.devices'
-          : 'assets.tabs.groups';
+  const entityLabelKey = `assets.tabs.${entity}`;
 
   const onSubmit = async (values: Record<string, unknown>) => {
     setServerError(null);
     try {
-      if (entity === 'vehicles') {
+      if (entity === 'fleets') {
+        const payload: CreateFleetPayload = {
+          name: String(values.name),
+          code: String(values.code),
+          ...(values.description ? { description: String(values.description) } : {}),
+        };
         if (isEdit && record) {
-          await updateVehicle.mutateAsync({
-            id: record.id,
-            changes: values as unknown as CreateVehiclePayload,
-          });
+          await updateFleet.mutateAsync({ id: record.id, changes: payload });
         } else {
-          await createVehicle.mutateAsync(values as unknown as CreateVehiclePayload);
+          await createFleet.mutateAsync(payload);
         }
-      } else if (entity === 'drivers') {
+      } else if (entity === 'vehicles') {
+        const payload: CreateVehiclePayload = {
+          fleetId: String(values.fleetId),
+          name: String(values.name),
+          code: String(values.code),
+          ...(values.plate ? { plate: String(values.plate) } : {}),
+          ...(values.vin ? { vin: String(values.vin).toUpperCase() } : {}),
+        };
         if (isEdit && record) {
-          await updateDriver.mutateAsync({
-            id: record.id,
-            changes: values as unknown as CreateDriverPayload,
-          });
+          await updateVehicle.mutateAsync({ id: record.id, changes: payload });
         } else {
-          await createDriver.mutateAsync(values as unknown as CreateDriverPayload);
-        }
-      } else if (entity === 'devices') {
-        if (isEdit && record) {
-          await updateDevice.mutateAsync({
-            id: record.id,
-            changes: values as unknown as CreateDevicePayload,
-          });
-        } else {
-          await createDevice.mutateAsync(values as unknown as CreateDevicePayload);
+          await createVehicle.mutateAsync(payload);
         }
       } else {
+        // Devices — create takes the IMEI; edit never sends it (immutable).
         if (isEdit && record) {
-          await updateGroup.mutateAsync({
-            id: record.id,
-            changes: values as unknown as CreateGroupPayload,
-          });
+          const changes: UpdateDevicePayload = {
+            protocol: values.protocol as DeviceProtocol,
+            status: values.status as DeviceStatus,
+            ...(values.serialNumber ? { serialNumber: String(values.serialNumber) } : {}),
+            ...(values.manufacturer ? { manufacturer: String(values.manufacturer) } : {}),
+            ...(values.model ? { model: String(values.model) } : {}),
+          };
+          await updateDevice.mutateAsync({ id: record.id, changes });
         } else {
-          await createGroup.mutateAsync(values as unknown as CreateGroupPayload);
+          const payload: CreateDevicePayload = {
+            imei: String(values.imei),
+            protocol: values.protocol as DeviceProtocol,
+            ...(values.serialNumber ? { serialNumber: String(values.serialNumber) } : {}),
+            ...(values.manufacturer ? { manufacturer: String(values.manufacturer) } : {}),
+            ...(values.model ? { model: String(values.model) } : {}),
+          };
+          await createDevice.mutateAsync(payload);
         }
       }
       toast.success(
@@ -204,9 +298,11 @@ export function AssetFormDrawer({
       onSuccess?.();
       onClose();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t('errors.generic');
+      // 409 → friendly conflict copy (code clash / duplicate IMEI); other
+      // backend validation errors surface verbatim via getApiErrorMessage.
+      const msg = err instanceof ConflictError ? t('assets.crud.conflict') : getApiErrorMessage(err);
       setServerError(msg);
-      toast.error(err);
+      toast.error(msg);
     }
   };
 
@@ -257,10 +353,19 @@ export function AssetFormDrawer({
           <FormAlert severity="error" message={serverError} />
 
           <Stack gap={2}>
-            {entity === 'vehicles' && <VehicleFields control={control} errors={errors} t={t} />}
-            {entity === 'drivers' && <DriverFields control={control} errors={errors} t={t} />}
-            {entity === 'devices' && <DeviceFields control={control} errors={errors} t={t} />}
-            {entity === 'groups' && <GroupFields control={control} errors={errors} t={t} />}
+            {entity === 'fleets' && <FleetFields control={control} errors={errors} t={t} />}
+            {entity === 'vehicles' && (
+              <VehicleFields control={control} errors={errors} fleets={fleets} t={t} />
+            )}
+            {entity === 'devices' && (
+              <DeviceFields
+                control={control}
+                errors={errors}
+                isEdit={isEdit}
+                imei={record && entity === 'devices' ? (record as Device).imei : undefined}
+                t={t}
+              />
+            )}
           </Stack>
 
           <Divider sx={{ my: 2 }} />
@@ -305,354 +410,171 @@ interface FieldProps {
   t: TFunction;
 }
 
-const VEHICLE_TYPES: Array<{ value: string; key: string }> = [
-  { value: 'truck', key: 'assets.vehicle.type.truck' },
-  { value: 'van', key: 'assets.vehicle.type.van' },
-  { value: 'bus', key: 'assets.vehicle.type.bus' },
-  { value: 'car', key: 'assets.vehicle.type.car' },
-];
-const VEHICLE_STATUSES = ['active', 'inactive', 'maintenance', 'decommissioned', 'sold'];
-const FUEL_TYPES = ['diesel', 'gasoline', 'electric', 'hybrid', 'cng', 'lpg'];
-const DRIVER_STATUSES = ['active', 'inactive', 'suspended', 'terminated'];
-const DEVICE_TYPES: Array<{ value: string; key: string }> = [
-  { value: 'obd2', key: 'assets.device.type.obd2' },
-  { value: 'gps_tracker', key: 'assets.device.type.gps_tracker' },
-  { value: 'dashcam', key: 'assets.device.type.dashcam' },
-  { value: 'custom_sensor', key: 'assets.device.type.custom_sensor' },
-];
-const DEVICE_STATUSES = [
-  'provisioned',
-  'active',
-  'inactive',
-  'firmware_updating',
-  'faulted',
-  'decommissioned',
-];
-const GROUP_STATUSES = ['active', 'archived'];
-
-function VehicleFields({ control, errors, t }: FieldProps) {
+function FleetFields({ control, errors, t }: FieldProps) {
   return (
     <>
       <FieldText
         control={control}
-        name="licensePlate"
-        label={`${t('assets.vehicle.colPlate')} *`}
-        error={errors.licensePlate as FieldError | undefined}
+        name="name"
+        label={`${t('assets.fleet.name')} *`}
+        error={errors.name as FieldError | undefined}
         t={t}
       />
       <FieldText
         control={control}
-        name="vin"
-        label={`${t('assets.vehicle.vin')} *`}
-        error={errors.vin as FieldError | undefined}
+        name="code"
+        label={`${t('assets.fleet.code')} *`}
+        error={errors.code as FieldError | undefined}
         t={t}
       />
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldText
-          control={control}
-          name="make"
-          label={`${t('assets.vehicle.make')} *`}
-          sx={{ flex: 1 }}
-          error={errors.make as FieldError | undefined}
-          t={t}
-        />
-        <FieldText
-          control={control}
-          name="model"
-          label={`${t('assets.vehicle.model')} *`}
-          sx={{ flex: 1 }}
-          error={errors.model as FieldError | undefined}
-          t={t}
-        />
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldNumber
-          control={control}
-          name="year"
-          label={`${t('assets.vehicle.year')} *`}
-          sx={{ flex: 1 }}
-          error={errors.year as FieldError | undefined}
-          t={t}
-        />
-        <FieldText
-          control={control}
-          name="color"
-          label={t('assets.vehicle.color', { defaultValue: 'Color' })}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldSelect
-          control={control}
-          name="type"
-          label={`${t('assets.vehicle.colType')} *`}
-          options={VEHICLE_TYPES.map((o) => ({ value: o.value, label: t(o.key) }))}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-        <FieldSelect
-          control={control}
-          name="fuelType"
-          label={t('assets.vehicle.fuelType', { defaultValue: 'Fuel' })}
-          options={FUEL_TYPES.map((o) => ({ value: o, label: t(`assets.vehicle.fuel.${o}`) }))}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-      </Stack>
+      <FieldText
+        control={control}
+        name="description"
+        label={t('assets.fleet.description')}
+        multiline
+        rows={3}
+        optional
+        t={t}
+      />
+    </>
+  );
+}
+
+function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fleet[] }) {
+  // Active fleets first; keep the currently-archived ones selectable so edits
+  // of vehicles in archived fleets don't silently change the assignment.
+  const options = [...fleets].sort((a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE'));
+  return (
+    <>
       <FieldSelect
         control={control}
-        name="status"
-        label={t('assets.vehicle.colStatus')}
-        options={VEHICLE_STATUSES.map((o) => ({
-          value: o,
-          label: t(`assets.vehicle.status.${o}`),
+        name="fleetId"
+        label={`${t('assets.vehicle.fleet')} *`}
+        options={options.map((f) => ({
+          value: f.id,
+          label: f.status === 'ACTIVE' ? f.name : `${f.name} (${t('assets.fleet.status.ARCHIVED')})`,
         }))}
+        error={errors.fleetId as FieldError | undefined}
         t={t}
       />
       <FieldText
         control={control}
-        name="groupId"
-        label={t('assets.vehicle.fleet', { defaultValue: 'Group ID' })}
-        optional
+        name="name"
+        label={`${t('assets.vehicle.name')} *`}
+        error={errors.name as FieldError | undefined}
         t={t}
       />
       <FieldText
         control={control}
-        name="deviceId"
-        label={t('assets.vehicle.device', { defaultValue: 'Device ID' })}
-        optional
+        name="code"
+        label={`${t('assets.vehicle.code')} *`}
+        error={errors.code as FieldError | undefined}
         t={t}
       />
+      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+        <FieldText
+          control={control}
+          name="plate"
+          label={t('assets.vehicle.plate')}
+          sx={{ flex: 1 }}
+          optional
+          error={errors.plate as FieldError | undefined}
+          t={t}
+        />
+        <FieldText
+          control={control}
+          name="vin"
+          label={t('assets.vehicle.vin')}
+          sx={{ flex: 1 }}
+          optional
+          error={errors.vin as FieldError | undefined}
+          t={t}
+        />
+      </Stack>
     </>
   );
 }
 
-function DriverFields({ control, errors, t }: FieldProps) {
+function DeviceFields({
+  control,
+  errors,
+  isEdit,
+  imei,
+  t,
+}: FieldProps & { isEdit: boolean; imei?: string }) {
   return (
     <>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+      {isEdit ? (
+        // IMEI is the immutable physical identity — display-only on edit.
+        <TextField
+          label={t('assets.device.imei')}
+          value={imei ?? ''}
+          fullWidth
+          slotProps={{ input: { readOnly: true } }}
+          helperText=" "
+          sx={{ '& input': { fontFamily: 'monospace' } }}
+        />
+      ) : (
         <FieldText
           control={control}
-          name="firstName"
-          label={`${t('assets.driver.firstName', { defaultValue: 'First name' })} *`}
-          sx={{ flex: 1 }}
-          error={errors.firstName as FieldError | undefined}
+          name="imei"
+          label={`${t('assets.device.imei')} *`}
+          error={errors.imei as FieldError | undefined}
           t={t}
         />
-        <FieldText
-          control={control}
-          name="lastName"
-          label={`${t('assets.driver.lastName', { defaultValue: 'Last name' })} *`}
-          sx={{ flex: 1 }}
-          error={errors.lastName as FieldError | undefined}
-          t={t}
-        />
-      </Stack>
-      <FieldText
-        control={control}
-        name="email"
-        label={t('auth.email')}
-        error={errors.email as FieldError | undefined}
-        t={t}
-      />
-      <FieldText
-        control={control}
-        name="phone"
-        label={`${t('assets.driver.phone', { defaultValue: 'Phone' })} *`}
-        error={errors.phone as FieldError | undefined}
-        t={t}
-      />
-      <FieldText
-        control={control}
-        name="employeeId"
-        label={t('assets.driver.employeeId', { defaultValue: 'Employee ID' })}
-        optional
-        t={t}
-      />
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldText
-          control={control}
-          name="licenseNumber"
-          label={`${t('assets.driver.license', { defaultValue: 'License number' })} *`}
-          sx={{ flex: 1 }}
-          error={errors.licenseNumber as FieldError | undefined}
-          t={t}
-        />
-        <FieldText
-          control={control}
-          name="licenseClass"
-          label={`${t('assets.driver.licenseClass', { defaultValue: 'License class' })} *`}
-          sx={{ flex: 1 }}
-          error={errors.licenseClass as FieldError | undefined}
-          t={t}
-        />
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldText
-          control={control}
-          name="licenseExpiry"
-          label={`${t('assets.driver.licenseExpiry', { defaultValue: 'License expiry' })} *`}
-          sx={{ flex: 1 }}
-          type="date"
-          error={errors.licenseExpiry as FieldError | undefined}
-          t={t}
-        />
-        <FieldSelect
-          control={control}
-          name="status"
-          label={t('assets.driver.colStatus', { defaultValue: 'Status' })}
-          options={DRIVER_STATUSES.map((o) => ({
-            value: o,
-            label: t(`assets.driver.status.${o}`),
-          }))}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-      </Stack>
-      <FieldText
-        control={control}
-        name="assignedVehicleId"
-        label={t('assets.driver.assigned', { defaultValue: 'Assigned vehicle' })}
-        optional
-        t={t}
-      />
-    </>
-  );
-}
-
-function DeviceFields({ control, errors, t }: FieldProps) {
-  return (
-    <>
+      )}
       <FieldText
         control={control}
         name="serialNumber"
-        label={`${t('assets.device.colSerial', { defaultValue: 'Serial number' })} *`}
+        label={t('assets.device.serial')}
+        optional
         error={errors.serialNumber as FieldError | undefined}
         t={t}
       />
       <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldSelect
-          control={control}
-          name="deviceType"
-          label={`${t('assets.device.colType', { defaultValue: 'Type' })} *`}
-          options={DEVICE_TYPES.map((o) => ({ value: o.value, label: t(o.key) }))}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-        <FieldText
-          control={control}
-          name="imei"
-          label={t('assets.device.imei', { defaultValue: 'IMEI' })}
-          sx={{ flex: 1 }}
-          optional
-          error={errors.imei as FieldError | undefined}
-          t={t}
-        />
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
         <FieldText
           control={control}
           name="manufacturer"
-          label={`${t('assets.device.manufacturer', { defaultValue: 'Manufacturer' })} *`}
+          label={t('assets.device.manufacturer')}
           sx={{ flex: 1 }}
+          optional
           error={errors.manufacturer as FieldError | undefined}
           t={t}
         />
         <FieldText
           control={control}
           name="model"
-          label={`${t('assets.device.model', { defaultValue: 'Model' })} *`}
+          label={t('assets.device.model')}
           sx={{ flex: 1 }}
+          optional
           error={errors.model as FieldError | undefined}
           t={t}
         />
       </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldText
-          control={control}
-          name="firmwareVersion"
-          label={`${t('assets.device.firmware', { defaultValue: 'Firmware' })} *`}
-          sx={{ flex: 1 }}
-          error={errors.firmwareVersion as FieldError | undefined}
-          t={t}
-        />
-        <FieldNumber
-          control={control}
-          name="reportingIntervalSec"
-          label={`${t('assets.device.reportingInterval', { defaultValue: 'Interval (s)' })} *`}
-          sx={{ flex: 1 }}
-          error={errors.reportingIntervalSec as FieldError | undefined}
-          t={t}
-        />
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+      <FieldSelect
+        control={control}
+        name="protocol"
+        label={`${t('assets.device.protocol')} *`}
+        options={PROTOCOL_OPTIONS.map((p) => ({
+          value: p,
+          label: t(`assets.device.protocols.${p}`),
+        }))}
+        error={errors.protocol as FieldError | undefined}
+        t={t}
+      />
+      {isEdit && (
         <FieldSelect
           control={control}
           name="status"
-          label={t('assets.device.colStatus', { defaultValue: 'Status' })}
-          options={DEVICE_STATUSES.map((o) => ({
-            value: o,
-            label: t(`assets.device.status.${o}`),
+          label={t('assets.device.status')}
+          options={DEVICE_STATUS_OPTIONS.map((s) => ({
+            value: s,
+            label: t(`assets.device.statusValues.${s}`),
           }))}
-          sx={{ flex: 1 }}
+          error={errors.status as FieldError | undefined}
           t={t}
         />
-        <FieldText
-          control={control}
-          name="boundVehicleId"
-          label={t('assets.device.colVehicle', { defaultValue: 'Vehicle' })}
-          sx={{ flex: 1 }}
-          optional
-          t={t}
-        />
-      </Stack>
-    </>
-  );
-}
-
-function GroupFields({ control, errors, t }: FieldProps) {
-  return (
-    <>
-      <FieldText
-        control={control}
-        name="name"
-        label={`${t('assets.group.name', { defaultValue: 'Name' })} *`}
-        error={errors.name as FieldError | undefined}
-        t={t}
-      />
-      <FieldText
-        control={control}
-        name="description"
-        label={t('assets.group.description', { defaultValue: 'Description' })}
-        multiline
-        rows={2}
-        t={t}
-      />
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <FieldSelect
-          control={control}
-          name="vehicleTypeFilter"
-          label={t('assets.vehicle.colType', { defaultValue: 'Vehicle type' })}
-          options={[
-            { value: '', label: t('common.all') },
-            ...VEHICLE_TYPES.map((o) => ({ value: o.value, label: t(o.key) })),
-          ]}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-        <FieldSelect
-          control={control}
-          name="status"
-          label={t('assets.vehicle.colStatus', { defaultValue: 'Status' })}
-          options={GROUP_STATUSES.map((o) => ({
-            value: o,
-            label: t(`assets.group.status.${o}`, { defaultValue: o }),
-          }))}
-          sx={{ flex: 1 }}
-          t={t}
-        />
-      </Stack>
+      )}
     </>
   );
 }
@@ -708,35 +630,6 @@ function FieldText({
   );
 }
 
-function FieldNumber({
-  control,
-  name,
-  label,
-  error,
-  t,
-  sx,
-}: FieldCommon & { name: string; label: string; error?: FieldError }) {
-  return (
-    <Controller
-      control={control}
-      name={name}
-      render={({ field }: { field: ControllerRenderProps }) => (
-        <TextField
-          {...field}
-          value={field.value ?? ''}
-          fullWidth
-          label={label}
-          type="number"
-          sx={sx}
-          onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
-          error={Boolean(error)}
-          helperText={error ? t(error.message ?? '') : ' '}
-        />
-      )}
-    />
-  );
-}
-
 function FieldSelect({
   control,
   name,
@@ -744,7 +637,13 @@ function FieldSelect({
   options,
   t: _t,
   sx,
-}: FieldCommon & { name: string; label: string; options: { value: string; label: string }[] }) {
+  error,
+}: FieldCommon & {
+  name: string;
+  label: string;
+  options: { value: string; label: string }[];
+  error?: FieldError;
+}) {
   return (
     <Controller
       control={control}
@@ -757,7 +656,8 @@ function FieldSelect({
           fullWidth
           label={label}
           sx={sx}
-          helperText=" "
+          error={Boolean(error)}
+          helperText={error ? _t(error.message ?? '') : ' '}
           SelectProps={{ displayEmpty: true }}
         >
           {options.map((o) => (
@@ -777,103 +677,34 @@ function buildDefaults(
   entity: AssetTab,
   record: AssetRecord | undefined,
   isEdit: boolean,
-): Record<string, unknown> {
+): Record<string, string> {
   if (isEdit && record) {
+    if (entity === 'fleets') {
+      const f = record as Fleet;
+      return { name: f.name, code: f.code, description: f.description ?? '' };
+    }
     if (entity === 'vehicles') {
       const v = record as Vehicle;
       return {
-        licensePlate: v.licensePlate,
-        vin: v.vin,
-        make: v.make,
-        model: v.model,
-        year: v.year,
-        type: v.type,
-        fuelType: v.fuelType,
-        color: v.color,
-        status: v.status,
-        groupId: v.groupId ?? '',
-        deviceId: v.deviceId ?? '',
+        fleetId: v.fleetId,
+        name: v.name,
+        code: v.code,
+        plate: v.plate ?? '',
+        vin: v.vin ?? '',
       };
     }
-    if (entity === 'drivers') {
-      const d = record as Driver;
-      return {
-        firstName: d.firstName,
-        lastName: d.lastName,
-        email: d.email,
-        phone: d.phone,
-        employeeId: d.employeeId ?? '',
-        status: d.status,
-        licenseNumber: d.licenseNumber,
-        licenseClass: d.licenseClass,
-        licenseExpiry: d.licenseExpiry,
-        assignedVehicleId: d.assignedVehicleId ?? '',
-      };
-    }
-    if (entity === 'devices') {
-      const dev = record as Device;
-      return {
-        serialNumber: dev.serialNumber,
-        deviceType: dev.deviceType,
-        manufacturer: dev.manufacturer,
-        model: dev.model,
-        imei: dev.imei ?? '',
-        firmwareVersion: dev.firmwareVersion,
-        reportingIntervalSec: dev.reportingIntervalSec,
-        status: dev.status,
-        boundVehicleId: dev.boundVehicleId ?? '',
-      };
-    }
-    const g = record as VehicleGroup;
+    const d = record as Device;
     return {
-      name: g.name,
-      description: g.description,
-      vehicleTypeFilter: g.vehicleTypeFilter ?? '',
-      status: g.status,
+      serialNumber: d.serialNumber ?? '',
+      manufacturer: d.manufacturer ?? '',
+      model: d.model ?? '',
+      protocol: d.protocol,
+      status: d.status,
     };
   }
   // Create defaults.
-  if (entity === 'vehicles') {
-    return {
-      licensePlate: '',
-      vin: '',
-      make: '',
-      model: '',
-      year: new Date().getFullYear(),
-      type: 'truck',
-      fuelType: 'diesel',
-      color: '',
-      status: 'active',
-      groupId: '',
-      deviceId: '',
-    };
-  }
-  if (entity === 'drivers') {
-    return {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      employeeId: '',
-      status: 'active',
-      licenseNumber: '',
-      licenseClass: '',
-      licenseExpiry: '',
-      assignedVehicleId: '',
-    };
-  }
-  if (entity === 'devices') {
-    return {
-      serialNumber: '',
-      deviceType: 'gps_tracker',
-      manufacturer: '',
-      model: '',
-      imei: '',
-      firmwareVersion: '',
-      reportingIntervalSec: 60,
-      status: 'provisioned',
-      boundVehicleId: '',
-    };
-  }
-  return { name: '', description: '', vehicleTypeFilter: '', status: 'active' };
+  if (entity === 'fleets') return { name: '', code: '', description: '' };
+  if (entity === 'vehicles')
+    return { fleetId: '', name: '', code: '', plate: '', vin: '' };
+  return { imei: '', serialNumber: '', manufacturer: '', model: '', protocol: 'gt06' };
 }

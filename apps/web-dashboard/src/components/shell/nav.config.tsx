@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { PERMISSIONS } from '@/auth/permissions';
+
 /**
  * FleetVision navigation — Limitless-style grouped IA.
  *
@@ -23,15 +25,21 @@ import type { LucideIcon } from 'lucide-react';
  * ASSETS, REPORTING, MAINTENANCE, ADMINISTRATION. Only routes that exist in
  * the router are exposed.
  *
- * Each item may declare a `permission`; when present the item is hidden unless
- * the principal owns that permission. Items without a permission always show.
+ * Each item may declare a `permission` (single requirement) and/or `anyOf`
+ * (satisfied by ANY ONE of the listed permissions); when present the item is
+ * hidden unless the principal holds it/them. The `*` tenant-admin wildcard
+ * satisfies everything (mirrors the backend's permissionSatisfies()). Items
+ * without a permission always show.
  */
 
 export interface NavItem {
   key: string;
   path: string;
   icon: LucideIcon;
+  /** Single required permission (hidden unless granted). */
   permission?: string;
+  /** ANY-of permission list — the item shows when at least one is granted. */
+  anyOf?: readonly string[];
 }
 
 export interface NavGroup {
@@ -48,8 +56,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     groupKey: 'tracking',
     items: [
-      { key: 'map', path: '/map', icon: MapIcon },
-      { key: 'trips', path: '/trips', icon: Navigation },
+      { key: 'map', path: '/map', icon: MapIcon, permission: PERMISSIONS.trackingRead },
+      { key: 'trips', path: '/trips', icon: Navigation, permission: PERMISSIONS.trackingRead },
     ],
   },
   {
@@ -65,8 +73,16 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    // Asset hub: readable with EITHER the fleet or the vehicle registry scope.
     groupKey: 'assets',
-    items: [{ key: 'assets', path: '/assets', icon: Truck }],
+    items: [
+      {
+        key: 'assets',
+        path: '/assets',
+        icon: Truck,
+        anyOf: [PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead],
+      },
+    ],
   },
   {
     groupKey: 'reporting',
@@ -88,8 +104,11 @@ export function filterNavByPermissions(
   groups: readonly NavGroup[],
   permissions: readonly string[],
 ): NavGroup[] {
-  const has = (p?: string) => !p || permissions.includes(p);
+  const has = (p?: string) => !p || permissions.includes('*') || permissions.includes(p);
   return groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => has(i.permission)) }))
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => has(i.permission) && (i.anyOf ? i.anyOf.some(has) : true)),
+    }))
     .filter((g) => g.items.length > 0);
 }

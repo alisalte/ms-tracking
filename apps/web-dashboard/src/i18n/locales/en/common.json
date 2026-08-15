@@ -93,6 +93,8 @@
     "showing": "Showing {{count}}",
     "cancel": "Cancel",
     "delete": "Delete",
+    "archive": "Archive",
+    "decommission": "Decommission",
     "edit": "Edit",
     "add": "Add",
     "save": "Save",
@@ -112,7 +114,8 @@
     "manageMembers": "Manage Members",
     "sendCommand": "Send Command",
     "optional": "Optional",
-    "required": "Required"
+    "required": "Required",
+    "unknown": "Unknown"
   },
   "errors": {
     "retry": "Retry",
@@ -123,7 +126,12 @@
     "network": "Connection error",
     "networkDesc": "Unable to reach the server. Check your connection.",
     "generic": "Something went wrong",
-    "genericDesc": "An unexpected error occurred. Please try again."
+    "genericDesc": "An unexpected error occurred. Please try again.",
+    "boundaryTitle": "Something went wrong",
+    "boundaryBody": "The screen failed to render. You can retry.",
+    "reload": "Reload",
+    "permissionDeniedTitle": "Permission denied",
+    "permissionDeniedBody": "You do not have access to this area."
   },
   "dashboard": {
     "title": "Fleet Dashboard",
@@ -137,7 +145,13 @@
       "idle": "Idle",
       "offline": "Offline",
       "alerts": "Alerts",
-      "critical": "{{count}} CRIT"
+      "critical": "{{count}} CRIT",
+      "totalVehicles": "Total Vehicles",
+      "online": "Online",
+      "stale": "Stale",
+      "unknown": "Unknown",
+      "fleets": "Fleets",
+      "devices": "Devices"
     },
     "states": {
       "driving": "Driving",
@@ -153,7 +167,8 @@
     "relative": {
       "justNow": "now",
       "minutes": "{{count}}m ago",
-      "hours": "{{count}}h ago"
+      "hours": "{{count}}h ago",
+      "days": "{{count}}d ago"
     },
     "alerts": {
       "overspeed": "Overspeed",
@@ -173,7 +188,10 @@
       "active": "Active",
       "idle": "Idle",
       "overspeed": "Overspeed",
-      "offline": "Offline"
+      "offline": "Offline",
+      "online": "Online",
+      "stale": "Stale",
+      "unknown": "Unknown"
     },
     "utilization": {
       "utilized": "utilized"
@@ -236,7 +254,9 @@
     "clusterAlt": "{{count}} vehicles",
     "noResults": "No vehicles match your filters.",
     "filters": {
-      "all": "All"
+      "all": "All",
+      "fleet": "Filter by fleet",
+      "allFleets": "All fleets"
     },
     "states": {
       "driving": "Driving",
@@ -271,7 +291,26 @@
       "history": "History",
       "recentEvents": "Recent events",
       "noEvents": "No recent events"
-    }
+    },
+    "presence": {
+      "ONLINE": "Online",
+      "OFFLINE": "Offline",
+      "STALE": "Stale",
+      "UNKNOWN": "Unknown"
+    },
+    "lastSeen": {
+      "label": "Last seen",
+      "never": "never"
+    },
+    "ws": {
+      "ariaLabel": "Live connection status",
+      "connected": "Connected",
+      "connecting": "Connecting…",
+      "reconnecting": "Reconnecting…",
+      "disconnected": "Disconnected"
+    },
+    "emptyTitle": "No vehicles yet",
+    "emptyHelp": "No vehicles are being tracked yet. Vehicles appear here once devices start reporting."
   },
   "trips": {
     "title": "Trips",
@@ -297,7 +336,8 @@
     },
     "detail": {
       "back": "Back to trips",
-      "notFound": "Trip not found."
+      "notFound": "Trip not found.",
+      "notFoundHelp": "This trip does not exist or has been removed."
     },
     "summary": {
       "distance": "Distance",
@@ -332,6 +372,10 @@
       "idle": "Idle",
       "overspeed": "Overspeed",
       "geofence": "Geofence"
+    },
+    "empty": {
+      "title": "No trips yet",
+      "notAvailable": "Trip history APIs are not available yet. Recorded trips will appear here once the backend ships a trips endpoint."
     }
   },
   "video": {
@@ -483,141 +527,130 @@
   },
   "assets": {
     "title": "Asset Management",
-    "subtitle": "Vehicles, drivers, devices, and groups",
-    "empty": "No assets match your filters.",
+    "subtitle": "Fleets, vehicles, and devices",
+    "empty": "No records match your filters.",
     "count": "{{count}}",
     "tabs": {
+      "fleets": "Fleets",
       "vehicles": "Vehicles",
-      "drivers": "Drivers",
-      "devices": "Devices",
-      "groups": "Groups"
+      "devices": "Devices"
     },
     "filters": {
       "allStatus": "All statuses",
-      "allTypes": "All types"
+      "allFleets": "All fleets",
+      "allProtocols": "All protocols"
+    },
+    "fleet": {
+      "notFound": "Fleet not found.",
+      "search": "Search name / code…",
+      "name": "Name",
+      "code": "Code",
+      "description": "Description",
+      "colVehicles": "Vehicles",
+      "colUpdated": "Updated",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "vehiclesCount": "{{count}} vehicles",
+      "status": {
+        "ACTIVE": "Active",
+        "ARCHIVED": "Archived"
+      },
+      "colName": "Name",
+      "colCode": "Code",
+      "colStatus": "Status"
     },
     "vehicle": {
       "notFound": "Vehicle not found.",
-      "search": "Search plate / VIN / model…",
+      "search": "Search name / code / plate / VIN…",
       "vin": "VIN",
+      "plate": "Plate",
       "fleet": "Fleet",
-      "fuelType": "Fuel",
-      "device": "Device",
-      "actions": "Actions",
-      "toMaintenance": "To maintenance",
-      "fromMaintenance": "Return to active",
+      "name": "Name",
+      "code": "Code",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
       "colPlate": "Plate",
-      "colVehicle": "Vehicle",
-      "colType": "Type",
-      "colStatus": "Status",
-      "colOdometer": "Odometer",
-      "type": {
-        "truck": "Truck",
-        "van": "Van",
-        "bus": "Bus",
-        "car": "Car"
-      },
+      "colUpdated": "Updated",
       "status": {
-        "active": "Active",
-        "inactive": "Inactive",
-        "maintenance": "Maintenance",
-        "decommissioned": "Decommissioned",
-        "sold": "Sold"
+        "ACTIVE": "Active",
+        "ARCHIVED": "Archived"
       },
-      "fuel": {
-        "diesel": "Diesel",
-        "gasoline": "Gasoline",
-        "electric": "Electric",
-        "hybrid": "Hybrid",
-        "cng": "CNG",
-        "lpg": "LPG"
-      }
-    },
-    "driver": {
-      "notFound": "Driver not found.",
-      "search": "Search name / email / license…",
-      "license": "License",
-      "licenseExpiry": "License expiry",
-      "employeeId": "Employee ID",
-      "phone": "Phone",
-      "assigned": "Assigned vehicle",
-      "behavior": "Behavior",
-      "totalTrips": "Trips",
-      "totalDistance": "Distance",
-      "certifications": "Certifications",
-      "colName": "Driver",
-      "colLicense": "License",
-      "colStatus": "Status",
-      "colScore": "Score",
-      "status": {
-        "active": "Active",
-        "inactive": "Inactive",
-        "suspended": "Suspended",
-        "terminated": "Terminated"
-      }
+      "colName": "Name",
+      "colCode": "Code",
+      "colFleet": "Fleet",
+      "colVin": "VIN",
+      "colStatus": "Status"
     },
     "device": {
       "notFound": "Device not found.",
-      "search": "Search serial / IMEI / vehicle…",
-      "firmware": "Firmware",
-      "reportingInterval": "Reporting interval",
-      "health": "Health",
-      "battery": "Battery",
-      "signal": "Signal",
-      "lastHeartbeat": "Last heartbeat",
-      "targetFirmware": "Target firmware",
+      "search": "Search IMEI / serial / model…",
+      "imei": "IMEI",
+      "serial": "Serial number",
+      "manufacturer": "Manufacturer",
+      "model": "Model",
+      "protocol": "Protocol",
+      "status": "Status",
+      "colImei": "IMEI",
       "colSerial": "Serial",
-      "colType": "Type",
+      "colManufacturer": "Manufacturer",
+      "colModel": "Model",
+      "colProtocol": "Protocol",
       "colVehicle": "Vehicle",
-      "colStatus": "Status",
-      "colHealth": "Health",
-      "type": {
-        "obd2": "OBD-II",
-        "gps_tracker": "GPS tracker",
-        "dashcam": "Dashcam",
-        "custom_sensor": "Custom sensor"
+      "colLastSeen": "Last seen",
+      "registry": "Registry",
+      "connection": "Connection",
+      "lastSeen": "Last seen",
+      "connectedAt": "Connected at",
+      "disconnectedAt": "Disconnected at",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "never": "never",
+      "devices": "Devices",
+      "role": "Role",
+      "roles": {
+        "TRACKER": "Tracker",
+        "MDVR": "MDVR",
+        "CAN": "CAN",
+        "SENSOR": "Sensor",
+        "OTHER": "Other"
       },
-      "status": {
-        "provisioned": "Provisioned",
-        "active": "Active",
-        "inactive": "Inactive",
-        "firmware_updating": "Updating",
-        "faulted": "Faulted",
-        "decommissioned": "Decommissioned"
-      }
-    },
-    "group": {
-      "members": "Members",
-      "typeFilter": "Type filter",
-      "status": {
-        "active": "Active",
-        "archived": "Archived"
-      }
+      "protocols": {
+        "gt06": "GT06",
+        "jt808": "JT/T 808",
+        "meitrack": "Meitrack",
+        "stub": "Stub"
+      },
+      "statusValues": {
+        "ACTIVE": "Active",
+        "SUSPENDED": "Suspended",
+        "DECOMMISSIONED": "Decommissioned",
+        "UNPAIRED": "Unpaired"
+      },
+      "primary": "Primary",
+      "boundAt": "Bound at",
+      "unbound": "Unbound",
+      "assignTitle": "Assign device",
+      "assignAction": "Assign",
+      "unassign": "Unbind",
+      "unassignConfirmTitle": "Unbind {{name}}?",
+      "unassignConfirmBody": "The device will be detached from this vehicle.",
+      "alreadyBound": "This device is already bound to a vehicle.",
+      "noUnbound": "No unbound devices available."
     },
     "actions": {
-      "addVehicle": "Add Vehicle",
-      "editVehicle": "Edit Vehicle",
-      "deleteVehicle": "Delete Vehicle",
-      "addDriver": "Add Driver",
-      "editDriver": "Edit Driver",
-      "deleteDriver": "Delete Driver",
-      "addDevice": "Add Device",
-      "editDevice": "Edit Device",
-      "deleteDevice": "Delete Device",
-      "addGroup": "Add Group",
-      "editGroup": "Edit Group",
-      "deleteGroup": "Delete Group",
-      "assignVehicle": "Assign Vehicle",
-      "unassignVehicle": "Unassign Vehicle",
-      "pendingBackend": "Waiting for backend"
+      "archive": "Archive",
+      "decommission": "Decommission"
     },
     "crud": {
       "createSuccess": "{{name}} created.",
       "updateSuccess": "{{name}} updated.",
-      "deleteSuccess": "{{name}} deleted.",
-      "deleteConfirmTitle": "Delete {{name}}?",
-      "deleteConfirmBody": "This action cannot be undone.",
-      "bulkDeleteConfirm": "Delete {{count}} selected items?"
+      "archiveSuccess": "{{name}} archived.",
+      "decommissionSuccess": "{{name}} decommissioned.",
+      "archiveConfirmTitle": "Archive {{name}}?",
+      "archiveConfirmBody": "The record is soft-archived and hidden from active lists.",
+      "decommissionConfirmTitle": "Decommission {{name}}?",
+      "decommissionConfirmBody": "The device is decommissioned (soft delete) and stops reporting.",
+      "conflict": "A record with this code or IMEI already exists."
     }
   },
   "reports": {
@@ -892,68 +925,29 @@
     "displayName": {
       "tooLong": "Must be at most 128 characters"
     },
-    "vehicle": {
-      "plate": {
-        "required": "Plate number is required"
-      },
-      "vin": {
-        "required": "VIN is required",
-        "length": "VIN must be 17 characters"
-      },
-      "make": {
-        "required": "Make is required"
-      },
-      "model": {
-        "required": "Model is required"
-      },
-      "year": {
-        "invalid": "Enter a valid year"
-      }
+    "fleet": {
+      "nameRequired": "Fleet name is required",
+      "nameTooLong": "Fleet name must be at most 200 characters",
+      "codeRequired": "Fleet code is required",
+      "codeTooLong": "Fleet code must be at most 64 characters",
+      "codeInvalid": "Code may only contain letters, digits, \"_\" and \"-\"",
+      "descriptionTooLong": "Description must be at most 1000 characters"
     },
-    "driver": {
-      "firstName": {
-        "required": "First name is required"
-      },
-      "lastName": {
-        "required": "Last name is required"
-      },
-      "phone": {
-        "required": "Phone is required"
-      },
-      "licenseNumber": {
-        "required": "License number is required"
-      },
-      "licenseClass": {
-        "required": "License class is required"
-      },
-      "licenseExpiry": {
-        "required": "License expiry is required"
-      }
+    "vehicle": {
+      "nameRequired": "Vehicle name is required",
+      "nameTooLong": "Vehicle name must be at most 200 characters",
+      "codeRequired": "Vehicle code is required",
+      "codeTooLong": "Vehicle code must be at most 64 characters",
+      "codeInvalid": "Code may only contain letters, digits, \"_\" and \"-\"",
+      "fleetRequired": "Select a fleet",
+      "plateTooLong": "Plate must be at most 32 characters",
+      "vinInvalid": "VIN must be 17 characters (letters/digits, no I, O, Q)"
     },
     "device": {
-      "serial": {
-        "required": "Serial number is required"
-      },
-      "manufacturer": {
-        "required": "Manufacturer is required"
-      },
-      "model": {
-        "required": "Model is required"
-      },
-      "imei": {
-        "length": "IMEI must be 15 digits"
-      },
-      "firmware": {
-        "required": "Firmware version is required"
-      },
-      "interval": {
-        "invalid": "Enter a valid interval (1–86400 sec)"
-      }
-    },
-    "group": {
-      "name": {
-        "required": "Group name is required"
-      }
+      "imeiRequired": "IMEI is required",
+      "imeiFormat": "IMEI must be exactly 15 digits",
+      "imeiLuhn": "IMEI is not valid (Luhn check failed)",
+      "protocolRequired": "Select a protocol"
     }
   },
   "navGroups": {

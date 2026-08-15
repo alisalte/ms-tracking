@@ -70,6 +70,20 @@ export class FleetRepository {
     return listPaginated<FleetRow>(base, opts);
   }
 
+  /** Row counts per status for the tenant (Sprint E dashboard summary). */
+  public async countByStatus(tenantId: string): Promise<Record<string, number>> {
+    const rows = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .select('status')
+      .count<{ status: string; count: string | number }[]>({ count: '*' })
+      .groupBy('status');
+    const out: Record<string, number> = {};
+    for (const row of rows) out[row.status] = Number(row.count);
+    return out;
+  }
+
   public async create(
     trx: Knex.Transaction,
     tenantId: string,

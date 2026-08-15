@@ -93,6 +93,8 @@
     "showing": "نمایش {{count}}",
     "cancel": "انصراف",
     "delete": "حذف",
+    "archive": "بایگانی",
+    "decommission": "تسویه",
     "edit": "ویرایش",
     "add": "افزودن",
     "save": "ذخیره",
@@ -112,7 +114,8 @@
     "manageMembers": "مدیریت اعضا",
     "sendCommand": "ارسال فرمان",
     "optional": "اختیاری",
-    "required": "الزامی"
+    "required": "الزامی",
+    "unknown": "نامشخص"
   },
   "errors": {
     "retry": "تلاش مجدد",
@@ -123,7 +126,12 @@
     "network": "خطای اتصال",
     "networkDesc": "ارتباط با سرور برقرار نشد. اتصال خود را بررسی کنید.",
     "generic": "خطایی رخ داد",
-    "genericDesc": "یک خطای غیرمنتظره رخ داد. لطفاً دوباره تلاش کنید."
+    "genericDesc": "یک خطای غیرمنتظره رخ داد. لطفاً دوباره تلاش کنید.",
+    "boundaryTitle": "خطایی رخ داد",
+    "boundaryBody": "نمایش این صفحه با خطا مواجه شد. می‌توانید دوباره تلاش کنید.",
+    "reload": "بارگذاری مجدد",
+    "permissionDeniedTitle": "دسترسی رد شد",
+    "permissionDeniedBody": "شما به این بخش دسترسی ندارید."
   },
   "dashboard": {
     "title": "داشبورد ناوگان",
@@ -137,7 +145,13 @@
       "idle": "درجا",
       "offline": "آفلاین",
       "alerts": "هشدارها",
-      "critical": "{{count}} بحرانی"
+      "critical": "{{count}} بحرانی",
+      "totalVehicles": "کل خودروها",
+      "online": "آنلاین",
+      "stale": "غیربه‌روز",
+      "unknown": "نامشخص",
+      "fleets": "ناوگان‌ها",
+      "devices": "دستگاه‌ها"
     },
     "states": {
       "driving": "در حرکت",
@@ -153,7 +167,8 @@
     "relative": {
       "justNow": "هم‌اکنون",
       "minutes": "{{count}} دقیقه پیش",
-      "hours": "{{count}} ساعت پیش"
+      "hours": "{{count}} ساعت پیش",
+      "days": "{{count}} روز پیش"
     },
     "alerts": {
       "overspeed": "سرعت غیرمجاز",
@@ -173,7 +188,10 @@
       "active": "فعال",
       "idle": "درجا",
       "overspeed": "سرعت غیرمجاز",
-      "offline": "آفلاین"
+      "offline": "آفلاین",
+      "online": "آنلاین",
+      "stale": "غیربه‌روز",
+      "unknown": "نامشخص"
     },
     "utilization": {
       "utilized": "به‌کارگیری"
@@ -236,7 +254,9 @@
     "clusterAlt": "{{count}} خودرو",
     "noResults": "هیچ خودرو‌ای با فیلترهای شما مطابقت ندارد.",
     "filters": {
-      "all": "همه"
+      "all": "همه",
+      "fleet": "فیلتر بر اساس ناوگان",
+      "allFleets": "همه‌ی ناوگان‌ها"
     },
     "states": {
       "driving": "در حرکت",
@@ -271,7 +291,26 @@
       "history": "تاریخچه",
       "recentEvents": "رویدادهای اخیر",
       "noEvents": "رویداد اخیری نیست"
-    }
+    },
+    "presence": {
+      "ONLINE": "آنلاین",
+      "OFFLINE": "آفلاین",
+      "STALE": "غیربه‌روز",
+      "UNKNOWN": "نامشخص"
+    },
+    "lastSeen": {
+      "label": "آخرین ارتباط",
+      "never": "هرگز"
+    },
+    "ws": {
+      "ariaLabel": "وضعیت اتصال زنده",
+      "connected": "متصل",
+      "connecting": "در حال اتصال…",
+      "reconnecting": "در حال اتصال مجدد…",
+      "disconnected": "قطع‌شده"
+    },
+    "emptyTitle": "هنوز خودروای وجود ندارد",
+    "emptyHelp": "هنوز خودرو‌ای رهگیری نمی‌شود. با شروع ارسال داده توسط دستگاه‌ها، خودروها اینجا نمایش داده می‌شوند."
   },
   "trips": {
     "title": "سفرها",
@@ -297,7 +336,8 @@
     },
     "detail": {
       "back": "بازگشت به سفرها",
-      "notFound": "سفر یافت نشد."
+      "notFound": "سفر یافت نشد.",
+      "notFoundHelp": "این سفر وجود ندارد یا حذف شده است."
     },
     "summary": {
       "distance": "مسافت",
@@ -332,6 +372,10 @@
       "idle": "درجا",
       "overspeed": "سرعت غیرمجاز",
       "geofence": "محدوده‌ی جغرافیایی"
+    },
+    "empty": {
+      "title": "هنوز سفری ثبت نشده است",
+      "notAvailable": "API تاریخچه‌ی سفر هنوز در دسترس نیست. پس از راه‌اندازی سرویس سفرها، سفرهای ثبت‌شده اینجا نمایش داده می‌شوند."
     }
   },
   "video": {
@@ -483,141 +527,130 @@
   },
   "assets": {
     "title": "مدیریت دارایی‌ها",
-    "subtitle": "خودروها، رانندگان، دستگاه‌ها و گروه‌ها",
-    "empty": "هیچ دارایی‌ای با فیلترهای شما مطابقت ندارد.",
+    "subtitle": "ناوگان‌ها، خودروها و دستگاه‌ها",
+    "empty": "هیچ رکوردی با فیلترهای شما مطابقت ندارد.",
     "count": "{{count}}",
     "tabs": {
+      "fleets": "ناوگان‌ها",
       "vehicles": "خودروها",
-      "drivers": "رانندگان",
-      "devices": "دستگاه‌ها",
-      "groups": "گروه‌ها"
+      "devices": "دستگاه‌ها"
     },
     "filters": {
       "allStatus": "همه‌ی وضعیت‌ها",
-      "allTypes": "همه‌ی انواع"
+      "allFleets": "همه‌ی ناوگان‌ها",
+      "allProtocols": "همه‌ی پروتکل‌ها"
+    },
+    "fleet": {
+      "notFound": "ناوگان یافت نشد.",
+      "search": "جستجوی نام / کد…",
+      "name": "نام",
+      "code": "کد",
+      "description": "توضیحات",
+      "colVehicles": "خودروها",
+      "colUpdated": "به‌روزرسانی",
+      "createdAt": "ایجاد",
+      "updatedAt": "به‌روزرسانی",
+      "vehiclesCount": "{{count}} خودرو",
+      "status": {
+        "ACTIVE": "فعال",
+        "ARCHIVED": "بایگانی‌شده"
+      },
+      "colName": "نام",
+      "colCode": "کد",
+      "colStatus": "وضعیت"
     },
     "vehicle": {
       "notFound": "خودرو یافت نشد.",
-      "search": "جستجوی پلاک / شاسی / مدل…",
+      "search": "جستجوی نام / کد / پلاک / شاسی…",
       "vin": "VIN",
+      "plate": "پلاک",
       "fleet": "ناوگان",
-      "fuelType": "سوخت",
-      "device": "دستگاه",
-      "actions": "عملیات",
-      "toMaintenance": "ارسال به تعمیر",
-      "fromMaintenance": "بازگشت به فعال",
+      "name": "نام",
+      "code": "کد",
+      "createdAt": "ایجاد",
+      "updatedAt": "به‌روزرسانی",
       "colPlate": "پلاک",
-      "colVehicle": "خودرو",
-      "colType": "نوع",
-      "colStatus": "وضعیت",
-      "colOdometer": "کیلومتر",
-      "type": {
-        "truck": "کامیون",
-        "van": "وانت",
-        "bus": "اتوبوس",
-        "car": "خودرو سواری"
-      },
+      "colUpdated": "به‌روزرسانی",
       "status": {
-        "active": "فعال",
-        "inactive": "غیرفعال",
-        "maintenance": "در تعمیر",
-        "decommissioned": "تسویه‌شده",
-        "sold": "فروخته‌شده"
+        "ACTIVE": "فعال",
+        "ARCHIVED": "بایگانی‌شده"
       },
-      "fuel": {
-        "diesel": "دیزل",
-        "gasoline": "بنزین",
-        "electric": "الکتریکی",
-        "hybrid": "هیبریدی",
-        "cng": "CNG",
-        "lpg": "LPG"
-      }
-    },
-    "driver": {
-      "notFound": "راننده یافت نشد.",
-      "search": "جستجوی نام / ایمیل / گواهینامه…",
-      "license": "گواهینامه",
-      "licenseExpiry": "انقضای گواهینامه",
-      "employeeId": "کد پرسنلی",
-      "phone": "تلفن",
-      "assigned": "خودروی تخصیص‌یافته",
-      "behavior": "رفتار",
-      "totalTrips": "سفرها",
-      "totalDistance": "مسافت",
-      "certifications": "گواهینامه‌های تکمیلی",
-      "colName": "راننده",
-      "colLicense": "گواهینامه",
-      "colStatus": "وضعیت",
-      "colScore": "امتیاز",
-      "status": {
-        "active": "فعال",
-        "inactive": "غیرفعال",
-        "suspended": "معلق",
-        "terminated": "پایان همکاری"
-      }
+      "colName": "نام",
+      "colCode": "کد",
+      "colFleet": "ناوگان",
+      "colVin": "VIN",
+      "colStatus": "وضعیت"
     },
     "device": {
       "notFound": "دستگاه یافت نشد.",
-      "search": "جستجوی سریال / IMEI / خودرو…",
-      "firmware": "فیرم‌ور",
-      "reportingInterval": "بازه‌ی گزارش‌دهی",
-      "health": "سلامت",
-      "battery": "باتری",
-      "signal": "سیگنال",
-      "lastHeartbeat": "آخرین ضربان",
-      "targetFirmware": "فیرم‌ور هدف",
+      "search": "جستجوی IMEI / سریال / مدل…",
+      "imei": "IMEI",
+      "serial": "شماره سریال",
+      "manufacturer": "سازنده",
+      "model": "مدل",
+      "protocol": "پروتکل",
+      "status": "وضعیت",
+      "colImei": "IMEI",
       "colSerial": "سریال",
-      "colType": "نوع",
+      "colManufacturer": "سازنده",
+      "colModel": "مدل",
+      "colProtocol": "پروتکل",
       "colVehicle": "خودرو",
-      "colStatus": "وضعیت",
-      "colHealth": "سلامت",
-      "type": {
-        "obd2": "OBD-II",
-        "gps_tracker": "ردیاب GPS",
-        "dashcam": "دوربین داشبورد",
-        "custom_sensor": "سنسور سفارشی"
+      "colLastSeen": "آخرین دیدار",
+      "registry": "ثبت",
+      "connection": "اتصال",
+      "lastSeen": "آخرین دیدار",
+      "connectedAt": "زمان اتصال",
+      "disconnectedAt": "زمان قطع اتصال",
+      "createdAt": "ایجاد",
+      "updatedAt": "به‌روزرسانی",
+      "never": "هرگز",
+      "devices": "دستگاه‌ها",
+      "role": "نقش",
+      "roles": {
+        "TRACKER": "ردیاب",
+        "MDVR": "MDVR",
+        "CAN": "CAN",
+        "SENSOR": "سنسور",
+        "OTHER": "سایر"
       },
-      "status": {
-        "provisioned": "پیکربندی‌شده",
-        "active": "فعال",
-        "inactive": "غیرفعال",
-        "firmware_updating": "در حال به‌روزرسانی",
-        "faulted": "خراب",
-        "decommissioned": "تسویه‌شده"
-      }
-    },
-    "group": {
-      "members": "اعضا",
-      "typeFilter": "فیلتر نوع",
-      "status": {
-        "active": "فعال",
-        "archived": "بایگانی‌شده"
-      }
+      "protocols": {
+        "gt06": "GT06",
+        "jt808": "JT/T 808",
+        "meitrack": "Meitrack",
+        "stub": "Stub"
+      },
+      "statusValues": {
+        "ACTIVE": "فعال",
+        "SUSPENDED": "معلق",
+        "DECOMMISSIONED": "تسویه‌شده",
+        "UNPAIRED": "جدا‌شده"
+      },
+      "primary": "اصلی",
+      "boundAt": "زمان اتصال",
+      "unbound": "متصل نیست",
+      "assignTitle": "انتساب دستگاه",
+      "assignAction": "انتساب",
+      "unassign": "لغو اتصال",
+      "unassignConfirmTitle": "لغو اتصال {{name}}؟",
+      "unassignConfirmBody": "دستگاه از این خودرو جدا می‌شود.",
+      "alreadyBound": "این دستگاه قبلاً به یک خودرو متصل شده است.",
+      "noUnbound": "دستگاه آزادی برای انتساب وجود ندارد."
     },
     "actions": {
-      "addVehicle": "افزودن خودرو",
-      "editVehicle": "ویرایش خودرو",
-      "deleteVehicle": "حذف خودرو",
-      "addDriver": "افزودن راننده",
-      "editDriver": "ویرایش راننده",
-      "deleteDriver": "حذف راننده",
-      "addDevice": "افزودن دستگاه",
-      "editDevice": "ویرایش دستگاه",
-      "deleteDevice": "حذف دستگاه",
-      "addGroup": "افزودن گروه",
-      "editGroup": "ویرایش گروه",
-      "deleteGroup": "حذف گروه",
-      "assignVehicle": "انتساب خودرو",
-      "unassignVehicle": "لغو انتساب خودرو",
-      "pendingBackend": "در انتظار بک‌اند"
+      "archive": "بایگانی",
+      "decommission": "تسویه"
     },
     "crud": {
       "createSuccess": "{{name}} ایجاد شد.",
       "updateSuccess": "{{name}} به‌روزرسانی شد.",
-      "deleteSuccess": "{{name}} حذف شد.",
-      "deleteConfirmTitle": "حذف {{name}}؟",
-      "deleteConfirmBody": "این عمل قابل بازگشت نیست.",
-      "bulkDeleteConfirm": "حذف {{count}} مورد انتخاب‌شده؟"
+      "archiveSuccess": "{{name}} بایگانی شد.",
+      "decommissionSuccess": "{{name}} تسویه شد.",
+      "archiveConfirmTitle": "بایگانی {{name}}؟",
+      "archiveConfirmBody": "رکورد به‌صورت نرم بایگانی می‌شود و از فهرست‌های فعال پنهان می‌گردد.",
+      "decommissionConfirmTitle": "تسویه {{name}}؟",
+      "decommissionConfirmBody": "دستگاه تسویه می‌شود (حذف نرم) و گزارش‌دهی آن متوقف می‌شود.",
+      "conflict": "رکوردی با این کد یا IMEI از قبل وجود دارد."
     }
   },
   "reports": {
@@ -892,68 +925,29 @@
     "displayName": {
       "tooLong": "حداکثر ۱۲۸ کاراکتر مجاز است"
     },
-    "vehicle": {
-      "plate": {
-        "required": "شماره پلاک الزامی است"
-      },
-      "vin": {
-        "required": "VIN الزامی است",
-        "length": "VIN باید ۱۷ کاراکتر باشد"
-      },
-      "make": {
-        "required": "برند الزامی است"
-      },
-      "model": {
-        "required": "مدل الزامی است"
-      },
-      "year": {
-        "invalid": "سال معتبر وارد کنید"
-      }
+    "fleet": {
+      "nameRequired": "نام ناوگان الزامی است",
+      "nameTooLong": "نام ناوگان حداکثر ۲۰۰ نویسه است",
+      "codeRequired": "کد ناوگان الزامی است",
+      "codeTooLong": "کد ناوگان حداکثر ۶۴ نویسه است",
+      "codeInvalid": "کد فقط می‌تواند شامل حروف، اعداد، \"_\" و \"-\" باشد",
+      "descriptionTooLong": "توضیحات حداکثر ۱۰۰۰ نویسه است"
     },
-    "driver": {
-      "firstName": {
-        "required": "نام الزامی است"
-      },
-      "lastName": {
-        "required": "نام خانوادگی الزامی است"
-      },
-      "phone": {
-        "required": "تلفن الزامی است"
-      },
-      "licenseNumber": {
-        "required": "شماره گواهینامه الزامی است"
-      },
-      "licenseClass": {
-        "required": "کلاس گواهینامه الزامی است"
-      },
-      "licenseExpiry": {
-        "required": "تاریخ انقضای گواهینامه الزامی است"
-      }
+    "vehicle": {
+      "nameRequired": "نام خودرو الزامی است",
+      "nameTooLong": "نام خودرو حداکثر ۲۰۰ نویسه است",
+      "codeRequired": "کد خودرو الزامی است",
+      "codeTooLong": "کد خودرو حداکثر ۶۴ نویسه است",
+      "codeInvalid": "کد فقط می‌تواند شامل حروف، اعداد، \"_\" و \"-\" باشد",
+      "fleetRequired": "یک ناوگان انتخاب کنید",
+      "plateTooLong": "پلاک حداکثر ۳۲ نویسه است",
+      "vinInvalid": "VIN باید ۱۷ نویسه باشد (حروف/اعداد، بدون I، O، Q)"
     },
     "device": {
-      "serial": {
-        "required": "شماره سریال الزامی است"
-      },
-      "manufacturer": {
-        "required": "سازنده الزامی است"
-      },
-      "model": {
-        "required": "مدل الزامی است"
-      },
-      "imei": {
-        "length": "IMEI باید ۱۵ رقم باشد"
-      },
-      "firmware": {
-        "required": "نسخه فریم‌ور الزامی است"
-      },
-      "interval": {
-        "invalid": "بازه معتبر وارد کنید (۱–۸۶۴۰۰ ثانیه)"
-      }
-    },
-    "group": {
-      "name": {
-        "required": "نام گروه الزامی است"
-      }
+      "imeiRequired": "IMEI الزامی است",
+      "imeiFormat": "IMEI باید دقیقاً ۱۵ رقم باشد",
+      "imeiLuhn": "IMEI معتبر نیست (بررسی Luhn ناموفق بود)",
+      "protocolRequired": "یک پروتکل انتخاب کنید"
     }
   },
   "navGroups": {

@@ -17,7 +17,6 @@ import {
   Navigation,
   Power,
   Send,
-  Tag,
   User,
   Video,
   X,
@@ -25,6 +24,8 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useVehicleDetail } from '@/api/fleet.api';
+import { ErrorState } from '@/components/common/ErrorState';
+import { lastSeenLabel } from '@/lib/relative-time';
 import { status } from '@/theme/palette';
 import type { AlertSeverity } from '@/types/fleet.types';
 
@@ -54,7 +55,7 @@ interface DevicePopupProps {
  */
 export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
   const { t } = useTranslation();
-  const { data, isLoading } = useVehicleDetail(vehicleId);
+  const { data, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
 
   return (
     <Drawer
@@ -92,7 +93,10 @@ export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
           </IconButton>
         </Stack>
 
-        {isLoading || !data ? (
+        {isError ? (
+          // §22: the real backend is unreachable — honest error, never fake data.
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        ) : isLoading || !data ? (
           <Box sx={{ p: 2 }}>
             <Skeleton variant="rounded" height={120} />
             <Skeleton variant="text" sx={{ mt: 2 }} />
@@ -100,17 +104,23 @@ export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
           </Box>
         ) : (
           <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
-            {/* Status pill */}
-            <Chip
-              size="small"
-              label={t(`map.states.${data.state}`)}
-              sx={{
-                mb: 2,
-                fontWeight: 600,
-                backgroundColor: `${SEVERITY_COLOR.warning}1A`,
-                color: data.state === 'overspeed' ? status.red : 'text.primary',
-              }}
-            />
+            {/* Status + presence pills (§18) */}
+            <Stack direction="row" gap={0.75} sx={{ mb: 2, flexWrap: 'wrap' }}>
+              <Chip
+                size="small"
+                label={t(`map.states.${data.state}`)}
+                sx={{
+                  fontWeight: 600,
+                  backgroundColor: `${SEVERITY_COLOR.warning}1A`,
+                  color: data.state === 'overspeed' ? status.red : 'text.primary',
+                }}
+              />
+              <Chip
+                size="small"
+                label={t(`map.presence.${data.presence ?? 'UNKNOWN'}`)}
+                sx={{ fontWeight: 600 }}
+              />
+            </Stack>
 
             {/* ── Quick facts grid ── */}
             <Box
@@ -134,7 +144,12 @@ export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
                 label={t('map.popup.driver')}
                 value={data.driver ?? t('map.popup.unassigned')}
               />
-              <Fact icon={Tag} label={t('map.popup.trip')} value={data.tripId ?? '—'} />
+              {/* §19 Last seen — from the backend status record; "never" when absent. */}
+              <Fact
+                icon={History}
+                label={t('map.lastSeen.label')}
+                value={lastSeenLabel(data.lastSeenAt, t)}
+              />
             </Box>
 
             <Fact icon={MapPin} label={t('map.popup.address')} value={data.address} fullWidth />

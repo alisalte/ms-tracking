@@ -123,26 +123,53 @@ export function useLiveTracking(tenantId: string | null, wsUrl?: string): LiveTr
 }
 
 /**
- * Merge live positions into the REST-fetched fleet list.
+ * Merge live updates into the REST-fetched fleet list (§18/§19/§32).
  *
- * Returns a new array where vehicles that have a live position update are
- * patched with the latest lat/lng/speed/heading/timestamp.
+ * - `live` positions (keyed by vehicleId, latest-wins) patch lat/lng/speed/
+ *   heading/updatedAt;
+ * - `statuses` (keyed by deviceId — MapVehicle.deviceId joins them, vehicleId
+ *   as a fallback) patch presence + lastSeenAt so connection flips show live;
+ * - the movement `state` is recomputed from the merged presence + position the
+ *   same way the REST bootstrap derives it (offline → offline, stale → stopped,
+ *   moving → driving, ignition off → stopped, else idle).
+ *
+ * Vehicles without a live delta are returned unchanged (referentially stable).
  */
 export function mergeLivePositions(
   vehicles: MapVehicle[],
   live: Map<string, LivePosition>,
+  statuses?: Map<string, DeviceStatus>,
 ): MapVehicle[] {
-  if (live.size === 0) return vehicles;
+  if (live.size === 0 && (!statuses || statuses.size === 0)) return vehicles;
   return vehicles.map((v) => {
     const pos = live.get(v.id);
-    if (!pos) return v;
+    const status = statuses ? (statuses.get(v.deviceId ?? '') ?? statuses.get(v.id)) : undefined;
+    if (!pos && !status) return v;
+    // A WS status delta wins; without one the bootstrapped presence stands
+    // (never fabricate UNKNOWN — absence of a delta is not absence of a record).
+    const presence = status?.state ?? v.presence;
+    let state: MapVehicle['state'];
+    if (presence === 'OFFLINE' || presence === 'UNKNOWN') {
+      state = 'offline';
+    } else if (presence === 'STALE') {
+      state = 'stopped';
+    } else if (pos) {
+      // The live wire carries no ignition flag — moving is provable, at rest
+      // is reported as idle (the same default the bootstrap uses for unknown).
+      state = pos.speedKph > 2 ? 'driving' : 'idle';
+    } else {
+      state = v.state; // no position delta — keep the bootstrapped movement state
+    }
     return {
       ...v,
-      lat: pos.latitude,
-      lng: pos.longitude,
-      speed: pos.speedKph,
-      heading: pos.headingDeg,
-      updatedAt: pos.capturedAt,
+      state,
+      lat: pos?.latitude ?? v.lat,
+      lng: pos?.longitude ?? v.lng,
+      speed: pos?.speedKph ?? v.speed,
+      heading: pos?.headingDeg ?? v.heading,
+      updatedAt: pos?.capturedAt ?? v.updatedAt,
+      presence,
+      lastSeenAt: status?.lastSeenAt ?? v.lastSeenAt,
     };
   });
 }

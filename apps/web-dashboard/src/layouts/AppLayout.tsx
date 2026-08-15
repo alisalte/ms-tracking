@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router';
 
+import { useSilentRefresh } from '@/auth/useSilentRefresh';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { Topbar } from '@/components/shell/Topbar';
 
@@ -19,10 +20,15 @@ export const PAGE_PADDING = 20;
  * Wall) render their own internal chrome within this padded area, same as the
  * previous MUI shell. State (mobile drawer open + desktop collapse) lives here
  * so the Topbar's hamburger and the Sidebar's collapse toggle stay in sync.
+ *
+ * Sprint E §5: `useSilentRefresh` is mounted exactly once here — it proactively
+ * rotates the access token ~60s before expiry for every authenticated screen.
  */
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  useSilentRefresh();
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-graydark-200">

@@ -132,6 +132,15 @@ export async function apiGet<T>(url: string, params?: Record<string, unknown>): 
 }
 
 /**
+ * Typed GET for endpoints that return a RAW body (no { data } envelope) —
+ * gps-engine REST (`/positions/*`, `/tracking/devices/*`) responds unwrapped.
+ */
+export async function apiGetRaw<T>(url: string, params?: Record<string, unknown>): Promise<T> {
+  const response = await apiClient.get<T>(url, { params });
+  return response.data;
+}
+
+/**
  * Typed POST request that unwraps the { data: T } envelope.
  */
 export async function apiPost<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {
@@ -155,10 +164,26 @@ export async function apiDelete<T = void>(url: string): Promise<T> {
 }
 
 /**
+ * Typed DELETE for endpoints that return no body (204 — archive/unbind/decommission).
+ */
+export async function apiDeleteNoContent(url: string): Promise<void> {
+  await apiClient.delete(url);
+}
+
+/**
  * Typed PUT request that unwraps the { data: T } envelope.
  */
 export async function apiPut<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {
   const response = await apiClient.put<ApiResponse<TRes>>(url, body);
+  return response.data.data;
+}
+
+/**
+ * Typed PATCH request that unwraps the { data: T } envelope — fleet-management
+ * uses PATCH for fleet/vehicle/device updates.
+ */
+export async function apiPatch<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {
+  const response = await apiClient.patch<ApiResponse<TRes>>(url, body);
   return response.data.data;
 }
 
