@@ -93,43 +93,47 @@ services:
       retries: 10
       start_period: 20s
 
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: fleetvision-rabbitmq
-    restart: unless-stopped
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fleetvision}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-fleetvision}
-    ports:
-      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
-      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
+  # rabbitmq:
+  #   # DEPRECATED (Sprint 2): no producer/consumer code exists for RabbitMQ yet.
+  #   # Uncomment when a task-queue integration lands. (Container-only, zero code today.)
+  #   image: rabbitmq:3.13-management-alpine
+  #   container_name: fleetvision-rabbitmq
+  #   restart: unless-stopped
+  #   environment:
+  #     RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fleetvision}
+  #     RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-fleetvision}
+  #   ports:
+  #     - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+  #     - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+  #   volumes:
+  #     - rabbitmq-data:/var/lib/rabbitmq
+  #   healthcheck:
+  #     test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 10
 
-  minio:
-    # S3-API object storage (sovereign/edge parity, TDR §6).
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
-    container_name: fleetvision-minio
-    restart: unless-stopped
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-fleetvision}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fleetvision-secret}
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+  # minio:
+  #   # DEPRECATED (Sprint 2): no S3/MinIO integration code exists yet (the
+  #   # NullRawRetentionSink is a no-op). Uncomment when media/cold-storage needs it.
+  #   # S3-API object storage (sovereign/edge parity, TDR §6).
+  #   image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+  #   container_name: fleetvision-minio
+  #   restart: unless-stopped
+  #   command: ["server", "/data", "--console-address", ":9001"]
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:-fleetvision}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fleetvision-secret}
+  #   ports:
+  #     - "${MINIO_API_PORT:-9000}:9000"
+  #     - "${MINIO_CONSOLE_PORT:-9001}:9001"
+  #   volumes:
+  #     - minio-data:/data
+  #   healthcheck:
+  #     test: ["CMD", "mc", "ready", "local"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
 
   # ── Application services ────────────────────────────────────────────────────
   # identity-service — NestJS auth + IAM backend. Depends on postgres + redis
@@ -153,7 +157,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ENVIRONMENT: local
       # In-container hostnames — resolve via the compose network.
-      DBURL: postgres://${POSTGRES_USER:-fleetvision}:${POSTGRES_PASSWORD:-fleetvision}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      # Runtime client connects as the non-superuser fleetvision_app role (RLS-enforced).
+      # The DBURL_PLATFORM client (migrations + platform ops) connects as the
+      # fleetvision_platform role (BYPASSRLS). Both roles are created by the
+      # 20260201000000 hardening migration; passwords from env (dev defaults below).
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
       REDISURL: redis://redis:6379/0
       # JWT / auth (HS256 MVP).
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}

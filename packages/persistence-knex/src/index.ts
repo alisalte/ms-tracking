@@ -9,6 +9,7 @@ export {
   PersistenceModule,
   type PersistenceModuleOptions,
   KNEX_TOKEN,
+  PLATFORM_KNEX_TOKEN,
 } from './persistence.module.js';
 export {
   createKnex,
@@ -18,4 +19,9 @@ export {
 } from './knex.factory.js';
 export { BaseRepository, type Row, type BaseRepositoryOptions } from './base.repository.js';
 export { runMigrations, rollbackLastBatch, type MigrationsOptions } from './migrations.js';
-export { withTenantContext, withoutTenantContext } from './tenant-context.js';
+export {
+  assertUuid,
+  withTenantContext,
+  withoutTenantContext,
+  withPlatformContext,
+} from './tenant-context.js';

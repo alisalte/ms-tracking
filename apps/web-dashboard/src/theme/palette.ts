@@ -1,115 +1,116 @@
 /**
- * FleetVision Design System — Color palette (v4 — Limitless-faithful).
+ * FleetVision Design System — Color palette (v5 — TailAdmin-faithful).
  *
- * Exact Limitless admin template tokens. The UI reads "Limitless" through and
- * through: Material Blue primary, dark slate sidebar, light grey page, 3px
- * radius, near-flat cards. FleetVision identity carried by the brand mark only.
+ * TailAdmin React indigo primary on a dark sidebar, layered neutral surfaces,
+ * restrained gradients. The indigo brand is applied to every MUI page through
+ * the theme; Tailwind components read the matching tokens from
+ * `src/styles/tailwind.css`. FleetVision identity carried by the brand mark.
  */
 
-/** Neutral ramp — Limitless uses Bootstrap-4 neutrals. */
+/** Neutral ramp — TailAdmin `gray` family (light) + the legacy keys kept stable. */
 export const neutral = {
   0: '#FFFFFF',
-  25: '#FAFAFA',
-  50: '#F5F5F5',
-  100: '#F0F0F0',
-  200: '#EEEEEE',
-  300: '#E5E5E5',
-  400: '#DDDDDD',
-  500: '#B7B7B7',
-  600: '#999999',
-  700: '#777777',
-  800: '#555555',
-  900: '#333333',
-  950: '#1A1A1A',
+  25: '#FCFCFD',
+  50: '#F9FAFB',
+  100: '#F2F4F7',
+  200: '#E4E7EC',
+  300: '#D0D5DD',
+  400: '#98A2B3',
+  500: '#667085',
+  600: '#475467',
+  700: '#344054',
+  800: '#1D2939',
+  900: '#101828',
+  950: '#0C111D',
 } as const;
 
-/** Primary — Limitless Material Blue 500. */
+/** Primary — TailAdmin indigo. */
 export const primary = {
-  main: '#2196F3',
-  light: '#64B5F6',
-  lighter: '#BBDEFB',
-  dark: '#1976D2',
-  darker: '#1565C0',
-  hover: '#1E88E5',
-  pressed: '#1565C0',
-  tint: 'rgba(33, 150, 243, 0.10)',
-  brandGradient: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
-  gradient: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
+  main: '#465FFB',
+  light: '#8199FD',
+  lighter: '#C7D8FF',
+  dark: '#3641F5',
+  darker: '#2D31D4',
+  hover: '#3641F5',
+  pressed: '#2D31D4',
+  tint: 'rgba(70, 95, 251, 0.10)',
+  brandGradient: 'linear-gradient(135deg, #465FFB 0%, #6366F1 100%)',
+  gradient: 'linear-gradient(135deg, #465FFB 0%, #6366F1 100%)',
 } as const;
 
-/** Status colors — Limitless Material palette at the 500 shade. */
+/** Status colors — TailAdmin semantic set. */
 export const status = {
-  success: '#4CAF50',
-  successLight: '#81C784',
-  successBg: 'rgba(76, 175, 80, 0.12)',
-  green: '#4CAF50',
+  success: '#12B76A',
+  successLight: '#36B37E',
+  successBg: 'rgba(18, 183, 106, 0.12)',
+  green: '#12B76A',
 
-  warning: '#FF5722',
-  warningLight: '#FF8A65',
-  warningBg: 'rgba(255, 87, 34, 0.12)',
-  amber: '#FF9800',
+  warning: '#F79009',
+  warningLight: '#FDB022',
+  warningBg: 'rgba(247, 144, 9, 0.12)',
+  amber: '#FDB022',
 
-  danger: '#F44336',
-  dangerLight: '#E57373',
-  dangerBg: 'rgba(244, 67, 54, 0.12)',
-  red: '#F44336',
+  danger: '#F04438',
+  dangerLight: '#FB7185',
+  dangerBg: 'rgba(240, 68, 56, 0.12)',
+  red: '#F04438',
 
-  info: '#00BCD4',
-  infoLight: '#4DD0E1',
-  infoBg: 'rgba(0, 188, 212, 0.12)',
-  blue: '#2196F3',
+  info: '#1570EF',
+  infoLight: '#2E90FA',
+  infoBg: 'rgba(21, 112, 239, 0.12)',
+  blue: '#465FFB',
 
-  indigo: '#3F51B5',
-  purple: '#AB47BC',
-  pink: '#E91E63',
-  teal: '#009688',
-  slate: '#607D8B',
+  indigo: '#465FFB',
+  purple: '#8B5CF6',
+  pink: '#EE46BC',
+  teal: '#06B6D4',
+  slate: '#667085',
 } as const;
 
-/** The signature Limitless dark slate sidebar (constant across modes). */
+/** The signature TailAdmin dark sidebar (constant across modes). */
 export const sidebar = {
-  bg: '#263238',
-  groupBg: 'rgba(0, 0, 0, 0.15)',
+  bg: '#1A222C',
+  groupBg: 'rgba(255, 255, 255, 0.03)',
   hover: 'rgba(255, 255, 255, 0.06)',
-  active: 'rgba(255, 255, 255, 0.10)',
-  accent: '#2196F3',
-  border: 'rgba(255, 255, 255, 0.08)',
-  text: 'rgba(255, 255, 255, 0.75)',
+  active: '#3C50E0',
+  accent: '#465FFB',
+  border: 'rgba(255, 255, 255, 0.06)',
+  text: '#9AA5B5',
   textStrong: '#FFFFFF',
-  textMuted: 'rgba(255, 255, 255, 0.45)',
+  textMuted: '#6B7280',
 } as const;
 
-/** Light-mode surfaces — Limitless near-white on #F5F5F5. */
+/** Light-mode surfaces — TailAdmin near-white on gray-50. */
 export const lightSurface = {
-  bg: '#F5F5F5',
+  bg: '#F9FAFB',
   paper: '#FFFFFF',
   elevated: '#FFFFFF',
-  hover: '#FAFAFA',
-  tableHead: '#FAFAFA',
-  border: '#EEEEEE',
-  borderStrong: '#DDDDDD',
-  divider: '#EEEEEE',
+  hover: '#F9FAFB',
+  tableHead: '#F9FAFB',
+  border: '#E4E7EC',
+  borderStrong: '#D0D5DD',
+  divider: '#E4E7EC',
 } as const;
 
-/** Dark-mode surfaces. */
+/** Dark-mode surfaces — TailAdmin graydark layered family. */
 export const darkSurface = {
-  bg: '#1F2730',
-  paper: '#2A333D',
-  elevated: '#323D48',
-  hover: '#36424E',
-  tableHead: '#2F3942',
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderStrong: 'rgba(255, 255, 255, 0.14)',
-  divider: 'rgba(255, 255, 255, 0.08)',
+  bg: '#101828',
+  paper: '#1A222C',
+  elevated: '#333A48',
+  hover: '#2A3340',
+  tableHead: '#1D2632',
+  border: 'rgba(255, 255, 255, 0.06)',
+  borderStrong: 'rgba(255, 255, 255, 0.12)',
+  divider: 'rgba(255, 255, 255, 0.06)',
 } as const;
 
 export const mapAccents = {
-  vehicleActive: '#4CAF50',
-  vehicleIdle: '#FFC107',
-  vehicleOverspeed: '#F44336',
-  vehicleOffline: '#9E9E9E',
-  geofence: '#3F51B5',
-  selectedRoute: '#00BCD4',
+  vehicleActive: '#12B76A',
+  vehicleIdle: '#F79009',
+  vehicleOverspeed: '#F04438',
+  vehicleOffline: '#98A2B3',
+  geofence: '#465FFB',
+  selectedRoute: '#06B6D4',
 } as const;
 
 export const shadows = {

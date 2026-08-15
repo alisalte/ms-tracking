@@ -11,7 +11,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { resolveMock } from '@/lib/mock-gate';
+import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
 import { downloadBlob } from '@/lib/video-stream';
 import {
   mockChartSeries,
@@ -31,26 +31,31 @@ import type {
 } from '@/types/report.types';
 import { queryKeys } from './query-keys';
 
-// ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
+// ── Fetchers (reporting/analytics services not built — mock in demo, empty in real) ──
 
-/** GET /api/v1/reports/definitions (pending backend). */
+/** GET /api/v1/reports/definitions (no backend; mock-only). */
 function fetchDefinitions(): Promise<ReportDefinition[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockReportDefinitions);
 }
-/** GET /api/v1/reports/jobs (pending backend). */
+/** GET /api/v1/reports/jobs (no backend; mock-only). */
 function fetchJobs(): Promise<ReportJob[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockReportJobs);
 }
-/** GET /api/v1/analytics/kpis (pending backend). */
+/** GET /api/v1/analytics/kpis (no backend; mock-only). */
 function fetchKpis(): Promise<Kpi[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockKpis);
 }
-/** GET /api/v1/analytics/charts (pending backend). */
+/** GET /api/v1/analytics/charts (no backend; mock-only). */
 function fetchCharts(): Promise<MetricSeries[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockChartSeries);
 }
-/** GET /api/v1/analytics/dashboards (pending backend). */
+/** GET /api/v1/analytics/dashboards (no backend; mock-only). */
 function fetchDashboards(): Promise<Dashboard[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockDashboards);
 }
 
@@ -75,9 +80,12 @@ export function useDashboards() {
 /**
  * Generate a report on-demand → `POST /api/v1/reports/generate` (Reporting §5.2).
  *
- * Simulates the async job lifecycle (pending → running → succeeded) and pushes
- * the job into the jobs cache so the Jobs table reflects it. When the backend
- * lands, replace with `apiPost` + polling the returned job URL.
+ * The reports backend does not exist yet. In mock/demo mode this simulates the
+ * async job lifecycle (pending → running → succeeded) so the Jobs table is
+ * demonstrable. In REAL mode it REJECTS honestly (no backend) rather than
+ * fabricating a "succeeded" job — callers surface the error instead of a fake
+ * success. Swap the mock body for `apiPost` + job polling when the endpoint
+ * lands.
  */
 export function useGenerateReport() {
   const qc = useQueryClient();
@@ -88,6 +96,10 @@ export function useGenerateReport() {
     { prev: ReportJob[] | undefined }
   >({
     mutationFn: async ({ definitionId, formats }) => {
+      if (!shouldUseMock()) {
+        // No reporting backend exists — fail honestly instead of faking success.
+        throw new Error('Report generation is not available (reports backend not implemented).');
+      }
       const { job, artifact } = mockGenerateJob(definitionId, formats);
       // Simulate the pending → running → succeeded transitions.
       await new Promise((r) => setTimeout(r, 600));
@@ -121,11 +133,15 @@ export function useGenerateReport() {
 /**
  * Export raw data → `POST /api/v1/reports/export` (REP-FR-11).
  *
- * Mock: builds a small CSV blob and triggers a download.
+ * Mock/demo: builds a small CSV blob and triggers a download. In REAL mode it
+ * REJECTS honestly (no reporting backend yet) instead of producing a fake file.
  */
 export function useExportRaw() {
   return useMutation<Blob, Error, { name: string }>({
     mutationFn: async () => {
+      if (!shouldUseMock()) {
+        throw new Error('Raw export is not available (reports backend not implemented).');
+      }
       await new Promise((r) => setTimeout(r, 800));
       const header = 'entity,date,metric,value';
       const rows = Array.from(

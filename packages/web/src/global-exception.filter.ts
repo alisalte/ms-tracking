@@ -1,10 +1,21 @@
-import { DomainError, type ErrorCode, HttpStatusByCode } from '@fleetvision/shared-kernel';
+import {
+  DomainError,
+  type ErrorCode,
+  ErrorCodes,
+  HttpStatusByCode,
+} from '@fleetvision/shared-kernel';
 /**
- * Global exception filter — the seed of the §8 filter chain. Maps thrown errors
- * to the JSON:API error envelope. Sprint 1 keeps this intentionally minimal:
- * Nest's built-in HttpException passes through with its status; everything else
- * becomes a canonical `INTERNAL_ERROR` 500. Later sprints add the domain-error
- * → HTTP mapping, problem-details negotiation, and PII redaction.
+ * Global exception filter — maps thrown errors to the JSON:API error envelope.
+ *
+ * Mapping rules (single source of truth = the shared-kernel catalog):
+ *   - DomainError → use its `code`, look up the HTTP status in HttpStatusByCode.
+ *   - HttpException → use its status; derive the canonical code from a reverse
+ *     status→code lookup (no parallel switch to drift from the catalog).
+ *   - Zod validation errors carried by a BadRequestException (the ZodValidationPipe
+ *     attaches the zod issues) → emit each issue as a JSON:API error with a
+ *     `source.pointer` so clients can highlight the offending field.
+ *   - Everything else → canonical INTERNAL_ERROR / 500 with NO detail/stack
+ *     leakage (never expose SQL, stack traces, or internal paths).
  */
 import {
   type ArgumentsHost,
@@ -16,6 +27,21 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { JsonApiErrorDocument } from './error-envelope.js';
+
+/** Reverse map: HTTP status → canonical code, derived from the catalog (no drift). */
+const CodeByHttpStatus: Record<number, string> = (() => {
+  const map: Record<number, string> = {};
+  for (const [code, status] of Object.entries(HttpStatusByCode)) {
+    // First code wins for a status; VALIDATION_ERROR claims 400 before BAD_REQUEST
+    // is reached in iteration order — that's the intended precedence (a 400 from a
+    // zod failure is VALIDATION_ERROR; a generic 400 is BAD_REQUEST).
+    if (!(status in map)) map[status] = code;
+  }
+  // 400 → BAD_REQUEST is the fallback for non-zod 400s; zod 400s set VALIDATION_ERROR
+  // explicitly via the zod-issue branch below, so BAD_REQUEST is the generic default.
+  map[400] = ErrorCodes.BAD_REQUEST;
+  return map;
+})();
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -61,39 +87,72 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       );
     }
 
-    const body: JsonApiErrorDocument = {
+    const body = this.buildBody(exception, status);
+    if (!response.headersSent) {
+      response.status(status).contentType('application/json').json(body);
+    }
+  }
+
+  /** Build the JSON:API error document for a non-Domain error. */
+  private buildBody(exception: unknown, status: number): JsonApiErrorDocument {
+    // 5xx → never leak detail. Generic INTERNAL_ERROR with no message body.
+    if (status >= 500) {
+      return {
+        errors: [
+          {
+            code: ErrorCodes.INTERNAL_ERROR,
+            status: String(status),
+            title: HttpStatus[status] ?? 'Error',
+          },
+        ],
+      };
+    }
+
+    // Zod validation issues: the ZodValidationPipe throws a BadRequestException
+    // whose response carries the zod issues array. Emit one JSON:API error per
+    // issue with a source.pointer so clients can highlight the field.
+    const zodIssues = extractZodIssues(exception);
+    if (zodIssues && zodIssues.length > 0) {
+      return {
+        errors: zodIssues.map((issue) => ({
+          code: ErrorCodes.VALIDATION_ERROR,
+          status: String(status),
+          title: 'Validation failed.',
+          detail: issue.message,
+          source: { pointer: issue.path.length > 0 ? `/${issue.path.join('/')}` : undefined },
+        })),
+      };
+    }
+
+    // Generic 4xx → derive the canonical code from the status (no parallel switch).
+    const code = CodeByHttpStatus[status] ?? ErrorCodes.INTERNAL_ERROR;
+    return {
       errors: [
         {
-          code: status >= 500 ? 'INTERNAL_ERROR' : this.codeForStatus(status),
+          code,
           status: String(status),
           title: HttpStatus[status] ?? 'Error',
           detail: exception instanceof HttpException ? exception.message : undefined,
         },
       ],
     };
-
-    if (!response.headersSent) {
-      response.status(status).contentType('application/json').json(body);
-    }
   }
+}
 
-  /** Map a 4xx status to a coarse canonical code; 5xx collapses to INTERNAL_ERROR. */
-  private codeForStatus(status: number): string {
-    switch (status) {
-      case HttpStatus.BAD_REQUEST:
-        return 'BAD_REQUEST';
-      case HttpStatus.UNAUTHORIZED:
-        return 'UNAUTHORIZED';
-      case HttpStatus.FORBIDDEN:
-        return 'FORBIDDEN';
-      case HttpStatus.NOT_FOUND:
-        return 'NOT_FOUND';
-      case HttpStatus.CONFLICT:
-        return 'CONFLICT';
-      case HttpStatus.UNPROCESSABLE_ENTITY:
-        return 'VALIDATION_ERROR';
-      default:
-        return 'INTERNAL_ERROR';
-    }
-  }
+/**
+ * If the HttpException carries Zod issues (attached by ZodValidationPipe), extract
+ * them. Returns undefined when the exception is not a zod-validation failure.
+ */
+interface ZodIssueLike {
+  message: string;
+  path: (string | number)[];
+}
+
+function extractZodIssues(exception: unknown): ZodIssueLike[] | undefined {
+  if (!(exception instanceof HttpException)) return undefined;
+  const res = exception.getResponse();
+  if (typeof res !== 'object' || res === null) return undefined;
+  const issues = (res as { zodIssues?: unknown }).zodIssues;
+  if (!Array.isArray(issues)) return undefined;
+  return issues as ZodIssueLike[];
 }

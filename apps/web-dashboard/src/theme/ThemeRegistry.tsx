@@ -74,6 +74,15 @@ export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
     document.documentElement.dir = direction;
   }, [language, direction]);
 
+  // Mirror the color mode onto <html class="dark"> so Tailwind's `dark:`
+  // variant tracks the same toggle that drives the MUI theme swap. One switch
+  // governs both systems (TailAdmin-style class strategy + MUI ThemeProvider).
+  useEffect(() => {
+    const root = document.documentElement;
+    if (mode === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
+  }, [mode]);
+
   const theme = useMemo((): Theme => {
     // Recreate the base theme so direction + the direction-aware font stack are
     // baked in. In RTL the body font becomes Vazirmatn (Persian) so MUI/Emotion

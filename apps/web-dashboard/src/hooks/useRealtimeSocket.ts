@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 import { type Socket, io } from 'socket.io-client';
 
+import { getAccessToken } from '@/auth/token.storage';
+
 /** Connection state machine. */
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -79,6 +81,10 @@ export function useRealtimeSocket(options: RealtimeSocketOptions) {
       transports: ['websocket'],
       reconnection: false,
       timeout: 10000,
+      // Sprint 1 WS gateway hardening: the handshake must carry the JWT so the
+      // server can authenticate + enforce tenant-scoped room joins. Without it
+      // the connection is rejected (no unauthenticated WS access).
+      auth: { token: getAccessToken() },
     });
     stateRef.current.socket = socket;
 

@@ -97,7 +97,12 @@ export function VideoTile({
   // The session hook stays mounted; for non-live/queued tiles we pass null so
   // it tears down and frees the canvas resource.
   const activeChannel = live && channel ? channel : null;
-  const { session, stream, setQuality: changeQuality } = useStreamSession(activeChannel, quality);
+  const {
+    session,
+    stream,
+    streamKind,
+    setQuality: changeQuality,
+  } = useStreamSession(activeChannel, quality);
 
   // Empty slot.
   if (!channel) {
@@ -230,6 +235,20 @@ export function VideoTile({
                   fontSize: '0.6rem',
                   bgcolor: 'rgba(0,0,0,0.6)',
                   color: '#e5e7eb',
+                }}
+              />
+            )}
+            {/* Honest stream-kind badge (Sprint 3): never present a stub as real. */}
+            {streamKind !== 'real' && (
+              <Chip
+                size="small"
+                label={streamKind === 'stub' ? 'DEMO' : 'OFFLINE'}
+                sx={{
+                  height: 18,
+                  fontSize: '0.55rem',
+                  fontWeight: 700,
+                  bgcolor: streamKind === 'stub' ? 'rgba(245,158,11,0.85)' : 'rgba(220,38,38,0.85)',
+                  color: '#fff',
                 }}
               />
             )}

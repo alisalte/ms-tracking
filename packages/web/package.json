@@ -2,7 +2,7 @@
   "name": "@fleetvision/web",
   "version": "0.1.0",
   "private": true,
-  "description": "FleetVision web layer primitives — JSON:API error envelope, a global exception filter stub, and a request-id interceptor (Codebase Architecture §8 — the seed of the cross-cutting HTTP pipeline). Only what health/root need for Sprint 1.",
+  "description": "FleetVision web layer primitives — the JSON:API error envelope, the GlobalExceptionFilter (canonical error-code to HTTP mapping used by every service), and the RequestIdInterceptor. The cross-cutting HTTP pipeline.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

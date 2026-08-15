@@ -261,8 +261,7 @@ export class RealtimeGateway implements OnApplicationBootstrap, OnApplicationShu
    * tenant: `tenant:<tid>:fleet` or `tenant:<tid>:vehicle:<vid>`.
    */
   private canSubscribe(principal: HandshakePrincipal, room: string): boolean {
-    const prefix = `tenant:${principal.tenantId}:`;
-    return room === `${prefix}fleet` || room.startsWith(`${prefix}vehicle:`);
+    return isAllowedRoom(room, principal.tenantId);
   }
 
   /** Wire signal-bus emissions → Socket.IO room broadcasts. */
@@ -343,4 +342,15 @@ export class RealtimeGateway implements OnApplicationBootstrap, OnApplicationShu
     if (!this.io) return;
     this.io.to(`tenant:${signal.tenantId}:fleet`).emit('engine.hours', signal);
   }
+}
+
+/**
+ * Pure room-authorization policy (exported for tests): a room is allowed iff it
+ * is a tenant-scoped room for the caller's own tenant — `tenant:<tid>:fleet` or
+ * `tenant:<tid>:vehicle:<vid>` with a non-empty vehicle id.
+ */
+export function isAllowedRoom(room: string, tenantId: string): boolean {
+  const fleet = `tenant:${tenantId}:fleet`;
+  const vehiclePrefix = `tenant:${tenantId}:vehicle:`;
+  return room === fleet || (room.startsWith(vehiclePrefix) && room.length > vehiclePrefix.length);
 }

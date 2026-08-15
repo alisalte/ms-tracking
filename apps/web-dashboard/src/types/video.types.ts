@@ -46,6 +46,13 @@ export interface CameraChannel {
   cabinCam: boolean;
   /** Driver has consented (jurisdiction-aware); false disables the channel. */
   consentGiven: boolean;
+  /**
+   * Honest stream classification (Sprint 3):
+   * - `real` — a real WebRTC stream from a live endpoint.
+   * - `stub` — the synthetic canvas-generated demo stream.
+   * - `unavailable` — channel exists but no stream session can be opened.
+   */
+  streamKind?: 'real' | 'stub' | 'unavailable';
 }
 
 // ── Streams ──────────────────────────────────────────────────────────────────

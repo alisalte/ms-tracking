@@ -62,6 +62,7 @@ import {
   UdpServer,
 } from '../infrastructure/transport/index.js';
 import { AdminController } from './admin/admin.controller.js';
+import { GatewayAuditWriter } from './admin/gateway-audit-writer.js';
 import {
   ADAPTER_REGISTRY,
   CONNECTION_POOL,
@@ -234,6 +235,9 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
           ],
         },
         AdminController,
+        // Sprint-D merge union: hash-chained audit of admin mutations
+        // (parallel-line feature; injects PLATFORM_KNEX_TOKEN).
+        GatewayAuditWriter,
       ],
       controllers: [AdminController],
       exports: [KAFKA_PRODUCER, EXTRA_READINESS_INDICATORS],

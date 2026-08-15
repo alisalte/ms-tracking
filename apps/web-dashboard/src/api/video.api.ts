@@ -16,21 +16,35 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-import { resolveMock } from '@/lib/mock-gate';
+import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import { captureSnapshot, downloadBlob } from '@/lib/video-stream';
 import { mockChannels, mockVideoWalls } from '@/mock/video-data';
+import type { Page } from '@/types/api.types';
 import type { CameraChannel, VideoWall } from '@/types/video.types';
+import { apiGet } from './client';
 import { queryKeys } from './query-keys';
 
-// ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
+// ── Fetchers ─────────────────────────────────────────────────────────────────
 
-/** GET /api/v1/media/vehicles|sites/.../channels (pending backend). */
-function fetchChannels(): Promise<CameraChannel[]> {
-  return resolveMock(mockChannels);
+/**
+ * GET /channels — real media-service backend (exists). In mock mode, falls back
+ * to mock data on network error. Returns the full list (non-paginated callers).
+ */
+async function fetchChannels(): Promise<CameraChannel[]> {
+  if (shouldUseMock()) return resolveMock(mockChannels);
+  return withMockFallback(
+    async () => {
+      const page = await apiGet<Page<CameraChannel>>('/channels', { limit: 100 });
+      return page.data;
+    },
+    () => resolveMock(mockChannels),
+  );
 }
 
-/** GET /api/v1/media/video-walls (pending backend). */
+/** GET /api/v1/media/video-walls (no backend — mock only). */
 function fetchVideoWalls(): Promise<VideoWall[]> {
+  if (!shouldUseMock()) return Promise.resolve([]);
   return resolveMock(mockVideoWalls);
 }
 
@@ -41,6 +55,17 @@ export function useChannels() {
   return useQuery({ queryKey: queryKeys.video.channels(), queryFn: fetchChannels });
 }
 
+/** Cursor-paginated channel list (real backend: GET /channels?limit=&cursor=). */
+export function useChannelsPage() {
+  return useCursorPagination<CameraChannel>(queryKeys.video.channels(), (cursor) =>
+    withMockFallback(
+      async () =>
+        apiGet<Page<CameraChannel>>('/channels', { limit: 25, ...(cursor ? { cursor } : {}) }),
+      async () => ({ data: mockChannels, nextCursor: null }),
+    ),
+  );
+}
+
 /** Saved video wall layouts. */
 export function useVideoWalls() {
   return useQuery({ queryKey: queryKeys.video.walls(), queryFn: fetchVideoWalls });
@@ -49,11 +74,18 @@ export function useVideoWalls() {
 /**
  * Save a wall layout — `POST /api/v1/media/video-walls` (pending backend).
  *
- * Mock: resolves immediately with the saved wall (no persistence).
+ * Mock: resolves immediately with the saved wall (no persistence). In REAL mode
+ * the mutation REJECTS honestly — there is no persistence backend, so the wall
+ * would be silently lost on refresh.
  */
 export function useSaveWall() {
   return useMutation<VideoWall, Error, VideoWall>({
-    mutationFn: async (wall) => resolveMock(wall),
+    mutationFn: async (wall) => {
+      if (!shouldUseMock()) {
+        throw new Error('Saving wall layouts is not available (backend not implemented).');
+      }
+      return resolveMock(wall);
+    },
   });
 }
 

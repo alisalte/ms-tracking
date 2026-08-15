@@ -16,7 +16,7 @@
     "dev:web": "pnpm --filter @fleetvision/web-dashboard dev",
     "build:web": "pnpm --filter @fleetvision/web-dashboard build",
     "test:web": "pnpm --filter @fleetvision/web-dashboard test",
-    "test": "pnpm -r run test",
+    "test": "pnpm --workspace-concurrency=1 -r run test",
     "typecheck": "tsc -b tsconfig.json && pnpm -r run typecheck",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

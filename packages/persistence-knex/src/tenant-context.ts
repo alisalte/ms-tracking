@@ -22,7 +22,7 @@ import type { Knex } from './knex.factory.js';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Assert a value is a canonical UUID (makes SET LOCAL interpolation safe). */
-function assertUuid(value: string): void {
+export function assertUuid(value: string): void {
   if (!UUID_RE.test(value)) {
     throw new Error(`Refusing to SET LOCAL a non-UUID tenant_id: ${value}`);
   }
@@ -55,4 +55,20 @@ export async function withoutTenantContext<T>(
   fn: (trx: Knex.Transaction) => Promise<T>,
 ): Promise<T> {
   return knex.transaction(async (trx) => fn(trx));
+}
+
+/**
+ * Run `fn` as a platform operation — sets `app.is_platform = 'true'` so RLS
+ * policies that branch on it allow cross-tenant access (tenant provisioning,
+ * audit writes). Union addition from the merged parallel line; the app connects
+ * as the owner today (RLS bypassed), so this is forward-ready plumbing.
+ */
+export async function withPlatformContext<T>(
+  knex: Knex,
+  fn: (trx: Knex.Transaction) => Promise<T>,
+): Promise<T> {
+  return knex.transaction(async (trx) => {
+    await trx.raw("SET LOCAL app.is_platform = 'true'");
+    return fn(trx);
+  });
 }

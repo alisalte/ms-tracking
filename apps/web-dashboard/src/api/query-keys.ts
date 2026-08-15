@@ -62,4 +62,10 @@ export const queryKeys = {
     settings: () => [...queryKeys.admin.all, 'settings'] as const,
     audit: () => [...queryKeys.admin.all, 'audit'] as const,
   },
+  notifications: {
+    all: ['notifications'] as const,
+    list: () => [...queryKeys.notifications.all, 'list'] as const,
+    unreadCount: () => [...queryKeys.notifications.all, 'unread-count'] as const,
+    preferences: () => [...queryKeys.notifications.all, 'preferences'] as const,
+  },
 } as const;

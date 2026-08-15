@@ -79,6 +79,7 @@
     "language": "Language",
     "close": "Close",
     "upcoming": "Coming soon",
+    "searchPlanned": "Global search — coming soon",
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome back"
@@ -409,6 +410,8 @@
     "title": "Alarm Center",
     "subtitle": "Triage and acknowledge live alarms",
     "empty": "No alarms match your filters.",
+    "connecting": "Connecting…",
+    "polling": "Polling",
     "stats": {
       "active": "active",
       "unacked": "unacked",

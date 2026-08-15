@@ -1,39 +1,31 @@
-import { Box, Stack } from '@mui/material';
 import { useState } from 'react';
 import { Outlet } from 'react-router';
 
 import { Sidebar } from '@/components/shell/Sidebar';
 import { Topbar } from '@/components/shell/Topbar';
 
-/** Limitless content-area padding exposed for full-bleed pages. */
-export const PAGE_PADDING = 16;
+/** Content-area padding exposed for full-bleed pages (Tailwind value, px). */
+export const PAGE_PADDING = 20;
 
 /**
- * AppLayout — the authenticated Limitless Layout 1 shell.
+ * AppLayout — the authenticated TailAdmin application shell.
  *
- * Composition (UI_UX_Design.md §0.4, restyled to Limitless L1):
- * - `Sidebar` (dark slate, permanent 270/64 + mobile off-canvas)
- * - `Topbar` (light 50px navbar: search + notifications + theme + user)
- * - content area (`<main>`) — a flex column; the active page renders inside it.
+ * Composition (TailAdmin two-pane layout):
+ * - `Sidebar` (dark graydark, permanent 270/72 + mobile off-canvas)
+ * - `Topbar` (sticky 64px header: search + notifications + theme + user)
+ * - content area (`<main>`) — a scroll column; the active page renders inside.
  *
- * `<main>` is a flex column so that child pages fill the full available width
- * and height. Pages that want a padded "card" layout wrap themselves in a
- * `<Box sx={{ p: PAGE_PADDING }}>`; full-bleed pages (Map, Video Wall) omit the
- * padding and fill the space.
+ * `<main>` carries the standard page padding. Full-bleed pages (Map, Video
+ * Wall) render their own internal chrome within this padded area, same as the
+ * previous MUI shell. State (mobile drawer open + desktop collapse) lives here
+ * so the Topbar's hamburger and the Sidebar's collapse toggle stay in sync.
  */
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <Stack
-      direction="row"
-      sx={{
-        height: '100vh',
-        overflow: 'hidden',
-        backgroundColor: 'background.default',
-      }}
-    >
+    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-graydark-200">
       <Sidebar
         mobileOpen={mobileOpen}
         collapsed={collapsed}
@@ -41,24 +33,17 @@ export function AppLayout() {
         onToggleCollapse={() => setCollapsed((c) => !c)}
       />
 
-      <Stack sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar onMobileMenu={() => setMobileOpen(true)} />
 
-        <Box
-          component="main"
+        <main
           id="fv-main-content"
-          sx={{
-            position: 'relative',
-            flex: 1,
-            minHeight: 0,
-            overflow: 'auto',
-            backgroundColor: 'background.default',
-            p: PAGE_PADDING,
-          }}
+          className="relative flex-1 min-h-0 overflow-auto bg-gray-50 dark:bg-graydark-200"
+          style={{ padding: PAGE_PADDING }}
         >
           <Outlet />
-        </Box>
-      </Stack>
-    </Stack>
+        </main>
+      </div>
+    </div>
   );
 }

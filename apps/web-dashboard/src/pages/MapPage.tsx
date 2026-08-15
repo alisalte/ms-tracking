@@ -3,13 +3,15 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMapVehicles } from '@/api/fleet.api';
+import { useAuthStore } from '@/auth/auth.store';
 import { ErrorState } from '@/components/common/ErrorState';
 import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
 import { FleetMap } from '@/components/map/FleetMap';
 import { MapToolbar } from '@/components/map/MapToolbar';
 import type { StatusFilter } from '@/components/map/types';
-import { Box, CircularProgress, Stack, Typography } from '@mui/material';
+import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
+import { Box, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 
 /**
  * MapPage — the Live Tracking map dashboard (UI_UX_Design.md §2).
@@ -24,7 +26,18 @@ import { Box, CircularProgress, Stack, Typography } from '@mui/material';
 export function MapPage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useMapVehicles();
-  const vehicles = data ?? [];
+  const tenantId = useAuthStore((s) => s.tenantId);
+
+  // Live tracking: subscribe to gps-engine WS for real-time position updates.
+  // The hook is a no-op when the WS server is unreachable (dev), so the REST
+  // fallback below is the source of truth until live data arrives.
+  const { positions, connectionState } = useLiveTracking(tenantId);
+
+  // Merge live positions into the REST-fetched vehicles (live overrides REST).
+  const vehicles = useMemo(() => {
+    const rest = data ?? [];
+    return positions.size > 0 ? mergeLivePositions(rest, positions) : rest;
+  }, [data, positions]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -126,6 +139,20 @@ export function MapPage() {
           total={vehicles.length}
           paused={paused}
           onTogglePause={() => setPaused((p) => !p)}
+        />
+        {/* Live WS connection indicator (connected = green, else amber/grey). */}
+        <Chip
+          size="small"
+          label={
+            connectionState === 'connected'
+              ? 'Live'
+              : connectionState === 'connecting'
+                ? 'Connecting…'
+                : 'Live off'
+          }
+          color={connectionState === 'connected' ? 'success' : 'default'}
+          variant={connectionState === 'connected' ? 'filled' : 'outlined'}
+          sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}
         />
         <Box sx={{ position: 'absolute', inset: 0 }}>
           <FleetMap

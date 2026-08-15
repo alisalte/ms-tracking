@@ -1,16 +1,17 @@
 /**
  * Mock-gate system — controls whether mock data is used instead of real API calls.
  *
- * Most FleetVision data services (analytics, fleet, tracking, weather) are not
- * implemented yet — only `identity-service` exists. So the dashboard/map/trips
- * pages are mock-backed by default, in dev AND production, so the UI is fully
- * demoable.
+ * Sprint 3 default: REAL FIRST. When the backend exists, the dashboard talks to
+ * it directly. `?useMock=true` (or `VITE_USE_MOCK=true` at build time) re-enables
+ * the demo/mock data for showcases. Domains whose backend genuinely doesn't
+ * exist yet show an honest "unavailable" state in real mode rather than masking
+ * the gap with mock data.
  *
  * Controls (checked in order):
- *   1. `localStorage.fleetvision_use_mock === 'false'` → mocks off (talk to real APIs).
- *   2. `?useMock=false` query param → mocks off for this session (sets the flag).
- *   3. `import.meta.env.VITE_USE_MOCK === 'false'` (build-time) → mocks off.
- *   4. otherwise → mocks ON (default).
+ *   1. `?useMock=true` query param → mocks ON for this session (persists to localStorage).
+ *   2. `localStorage.fleetvision_use_mock` → explicit operator override.
+ *   3. `import.meta.env.VITE_USE_MOCK === 'true'` (build-time) → mocks ON.
+ *   4. otherwise → mocks OFF (default: real APIs).
  *
  * Individual API modules use `shouldUseMock()` to decide, and `withMockFallback()`
  * to implement the try-real-then-fallback pattern.
@@ -19,32 +20,33 @@
 const LS_KEY = 'fleetvision_use_mock';
 
 function readRuntimeFlag(): boolean | null {
-  // Query-param override (?useMock=false), persisted to localStorage so it
+  // Query-param override (?useMock=true), persisted to localStorage so it
   // survives navigation/refresh.
   if (typeof window !== 'undefined') {
     const qp = new URLSearchParams(window.location.search).get('useMock');
-    if (qp === 'false' || qp === '0') {
-      window.localStorage.setItem(LS_KEY, 'false');
-    } else if (qp === 'true' || qp === '1') {
+    if (qp === 'true' || qp === '1') {
       window.localStorage.setItem(LS_KEY, 'true');
+    } else if (qp === 'false' || qp === '0') {
+      window.localStorage.setItem(LS_KEY, 'false');
     }
     const ls = window.localStorage.getItem(LS_KEY);
-    if (ls === 'false' || ls === '0') return false;
     if (ls === 'true' || ls === '1') return true;
+    if (ls === 'false' || ls === '0') return false;
   }
   return null;
 }
 
 /**
- * Whether mock data should be used. Default: TRUE (so the dashboard/map/trips
- * render with data even when the backend services aren't deployed).
+ * Whether mock data should be used. Default: FALSE (real APIs first).
+ * Re-enable with `?useMock=true`, `localStorage.fleetvision_use_mock=true`,
+ * or `VITE_USE_MOCK=true` at build time.
  */
 export function shouldUseMock(): boolean {
   const runtime = readRuntimeFlag();
   if (runtime !== null) return runtime;
-  // Build-time override.
+  // Build-time override: only the explicit 'true' turns mocks on.
   const flag = import.meta.env.VITE_USE_MOCK;
-  return flag !== 'false' && flag !== '0';
+  return flag === 'true' || flag === '1';
 }
 
 /**

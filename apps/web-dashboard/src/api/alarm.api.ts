@@ -1,41 +1,84 @@
 /**
  * Alarm Center API + data hooks.
  *
- * The Alarm Center (`12_Alarm_Engine.md` §5/§6, UI_UX alerts) needs the alert
- * list, alert detail, and the three operator actions (ack / resolve / contest,
- * §5.3). None of these endpoints exist in the backend yet — so each query
- * resolves from static mock data (`mock/alarm-data.ts`) with a small latency
- * to mimic a real fetch and exercise the loading skeleton states.
+ * **Real backend**: notification-service —
+ *   GET    /notification/alerts          — list alarms (cursor-paginated + filters)
+ *   GET    /notification/alerts/:id      — alarm detail
+ *   POST   /notification/alerts/:id/acknowledge
+ *   POST   /notification/alerts/:id/resolve
+ *
+ * The notification-service runs on port 3010 (proxied via the same /api/v1 base).
+ * In mock mode, falls back to static demo data on network error.
  *
  * The action mutations are optimistic: they update the React Query cache
- * immediately (state transition) and roll back on failure. When the
- * `notification-service` alarm endpoints land, swap the mock body for
- * `apiPost` and the hooks stay unchanged.
+ * immediately (state transition) and roll back on failure.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { resolveMock } from '@/lib/mock-gate';
+import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { mockAlarmDetail, mockAlarms } from '@/mock/alarm-data';
 import type { Alarm, AlarmStatus } from '@/types/alarm.types';
+import { apiGet, apiPost } from './client';
 import { queryKeys } from './query-keys';
 
-// ── Fetchers (swap mock → apiGet when backends land) ─────────────────────────
+// ── Wire types (snake_case → camelCase mapping) ─────────────────────────────
 
-/** GET /api/v1/notifications/alerts (pending backend). */
-function fetchAlarms(): Promise<Alarm[]> {
-  return resolveMock(mockAlarms);
+/** Map the backend alarm wire shape to the frontend camelCase type. */
+function mapAlarm(raw: Record<string, unknown>): Alarm {
+  return {
+    id: raw.id as string,
+    type: (raw.type as string) ?? 'other',
+    severity: ((raw.severity as string) ?? 'info').toLowerCase() as Alarm['severity'],
+    status: mapStatus(raw.status as string),
+    vehicleId: (raw.vehicle_id as string) ?? '',
+    vehicleLabel: (raw.vehicle_label as string) ?? (raw.vehicle_id as string) ?? '',
+    driver: (raw.driver as string) ?? undefined,
+    lat: (raw.lat as number) ?? 0,
+    lng: (raw.lng as number) ?? 0,
+    address: (raw.address as string) ?? '',
+    raisedAt: (raw.raised_at as string) ?? new Date().toISOString(),
+    ackedAt: (raw.acknowledged_at as string) ?? undefined,
+    resolvedAt: (raw.resolved_at as string) ?? undefined,
+    escalationStep: (raw.escalation_step as number) ?? 0,
+    message: (raw.message as string) ?? '',
+    detail: typeof raw.detail === 'string' ? raw.detail : JSON.stringify(raw.detail ?? {}),
+    sourceEvents: (raw.source_events as Alarm['sourceEvents']) ?? [],
+  } as Alarm;
 }
 
-/** GET /api/v1/notifications/alerts/{id} (pending backend). */
-function fetchAlarmDetail(id: string): Promise<Alarm | undefined> {
-  return resolveMock(mockAlarmDetail(id));
+/** Map the backend OPEN/ACKNOWLEDGED/RESOLVED to the frontend raised/acked/resolved. */
+function mapStatus(status: string): AlarmStatus {
+  if (status === 'ACKNOWLEDGED') return 'acked';
+  if (status === 'RESOLVED') return 'resolved';
+  return 'raised';
 }
 
-/** POST /api/v1/notifications/alerts/{id}:ack|:resolve|:contest (§5.3). */
-function transitionAlarm(id: string, status: AlarmStatus): Promise<Alarm> {
-  const base = mockAlarmDetail(id);
-  if (!base) throw new Error(`alarm ${id} not found`);
-  return resolveMock({ ...base, status } satisfies Alarm);
+// ── Fetchers ─────────────────────────────────────────────────────────────────
+
+/** GET /notification/alerts — real backend; mock fallback in dev. */
+async function fetchAlarms(): Promise<Alarm[]> {
+  if (shouldUseMock()) return resolveMock(mockAlarms);
+  return withMockFallback(
+    async () => {
+      const page = await apiGet<{ data: Record<string, unknown>[] }>('/notification/alerts', {
+        limit: 100,
+      });
+      return page.data.map(mapAlarm);
+    },
+    () => resolveMock(mockAlarms),
+  );
+}
+
+/** GET /notification/alerts/:id — real backend; mock fallback in dev. */
+async function fetchAlarmDetail(id: string): Promise<Alarm | undefined> {
+  if (shouldUseMock()) return resolveMock(mockAlarmDetail(id));
+  return withMockFallback(
+    async () => {
+      const res = await apiGet<{ data: Record<string, unknown> }>(`/notification/alerts/${id}`);
+      return res.data ? mapAlarm(res.data as Record<string, unknown>) : undefined;
+    },
+    () => resolveMock(mockAlarmDetail(id)),
+  );
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
@@ -57,9 +100,8 @@ export function useAlarmDetail(id: string | null) {
 /**
  * Optimistic state transition for an alarm (ack / resolve).
  *
- * Updates the list + detail cache in place; rolls back on failure. The contest
- * action is modeled as a transition to `resolved` with a false-positive flag
- * (the mock doesn't persist the flag separately).
+ * Real backend: POST /notification/alerts/:id/acknowledge or :id/resolve.
+ * Mock fallback in dev. Optimistic cache update + rollback on error.
  */
 export function useTransitionAlarm() {
   const qc = useQueryClient();
@@ -69,7 +111,19 @@ export function useTransitionAlarm() {
     { id: string; status: AlarmStatus },
     { prev: Alarm[] | undefined }
   >({
-    mutationFn: ({ id, status }) => transitionAlarm(id, status),
+    mutationFn: async ({ id, status }) => {
+      if (shouldUseMock()) {
+        const base = mockAlarmDetail(id);
+        if (!base) throw new Error(`alarm ${id} not found`);
+        return resolveMock({ ...base, status } satisfies Alarm);
+      }
+      const endpoint =
+        status === 'resolved'
+          ? `/notification/alerts/${id}/resolve`
+          : `/notification/alerts/${id}/acknowledge`;
+      const res = await apiPost<unknown, { data: Record<string, unknown> }>(endpoint, {});
+      return mapAlarm(res.data);
+    },
     onMutate: async ({ id, status }) => {
       const listKey = queryKeys.alarms.list();
       await qc.cancelQueries({ queryKey: listKey });
