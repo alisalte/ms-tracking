@@ -1,4 +1,5 @@
 import type { Redis } from '@fleetvision/cache-redis';
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * Realtime WebSocket gateway — Socket.IO broadcaster (07 §11).
  *
@@ -42,7 +43,6 @@ import type { Redis } from '@fleetvision/cache-redis';
  */
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Server as IoServer, type Socket } from 'socket.io';
 import type {

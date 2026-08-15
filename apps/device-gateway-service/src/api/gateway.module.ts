@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { REDIS_TOKEN } from '@fleetvision/cache-redis';
+import type { Redis } from '@fleetvision/cache-redis';
+import { EXTRA_READINESS_INDICATORS } from '@fleetvision/health';
 /**
  * GatewayModule — wires the device-gateway components (06 §1.5 module structure).
  *
@@ -24,10 +27,12 @@ import { randomUUID } from 'node:crypto';
  *   - Prometheus metrics on /metrics.
  */
 import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
-import { REDIS_TOKEN } from '@fleetvision/cache-redis';
-import type { Redis } from '@fleetvision/cache-redis';
-import { EXTRA_READINESS_INDICATORS } from '@fleetvision/health';
-import { Inject, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import {
+  Inject,
+  Logger,
+  type OnApplicationBootstrap,
+  type OnApplicationShutdown,
+} from '@nestjs/common';
 import { Module } from '@nestjs/common';
 import {
   AuthResolver,
@@ -45,9 +50,9 @@ import {
   type ProtocolAdapter,
 } from '../infrastructure/protocol/index.js';
 import {
-  RegistryInvalidationSubscriber,
   type DeviceRegistry,
   HttpDeviceRegistry,
+  RegistryInvalidationSubscriber,
 } from '../infrastructure/registry/index.js';
 import { RawPacketStorage, SessionRedisStore } from '../infrastructure/storage/index.js';
 import {

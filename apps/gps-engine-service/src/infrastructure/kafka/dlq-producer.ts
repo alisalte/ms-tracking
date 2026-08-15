@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * DLQ producer — the dead-letter sink for unprocessable messages (Sprint D §15/§16).
  *
@@ -20,7 +21,6 @@
  * write would be worse).
  */
 import { Logger, type OnApplicationShutdown } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import { Kafka, type Message, type Producer } from 'kafkajs';
 
 /** A message routed to the DLQ. */

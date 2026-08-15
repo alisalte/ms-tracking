@@ -20,7 +20,7 @@ import type {
   TripDiscardedEvent,
 } from '../../domain/trip/trip-types.js';
 import { TripRepository } from '../../infrastructure/persistence/trip.repository.js';
-import { bootstrap as integrationBootstrap, dropTestDb } from './db.js';
+import { dropTestDb, bootstrap as integrationBootstrap } from './db.js';
 
 const TEST_DB_NAME = 'fleetvision_gps_int_test';
 

@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from '@jest/globals';
 import { AuthResolver } from '../application/auth-resolver.js';
+import type {
+  DeviceRegistry,
+  Resolution,
+} from '../infrastructure/registry/device-registry.port.js';
+import { HttpDeviceRegistry } from '../infrastructure/registry/http-device-registry.js';
 import {
   REGISTRY_INVALIDATION_CHANNEL,
   RegistryInvalidationSubscriber,
 } from '../infrastructure/registry/index.js';
-import { HttpDeviceRegistry } from '../infrastructure/registry/http-device-registry.js';
-import type { DeviceRegistry, Resolution } from '../infrastructure/registry/device-registry.port.js';
 
 /**
  * Sprint D §12 — HttpDeviceRegistry bounded retry/backoff, and Sprint D §11 —
@@ -223,10 +226,7 @@ describe('Sprint D §11 — registry cache invalidation (Redis pub/sub)', () => 
     };
     const registry = new StaticRegistry(activeDevice);
     const resolver = new AuthResolver(null, registry);
-    const subscriber = new RegistryInvalidationSubscriber(
-      redis as never,
-      resolver,
-    );
+    const subscriber = new RegistryInvalidationSubscriber(redis as never, resolver);
     await subscriber.start();
 
     // Prime the L1 cache.

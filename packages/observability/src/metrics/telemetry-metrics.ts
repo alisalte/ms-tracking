@@ -61,9 +61,7 @@ const GATEWAY_TOPICS = ['position', 'alarm', 'device', 'commandAck', 'session'] 
 const CONSUME_TOPICS = ['position', 'session'] as const;
 
 /** Create the telemetry metric set on a fresh registry. */
-export function createTelemetryMetrics(
-  options: TelemetryMetricsOptions = {},
-): TelemetryMetrics {
+export function createTelemetryMetrics(options: TelemetryMetricsOptions = {}): TelemetryMetrics {
   const prefix = options.prefix ?? 'fleetvision';
   const registry = new Registry();
   if (options.defaultMetrics !== false) {

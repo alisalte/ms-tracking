@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * Position pipeline — the staged processor for each inbound position
  * (07 §2, §3, §9.2).
@@ -32,13 +33,12 @@
  * gracefully so a single bad position never blocks the partition.
  */
 import { Logger } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
 import type { PositionEvent } from '../domain/position-event.js';
 import { validatePosition } from '../domain/quality.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
-import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import type { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
+import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import type { SignalBus } from './signal-bus.js';
 import type { TripEngine } from './trip-engine.js';
 

@@ -1,3 +1,4 @@
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * Registry cache invalidation publisher (Sprint D §11).
  *
@@ -17,7 +18,6 @@
  * Channel + payload shape are mirrored in the gateway's subscriber.
  */
 import { Logger } from '@nestjs/common';
-import type { Redis } from '@fleetvision/cache-redis';
 
 export const REGISTRY_INVALIDATION_CHANNEL = 'fleetvision:registry:invalidate';
 

@@ -13,11 +13,11 @@ import { Public } from '@fleetvision/web';
 import { Controller, Get, Inject, Optional } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: HealthCheckService is a NestJS DI injectable (value), used via emitDecoratorMetadata.
 import { HealthCheck, type HealthCheckResult, HealthCheckService } from '@nestjs/terminus';
+import { EXTRA_READINESS_INDICATORS, type ReadinessIndicator } from './health.module.js';
 // biome-ignore lint/style/useImportType: value import required — NestJS DI reads constructor param types via emitDecoratorMetadata; a type-only import erases the class and degrades the reflected type to Function, breaking injection.
 import { KnexPingIndicator } from './knex-ping.indicator.js';
 // biome-ignore lint/style/useImportType: value import required for NestJS DI metadata (see above).
 import { RedisPingIndicator } from './redis-ping.indicator.js';
-import { EXTRA_READINESS_INDICATORS, type ReadinessIndicator } from './health.module.js';
 
 @Public()
 @Controller('health')
@@ -26,7 +26,8 @@ export class HealthController {
     private readonly health: HealthCheckService,
     private readonly knexPing: KnexPingIndicator,
     private readonly redisPing: RedisPingIndicator,
-    @Inject(EXTRA_READINESS_INDICATORS) @Optional()
+    @Inject(EXTRA_READINESS_INDICATORS)
+    @Optional()
     private readonly extraIndicators: readonly ReadinessIndicator[] = [],
   ) {}
 

@@ -147,9 +147,6 @@ export class HttpDeviceRegistry implements DeviceRegistry {
       };
       this.cacheTenantActive(d.tenantId, body.tenantActive === true);
       return { kind: 'result', value: { found: true, device } };
-    } catch (err) {
-      // Network/abort/JSON errors are transient — the retry loop decides.
-      throw err;
     } finally {
       clearTimeout(timer);
     }

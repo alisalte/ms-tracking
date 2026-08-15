@@ -193,7 +193,13 @@ export class GpsEngineModule {
         // Kafka consumer (non-fatal at boot; Sprint D retry + DLQ + metrics).
         {
           provide: KAFKA_CONSUMER,
-          inject: [GPS_ENGINE_CONFIG, POSITION_PIPELINE, DEVICE_STATUS_PIPELINE, DLQ_PRODUCER, METRICS_TOKEN],
+          inject: [
+            GPS_ENGINE_CONFIG,
+            POSITION_PIPELINE,
+            DEVICE_STATUS_PIPELINE,
+            DLQ_PRODUCER,
+            METRICS_TOKEN,
+          ],
           useFactory: (
             cfg: GpsEngineConfig,
             posPipeline: PositionPipeline,

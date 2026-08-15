@@ -1,10 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
+import type { DlqEntry, DlqProducer } from '../infrastructure/kafka/dlq-producer.js';
 import { EnvelopeValidationError } from '../infrastructure/kafka/envelope-parser.js';
 import {
-  KafkaMessageProcessor,
   type DlqAuditRecord,
+  KafkaMessageProcessor,
 } from '../infrastructure/kafka/message-processor.js';
-import type { DlqEntry, DlqProducer } from '../infrastructure/kafka/dlq-producer.js';
 
 /**
  * Sprint D §15/§16/§18/§19 — consumer reliability semantics (no broker needed):
@@ -28,11 +28,13 @@ function msg(value: string | Buffer): {
   };
 }
 
-function makeProcessor(opts: {
-  maxAttempts?: number;
-  dlq?: DlqProducer | null;
-  onDlq?: (r: DlqAuditRecord) => void;
-} = {}) {
+function makeProcessor(
+  opts: {
+    maxAttempts?: number;
+    dlq?: DlqProducer | null;
+    onDlq?: (r: DlqAuditRecord) => void;
+  } = {},
+) {
   const dlqPublished: DlqEntry[] = [];
   const dlq: DlqProducer | null =
     opts.dlq === null
@@ -59,9 +61,13 @@ describe('KafkaMessageProcessor — bounded retry + DLQ (Sprint D §15)', () => 
   it('processes a successful message once (no retries)', async () => {
     const { processor } = makeProcessor();
     let calls = 0;
-    const outcome = await processor.process(msg('{}'), async () => {
-      calls++;
-    }, 'position');
+    const outcome = await processor.process(
+      msg('{}'),
+      async () => {
+        calls++;
+      },
+      'position',
+    );
     expect(outcome).toBe('processed');
     expect(calls).toBe(1);
   });

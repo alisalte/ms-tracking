@@ -50,9 +50,7 @@ const SKIP_IN_TESTS = ['20260813120000_harden_tracking_rls_policies.js'];
 
 /** Import each `.js` migration and run `up(knex)` in name order. */
 export async function applyMigrations(knex: Knex, dir = MIGRATIONS_DIR): Promise<void> {
-  const files = readdirSync(dir).filter(
-    (f) => f.endsWith('.js') && !SKIP_IN_TESTS.includes(f),
-  );
+  const files = readdirSync(dir).filter((f) => f.endsWith('.js') && !SKIP_IN_TESTS.includes(f));
   files.sort((a, b) => a.localeCompare(b));
   for (const file of files) {
     const mod = (await import(pathToFileURL(resolve(dir, file)).href)) as {

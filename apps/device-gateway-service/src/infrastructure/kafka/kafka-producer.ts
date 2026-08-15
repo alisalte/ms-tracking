@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * KafkaProducer — the event-backbone producer (06 §13.2).
  *
@@ -27,7 +28,6 @@
  * `bus-kafka` package (06 §13.2 — deferred per plan; documented in Sprint D).
  */
 import { Logger, type OnApplicationShutdown } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import { Kafka, type Message, type Producer } from 'kafkajs';
 import type { DeviceMessage } from '../../domain/device-message.js';
 

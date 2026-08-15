@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * KafkaMessageProcessor — bounded-retry + DLQ orchestration for one consumed
  * message (Sprint D §15).
@@ -19,7 +20,6 @@
  * alive and the partition keeps advancing (§19).
  */
 import { Logger } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import type { DlqProducer } from './dlq-producer.js';
 import { EnvelopeValidationError } from './envelope-parser.js';
 
@@ -85,9 +85,7 @@ export class KafkaMessageProcessor {
       error = err as Error;
       if (!(err instanceof EnvelopeValidationError)) {
         for (attempts = 2; attempts <= maxAttempts; attempts++) {
-          await sleep(
-            Math.min(this.deps.retryBackoffMs * 2 ** (attempts - 2), 5_000),
-          );
+          await sleep(Math.min(this.deps.retryBackoffMs * 2 ** (attempts - 2), 5_000));
           try {
             await handler();
             this.deps.metrics?.kafkaConsumed.inc({ topic: logicalTopic, result: 'processed' });
@@ -124,8 +122,7 @@ export class KafkaMessageProcessor {
       partition: message.partition,
       offset: message.offset,
       reason: error.message,
-      errorClass:
-        error instanceof EnvelopeValidationError ? 'EnvelopeValidationError' : error.name,
+      errorClass: error instanceof EnvelopeValidationError ? 'EnvelopeValidationError' : error.name,
       attempts,
       eventId,
       correlationId,

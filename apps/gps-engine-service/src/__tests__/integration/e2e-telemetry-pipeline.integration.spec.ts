@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 /**
  * Sprint D §46/§47 — the mandatory REAL end-to-end telemetry test.
  *
@@ -26,21 +28,19 @@ import { createHash } from 'node:crypto';
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { JwtService } from '@nestjs/jwt';
-import { Kafka, type Admin, type Consumer, type Producer } from 'kafkajs';
+import { type Admin, type Consumer, Kafka, type Producer } from 'kafkajs';
 import { io } from 'socket.io-client';
-import { resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 // GPS leg.
 import { DeviceStatusPipeline } from '../../application/device-status-pipeline.js';
 import { PositionPipeline } from '../../application/position-pipeline.js';
 import { SignalBus } from '../../application/signal-bus.js';
 import { TripEngine } from '../../application/trip-engine.js';
 import type { GpsEngineConfig } from '../../config/gps-engine.config.js';
+import { DlqProducer } from '../../infrastructure/kafka/dlq-producer.js';
+import { GpsEngineKafkaConsumer } from '../../infrastructure/kafka/kafka-consumer.js';
 import { DeviceStatusRepository } from '../../infrastructure/persistence/device-status.repository.js';
 import { PositionRepository } from '../../infrastructure/persistence/position.repository.js';
 import { TripRepository } from '../../infrastructure/persistence/trip.repository.js';
-import { GpsEngineKafkaConsumer } from '../../infrastructure/kafka/kafka-consumer.js';
-import { DlqProducer } from '../../infrastructure/kafka/dlq-producer.js';
 import { RealtimeGateway } from '../../infrastructure/websocket/realtime.gateway.js';
 import { bootstrap as bootstrapDb, dropTestDb } from './db.js';
 
@@ -84,14 +84,13 @@ interface GwMessageProps {
   checksum: string;
   direction: 'INBOUND' | 'OUTBOUND';
 }
-const AuthResolver = (await gwModule('application/auth-resolver.js'))['AuthResolver'] as new (
+const AuthResolver = (await gwModule('application/auth-resolver.js')).AuthResolver as new (
   redis: unknown,
   registry: unknown,
   options?: unknown,
 ) => { resolve: (imei: string) => Promise<unknown> };
-const PacketDispatcher = (await gwModule('application/packet-dispatcher.js'))[
-  'PacketDispatcher'
-] as new (deps: {
+const PacketDispatcher = (await gwModule('application/packet-dispatcher.js'))
+  .PacketDispatcher as new (deps: {
   authResolver: { resolve: (imei: string) => Promise<unknown> };
   sessionManager: unknown;
   kafka: unknown;
@@ -103,24 +102,22 @@ const PacketDispatcher = (await gwModule('application/packet-dispatcher.js'))[
     raw: unknown,
   ) => Promise<{ published: number; close: boolean; closeReason: string | null }>;
 };
-const SessionManager = (await gwModule('application/session-manager.js'))['SessionManager'] as new (
+const SessionManager = (await gwModule('application/session-manager.js')).SessionManager as new (
   store: unknown,
   emitter: unknown,
   pod: string,
   options: { tcpTtlSeconds: number; udpTtlSeconds: number },
 ) => { track: (s: unknown) => void; registerAuthenticated: (s: unknown) => Promise<unknown> };
-const InMemoryDeviceRegistry = (await gwModule('infrastructure/registry/index.js'))[
-  'InMemoryDeviceRegistry'
-] as new () => {
+const InMemoryDeviceRegistry = (await gwModule('infrastructure/registry/index.js'))
+  .InMemoryDeviceRegistry as new () => {
   registerByImei: (
     imei: string,
     device: { deviceId: string; tenantId: string; status: string; pairedVehicleId: string | null },
     active: boolean,
   ) => unknown;
 };
-const DeviceGatewayKafkaProducer = (await gwModule('infrastructure/kafka/kafka-producer.js'))[
-  'DeviceGatewayKafkaProducer'
-] as new (options: {
+const DeviceGatewayKafkaProducer = (await gwModule('infrastructure/kafka/kafka-producer.js'))
+  .DeviceGatewayKafkaProducer as new (options: {
   brokers: string[];
   clientId: string;
   topics: Record<string, string>;
@@ -129,11 +126,12 @@ const DeviceGatewayKafkaProducer = (await gwModule('infrastructure/kafka/kafka-p
   publishSessionLifecycle: (e: unknown) => Promise<void>;
   onApplicationShutdown: () => Promise<void>;
 };
-const RawPacketStorage = (await gwModule('infrastructure/storage/index.js'))['RawPacketStorage'] as new () => {
+const RawPacketStorage = (await gwModule('infrastructure/storage/index.js'))
+  .RawPacketStorage as new () => {
   retain: (r: unknown, d: string, m: string) => unknown;
 };
 const gwDomain = await gwModule('domain/index.js');
-const DeviceSession = gwDomain['DeviceSession'] as {
+const DeviceSession = gwDomain.DeviceSession as {
   open: (init: {
     transport: 'tcp' | 'udp';
     protocolId: string;
@@ -148,15 +146,15 @@ const DeviceSession = gwDomain['DeviceSession'] as {
     activate: (now?: Date) => void;
   };
 };
-const RawPacket = gwDomain['RawPacket'] as new (p: {
+const RawPacket = gwDomain.RawPacket as new (p: {
   protocolId: string;
   payload: Buffer;
   receivedAt: Date;
   direction: 'INBOUND' | 'OUTBOUND';
 }) => unknown;
 const gwTransport = await gwModule('infrastructure/transport/index.js');
-const NEED_MORE = gwTransport['NEED_MORE'] as symbol;
-const DeviceMessage = (await gwModule('domain/device-message.js'))['DeviceMessage'] as new (
+const NEED_MORE = gwTransport.NEED_MORE as symbol;
+const DeviceMessage = (await gwModule('domain/device-message.js')).DeviceMessage as new (
   props: GwMessageProps,
 ) => unknown;
 
@@ -179,7 +177,11 @@ const JWT_SECRET = 'e2e-secret-e2e-secret-e2e-secret-3232';
 
 // --- graceful gating: Kafka + PostgreSQL must be reachable -----------------
 
-async function tryKafka(): Promise<{ admin: Admin; producer: Producer; consumer: Consumer } | null> {
+async function tryKafka(): Promise<{
+  admin: Admin;
+  producer: Producer;
+  consumer: Consumer;
+} | null> {
   try {
     const kafka = new Kafka({ brokers: KAFKA_BROKERS, clientId: `sprintd-e2e-${RUN}` });
     const admin = kafka.admin();
@@ -215,7 +217,11 @@ const d = knex ? describe : describe.skip;
 /** Poll until the predicate holds (bounded). */
 async function waitFor<T>(
   fn: () => Promise<T | null | undefined>,
-  { timeoutMs = 20_000, intervalMs = 250, what = 'condition' }: { timeoutMs?: number; intervalMs?: number; what?: string } = {},
+  {
+    timeoutMs = 20_000,
+    intervalMs = 250,
+    what = 'condition',
+  }: { timeoutMs?: number; intervalMs?: number; what?: string } = {},
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -233,7 +239,14 @@ interface ProtocolAdapter {
   readonly id: string;
   readonly meta: { id: string; name: string; version: string; vendor: string };
   detect(peek: Buffer): { confidence: number };
-  frame(reader: { available: number; peek: (n: number) => Buffer; read: (n: number) => Buffer | symbol }, receivedAt: Date): unknown;
+  frame(
+    reader: {
+      available: number;
+      peek: (n: number) => Buffer;
+      read: (n: number) => Buffer | symbol;
+    },
+    receivedAt: Date,
+  ): unknown;
   decode(raw: unknown): readonly unknown[];
   encode(cmd: unknown): Buffer;
 }
@@ -249,7 +262,11 @@ class E2eAdapter implements ProtocolAdapter {
   }
 
   public frame(
-    reader: { available: number; peek: (n: number) => Buffer; read: (n: number) => Buffer | symbol },
+    reader: {
+      available: number;
+      peek: (n: number) => Buffer;
+      read: (n: number) => Buffer | symbol;
+    },
     receivedAt: Date,
   ): unknown {
     void receivedAt;
@@ -268,7 +285,12 @@ class E2eAdapter implements ProtocolAdapter {
     });
   }
 
-  public decode(raw: { payload: Buffer; receivedAt: Date; rawSize: number; direction: 'INBOUND' | 'OUTBOUND' }): readonly unknown[] {
+  public decode(raw: {
+    payload: Buffer;
+    receivedAt: Date;
+    rawSize: number;
+    direction: 'INBOUND' | 'OUTBOUND';
+  }): readonly unknown[] {
     const body = raw.payload.subarray(4, raw.payload.length - 1);
     const typeByte = body[0] ?? 0;
     const rest = body.subarray(1).toString('utf8');
@@ -516,7 +538,15 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
     if (kafkaCtx) {
       try {
         await kafkaCtx.admin.deleteTopics({
-          topics: [POSITION_TOPIC, SESSION_TOPIC, DEVICE_TOPIC, ALARM_TOPIC, ACK_TOPIC, `${POSITION_TOPIC}.dlq`, `${SESSION_TOPIC}.dlq`],
+          topics: [
+            POSITION_TOPIC,
+            SESSION_TOPIC,
+            DEVICE_TOPIC,
+            ALARM_TOPIC,
+            ACK_TOPIC,
+            `${POSITION_TOPIC}.dlq`,
+            `${SESSION_TOPIC}.dlq`,
+          ],
         });
       } catch {
         /* best-effort */
@@ -541,21 +571,28 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
 
   async function dispatchFrame(frame: Buffer): Promise<void> {
     if (session.state === 'NEW') session.identify(new Date());
-    await dispatcher.dispatch(session, adapter, new RawPacket({
-      protocolId: adapter.id,
-      payload: frame,
-      receivedAt: new Date(),
-      direction: 'INBOUND',
-    }));
+    await dispatcher.dispatch(
+      session,
+      adapter,
+      new RawPacket({
+        protocolId: adapter.id,
+        payload: frame,
+        receivedAt: new Date(),
+        direction: 'INBOUND',
+      }),
+    );
   }
 
   function wsClient(): Promise<import('socket.io-client').Socket> {
     const jwt = new JwtService({ secret: JWT_SECRET });
-    const token = jwt.sign({ sub: 'e2e-user', tenant_id: TENANT_A }, {
-      issuer: 'fleetvision',
-      audience: 'fleetvision-api',
-      algorithm: 'HS256',
-    });
+    const token = jwt.sign(
+      { sub: 'e2e-user', tenant_id: TENANT_A },
+      {
+        issuer: 'fleetvision',
+        audience: 'fleetvision-api',
+        algorithm: 'HS256',
+      },
+    );
     return new Promise((resolve, reject) => {
       const socket = io(`http://localhost:${WS_PORT}`, {
         auth: { token },
@@ -574,12 +611,14 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
     const status = await waitFor(
       async () => {
         try {
-          const r = await (knex as never as {
-            raw: (q: string, b: unknown[]) => Promise<{ rows: { state: string }[] }>;
-          }).raw(
-            'SELECT state FROM tracking.device_status WHERE device_id = ? AND tenant_id = ?',
-            [DEVICE_ID, TENANT_A],
-          );
+          const r = await (
+            knex as never as {
+              raw: (q: string, b: unknown[]) => Promise<{ rows: { state: string }[] }>;
+            }
+          ).raw('SELECT state FROM tracking.device_status WHERE device_id = ? AND tenant_id = ?', [
+            DEVICE_ID,
+            TENANT_A,
+          ]);
           return r.rows[0]?.state === 'ONLINE' ? r.rows[0] : null;
         } catch {
           return null;
@@ -591,10 +630,12 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
 
     // Step 2: a live position through the whole pipeline.
     const client = await wsClient();
-    await new Promise<void>((resolve) => client.emit('subscribe', `tenant:${TENANT_A}:vehicle:${VEHICLE_A}`, () => resolve()));
+    await new Promise<void>((resolve) =>
+      client.emit('subscribe', `tenant:${TENANT_A}:vehicle:${VEHICLE_A}`, () => resolve()),
+    );
 
-    const received = new Promise<import('../../application/signal-bus.js').PositionSignal>((resolve) =>
-      client.once('position.update', resolve),
+    const received = new Promise<import('../../application/signal-bus.js').PositionSignal>(
+      (resolve) => client.once('position.update', resolve),
     );
     await dispatchFrame(e2eFrame(0x10, '35.7,51.4,40'));
 
@@ -605,9 +646,11 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
     // The position row carries the trusted identity (§5) + both timestamps (§22).
     const row = await waitFor(
       async () => {
-        const rows = await (knex as never as {
-          raw: (q: string, b: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
-        }).raw(
+        const rows = await (
+          knex as never as {
+            raw: (q: string, b: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+          }
+        ).raw(
           'SELECT vehicle_id, tenant_id, captured_at, ingested_at FROM tracking.vehicle_positions WHERE tenant_id = ? LIMIT 5',
           [TENANT_A],
         );
@@ -652,12 +695,13 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
 
     await waitFor(
       async () => {
-        const rows = await (knex as never as {
-          raw: (q: string, b: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
-        }).raw(
-          'SELECT count(*)::int AS n FROM tracking.vehicle_positions WHERE event_id = ?',
-          [redeliveryId],
-        );
+        const rows = await (
+          knex as never as {
+            raw: (q: string, b: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+          }
+        ).raw('SELECT count(*)::int AS n FROM tracking.vehicle_positions WHERE event_id = ?', [
+          redeliveryId,
+        ]);
         return rows.rows[0]?.n === 1 ? rows.rows[0] : null;
       },
       { what: 'exactly one redelivered row' },
@@ -667,7 +711,9 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
 
   it('4. Out-of-order packet: persisted, but NOT broadcast (§21)', async () => {
     const client = await wsClient();
-    await new Promise<void>((resolve) => client.emit('subscribe', `tenant:${TENANT_A}:vehicle:${VEHICLE_A}`, () => resolve()));
+    await new Promise<void>((resolve) =>
+      client.emit('subscribe', `tenant:${TENANT_A}:vehicle:${VEHICLE_A}`, () => resolve()),
+    );
     let broadcastCount = 0;
     client.on('position.update', () => broadcastCount++);
 
@@ -699,12 +745,13 @@ d('Sprint D E2E — device → gateway → Kafka → gps-engine → PG → WebSo
     await new Promise((r) => setTimeout(r, 3_000));
 
     // Persisted (2 distinct rows in the window)…
-    const rows = await (knex as never as {
-      raw: (q: string, b: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
-    }).raw(
-      'SELECT count(*)::int AS n FROM tracking.vehicle_positions WHERE event_id = ?',
-      [olderId],
-    );
+    const rows = await (
+      knex as never as {
+        raw: (q: string, b: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+      }
+    ).raw('SELECT count(*)::int AS n FROM tracking.vehicle_positions WHERE event_id = ?', [
+      olderId,
+    ]);
     expect(rows.rows[0]?.n).toBe(1);
     // …but NO new WS broadcast for the out-of-order packet.
     expect(broadcastCount).toBe(before);

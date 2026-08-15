@@ -53,9 +53,9 @@ describe('Sprint D §22 — strict timestamp validation', () => {
   });
 
   it('rejects a non-string timestamp', () => {
-    expect(() =>
-      parsePositionEnvelope(baseEnvelope({ timestamp: { nested: true } })),
-    ).toThrow(EnvelopeValidationError);
+    expect(() => parsePositionEnvelope(baseEnvelope({ timestamp: { nested: true } }))).toThrow(
+      EnvelopeValidationError,
+    );
   });
 
   it('rejects an unparseable ingestion time', () => {
@@ -82,9 +82,9 @@ describe('Sprint D §18 — structural validation (non-retryable)', () => {
   });
 
   it('rejects missing identity fields', () => {
-    expect(() => parsePositionEnvelope(baseEnvelope({ messageId: undefined, id: undefined }))).toThrow(
-      /messageId/,
-    );
+    expect(() =>
+      parsePositionEnvelope(baseEnvelope({ messageId: undefined, id: undefined })),
+    ).toThrow(/messageId/);
     expect(() => parsePositionEnvelope(baseEnvelope({ deviceId: undefined }))).toThrow(/deviceId/);
     expect(() => parsePositionEnvelope(baseEnvelope({ tenantId: '' }))).toThrow(/tenantId/);
   });
@@ -96,7 +96,9 @@ describe('Sprint D §18 — structural validation (non-retryable)', () => {
     ).toThrow(/latitude/);
     // JSON.stringify(Infinity) → null: serializes into the missing-numeric branch.
     expect(() =>
-      parsePositionEnvelope(baseEnvelope({ position: { latitude: Infinity, longitude: 1 } })),
+      parsePositionEnvelope(
+        baseEnvelope({ position: { latitude: Number.POSITIVE_INFINITY, longitude: 1 } }),
+      ),
     ).toThrow(EnvelopeValidationError);
   });
 });

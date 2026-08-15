@@ -111,7 +111,10 @@ export class SessionManager {
     this.bySession.set(id, session);
     this.establishedAt.set(id, session.createdAt.getTime());
     if (session.transport === 'udp') {
-      this.byUdpSource.set(udpSourceKey(session.protocolId, session.remoteAddress, session.remotePort), session);
+      this.byUdpSource.set(
+        udpSourceKey(session.protocolId, session.remoteAddress, session.remotePort),
+        session,
+      );
     }
   }
 
@@ -125,7 +128,7 @@ export class SessionManager {
     remotePort: number,
   ): DeviceSession | null {
     const existing = this.byUdpSource.get(udpSourceKey(protocolId, remoteAddress, remotePort));
-    if (existing && existing.isLive) return existing;
+    if (existing?.isLive) return existing;
     return null;
   }
 
@@ -227,11 +230,9 @@ export class SessionManager {
     const terminator = this.terminators.get(id);
     this.terminators.delete(id);
     if (this.redisStore && session.tenantId && session.deviceId) {
-      await this.redisStore
-        .removeIfSession(session.tenantId, session.deviceId, id)
-        .catch(() => {
-          /* best-effort */
-        });
+      await this.redisStore.removeIfSession(session.tenantId, session.deviceId, id).catch(() => {
+        /* best-effort */
+      });
     }
     // Destroy the transport socket (manager-initiated close — duplicate session,
     // sweep, shutdown). The socket's async 'close' event re-enters close() with
@@ -317,8 +318,7 @@ export class SessionManager {
     const prior = this.byDevice.get(deviceId);
     if (!prior || prior === incoming || !prior.isLive) return;
     this.logger.warn(
-      `Duplicate connection for device ${deviceId}: closing prior session ${prior.id} ` +
-        `(DUPLICATE_SESSION — newest connection wins).`,
+      `Duplicate connection for device ${deviceId}: closing prior session ${prior.id} (DUPLICATE_SESSION — newest connection wins).`,
     );
     await this.close(prior, 'DUPLICATE_SESSION').catch((err) => {
       this.logger.warn(`Prior-session close failed: ${(err as Error).message}`);

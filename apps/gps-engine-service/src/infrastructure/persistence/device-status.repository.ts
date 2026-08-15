@@ -60,11 +60,7 @@ export class DeviceStatusRepository {
    * packet). UPDATE-only: 0 rows when the lifecycle pipeline hasn't created the
    * device's row yet (it will, on the next lifecycle event).
    */
-  public async touchLastSeen(
-    tenantId: string,
-    deviceId: string,
-    lastSeenAt: Date,
-  ): Promise<void> {
+  public async touchLastSeen(tenantId: string, deviceId: string, lastSeenAt: Date): Promise<void> {
     await this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
@@ -80,22 +76,23 @@ export class DeviceStatusRepository {
    * reconnect re-ONLINEs the device). Returns the transitioned rows so the
    * caller can broadcast STALE signals.
    */
-  public async markStale(
-    staleAfterSeconds: number,
-    limit = 500,
-  ): Promise<DeviceStatusRecord[]> {
+  public async markStale(staleAfterSeconds: number, limit = 500): Promise<DeviceStatusRecord[]> {
     const rows = (await this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
-      .whereRaw('state = \'ONLINE\' AND last_seen_at < now() - (? || \' seconds\')::interval', [
+      .whereRaw("state = 'ONLINE' AND last_seen_at < now() - (? || ' seconds')::interval", [
         String(staleAfterSeconds),
       ])
       .limit(limit)
       .update({ state: 'STALE', updated_at: this.knex.fn.now() })
-      .returning(['device_id', 'tenant_id', 'state', 'protocol_id', 'reason', 'last_seen_at'])) as Record<
-      string,
-      unknown
-    >[];
+      .returning([
+        'device_id',
+        'tenant_id',
+        'state',
+        'protocol_id',
+        'reason',
+        'last_seen_at',
+      ])) as Record<string, unknown>[];
     return rows.map(
       (row) =>
         new DeviceStatusRecord({

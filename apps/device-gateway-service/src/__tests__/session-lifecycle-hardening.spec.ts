@@ -112,12 +112,12 @@ function openAndAuthenticate(
 }
 
 function makeManager(store: FakeRedisStore | null, emitter: RecordingEmitter) {
-  return new SessionManager(
-    store as unknown as SessionRedisStore | null,
-    emitter,
-    'pod-a',
-    { tcpTtlSeconds: 60, udpTtlSeconds: 30, authGraceMs: 15_000, supersededCheckIntervalMs: 0 },
-  );
+  return new SessionManager(store as unknown as SessionRedisStore | null, emitter, 'pod-a', {
+    tcpTtlSeconds: 60,
+    udpTtlSeconds: 30,
+    authGraceMs: 15_000,
+    supersededCheckIntervalMs: 0,
+  });
 }
 
 describe('Sprint D §8 — duplicate device connection (newest wins)', () => {
@@ -251,9 +251,7 @@ describe('Sprint D §7 — liveness sweep', () => {
     expect(result.closedSuperseded).toBe(1);
     expect(mine.closeReason).toBe('DUPLICATE_SESSION');
     expect(
-      emitter.events.some(
-        (e) => e.sessionId === (mine.id as string) && e.state === 'DISCONNECTED',
-      ),
+      emitter.events.some((e) => e.sessionId === (mine.id as string) && e.state === 'DISCONNECTED'),
     ).toBe(true);
   });
 
@@ -300,9 +298,10 @@ describe('Sprint D §7 — conditional global-entry removal', () => {
     // pod-a's old socket closes — it must NOT remove pod-b's entry.
     await manager.close(first, 'REMOTE_DISCONNECT');
     expect(store.removedKeys).toHaveLength(0);
-    expect(
-      await store.get('tenant-1', 'dev-r'),
-    ).toEqual({ instanceID: 'pod-b', sessionID: 'session-b' });
+    expect(await store.get('tenant-1', 'dev-r')).toEqual({
+      instanceID: 'pod-b',
+      sessionID: 'session-b',
+    });
   });
 
   it('a normal close removes its own entry', async () => {

@@ -124,8 +124,7 @@ export class FleetManagementModule {
             bindings: BindingRepository,
             audit: AuditRepository,
             invalidation: RegistryInvalidationPublisher,
-          ) =>
-            new BindingService(knex as never, vehicles, devices, bindings, audit, invalidation),
+          ) => new BindingService(knex as never, vehicles, devices, bindings, audit, invalidation),
         },
         // Kafka session-lifecycle consumer (non-fatal at boot).
         {

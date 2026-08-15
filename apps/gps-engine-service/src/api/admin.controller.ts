@@ -9,8 +9,11 @@
  */
 import { RequirePermissions } from '@fleetvision/auth';
 import { Controller, Get, Inject } from '@nestjs/common';
+import type {
+  DlqAuditRecord,
+  GpsEngineKafkaConsumer,
+} from '../infrastructure/kafka/kafka-consumer.js';
 import { KAFKA_CONSUMER } from './tokens.js';
-import type { DlqAuditRecord, GpsEngineKafkaConsumer } from '../infrastructure/kafka/kafka-consumer.js';
 
 @Controller('admin')
 @RequirePermissions('telemetry.gateway.manage')

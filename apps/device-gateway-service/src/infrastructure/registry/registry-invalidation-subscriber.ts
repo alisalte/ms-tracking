@@ -1,3 +1,4 @@
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * Registry cache invalidation — push-based, over the existing Redis (Sprint D §11).
  *
@@ -16,7 +17,6 @@
  * Redis pub/sub is unavailable — this is an optimization, not a hard dependency.
  */
 import { Logger, type OnApplicationShutdown } from '@nestjs/common';
-import type { Redis } from '@fleetvision/cache-redis';
 import type { AuthResolver } from '../../application/auth-resolver.js';
 
 export const REGISTRY_INVALIDATION_CHANNEL = 'fleetvision:registry:invalidate';
@@ -46,7 +46,7 @@ export class RegistryInvalidationSubscriber implements OnApplicationShutdown {
       sub.on('message', (_channel, payload) => this.handle(payload));
       this.listener = sub;
       this.started = true;
-      this.logger.log(`Subscribed to registry invalidation channel.`);
+      this.logger.log('Subscribed to registry invalidation channel.');
     } catch (err) {
       // Non-fatal: TTL-bounded invalidation still applies (Sprint C baseline).
       this.logger.warn(
@@ -60,12 +60,14 @@ export class RegistryInvalidationSubscriber implements OnApplicationShutdown {
     try {
       msg = JSON.parse(payload) as RegistryInvalidationMessage;
     } catch {
-      this.logger.warn(`Malformed registry invalidation payload — ignored.`);
+      this.logger.warn('Malformed registry invalidation payload — ignored.');
       return;
     }
     if (!msg || typeof msg.imei !== 'string' || msg.imei.length === 0) return;
     this.authResolver.invalidate(msg.imei);
-    this.logger.debug(`Invalidated registry cache for imei=${msg.imei} (reason=${msg.reason ?? 'unknown'}).`);
+    this.logger.debug(
+      `Invalidated registry cache for imei=${msg.imei} (reason=${msg.reason ?? 'unknown'}).`,
+    );
   }
 
   public async onApplicationShutdown(): Promise<void> {

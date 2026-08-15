@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * TripEngine — the segmentation orchestrator (07 §2 stage 3–5; §5).
  *
@@ -21,7 +22,6 @@
  * resilience contract.
  */
 import { Logger } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
 import { PositionEvent } from '../domain/position-event.js';
 import { filteredDistanceStep } from '../domain/trip/haversine.js';

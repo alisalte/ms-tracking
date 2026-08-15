@@ -24,9 +24,6 @@ import { PositionEvent } from '../../domain/position-event.js';
 /** Structural validation failure — non-retryable (Sprint D §18). */
 export class EnvelopeValidationError extends Error {
   public override readonly name = 'EnvelopeValidationError';
-  constructor(message: string) {
-    super(message);
-  }
 }
 
 /** Raw envelope shape produced by the device-gateway (a subset we consume). */
@@ -145,7 +142,9 @@ export function parseSessionEnvelope(raw: Buffer | string): DeviceStatusRecord {
   try {
     env = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8')) as SessionEnvelope;
   } catch (err) {
-    throw new EnvelopeValidationError(`session envelope is not valid JSON: ${(err as Error).message}`);
+    throw new EnvelopeValidationError(
+      `session envelope is not valid JSON: ${(err as Error).message}`,
+    );
   }
   if (env === null || typeof env !== 'object' || Array.isArray(env)) {
     throw new EnvelopeValidationError('session envelope is not a JSON object');

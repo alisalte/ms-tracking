@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 import { DeviceStatusPipeline } from '../application/device-status-pipeline.js';
+import type { SignalBus } from '../application/signal-bus.js';
 import { TripEngine } from '../application/trip-engine.js';
-import { PositionEvent } from '../domain/position-event.js';
+import type { GpsEngineConfig } from '../config/gps-engine.config.js';
 import { DeviceStatusRecord } from '../domain/device-status.js';
+import { PositionEvent } from '../domain/position-event.js';
+import type { RedisDeviceStatusCache } from '../infrastructure/cache/redis-device-status-cache.js';
 import type { RedisFsmCache } from '../infrastructure/cache/redis-fsm-cache.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
-import type { SignalBus } from '../application/signal-bus.js';
-import type { TripRepository } from '../infrastructure/persistence/trip.repository.js';
-import type { GpsEngineConfig } from '../config/gps-engine.config.js';
-import type { RedisDeviceStatusCache } from '../infrastructure/cache/redis-device-status-cache.js';
 import type { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
+import type { TripRepository } from '../infrastructure/persistence/trip.repository.js';
 
 /**
  * Sprint D §21 — out-of-order telemetry policy, and §7/§8 — the

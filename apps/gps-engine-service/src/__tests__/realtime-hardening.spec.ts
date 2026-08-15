@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { JwtService } from '@nestjs/jwt';
-import { io, type Socket as ClientSocket } from 'socket.io-client';
+import { type Socket as ClientSocket, io } from 'socket.io-client';
 import { SignalBus } from '../application/signal-bus.js';
-import { PositionEvent } from '../domain/position-event.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
+import { PositionEvent } from '../domain/position-event.js';
 import { RealtimeGateway } from '../infrastructure/websocket/realtime.gateway.js';
 
 /**
@@ -97,11 +97,14 @@ function coalescePosition(i: number): PositionEvent {
 }
 
 function tokenFor(tenantId: string): string {
-  return jwt.sign({ sub: `user-${tenantId.slice(0, 4)}`, tenant_id: tenantId }, {
-    issuer: 'fleetvision',
-    audience: 'fleetvision-api',
-    algorithm: 'HS256',
-  });
+  return jwt.sign(
+    { sub: `user-${tenantId.slice(0, 4)}`, tenant_id: tenantId },
+    {
+      issuer: 'fleetvision',
+      audience: 'fleetvision-api',
+      algorithm: 'HS256',
+    },
+  );
 }
 
 function client(token: string | null): Promise<ClientSocket> {

@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * Kafka consumer — position + session-lifecycle ingestion (07 §3.1, §3.6; 06 §13.2).
  *
@@ -29,16 +30,12 @@
  * when downstream is slow.
  */
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import { type Consumer, type EachMessagePayload, Kafka } from 'kafkajs';
 import type { DeviceStatusPipeline } from '../../application/device-status-pipeline.js';
 import type { PositionPipeline } from '../../application/position-pipeline.js';
 import type { GpsEngineConfig } from '../../config/gps-engine.config.js';
 import type { DlqProducer } from './dlq-producer.js';
-import {
-  type DlqAuditRecord,
-  KafkaMessageProcessor,
-} from './message-processor.js';
+import { type DlqAuditRecord, KafkaMessageProcessor } from './message-processor.js';
 
 export type { DlqAuditRecord };
 import { parsePositionEnvelope, parseSessionEnvelope } from './envelope-parser.js';
@@ -220,10 +217,7 @@ export class GpsEngineKafkaConsumer implements OnApplicationBootstrap, OnApplica
     );
 
     if (logical === 'position') {
-      this.metrics?.processingLatency.observe(
-        { topic: logical },
-        (Date.now() - startedAt) / 1000,
-      );
+      this.metrics?.processingLatency.observe({ topic: logical }, (Date.now() - startedAt) / 1000);
     }
   }
 
