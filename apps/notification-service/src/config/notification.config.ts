@@ -10,6 +10,12 @@ import { z } from 'zod';
  */
 export const notificationConfigSchema = baseConfigSchema.merge(
   z.object({
+    /**
+     * Override the base default (3000) — notification-service REST listens on
+     * 3008 to match the web-dashboard dev proxy + nginx upstream (Sprint E).
+     */
+    PORT: z.coerce.number().int().min(1).max(65535).default(3008),
+
     DBURL: z.string().min(1),
     DBURL_PLATFORM: z.string().min(1).optional(),
     REDISURL: z.string().min(1),

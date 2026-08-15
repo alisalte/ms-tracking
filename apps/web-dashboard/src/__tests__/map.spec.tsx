@@ -144,6 +144,13 @@ vi.mock('maplibre-gl', () => {
     flyTo() {}
     easeTo() {}
     remove() {}
+    // Sprint F: track-overlay source/layer APIs.
+    getSource() {
+      return null;
+    }
+    addSource() {}
+    addLayer() {}
+    fitBounds() {}
     getCanvas() {
       return document.createElement('canvas');
     }

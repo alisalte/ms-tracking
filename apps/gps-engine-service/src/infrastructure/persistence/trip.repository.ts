@@ -218,4 +218,152 @@ export class TripRepository {
       .onConflict(['source_event_id'])
       .ignore();
   }
+
+  // --- Read model (Sprint F §11: trip visualization without rebuilding the Trip Engine) ---
+
+  /** Trips (any status) for a tenant/vehicle inside a time window, newest first. */
+  public async findTrips(
+    tenantId: string,
+    opts: { vehicleId?: string; from: Date; to: Date; limit?: number },
+  ): Promise<TripRecord[]> {
+    let query = this.knex
+      .withSchema(SCHEMA)
+      .from('trip_events')
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .where('started_at', '>=', opts.from)
+      .where('started_at', '<=', opts.to)
+      .orderBy('started_at', 'desc')
+      .limit(opts.limit ?? 50);
+    if (opts.vehicleId) {
+      query = query.whereRaw('vehicle_id = ?::uuid', [opts.vehicleId]);
+    }
+    const rows = await query;
+    return (rows as TripRow[]).map(toTrip);
+  }
+
+  /** Single trip by id — tenant-scoped (no cross-tenant enumeration oracle). */
+  public async findTripById(tenantId: string, tripId: string): Promise<TripRecord | null> {
+    const row = await this.knex
+      .withSchema(SCHEMA)
+      .from('trip_events')
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('id = ?::uuid', [tripId])
+      .first();
+    return row ? toTrip(row as TripRow) : null;
+  }
+
+  /** Idle periods for a vehicle inside a window (trip-detail events). */
+  public async findIdlePeriods(
+    tenantId: string,
+    vehicleId: string,
+    from: Date,
+    to: Date,
+  ): Promise<Array<{ startedAt: Date; endedAt: Date | null; durationS: number }>> {
+    const rows = await this.knex
+      .withSchema(SCHEMA)
+      .from('idle_periods')
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('vehicle_id = ?::uuid', [vehicleId])
+      .where('started_at', '>=', from)
+      .where('started_at', '<=', to)
+      .orderBy('started_at', 'asc');
+    return (
+      rows as Array<{
+        started_at: Date | string;
+        ended_at: Date | string | null;
+        duration_s: number;
+      }>
+    ).map((r) => ({
+      startedAt: new Date(r.started_at),
+      endedAt: r.ended_at ? new Date(r.ended_at) : null,
+      durationS: Number(r.duration_s),
+    }));
+  }
+
+  /** Parking periods for a vehicle inside a window (trip-detail events). */
+  public async findParkingPeriods(
+    tenantId: string,
+    vehicleId: string,
+    from: Date,
+    to: Date,
+  ): Promise<
+    Array<{ startedAt: Date; endedAt: Date | null; durationS: number; lat: number; lng: number }>
+  > {
+    const rows = await this.knex
+      .withSchema(SCHEMA)
+      .from('parking_periods')
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('vehicle_id = ?::uuid', [vehicleId])
+      .where('started_at', '>=', from)
+      .where('started_at', '<=', to)
+      .orderBy('started_at', 'asc');
+    return (
+      rows as Array<{
+        started_at: Date | string;
+        ended_at: Date | string | null;
+        duration_s: number;
+        lat: number;
+        lng: number;
+      }>
+    ).map((r) => ({
+      startedAt: new Date(r.started_at),
+      endedAt: r.ended_at ? new Date(r.ended_at) : null,
+      durationS: Number(r.duration_s),
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+    }));
+  }
+}
+
+/** Trip read-model row (DB column names). */
+interface TripRow {
+  id: string;
+  tenant_id: string;
+  vehicle_id: string;
+  status: string;
+  started_at: Date | string;
+  ended_at: Date | string | null;
+  start_lat: number;
+  start_lng: number;
+  end_lat: number | null;
+  end_lng: number | null;
+  distance_km: number;
+  duration_s: number;
+  max_speed_kmh: number;
+  stop_count: number;
+}
+
+/** Trip read model returned by the REST API (camelCase). */
+export interface TripRecord {
+  readonly id: string;
+  readonly vehicleId: string;
+  readonly status: 'ACTIVE' | 'COMPLETED' | 'DISCARDED';
+  readonly startedAt: Date;
+  readonly endedAt: Date | null;
+  readonly startLat: number;
+  readonly startLng: number;
+  readonly endLat: number | null;
+  readonly endLng: number | null;
+  readonly distanceKm: number;
+  readonly durationS: number;
+  readonly maxSpeedKmh: number;
+  readonly stopCount: number;
+}
+
+function toTrip(row: TripRow): TripRecord {
+  return {
+    id: String(row.id),
+    vehicleId: String(row.vehicle_id),
+    status: row.status as TripRecord['status'],
+    startedAt: new Date(row.started_at),
+    endedAt: row.ended_at ? new Date(row.ended_at) : null,
+    startLat: Number(row.start_lat),
+    startLng: Number(row.start_lng),
+    endLat: row.end_lat !== null ? Number(row.end_lat) : null,
+    endLng: row.end_lng !== null ? Number(row.end_lng) : null,
+    distanceKm: Number(row.distance_km),
+    durationS: Number(row.duration_s),
+    maxSpeedKmh: Number(row.max_speed_kmh),
+    stopCount: Number(row.stop_count),
+  };
 }

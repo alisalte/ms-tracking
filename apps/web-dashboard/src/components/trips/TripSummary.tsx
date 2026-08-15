@@ -29,7 +29,11 @@ export function TripSummary({ trip }: TripSummaryProps) {
     { icon: Gauge, label: t('trips.summary.maxSpeed'), value: `${trip.maxSpeed} km/h` },
     { icon: Timer, label: t('trips.summary.avgSpeed'), value: `${trip.avgSpeed} km/h` },
     { icon: MapPin, label: t('trips.summary.stops'), value: String(trip.stopCount) },
-    { icon: PauseCircle, label: t('trips.summary.idleTime'), value: formatDuration(trip.idleMin) },
+    {
+      icon: PauseCircle,
+      label: t('trips.summary.idleTime'),
+      value: trip.idleMin === undefined ? '—' : formatDuration(trip.idleMin),
+    },
     ...(trip.fuelL !== undefined
       ? [{ icon: Fuel, label: t('trips.summary.fuel'), value: `${trip.fuelL} L` }]
       : []),

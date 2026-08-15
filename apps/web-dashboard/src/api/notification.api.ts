@@ -14,7 +14,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
+import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import type { Notification, UnreadCount } from '@/types/notification.types';
 import { apiGet, apiPostNoContent, apiPut } from './client';
 import { queryKeys } from './query-keys';
@@ -33,29 +33,27 @@ function mapNotification(raw: Record<string, unknown>): Notification {
 }
 
 async function fetchNotifications(): Promise<Notification[]> {
-  if (!shouldUseMock()) {
-    try {
+  // Real mode: errors propagate (no fabricated "no notifications" success —
+  // §22); mock mode falls back to an empty list when the service is down.
+  return withMockFallback(
+    async () => {
       const page = await apiGet<{ data: Record<string, unknown>[] }>(
         '/notification/notifications',
-        { limit: 50 },
+        {
+          limit: 50,
+        },
       );
       return page.data.map(mapNotification);
-    } catch {
-      return [];
-    }
-  }
-  return resolveMock([]);
+    },
+    () => resolveMock([]),
+  );
 }
 
 async function fetchUnreadCount(): Promise<UnreadCount> {
-  if (!shouldUseMock()) {
-    try {
-      return await apiGet<UnreadCount>('/notification/notifications/unread-count');
-    } catch {
-      return { total: 0, critical: 0, high: 0 };
-    }
-  }
-  return resolveMock({ total: 0, critical: 0, high: 0 });
+  return withMockFallback(
+    () => apiGet<UnreadCount>('/notification/notifications/unread-count'),
+    () => resolveMock({ total: 0, critical: 0, high: 0 }),
+  );
 }
 
 /** Recent notifications for the bell popover. */

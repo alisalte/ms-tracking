@@ -19,6 +19,9 @@ interface PoiRow {
   radius_m: number;
   geofence_id: string | null;
   metadata: Record<string, unknown> | string;
+  /** Decoded coordinates (ST_Y/ST_X projections added by the queries). */
+  lat?: string | number;
+  lng?: string | number;
 }
 
 export class PoiRepository {
@@ -49,7 +52,17 @@ export class PoiRepository {
         geofence_id: input.geofenceId ?? null,
         metadata: JSON.stringify(input.metadata ?? {}),
       })
-      .returning('*');
+      .returning([
+        'poi_id',
+        'tenant_id',
+        'name',
+        'category',
+        'radius_m',
+        'geofence_id',
+        'metadata',
+        this.knex.raw('ST_Y(geom::geometry) AS lat'),
+        this.knex.raw('ST_X(geom::geometry) AS lng'),
+      ]);
     return toPoi(row as PoiRow);
   }
 
@@ -66,6 +79,17 @@ export class PoiRepository {
     let query = this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
+      .select(
+        'poi_id',
+        'tenant_id',
+        'name',
+        'category',
+        'radius_m',
+        'geofence_id',
+        'metadata',
+        this.knex.raw('ST_Y(geom::geometry) AS lat'),
+        this.knex.raw('ST_X(geom::geometry) AS lng'),
+      )
       .whereRaw('geom && ?::geography', [bboxWkt]);
     if (tenantId !== undefined) {
       query = query.where((q) => q.whereNull('tenant_id').orWhere('tenant_id', '=', tenantId));
@@ -89,7 +113,12 @@ export class PoiRepository {
     let query = this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
-      .select('*', this.knex.raw('ST_Distance(geom, ?::geography) AS distance_m', [pointWkt]))
+      .select(
+        '*',
+        this.knex.raw('ST_Distance(geom, ?::geography) AS distance_m', [pointWkt]),
+        this.knex.raw('ST_Y(geom::geometry) AS lat'),
+        this.knex.raw('ST_X(geom::geometry) AS lng'),
+      )
       .whereRaw('ST_DWithin(geom, ?::geography, ?)', [pointWkt, radiusM])
       .orderByRaw('geom <-> ?::geography', [pointWkt])
       .limit(k);
@@ -116,8 +145,10 @@ function toPoi(row: PoiRow): Poi {
     tenantId: row.tenant_id,
     name: row.name,
     category: row.category,
-    latitude: 0, // extracted from geom if needed; for Sprint 9 the callers use the query point
-    longitude: 0,
+    // Real coordinates decoded from the geography column (Sprint F — the old
+    // mapper returned 0,0 and discarded the geometry entirely).
+    latitude: row.lat !== undefined ? Number(row.lat) : 0,
+    longitude: row.lng !== undefined ? Number(row.lng) : 0,
     radiusM: row.radius_m,
     geofenceId: row.geofence_id,
     metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,

@@ -8,11 +8,12 @@ import { defineConfig } from 'vite';
  * the browser talks to one origin (no CORS) exactly like the nginx deployment:
  *
  *   /api/v1/fleets | vehicles | devices | summary   → fleet-management (3006)
- *   /api/v1/positions                             → gps-engine (3005; backend has NO /api/v1 prefix → stripped)
- *   /api/v1/tracking/devices                      → gps-engine /devices (prefix stripped)
- *   /api/v1/notification/*                        → notification-service (3008)
- *   /api/v1/fleet/*                               → fleet-service (3007; drivers/business trips)
- *   /api/*  (everything else: auth/iam/tenants)   → identity (3000)
+ *   /api/v1/positions | trips                      → gps-engine (3005; backend has NO /api/v1 prefix → stripped)
+ *   /api/v1/tracking/devices                        → gps-engine /devices (prefix stripped)
+ *   /api/v1/map | route | location                  → map-engine (3009; prefix stripped — Sprint F)
+ *   /api/v1/notification/*                          → notification-service (3008)
+ *   /api/v1/fleet/*                                 → fleet-service (3007; drivers/business trips)
+ *   /api/*  (everything else: auth/iam/tenants)     → identity (3000)
  *
  * Key order matters — the most specific prefixes must precede the `/api` catch-all.
  * The WebSocket (Socket.IO, default :3001) connects DIRECTLY via VITE_GPS_WS_URL,
@@ -20,7 +21,9 @@ import { defineConfig } from 'vite';
  */
 const fleetTarget = process.env.VITE_FLEET_API_PROXY_TARGET ?? 'http://localhost:3006';
 const gpsTarget = process.env.VITE_GPS_API_PROXY_TARGET ?? 'http://localhost:3005';
-const notificationTarget = process.env.VITE_NOTIFICATION_API_PROXY_TARGET ?? 'http://localhost:3008';
+const mapTarget = process.env.VITE_MAP_API_PROXY_TARGET ?? 'http://localhost:3009';
+const notificationTarget =
+  process.env.VITE_NOTIFICATION_API_PROXY_TARGET ?? 'http://localhost:3008';
 const fleetServiceTarget = process.env.VITE_FLEET_SVC_API_PROXY_TARGET ?? 'http://localhost:3007';
 
 export default defineConfig({
@@ -42,10 +45,30 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/v1/, ''),
       },
+      '/api/v1/trips': {
+        target: gpsTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
+      },
       '/api/v1/tracking/devices': {
         target: gpsTarget,
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/v1\/tracking/, ''),
+      },
+      '/api/v1/map': {
+        target: mapTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
+      },
+      '/api/v1/route': {
+        target: mapTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
+      },
+      '/api/v1/location': {
+        target: mapTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
       },
       '/api/v1/notification': { target: notificationTarget, changeOrigin: true },
       '/api/v1/fleet': { target: fleetServiceTarget, changeOrigin: true },

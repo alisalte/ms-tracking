@@ -20,15 +20,28 @@ export const mapEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     /** Redis connection URL (three-tier geo cache). */
     REDISURL: z.string().min(1),
 
-    // --- Provider selection (08 §2.3) ---
-    /** Default provider when no region/tenant pin applies: 'local' | 'mapbox'. */
+    /**
+     * Override the base default (3000) — map-engine REST listens on 3009 to
+     * match the web-dashboard dev proxy + nginx upstream (Sprint F).
+     */
+    PORT: z.coerce.number().int().min(1).max(65535).default(3009),
+
+    // --- Provider selection (08 §2.3; Sprint F §5) ---
+    /** Default provider when no region/tenant pin applies: 'local' | 'osrm' | 'nominatim'. */
     MAP_DEFAULT_PROVIDER: z.string().default('local'),
     /** Provider region override: 'global' | 'china'. China → Amap/Baidu (stubbed). */
     MAP_PROVIDER_REGION: z.string().default('global'),
 
-    // --- Optional external credentials (empty = provider unavailable) ---
+    // --- Optional external providers (empty = provider not registered) ---
     MAPBOX_TOKEN: z.string().default(''),
+    /** OSRM-compatible routing server base URL (e.g. http://localhost:5000). Empty = no real routing. */
     OSRM_URL: z.string().default(''),
+    /** OSRM profile the server was built with (driving | car | bike | foot). */
+    OSRM_PROFILE: z.string().default('driving'),
+    /** Nominatim (geocoding) base URL. Empty = geocoding falls back to the local geo.addresses provider. */
+    NOMINATIM_URL: z.string().default(''),
+    /** User-Agent for Nominatim requests (public-instance usage policy requires identification). */
+    NOMINATIM_USER_AGENT: z.string().default('FleetVision-MapEngine/1.0'),
     GOOGLE_MAPS_KEY: z.string().default(''),
 
     // --- Cache TTLs (08 §6.1) ---

@@ -56,6 +56,7 @@ import {
   TRIP_ENGINE,
   TRIP_REPOSITORY,
 } from './tokens.js';
+import { TripsController } from './trips.controller.js';
 
 @Module({})
 export class GpsEngineModule {
@@ -249,10 +250,11 @@ export class GpsEngineModule {
         // Sprint D §35 — consumer readiness (liveness never checks Kafka).
         readinessProvider,
         PositionsController,
+        TripsController,
         DeviceStatusController,
         AdminController,
       ],
-      controllers: [PositionsController, DeviceStatusController, AdminController],
+      controllers: [PositionsController, TripsController, DeviceStatusController, AdminController],
       exports: [KAFKA_CONSUMER, EXTRA_READINESS_INDICATORS],
     };
   }

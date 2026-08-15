@@ -8,6 +8,20 @@
  */
 import type { Address, PlaceResult, RouteResult, SnappedPoint } from './geo-types.js';
 
+/**
+ * The operations a provider can serve. Providers declare their capabilities;
+ * the ProviderRouter resolves per-operation so a deployment can mix, e.g.,
+ * OSRM (routing) with Nominatim (geocoding) and the local DB provider
+ * (reverse geocode from `geo.addresses`).
+ */
+export type ProviderCapability =
+  | 'geocode'
+  | 'reverseGeocode'
+  | 'route'
+  | 'matchRoute'
+  | 'snapPoint'
+  | 'searchPlaces';
+
 export interface GeocodeRequest {
   readonly query: string;
   readonly tenantId?: string;
@@ -37,6 +51,13 @@ export interface PlacesRequest {
 /** The port every map provider implements. */
 export interface MapProvider {
   readonly name: string;
+
+  /**
+   * Capabilities this provider actually serves. Methods outside this set MUST
+   * throw `MapProviderUnavailableError` — the router uses the set to resolve
+   * per-operation providers and never silently falls back to a stub.
+   */
+  readonly capabilities: ReadonlySet<ProviderCapability>;
 
   /** Forward geocode: address string → coordinates + formatted address. */
   geocode(req: GeocodeRequest): Promise<Address[]>;

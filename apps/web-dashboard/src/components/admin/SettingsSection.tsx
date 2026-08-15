@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSettings, useUpdateSettings } from '@/api/admin.api';
+import { ErrorState } from '@/components/common/ErrorState';
 import type { DistanceUnit, TempUnit, VolumeUnit } from '@/types/admin.types';
 import {
   Box,
@@ -28,17 +29,27 @@ const LOCALES = ['en', 'fa'];
 
 export function SettingsSection() {
   const { t } = useTranslation();
-  const { data: settings, isLoading } = useSettings();
+  const { data: settings, isLoading, isError, error, refetch } = useSettings();
   const update = useUpdateSettings();
 
   // Local form state mirrors the loaded settings; edit + Save commits.
   const draft = useMemo(() => settings, [settings]);
 
-  if (isLoading || !draft) {
+  if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
       </Box>
+    );
+  }
+
+  // No settings backend exists yet — fail honestly instead of fabricating (§22).
+  if (isError || !draft) {
+    return (
+      <ErrorState
+        error={error ?? new Error('Tenant settings are unavailable')}
+        onRetry={() => refetch()}
+      />
     );
   }
 

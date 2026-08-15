@@ -125,6 +125,65 @@ export class PositionRepository {
       .limit(limit);
     return rows.map((r) => toLatest(r));
   }
+
+  /**
+   * Latest position per vehicle within `radiusM` of a point (Sprint F §17) —
+   * one PostGIS query (ST_DWithin on the GiST-indexed `geom` column over a
+   * DISTINCT ON latest-per-vehicle subquery), ordered by distance. No
+   * application-level loops over vehicles.
+   */
+  public async findNearby(
+    tenantId: string,
+    latitude: number,
+    longitude: number,
+    radiusM: number,
+    limit = 50,
+  ): Promise<Array<LatestPosition & { distanceM: number }>> {
+    const pointWkt = `SRID=4326;POINT(${longitude} ${latitude})`;
+    const latest = this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('ST_DWithin(geom, ?::geography, ?)', [pointWkt, radiusM])
+      .select('*', this.knex.raw('ST_Distance(geom, ?::geography) AS distance_m', [pointWkt]))
+      .distinctOn('vehicle_id')
+      .orderBy('vehicle_id', 'desc')
+      .orderBy('captured_at', 'desc')
+      .as('latest');
+    const rows = await this.knex.select('*').from(latest).orderBy('distance_m', 'asc').limit(limit);
+    return (rows as Array<PositionRow & { distance_m: number | string }>).map((r) => ({
+      ...toLatest(r),
+      distanceM: Number(r.distance_m),
+    }));
+  }
+
+  /**
+   * Latest position per vehicle inside a bounding box (Sprint F §18) — PostGIS
+   * `&&` overlap on the GiST-indexed `geom` column over DISTINCT ON
+   * latest-per-vehicle. Tenant-scoped by the caller's verified tenant only.
+   */
+  public async findInBounds(
+    tenantId: string,
+    minLng: number,
+    minLat: number,
+    maxLng: number,
+    maxLat: number,
+    limit = 500,
+  ): Promise<LatestPosition[]> {
+    const bboxWkt = `SRID=4326;POLYGON((${minLng} ${minLat},${maxLng} ${minLat},${maxLng} ${maxLat},${minLng} ${maxLat},${minLng} ${minLat}))`;
+    const latest = this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('geom && ?::geography', [bboxWkt])
+      .select('*')
+      .distinctOn('vehicle_id')
+      .orderBy('vehicle_id', 'desc')
+      .orderBy('captured_at', 'desc')
+      .as('latest');
+    const rows = await this.knex.select('*').from(latest).limit(limit);
+    return (rows as PositionRow[]).map((r) => toLatest(r));
+  }
 }
 
 /** Knex row shape for the vehicle_positions table (DB column names). */

@@ -19,6 +19,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { NotImplementedError } from '@/lib/errors';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import { downloadBlob } from '@/lib/video-stream';
@@ -38,7 +39,7 @@ import type {
   Role,
   TenantSettings,
 } from '@/types/admin.types';
-import { apiGet, apiPost, apiPostNoContent } from './client';
+import { apiGet, apiPost, apiPostNoContent, apiPut } from './client';
 import { queryKeys } from './query-keys';
 
 // ── identity-service wire format → UI type ───────────────────────────────────
@@ -79,13 +80,10 @@ function mapUser(wire: UserWire): AdminUser {
 async function fetchUsers(): Promise<AdminUser[]> {
   return withMockFallback(
     async () => {
-      // Backend returns the standard Page<T> shape { data, nextCursor }. The
-      // non-page hook loads the first page only (bounded by the default limit);
-      // use useUsersPage() for full cursor-paginated access.
-      const res = await apiGet<{ data: UserWire[]; nextCursor: string | null }>('/iam/users', {
-        limit: 100,
-      });
-      return res.data.map(mapUser);
+      // Identity responds { data: rows, meta: { total } } on the wire; the
+      // envelope-unwrapping apiGet yields the rows array directly.
+      const rows = await apiGet<UserWire[]>('/iam/users', { limit: 100 });
+      return rows.map(mapUser);
     },
     () => resolveMock(mockUsers),
   );
@@ -95,8 +93,8 @@ async function fetchUsers(): Promise<AdminUser[]> {
 async function fetchUserDetail(id: string): Promise<AdminUser | undefined> {
   return withMockFallback(
     async () => {
-      const res = await apiGet<{ data: UserWire | null }>(`/iam/users/${id}`);
-      return res.data ? mapUser(res.data) : undefined;
+      const wire = await apiGet<UserWire | null>(`/iam/users/${id}`);
+      return wire ? mapUser(wire) : undefined;
     },
     () => resolveMock(mockUsers.find((u) => u.id === id)),
   );
@@ -116,7 +114,11 @@ async function fetchPermissions(): Promise<PermissionGroup[]> {
 
 /** GET /settings — no backend; mock-only (gated). */
 async function fetchSettings(): Promise<TenantSettings> {
-  if (!shouldUseMock()) return mockSettings;
+  // No settings backend exists yet — real mode must fail honestly (§22) so the
+  // Settings section shows its error state instead of fabricated settings.
+  if (!shouldUseMock()) {
+    throw new NotImplementedError('Tenant settings API is not implemented yet');
+  }
   return resolveMock(mockSettings);
 }
 
@@ -133,19 +135,20 @@ export function useUsers() {
 }
 
 /**
- * Cursor-paginated users list (real backend: GET /iam/users?limit=&cursor=).
- * Falls back to mock on network error in mock mode. Use this for the users
- * table to avoid unbounded client-side loading.
+ * Users list via useCursorPagination (real backend: GET /iam/users?limit=).
+ * Identity currently pages with a fixed limit/offset (no cursor yet), so the
+ * first page is mapped with nextCursor=null until the backend ships cursors.
+ * Falls back to mock on network error in mock mode.
  */
 export function useUsersPage() {
   return useCursorPagination<AdminUser>(queryKeys.admin.users(), (cursor) =>
     withMockFallback(
       async () => {
-        const res = await apiGet<{ data: UserWire[]; nextCursor: string | null }>(
+        const rows = await apiGet<UserWire[]>(
           '/iam/users',
           cursor ? { limit: 25, cursor } : { limit: 25 },
         );
-        return { data: res.data.map(mapUser), nextCursor: res.nextCursor };
+        return { data: rows.map(mapUser), nextCursor: null };
       },
       async () => ({ data: mockUsers, nextCursor: null }),
     ),
@@ -188,13 +191,13 @@ export function useCreateUser() {
     mutationFn: async (input) => {
       return withMockFallback(
         async () => {
-          const res = await apiPost<unknown, { data: UserWire }>('/iam/users', {
+          const wire = await apiPost<unknown, UserWire>('/iam/users', {
             email: input.email,
             username: input.username,
             password: input.password,
             display_name: input.displayName,
           });
-          return mapUser(res.data);
+          return mapUser(wire);
         },
         () => resolveMock({ ...mockUsers[0], ...input } as AdminUser),
       );
@@ -213,11 +216,11 @@ export function useUpdateUser() {
     mutationFn: async ({ id, email, displayName }) => {
       return withMockFallback(
         async () => {
-          const res = await apiPost<unknown, { data: UserWire }>(`/iam/users/${id}`, {
+          const wire = await apiPut<unknown, UserWire>(`/iam/users/${id}`, {
             email,
             display_name: displayName,
           });
-          return mapUser(res.data);
+          return mapUser(wire);
         },
         () => resolveMock({ ...mockUsers[0], email: email ?? mockUsers[0]?.email } as AdminUser),
       );

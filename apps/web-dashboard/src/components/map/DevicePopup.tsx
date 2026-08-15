@@ -24,6 +24,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useVehicleDetail } from '@/api/fleet.api';
+import { useReverseGeocode } from '@/api/map.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { lastSeenLabel } from '@/lib/relative-time';
 import { status } from '@/theme/palette';
@@ -44,6 +45,8 @@ interface DevicePopupProps {
   /** Vehicle id to show; `null` closes the drawer. */
   vehicleId: string | null;
   onClose: () => void;
+  /** Switch the map to HISTORY mode for this vehicle (Sprint F §20). */
+  onShowHistory?: () => void;
 }
 
 /**
@@ -53,9 +56,14 @@ interface DevicePopupProps {
  * (speed/heading/odometer/ignition/driver/address/age), recent events, and
  * quick actions. Never a page navigation. Backed by `useVehicleDetail`.
  */
-export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
+export function DevicePopup({ vehicleId, onClose, onShowHistory }: DevicePopupProps) {
   const { t } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
+
+  // Sprint F §13 — reverse geocode ONLY the selected vehicle's position
+  // (justified event; the backend caches by rounded coordinate in Redis).
+  const hasFix = data !== undefined && (data.lat !== 0 || data.lng !== 0);
+  const reverse = useReverseGeocode(hasFix ? data.lat : null, hasFix ? data.lng : null);
 
   return (
     <Drawer
@@ -152,7 +160,20 @@ export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
               />
             </Box>
 
-            <Fact icon={MapPin} label={t('map.popup.address')} value={data.address} fullWidth />
+            <Fact
+              icon={MapPin}
+              label={t('map.popup.address')}
+              value={
+                !hasFix
+                  ? '—'
+                  : reverse.isLoading
+                    ? t('common.loading')
+                    : reverse.isError
+                      ? t('map.popup.addressUnavailable')
+                      : (reverse.data?.formatted ?? t('map.popup.addressUnavailable'))
+              }
+              fullWidth
+            />
 
             {/* ── Quick actions ── */}
             <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
@@ -163,7 +184,7 @@ export function DevicePopup({ vehicleId, onClose }: DevicePopupProps) {
               <ActionButton icon={Video} label={t('map.popup.liveVideo')} />
               <ActionButton icon={History} label={t('map.popup.tripTimeline')} />
               <ActionButton icon={Send} label={t('map.popup.sendMessage')} />
-              <ActionButton icon={History} label={t('map.popup.history')} />
+              <ActionButton icon={History} label={t('map.popup.history')} onClick={onShowHistory} />
             </Stack>
 
             <Divider sx={{ my: 1 }} />
@@ -245,15 +266,17 @@ function Fact({
   );
 }
 
-/** Presentational quick-action button (§2.5 — actions deferred to later sprints). */
+/** Presentational quick-action button (§2.5 — wired actions call back; the rest stay deferred). */
 function ActionButton({
   icon: Icon,
   label,
   primary,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
   primary?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <Button
@@ -261,9 +284,7 @@ function ActionButton({
       variant={primary ? 'contained' : 'outlined'}
       startIcon={<Icon size={15} />}
       sx={{ textTransform: 'none' }}
-      onClick={() => {
-        /* Actions deferred to later sprints. */
-      }}
+      onClick={onClick}
     >
       {label}
     </Button>

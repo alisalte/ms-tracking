@@ -36,14 +36,17 @@ import type {
   VehicleDetail,
   VehiclePresence,
 } from '@/types/fleet.types';
-import { apiGet, apiGetRaw } from './client';
 import { fetchAllVehiclesAsMap } from './asset.api';
+import { apiGet, apiGetRaw } from './client';
 import { queryKeys } from './query-keys';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Derive the UI movement state from a position + connection state (§18). */
-function movementState(pos: LatestPosition | undefined, presence: VehiclePresence): MapVehicle['state'] {
+function movementState(
+  pos: LatestPosition | undefined,
+  presence: VehiclePresence,
+): MapVehicle['state'] {
   if (presence === 'OFFLINE' || presence === 'UNKNOWN') return 'offline';
   if (presence === 'STALE') return 'stopped';
   if (!pos) return 'stopped';
@@ -109,26 +112,38 @@ function fetchFleetStats(): Promise<FleetStats> {
       totalDevices: 0,
     });
   }
-  return withMockFallback(async () => {
-    const [summary, statuses] = await Promise.all([
-      apiGet<FleetSummary>('/summary'),
-      fetchDeviceStatuses(),
-    ]);
-    const online = statuses.filter((s) => s.state === 'ONLINE').length;
-    const offline = statuses.filter((s) => s.state === 'OFFLINE').length;
-    const stale = statuses.filter((s) => s.state === 'STALE').length;
-    // Vehicles without any device status record are UNKNOWN (never guessed).
-    const unknown = Math.max(0, summary.vehicles.active - statuses.length);
-    return {
-      totalVehicles: summary.vehicles.active,
-      online,
-      offline,
-      stale,
-      unknown,
-      totalFleets: summary.fleets.active,
-      totalDevices: summary.devices.total,
-    } satisfies FleetStats;
-  }, () => resolveMock({ totalVehicles: 0, online: 0, offline: 0, stale: 0, unknown: 0, totalFleets: 0, totalDevices: 0 }));
+  return withMockFallback(
+    async () => {
+      const [summary, statuses] = await Promise.all([
+        apiGet<FleetSummary>('/summary'),
+        fetchDeviceStatuses(),
+      ]);
+      const online = statuses.filter((s) => s.state === 'ONLINE').length;
+      const offline = statuses.filter((s) => s.state === 'OFFLINE').length;
+      const stale = statuses.filter((s) => s.state === 'STALE').length;
+      // Vehicles without any device status record are UNKNOWN (never guessed).
+      const unknown = Math.max(0, summary.vehicles.active - statuses.length);
+      return {
+        totalVehicles: summary.vehicles.active,
+        online,
+        offline,
+        stale,
+        unknown,
+        totalFleets: summary.fleets.active,
+        totalDevices: summary.devices.total,
+      } satisfies FleetStats;
+    },
+    () =>
+      resolveMock({
+        totalVehicles: 0,
+        online: 0,
+        offline: 0,
+        stale: 0,
+        unknown: 0,
+        totalFleets: 0,
+        totalDevices: 0,
+      }),
+  );
 }
 
 /**
@@ -137,30 +152,34 @@ function fetchFleetStats(): Promise<FleetStats> {
  */
 function fetchMapVehicles(): Promise<MapVehicle[]> {
   if (shouldUseMock()) return resolveMock(mockMapVehicles);
-  return withMockFallback(async () => {
-    const { vehicles, devices } = await fetchAllVehiclesAsMap();
-    const [statuses, positions] = await Promise.all([
-      fetchDeviceStatuses(),
-      fetchLatestPositions(),
-    ]);
-    const statusByDevice = new Map(statuses.map((s) => [s.deviceId, s]));
-    const vehicleToDevice = new Map<string, { deviceId: string; lastSeenAt?: string }>();
-    for (const d of devices) {
-      if (d.vehicleId) {
-        const status = statusByDevice.get(d.id);
-        vehicleToDevice.set(d.vehicleId, { deviceId: d.id, lastSeenAt: status?.lastSeenAt });
+  return withMockFallback(
+    async () => {
+      const { vehicles, devices } = await fetchAllVehiclesAsMap();
+      const [statuses, positions] = await Promise.all([
+        fetchDeviceStatuses(),
+        fetchLatestPositions(),
+      ]);
+      const statusByDevice = new Map(statuses.map((s) => [s.deviceId, s]));
+      const vehicleToDevice = new Map<string, { deviceId: string; lastSeenAt?: string }>();
+      for (const d of devices) {
+        if (d.vehicleId) {
+          const status = statusByDevice.get(d.id);
+          vehicleToDevice.set(d.vehicleId, { deviceId: d.id, lastSeenAt: status?.lastSeenAt });
+        }
       }
-    }
-    const posByVehicle = new Map(positions.map((p) => [p.vehicleId, p]));
-    return vehicles.map((v) => {
-      const bound = vehicleToDevice.get(v.id);
-      const status = bound ? statusByDevice.get(bound.deviceId) : undefined;
-      const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
-      // Positions of unbound devices are keyed by deviceId (gps-engine fallback).
-      const pos = posByVehicle.get(v.id) ?? (bound ? posByVehicle.get(bound.deviceId) : undefined);
-      return toMapVehicle(v, presence, pos, bound?.deviceId, status?.lastSeenAt);
-    });
-  }, () => resolveMock([]));
+      const posByVehicle = new Map(positions.map((p) => [p.vehicleId, p]));
+      return vehicles.map((v) => {
+        const bound = vehicleToDevice.get(v.id);
+        const status = bound ? statusByDevice.get(bound.deviceId) : undefined;
+        const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
+        // Positions of unbound devices are keyed by deviceId (gps-engine fallback).
+        const pos =
+          posByVehicle.get(v.id) ?? (bound ? posByVehicle.get(bound.deviceId) : undefined);
+        return toMapVehicle(v, presence, pos, bound?.deviceId, status?.lastSeenAt);
+      });
+    },
+    () => resolveMock([]),
+  );
 }
 
 /**
@@ -169,52 +188,53 @@ function fetchMapVehicles(): Promise<MapVehicle[]> {
  * unreachable so the drawer can show an honest error state.
  */
 function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
-  return withMockFallback<VehicleDetail>(async () => {
-    const [vehicleWire, devicesWire, statusList] = await Promise.all([
-      apiGet<{ id: string; name: string; code: string; plate: string | null }>(`/vehicles/${id}`),
-      apiGet<BoundDevice[]>(`/vehicles/${id}/devices`),
-      fetchDeviceStatuses(),
-    ]);
-    const primary = devicesWire.find((d) => d.isPrimary) ?? devicesWire[0];
-    const status = primary
-      ? statusList.find((s) => s.deviceId === primary.deviceId)
-      : undefined;
-    let position: LatestPosition | undefined;
-    try {
-      position = await apiGetRaw<LatestPosition>(`/positions/${id}/latest`);
-    } catch {
-      // 404 when the vehicle has never reported — the drawer shows "never seen".
-      position = undefined;
-    }
-    const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
-    return {
-      id: vehicleWire.id,
-      label: vehicleWire.plate ?? `${vehicleWire.name} (${vehicleWire.code})`,
-      state: movementState(position, presence),
-      lat: position?.latitude ?? 0,
-      lng: position?.longitude ?? 0,
-      heading: position?.headingDeg ?? 0,
-      speed: position?.speedKph ?? 0,
-      ignitionOn: position?.ignitionOn ?? false,
-      updatedAt: position?.capturedAt ?? '',
-      presence,
-      deviceId: primary?.deviceId,
-      odometer: 0, // Not exposed by the backend yet — never fabricated.
-      address: '', // Reverse geocoding is a map-engine concern (out of scope).
-      events: [],
-    } satisfies VehicleDetail;
-  }, async (): Promise<VehicleDetail> => {
-    const fixture = mockMapVehicles.find((v) => v.id === id) ?? mockMapVehicles[0];
-    if (!fixture) throw new Error('mock fixture unavailable');
-    return {
-      ...fixture,
-      odometer: 0,
-      address: '',
-      ignitionOn: fixture.ignitionOn ?? false,
-      updatedAt: fixture.updatedAt ?? '',
-      events: [],
-    };
-  });
+  return withMockFallback<VehicleDetail>(
+    async () => {
+      const [vehicleWire, devicesWire, statusList] = await Promise.all([
+        apiGet<{ id: string; name: string; code: string; plate: string | null }>(`/vehicles/${id}`),
+        apiGet<BoundDevice[]>(`/vehicles/${id}/devices`),
+        fetchDeviceStatuses(),
+      ]);
+      const primary = devicesWire.find((d) => d.isPrimary) ?? devicesWire[0];
+      const status = primary ? statusList.find((s) => s.deviceId === primary.deviceId) : undefined;
+      let position: LatestPosition | undefined;
+      try {
+        position = await apiGetRaw<LatestPosition>(`/positions/${id}/latest`);
+      } catch {
+        // 404 when the vehicle has never reported — the drawer shows "never seen".
+        position = undefined;
+      }
+      const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
+      return {
+        id: vehicleWire.id,
+        label: vehicleWire.plate ?? `${vehicleWire.name} (${vehicleWire.code})`,
+        state: movementState(position, presence),
+        lat: position?.latitude ?? 0,
+        lng: position?.longitude ?? 0,
+        heading: position?.headingDeg ?? 0,
+        speed: position?.speedKph ?? 0,
+        ignitionOn: position?.ignitionOn ?? false,
+        updatedAt: position?.capturedAt ?? '',
+        presence,
+        deviceId: primary?.deviceId,
+        odometer: 0, // Not exposed by the backend yet — never fabricated.
+        address: '', // Reverse geocoding is a map-engine concern (out of scope).
+        events: [],
+      } satisfies VehicleDetail;
+    },
+    async (): Promise<VehicleDetail> => {
+      const fixture = mockMapVehicles.find((v) => v.id === id) ?? mockMapVehicles[0];
+      if (!fixture) throw new Error('mock fixture unavailable');
+      return {
+        ...fixture,
+        odometer: 0,
+        address: '',
+        ignitionOn: fixture.ignitionOn ?? false,
+        updatedAt: fixture.updatedAt ?? '',
+        events: [],
+      };
+    },
+  );
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
@@ -248,22 +268,145 @@ export function useVehicleDetail(id: string | null) {
   });
 }
 
-// ── Trips (REAL backend endpoint pending — honest empty, never faked) ────────
+// ── Trips (REAL gps-engine /trips — Sprint F §11) ────────────────────────────
+
+/** gps-engine trip_events row (raw wire — camelCase, no envelope). */
+interface TripWire {
+  readonly id: string;
+  readonly vehicleId: string;
+  readonly status: 'ACTIVE' | 'COMPLETED' | 'DISCARDED';
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  readonly startLat: number;
+  readonly startLng: number;
+  readonly endLat: number | null;
+  readonly endLng: number | null;
+  readonly distanceKm: number;
+  readonly durationS: number;
+  readonly maxSpeedKmh: number;
+  readonly stopCount: number;
+}
+
+interface TripDetailWire extends TripWire {
+  readonly avgSpeedKph: number;
+  readonly waypoints: ReadonlyArray<{
+    ts: string;
+    lat: number;
+    lng: number;
+    speed: number;
+    heading: number;
+  }>;
+  readonly events: ReadonlyArray<{
+    id: string;
+    type: 'idle' | 'stop';
+    ts: string;
+    lat: number | null;
+    lng: number | null;
+    durationMin: number;
+  }>;
+}
+
+/** Trip status wire → UI lifecycle subset. */
+function toTripStatus(wire: TripWire['status']): Trip['status'] {
+  if (wire === 'ACTIVE') return 'in_progress';
+  if (wire === 'DISCARDED') return 'cancelled';
+  return 'completed';
+}
 
 /**
- * Trip history. gps-engine persists trip_events (Sprint A) but exposes no
- * trips REST endpoint yet; in REAL mode these resolve to an EMPTY list and the
- * Trips page shows its "no data yet" state. The deterministic fixture dataset
- * stands in only in explicit dev/demo mock mode.
+ * Trip list — REAL `GET /trips` (gps-engine trip_events projection, last 7 days
+ * by default). Vehicle labels join the registry (best-effort; falls back to the
+ * vehicle id). Origin/destination render as coordinates — reverse-geocoded
+ * labels are a map-engine concern and are NOT fabricated here.
  */
 function fetchTrips(): Promise<Trip[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
+  if (!shouldUseMock()) {
+    return (async () => {
+      const now = new Date();
+      const from = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+      const [wires, registry] = await Promise.all([
+        apiGetRaw<TripWire[]>('/trips', { from, to: now.toISOString(), limit: 100 }),
+        fetchAllVehiclesAsMap().catch(() => ({
+          vehicles: [] as Array<{ id: string; name: string; code: string; plate: string | null }>,
+        })),
+      ]);
+      const labelOf = new Map(registry.vehicles.map((v) => [v.id, v.plate ?? v.name ?? v.code]));
+      return wires.map((w): Trip => {
+        const durationH = w.durationS / 3600;
+        return {
+          id: w.id,
+          vehicleId: w.vehicleId,
+          vehicleLabel: labelOf.get(w.vehicleId) ?? w.vehicleId.slice(0, 8),
+          status: toTripStatus(w.status),
+          originLabel: `${w.startLat.toFixed(4)}, ${w.startLng.toFixed(4)}`,
+          destinationLabel:
+            w.endLat !== null && w.endLng !== null
+              ? `${w.endLat.toFixed(4)}, ${w.endLng.toFixed(4)}`
+              : '—',
+          startTime: w.startedAt,
+          endTime: w.endedAt ?? undefined,
+          distanceKm: Math.round(w.distanceKm * 10) / 10,
+          durationMin: Math.round(w.durationS / 60),
+          maxSpeed: Math.round(w.maxSpeedKmh),
+          avgSpeed: durationH > 0 ? Math.round((w.distanceKm / durationH) * 10) / 10 : 0,
+          stopCount: w.stopCount,
+          // Idle totals are not part of the list projection — never fabricated.
+        };
+      });
+    })();
+  }
   return resolveMock(mockTrips);
 }
 
-function fetchTripDetail(_id: string): Promise<TripDetail | null> {
-  if (!shouldUseMock()) return Promise.resolve(null);
-  return resolveMock(mockTripDetail(_id));
+/**
+ * Trip detail — REAL `GET /trips/:id` (trip + waypoints from the positions
+ * hypertable + idle/parking events). Idle time is summed from the events;
+ * events without coordinates stay on the timeline only.
+ */
+function fetchTripDetail(id: string): Promise<TripDetail | null> {
+  if (!shouldUseMock()) {
+    return (async () => {
+      const w = await apiGetRaw<TripDetailWire>(`/trips/${id}`);
+      const idleMin = w.events
+        .filter((e) => e.type === 'idle')
+        .reduce((sum, e) => sum + e.durationMin, 0);
+      return {
+        id: w.id,
+        vehicleId: w.vehicleId,
+        vehicleLabel: w.vehicleId.slice(0, 8),
+        status: toTripStatus(w.status),
+        originLabel: `${w.startLat.toFixed(4)}, ${w.startLng.toFixed(4)}`,
+        destinationLabel:
+          w.endLat !== null && w.endLng !== null
+            ? `${w.endLat.toFixed(4)}, ${w.endLng.toFixed(4)}`
+            : '—',
+        startTime: w.startedAt,
+        endTime: w.endedAt ?? undefined,
+        distanceKm: Math.round(w.distanceKm * 10) / 10,
+        durationMin: Math.round(w.durationS / 60),
+        maxSpeed: Math.round(w.maxSpeedKmh),
+        avgSpeed: w.avgSpeedKph,
+        stopCount: w.stopCount,
+        idleMin,
+        waypoints: w.waypoints.map((p) => ({
+          ts: p.ts,
+          lat: p.lat,
+          lng: p.lng,
+          speed: p.speed,
+          heading: p.heading,
+        })),
+        events: w.events.map((e) => ({
+          id: e.id,
+          ts: e.ts,
+          type: e.type,
+          ...(e.lat !== null && e.lng !== null ? { lat: e.lat, lng: e.lng } : {}),
+          label: `${e.durationMin} min`,
+          durationMin: e.durationMin,
+        })),
+      } satisfies TripDetail;
+    })();
+  }
+  return resolveMock(mockTripDetail(id));
 }
 
 /** Trip list for the Trips page (empty until the backend ships a trips API). */
@@ -298,11 +441,7 @@ export function useActiveAlarms() {
             id: a.id,
             type: a.type === 'overspeed' || a.type === 'geofence' ? a.type : 'geofence',
             severity:
-              a.severity === 'critical'
-                ? 'critical'
-                : a.severity === 'major'
-                  ? 'warning'
-                  : 'info',
+              a.severity === 'critical' ? 'critical' : a.severity === 'major' ? 'warning' : 'info',
             vehicleLabel: a.vehicleLabel || a.vehicleId,
             detail: a.message || a.detail,
             occurredAt: a.raisedAt,

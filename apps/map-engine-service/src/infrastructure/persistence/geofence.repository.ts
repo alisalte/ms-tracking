@@ -23,6 +23,9 @@ interface GeofenceRow {
   alert_on: string[] | unknown;
   dwell_sec: number | null;
   metadata: Record<string, unknown> | string;
+  /** Decoded center coordinates (ST_Y/ST_X projections added by queries). */
+  center_lat?: string | number | null;
+  center_lng?: string | number | null;
 }
 
 export class GeofenceRepository {
@@ -61,7 +64,19 @@ export class GeofenceRepository {
         dwell_sec: input.dwellSec ?? null,
         metadata: JSON.stringify(input.metadata ?? {}),
       })
-      .returning('*');
+      .returning([
+        'id',
+        'tenant_id',
+        'name',
+        'geofence_type',
+        'boundary',
+        'radius_m',
+        'alert_on',
+        'dwell_sec',
+        'metadata',
+        this.knex.raw('ST_Y(center::geometry) AS center_lat'),
+        this.knex.raw('ST_X(center::geometry) AS center_lng'),
+      ]);
     return toGeofence(row as GeofenceRow);
   }
 
@@ -70,6 +85,19 @@ export class GeofenceRepository {
     const rows = await this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
+      .select(
+        'id',
+        'tenant_id',
+        'name',
+        'geofence_type',
+        'boundary',
+        'radius_m',
+        'alert_on',
+        'dwell_sec',
+        'metadata',
+        this.knex.raw('ST_Y(center::geometry) AS center_lat'),
+        this.knex.raw('ST_X(center::geometry) AS center_lng'),
+      )
       .whereRaw('tenant_id = ?::uuid', [tenantId])
       .orderBy('created_at', 'desc');
     return (rows as GeofenceRow[]).map(toGeofence);
@@ -110,8 +138,11 @@ function toGeofence(row: GeofenceRow): Geofence {
     name: row.name,
     type: row.geofence_type as Geofence['type'],
     boundaryGeoJson: row.boundary,
-    centerLat: null,
-    centerLng: null,
+    // Real center decoded from the geography column (Sprint F — was null).
+    centerLat:
+      row.center_lat !== undefined && row.center_lat !== null ? Number(row.center_lat) : null,
+    centerLng:
+      row.center_lng !== undefined && row.center_lng !== null ? Number(row.center_lng) : null,
     radiusM: row.radius_m,
     alertOn: Array.isArray(row.alert_on) ? row.alert_on : [],
     dwellSec: row.dwell_sec,

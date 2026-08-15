@@ -43,6 +43,13 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     /** Sprint D §15 — initial retry backoff (ms), doubling per attempt. */
     GPS_KAFKA_RETRY_BACKOFF_MS: z.coerce.number().int().min(10).default(250),
 
+    // --- HTTP (REST) ---
+    /**
+     * Override the base default (3000) — gps-engine REST listens on 3005 to
+     * match the web-dashboard dev proxy + nginx upstream (Sprint E).
+     */
+    PORT: z.coerce.number().int().min(1).max(65535).default(3005),
+
     // --- WebSocket (real-time broadcaster, 07 §11) ---
     /** WebSocket (Socket.IO) port. */
     GPS_WS_PORT: z.coerce.number().int().min(1).max(65535).default(3001),

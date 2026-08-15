@@ -64,6 +64,11 @@ export class RedisGeoCache {
     return `geo:replay:${tenantId}:${vehicleId}:${sha(from + to)}`;
   }
 
+  /** Heat-map density cells (Sprint F §19). */
+  heatKey(tenantId: string, bbox: string, from: Date, to: Date): string {
+    return `geo:heat:${tenantId}:${bbox}:${sha(from.toISOString() + to.toISOString())}`;
+  }
+
   /** Cluster cache uses the shorter TTL. */
   async setCluster<T>(key: string, value: T): Promise<void> {
     await this.set(key, value, this.clusterTtlSeconds);

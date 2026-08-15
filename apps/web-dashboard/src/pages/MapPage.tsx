@@ -4,14 +4,17 @@ import { useTranslation } from 'react-i18next';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
 import { useMapVehicles } from '@/api/fleet.api';
+import { type HistoryPresetId, presetRange, useVehicleTrack } from '@/api/map.api';
 import { useAuthStore } from '@/auth/auth.store';
 import { ErrorState } from '@/components/common/ErrorState';
 import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
-import { FleetMap } from '@/components/map/FleetMap';
+import { FleetMap, type HistoryTrack } from '@/components/map/FleetMap';
 import { MapToolbar } from '@/components/map/MapToolbar';
+import { RoutePlannerDialog } from '@/components/map/RoutePlannerDialog';
 import { type PresenceFilter, presenceOf } from '@/components/map/types';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
+import { splitTrackIntoSegments } from '@/lib/track-utils';
 import { Box, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
@@ -74,6 +77,30 @@ export function MapPage() {
   const [presence, setPresence] = useState<PresenceFilter>('all');
   const [fleetId, setFleetId] = useState<string>('all');
   const [paused, setPaused] = useState(false);
+
+  // ── Sprint F §20: LIVE vs HISTORY mode ──
+  // LIVE merges WebSocket deltas; HISTORY queries the real track for the
+  // selected vehicle + a bounded preset window. The data models are never
+  // mixed: in history mode the live WS merge is bypassed.
+  const [mode, setMode] = useState<'live' | 'history'>('live');
+  const [historyPreset, setHistoryPreset] = useState<HistoryPresetId>('24h');
+  const [routePlannerOpen, setRoutePlannerOpen] = useState(false);
+  const [routeGeometry, setRouteGeometry] = useState<ReadonlyArray<{
+    lat: number;
+    lng: number;
+  }> | null>(null);
+
+  const historyWindow = useMemo(() => presetRange(historyPreset), [historyPreset]);
+  const trackQuery = useVehicleTrack(
+    selectedId,
+    historyWindow.from,
+    historyWindow.to,
+    mode === 'history',
+  );
+  const track: HistoryTrack | null = useMemo(() => {
+    if (mode !== 'history' || !trackQuery.data) return null;
+    return { segments: splitTrackIntoSegments(trackQuery.data), key: 1 };
+  }, [mode, trackQuery.data]);
 
   // §17 selection sync: list selections bump a nonce so FleetMap flies to the
   // vehicle (re-selecting the same row re-focuses).
@@ -189,7 +216,37 @@ export function MapPage() {
           total={vehicles.length}
           paused={paused}
           onTogglePause={() => setPaused((p) => !p)}
+          mode={mode}
+          onModeChange={setMode}
+          historyPreset={historyPreset}
+          onHistoryPresetChange={setHistoryPreset}
+          hasSelection={selectedId !== null}
+          onOpenRoutePlanner={() => setRoutePlannerOpen(true)}
         />
+        {/* History mode states (§22/§24): loading / error / no data. */}
+        {mode === 'history' && selectedId && trackQuery.isLoading && (
+          <Chip
+            size="small"
+            label={t('map.history.loading')}
+            sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
+          />
+        )}
+        {mode === 'history' && selectedId && trackQuery.isError && (
+          <Chip
+            size="small"
+            color="error"
+            label={t('map.history.error')}
+            onClick={() => trackQuery.refetch()}
+            sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
+          />
+        )}
+        {mode === 'history' && selectedId && !trackQuery.isLoading && !trackQuery.isError && (
+          <Chip
+            size="small"
+            label={t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
+            sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
+          />
+        )}
         {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
         <Chip
           size="small"
@@ -205,14 +262,34 @@ export function MapPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
             onDeselect={() => setSelectedId(null)}
-            paused={paused}
+            paused={paused || mode === 'history'}
             focus={focus}
+            track={
+              track ??
+              (routeGeometry
+                ? {
+                    segments: [routeGeometry.map((p) => [p.lng, p.lat] as [number, number])],
+                    key: 1,
+                  }
+                : null)
+            }
           />
         </Box>
       </Box>
 
+      {/* ── Route planner (Sprint F §12) ── */}
+      <RoutePlannerDialog
+        open={routePlannerOpen}
+        onClose={() => setRoutePlannerOpen(false)}
+        onRoute={(geometry) => setRouteGeometry(geometry)}
+      />
+
       {/* ── Right: device popup drawer ── */}
-      <DevicePopup vehicleId={selectedId} onClose={() => setSelectedId(null)} />
+      <DevicePopup
+        vehicleId={selectedId}
+        onClose={() => setSelectedId(null)}
+        onShowHistory={() => setMode('history')}
+      />
     </Box>
   );
 }

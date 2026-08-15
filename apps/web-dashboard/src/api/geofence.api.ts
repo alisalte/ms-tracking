@@ -14,7 +14,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
+import { resolveMock, withMockFallback } from '@/lib/mock-gate';
 import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import type { Page } from '@/types/api.types';
 import type { CreateGeofencePayload, Geofence, GeofenceType } from '@/types/geofence.types';
@@ -32,15 +32,12 @@ const geofenceKeys = {
 
 /** GET /location/geofences — list all geofences for the tenant. */
 async function fetchGeofences(): Promise<Geofence[]> {
-  if (!shouldUseMock()) {
-    try {
-      return await apiGet<Geofence[]>('/location/geofences');
-    } catch {
-      return [];
-    }
-  }
-  // Dev fallback when map-engine isn't running.
-  return resolveMock([]);
+  // Real mode: errors propagate (the page shows its ErrorState); mock mode
+  // falls back to an empty list only when map-engine is unreachable.
+  return withMockFallback(
+    () => apiGet<Geofence[]>('/location/geofences'),
+    () => resolveMock([]),
+  );
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
@@ -55,20 +52,16 @@ export function useGeofences() {
  * Falls back to empty on network error in dev.
  */
 export function useGeofencesPage() {
-  return useCursorPagination<Geofence>(geofenceKeys.list(), async (cursor) => {
-    if (!shouldUseMock()) {
-      try {
-        return await apiGet<Page<Geofence>>('/location/geofences', {
+  return useCursorPagination<Geofence>(geofenceKeys.list(), async (cursor) =>
+    withMockFallback(
+      () =>
+        apiGet<Page<Geofence>>('/location/geofences', {
           limit: 25,
           ...(cursor ? { cursor } : {}),
-        });
-      } catch {
-        return { data: [], nextCursor: null };
-      }
-    }
-    // Mock mode: return all mock geofences as a single page.
-    return resolveMock({ data: [], nextCursor: null });
-  });
+        }),
+      () => resolveMock({ data: [], nextCursor: null }),
+    ),
+  );
 }
 
 /** Create a geofence → POST /location/geofences. */
@@ -85,9 +78,9 @@ export function useCreateGeofence() {
 export function useDeleteGeofence() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: async (id) => {
-      void apiDelete(`/location/geofences/${id}`);
-    },
+    // Awaited (not voided) so real failures surface to the caller's toast —
+    // a silent fire-and-forget would fake success when the backend errors.
+    mutationFn: (id) => apiDelete(`/location/geofences/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: geofenceKeys.all }),
   });
 }

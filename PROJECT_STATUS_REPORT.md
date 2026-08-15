@@ -89,18 +89,63 @@
 >   (re-verified 2026-08-15 after the checkall4-line merge).
 
 
+---
+
+> **Update 2026-08-15 — Sprint E (Real Frontend Integration & Live Tracking) COMPLETE.**
+> The web-dashboard is now a **real backend-connected application**: real login/refresh/401
+> handling against identity-service, a centralized Axios client with typed error classes,
+> real Fleet/Vehicle/Device CRUD + device assignment against fleet-management-service, real
+> dashboard statistics (`/summary` × device statuses), and **real live tracking** (REST
+> bootstrap joined with authenticated Socket.IO `position.update`/`device.status` deltas on a
+> maplibre-gl map, with reconnect/backoff and backend-authoritative status/last-seen). The mock
+> gate is **real-first by default** (fixtures only via explicit `?useMock=true` /
+> `VITE_USE_MOCK=true`); every remaining mock is dev/demo-gated or behind an honest error/empty
+> state. Fixes landed with the integration verification: a P0 `Page<T>` envelope-unwrap bug that
+> broke all registry lists in real mode, several admin IAM wire-shape bugs, ungated mock leaks,
+> error-swallowing fallbacks, service PORT defaults misaligned with the dashboard proxy
+> (gps-engine 3005, notification 3008, fleet-service 3007), and `/auth/me` now returns the real
+> email. New tests: WS lifecycle suite + asset-API wire-contract suite (web-dashboard 20 suites /
+> 154 tests; identity 42, fleet-management 33, gps-engine 108 passing). Full report:
+> `docs/implementation/SPRINT-E-REAL-FRONTEND-LIVE-TRACKING.md`. **Supersedes** every
+> "dashboard is mock-backed / demo-only" statement below in the pre-Sprint-E audit body.
+
+---
+
+> **Update 2026-08-15 — Sprint F (Real Map Engine & Geospatial Tracking) COMPLETE.**
+> The map engine's stubs are gone: **routing is REAL** (OSRM provider behind the
+> capability-aware `MapProvider`/`ProviderRouter` seam — configuration-driven via
+> `OSRM_URL`/`NOMINATIM_URL`, controlled 503s instead of straight-line fabrication),
+> **reverse/forward geocoding is REAL** (Nominatim + the PostGIS `geo.addresses`
+> provider, Redis-cached, geocode-on-demand only), the **local provider's geocode
+> 0,0 bug and POI/geofence coordinate decoding are fixed**, and `/map/heat` +
+> `/map/layers` return real data. gps-engine gained **`GET /positions/nearby` +
+> `/positions/in-bounds`** (single PostGIS queries over a new GIST index on the
+> positions hypertable), a **hardened historical-track endpoint** (validated
+> from<to, ≤31 d, limit-clamped), and a **real Trips REST API** over the existing
+> trip projections (`GET /trips`, `GET /trips/:id` with waypoints + idle/parking
+> events). The dashboard gained **LIVE/HISTORY modes** with a gap-aware track
+> polyline, a real **Route Planner**, reverse-geocoded addresses in the vehicle
+> drawer, diffed markers (per-marker `setLngLat`), and the Trips pages are now
+> data-fed in real mode. Tests: map-engine 43, gps-engine 129 (EXPLAIN-based
+> spatial-plan verification included), web-dashboard 23 suites/174. Full report:
+> `docs/implementation/SPRINT-F-MAP-GEOSPATIAL-TRACKING.md`. **Supersedes** the
+> "routing is straight-line / geocode returns 0,0 / heat is a stub" statements in
+> the pre-Sprint-F audit body below.
+
 ## 0. TL;DR
 
 FleetVision is a **well-engineered monorepo with a strong foundation and one genuinely deep
 end-to-end vertical (device ingest → Kafka → GPS processing → TimescaleDB → WebSocket)**, plus a
-real authentication/IAM service and a polished (but **mock-backed**) React dashboard. The
-implemented slices are production-quality scaffolding with good tests. **However**, most of the
-platform's business breadth is **not started**: video is a stub, routing is an approximation,
-the dashboard is mock-fed for all business data, and ~5 of the 14 documented bounded contexts
-(maintenance, fuel, compliance/HOS, analytics, billing) have no
-service at all. *(Sprint C added the Fleet Management context + a persistent device registry; the
-merged parallel line added `fleet-service` (driver + business-trip management) and
-`notification-service` (alarm engine); the mock dashboard Fleet pages remain future work.)*
+real authentication/IAM service and a **real backend-connected React dashboard** (Sprint E:
+auth, fleet/vehicle/device CRUD + assignment, live tracking over WebSocket, dashboard stats —
+all real; mocks are dev/demo-gated only). The implemented slices are production-quality
+scaffolding with good tests. **However**, much of the platform's business breadth is
+**not started**: video is a stub, routing is an approximation, and ~5 of the 14 documented
+bounded contexts (maintenance, fuel, compliance/HOS, analytics, billing) have no
+service at all — video remains a stub. *(Sprint C added the Fleet Management context; the
+parallel line added `fleet-service` + `notification-service`; Sprint E wired the dashboard to
+real APIs; Sprint F made the map engine real — provider-backed routing/geocoding, spatial
+queries, historical tracks, trip visualization.)*
 
 **Build/typecheck/tests/lint: ALL GREEN (verified 2026-08-15, Sprint D).**
 **Estimated overall completion: ~35 %** (foundation + telemetry vertical production-grade;
@@ -122,9 +167,9 @@ fleetvision/                         (pnpm workspace, packageManager pnpm@9.15.0
 │   ├── fleet-service/               Driver + business-trip management (parallel line) — REAL core
 │   ├── gps-engine-service/          Kafka → Timescale → Redis → WS pipeline (NestJS) — HARDENED
 │   ├── notification-service/        Alarm engine: Kafka → rules → WS (parallel line) — REAL core
-│   ├── map-engine-service/          PostGIS POI/geofence + routing (NestJS) — PARTIAL
+│   ├── map-engine-service/          PostGIS POI/geofence/heat + real routing/geocoding (NestJS) — REAL providers (Sprint F)
 │   ├── media-service/               Video control-plane (NestJS) — STUB media path
-│   └── web-dashboard/               React 19 + Vite + MUI SPA — REAL UI, MOCK data
+│   └── web-dashboard/               React 19 + Vite + MUI SPA — REAL UI, REAL data (Sprint E)
 ├── packages/                        8 shared workspace libs (all foundational, all tested)
 │   ├── shared-kernel/   config/   observability/   persistence-knex/
 │   ├── cache-redis/    health/    auth/    web/
@@ -150,9 +195,9 @@ Per-app summary:
 | fleet-service | NestJS | Driver + business-trip management (parallel line) | ✅ | 122 | COMPLETE (core, unreviewed breadth) | Builds on gps trip segmentation |
 | gps-engine-service | NestJS + socket.io | Position pipeline, trip/idle/parking FSMs | ✅ | 122 | HARDENED (Sprint A fixes + Sprint D reliability) | Kafka consumer real |
 | notification-service | NestJS | Alarm engine: Kafka → rules → occurrences → WS (parallel line) | ✅ | 40 | COMPLETE (core) | Kafka consumer real |
-| map-engine-service | NestJS + PostGIS | POI/geofence/cluster/replay, routing | ✅ | 26 | PARTIAL (routing≈, geocode broken) | PostGIS real |
+| map-engine-service | NestJS + PostGIS | POI/geofence/cluster/replay/heat, routing, geocoding | ✅ | 43 | REAL PROVIDERS (Sprint F: OSRM routing + Nominatim geocoding behind capability router; controlled 503s when unconfigured) | PostGIS + Redis cache real |
 | media-service | NestJS + socket.io | Video channel + stream-session control-plane | ✅ | 58 | STUB (no real SFU/video) | Redis/PG real, media stub |
-| web-dashboard | React 19 + Vite | Full SPA fleet UI | ✅ | 118 | PARTIAL (UI complete, data MOCK) | Only auth is real |
+| web-dashboard | React 19 + Vite | Full SPA fleet UI | ✅ | 154 | INTEGRATED (Sprint E: real auth/fleet/device/live-tracking APIs; dev-only mock gate) | Reports/video/trips await backends |
 
 ---
 
@@ -411,17 +456,18 @@ control-plane mechanics (but stream open returns stub SDP). Tenant-scoped via he
 
 ---
 
-### 2.6 web-dashboard — **PARTIAL (complete polished UI; data is MOCK)**
+### 2.6 web-dashboard — **INTEGRATED (Sprint E: real APIs; mocks dev/demo-gated only)**
 
 A genuinely complete, production-looking React 19 SPA (MUI 6, TanStack Query, react-router 7,
 i18next en/fa + RTL, maplibre-gl, echarts/recharts, zustand, react-hook-form + zod). 19 pages,
 full layout/shell, dark theme, toast/confirm feedback, protected routes.
 
-**The defining fact — `lib/mock-gate.ts`:** **mocks are ON by default in dev AND production.**
-Only `identity-service` exists, so dashboard/map/trips/alarms/reports/assets/video pages are
-**mock-fed** so the UI is "fully demoable." Toggles: `localStorage`/`?useMock=false`/
-`VITE_USE_MOCK=false` turn mocks off (but then most pages return empty defaults because the
-backends don't exist).
+**The defining fact (Sprint E) — `lib/mock-gate.ts` is REAL-FIRST:** mocks are OFF by
+default in dev AND production; fixtures load only via explicit `?useMock=true` /
+`localStorage` / `VITE_USE_MOCK=true`. Auth, fleet/vehicle/device CRUD + assignment, dashboard
+stats, live tracking (REST bootstrap + WebSocket deltas), alarms, geofences, and notifications
+hit real backend services. Domains without a backend (reports, video walls, trips REST,
+admin roles/audit/settings) show honest empty/error states instead of fabricated data.
 
 **Real vs mock API split (measured by grep of `src/api/*.api.ts`):**
 
@@ -436,7 +482,8 @@ backends don't exist).
 | `video.api.ts` | 6 | 2 | **MOCK** |
 | `geofence.api.ts` | 3 | 5 | **MOCK** (a map-engine backend exists, but the client uses mock fallback) |
 
-→ **Only authentication is truly real. Every business domain is mock-backed.**
+→ **(Sprint E) Every module above now leads with its REAL fetcher; the mock column is the
+explicit dev/demo fallback only. The table above is the pre-Sprint-E measurement.**
 
 **Real auth client (`api/client.ts`):** axios with Bearer token, `X-Tenant-Id` header, **401 →
 silent token refresh** with a shared refresh promise (no thundering herd), `{ data }` envelope
@@ -446,10 +493,11 @@ unwrapping, typed error normalization. This is correctly wired against identity-
 MFA manage — each throws with the exact missing endpoint. `MaintenancePage` and `CommandCenterPage`
 are documented typed placeholders (no backend service exists).
 
-**Tests (18 files, 118 cases):** auth.api, auth.store, token.storage, validation, errors,
-live-tracking, + page tests (dashboard, map, trips, reports, assets, admin, alarms, video-wall).
-jsdom; ECharts DOM-size warnings are benign. **Validate rendering/interactions against mock data,
-not real APIs.**
+**Tests (20 files, 154 cases — Sprint E):** auth.api, auth.store, token.storage, validation,
+errors, live-tracking, **realtime-socket (WS connect/auth/subscribe/backoff/room-scoping)**,
+**asset-api (Page cursor + CRUD/assignment wire contracts)**, mock-gate, + page tests
+(dashboard, map, trips, reports, assets, admin, alarms, video-wall). jsdom; ECharts DOM-size
+warnings are benign.
 
 ---
 
@@ -736,7 +784,7 @@ but the README's "Architecture at a Glance" overstates the implementation by a w
 | Telemetry | Packet dispatcher + fail-closed auth | COMPLETE | `packet-dispatcher.ts` | — | P0 |
 | Telemetry | Kafka producer | COMPLETE | `kafka-producer.ts` | — | P0 |
 | Telemetry | Device registry (durable) | ✅ COMPLETE (Sprint C) | `HttpDeviceRegistry` → fleet-management `/devices/resolve` (port unchanged; L1/L2 cache) | gateway→fleet event invalidation (TTL-bounded for now) | P1 |
-| Fleet Mgmt | Fleet / Vehicle / Device domain + registry | ✅ COMPLETE (Sprint C) | `fleet-management-service` (`fleet` schema; CRUD, binding, resolve, audit, tenant-isolated) | mock dashboard Fleet UI | P1 |
+| Fleet Mgmt | Fleet / Vehicle / Device domain + registry | ✅ COMPLETE (Sprint C) | `fleet-management-service` (`fleet` schema; CRUD, binding, resolve, audit, tenant-isolated) | — (dashboard wired in Sprint E) | P1 |
 | Telemetry | Raw packet retention | STUB | `NullRawRetentionSink` | S3/MinIO sink | P2 |
 | Telemetry | Device command dispatch | MISSING | — | gateway has no command path | P2 |
 | Telemetry | Gateway admin API authz | PARTIAL | `admin.controller.ts` (unauth) | add IAM guard | P1 |
@@ -763,7 +811,8 @@ but the README's "Architecture at a Glance" overstates the implementation by a w
 | Media | Recording / playback / HLS | MISSING | — | all absent | P2 |
 | Frontend | Auth (login/refresh/logout) | COMPLETE | `auth.api.ts`, `client.ts` | — | P0 |
 | Frontend | App shell, routing, i18n, theme | COMPLETE | `App.tsx`, `router/`, `theme/`, `i18n/` | — | P1 |
-| Frontend | Dashboard/Map/Trips/Assets/Reports/Alarms/Video/Admin UI | **MOCK** | `mock-gate.ts` + `mock/*-data.ts` | real API integration | P1 |
+| Frontend | Dashboard/Map/Assets/Admin-users | ✅ REAL (Sprint E) | `fleet.api.ts`, `asset.api.ts`, `admin.api.ts`, `useLiveTracking` | trips REST endpoint | P1 |
+| Frontend | Reports/Video/Alarms/Geofence/Notifications | REAL-first with honest empty/error | gated fixtures only | reporting + media backends | P2 |
 | Frontend | Register/Forgot/Reset/MFA pages | STUB | `NotImplementedError` | backend endpoints | P2 |
 | Frontend | Maintenance/Command pages | STUB | typed placeholders | backend services | P2 |
 | Contexts | Fleet/Asset, Driver, Fuel, Compliance, Analytics, Notification, Billing, Trip-service, Alarm-service | **MISSING** | no apps | greenfield services | P1–P2 |
@@ -874,9 +923,9 @@ integration. Applying this:
 | TD5 | In-memory device registry | `device-gateway/.../device-registry.port.ts:60` | can't manage devices | High (blocks real telemetry) | build device-management-service (gRPC/REST + `telemetry.telematics_devices`) | P1 |
 | TD6 | Stale README/docs (Kotlin/K8s) | `README.md`, many `docs/` | misleading | Med | rewrite README to match ADR-021/022 reality | P2 |
 | TD7 | Unused infra (RabbitMQ/MinIO) | `docker-compose.yml` | confusion, resources | Low | remove or wire (raw retention → MinIO) | P3 |
-| TD8 | Frontend mock-gate default-on | `web-dashboard/.../mock-gate.ts` | demo-only data | High (perceived completeness) | build read APIs + flip default off per domain | P1 |
-| TD9 | map geocode returns 0,0 | `map-engine/.../local-provider.ts:27-41` | broken forward geocode | Med | return real `geo.addresses` geom | P1 |
-| TD10 | map routing straight-line | `local-provider.ts:67-88` | wrong distances/ETAs | Med | wire OSRM/Mapbox in `ProviderRouter` | P1 |
+| TD8 | Frontend mock-gate default-on | `web-dashboard/.../mock-gate.ts` | demo-only data | **RESOLVED (Sprint E)** — real-first default; backends built + wired | flip default off per domain | done |
+| TD9 | map geocode returns 0,0 | `map-engine/.../local-provider.ts` | broken forward geocode | **RESOLVED (Sprint F)** — ST_Y/ST_X decode + Nominatim provider | return real `geo.addresses` geom | done |
+| TD10 | map routing straight-line | `map-engine/.../local-provider.ts` | wrong distances/ETAs | **RESOLVED (Sprint F)** — OSRM provider, controlled RouteUnavailableError | wire OSRM/Mapbox in `ProviderRouter` | done |
 | TD11 | StubMediaRouter | `media-service/.../media-router-port.ts:53` | no real video | High (flagship feature) | integrate Pion/mediasoup SFU | P1 |
 | TD12 | ✅ RESOLVED (Sprint D) — bounded retry + `<topic>.dlq` with forensic headers | `gps-engine/.../kafka-consumer.ts` + `message-processor.ts` + `dlq-producer.ts` | — | — | — | done |
 | TD13 | ✅ largely RESOLVED (Sprint D) — real-PG integration suites execute (were silently skipping); real-Kafka E2E added | gps-engine/fleet/gateway | — | — | — | done |
@@ -952,16 +1001,21 @@ management — `fleet-service` (parallel line); Notification & Alerting / Alarm 
 
 ## 21. MOCK_AND_STUB_REPORT
 
-**Frontend mocks (the dominant form of "fake" in this repo):**
-- `apps/web-dashboard/src/mock/{fleet,asset,alarm,report,admin,video}-data.ts` — static datasets.
-- `apps/web-dashboard/src/lib/mock-gate.ts` — mocks **ON by default (dev + prod)**; `withMockFallback`
-  returns mock on network error. Only `auth.api.ts` is mock-free.
+**Frontend mocks (post-Sprint E: dev/demo-gated only, never production defaults):**
+- `apps/web-dashboard/src/mock/{fleet,alarm,report,admin,video}-data.ts` — static datasets,
+  loaded ONLY via the explicit mock gate (`?useMock=true` / `VITE_USE_MOCK=true`).
+- `apps/web-dashboard/src/lib/mock-gate.ts` — **real-first default (OFF)**; `withMockFallback`
+  returns mock only on network error and only in mock mode.
+- Honest no-backend states (not mocks): trips empty; reports empty/rejecting mutations;
+  admin roles/audit empty; admin settings error state; video walls empty.
 - `apps/web-dashboard/src/api/auth.api.ts` — 7 `NotImplementedError` stubs (register/forgot/reset/MFA).
 
-**Backend stubs:**
+**Backend stubs (post-Sprint F):**
 - `media-service` `StubMediaRouter` — synthetic SDP, no-op negotiation/viewer/end.
 - `device-gateway` `InMemoryDeviceRegistry`, `NullRawRetentionSink`.
-- `map-engine` local-provider routing (straight-line), `geocode` (0,0), `/map/heat` (empty), `/map/layers` (static).
+- `map-engine` local-provider `matchRoute`/`snapPoint` remain honest pass-throughs
+  (confidence 0.3, no road graph) — REAL snapping needs OSRM (`OSRM_URL`).
+  The routing/geocode/heat/layers stubs were RESOLVED in Sprint F (see banner).
 - `gps-engine` PTO branch (dead), `stop.detected` (dropped), engine-hours (`void`).
 - Identity `AuditRepository` (defined, never used).
 
@@ -1103,10 +1157,11 @@ Features (sampled ~50 across domains):
 - Broken:      1 (map geocode 0,0 — gps trip-end SQL fixed in Sprint A)
 - Missing:     ~16
 
-Frontend:
+Frontend (post-Sprint E):
 - Pages:       19
-- Real API:    1  (auth only)
-- Mock-backed: ~8 domains (dashboard, map, trips, assets, alarms, reports, admin, video)
+- Real API:    auth + fleet/vehicle/device CRUD + assignment + live tracking (WS) +
+               dashboard stats + alarms + geofences + notifications + admin users
+- Mock-backed: dev/demo-gated only (reports, video, trips fixtures, admin roles/audit/settings)
 - Stub pages:  4  (register, forgot, reset, mfa) + 2 placeholders (maintenance, commands)
 
 Backend APIs:
@@ -1150,12 +1205,13 @@ Overall Project Completion:
 - Estimated:   ~22%  (foundation + telemetry vertical ~65–70%; breadth ~5–10%)
 - Confidence:  Medium-High
 
-One-line verdict (post-Sprint D):
+One-line verdict (post-Sprint F):
   Strong, well-tested foundation + a real auth/IAM service + a fleet/device registry + a
   production-hardened device→gateway→Kafka→GPS→Timescale→Redis→WebSocket telemetry vertical
   (retry+DLQ, idempotent, duplicate-safe, observable, restart-resilient — E2E-proven) + a
-  polished (mock-backed) dashboard — but video is a stub, routing is approximate, ~9 of 14
-  contexts are unbuilt, and the frontend remains demo-only until Sprint E.
+  REAL backend-connected dashboard (live map + history/trips/routing, dev-only mock gate)
+  + a real geospatial layer (provider-backed routing/geocoding, PostGIS spatial queries,
+  historical tracks) — but video is a stub and ~9 of 14 contexts are unbuilt.
 ```
 
 ---

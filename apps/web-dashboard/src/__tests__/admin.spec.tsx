@@ -14,49 +14,53 @@ import { i18n } from '@/i18n';
 // identity-service in the test env). The users endpoint is now real; the rest
 // stays mock via resolveMock.
 vi.mock('@/api/client', () => ({
+  // NOTE: these mocks mimic the REAL client's post-interceptor semantics —
+  // apiGet returns the UNWRAPPED payload (the { data } envelope is stripped),
+  // so the list branch returns the rows array directly, not the wire body.
   apiGet: vi.fn(async (url: string) => {
     if (url === '/iam/users') {
-      // List endpoint.
-      return {
-        data: mockUsers.map((u) => ({
-          id: u.id,
-          tenant_id: 'test-tenant',
-          email: u.email,
-          username: u.username,
-          status: u.status.toUpperCase(),
-          display_name: `${u.firstName} ${u.lastName}`,
-          roles: u.roleIds,
-          mfa_enabled: u.mfaEnabled,
-          last_login_at: u.lastLoginAt ?? null,
-        })),
-        meta: { total: mockUsers.length },
-      };
+      // List endpoint — the real wire body is { data: rows, meta }, which the
+      // client unwraps to the rows array.
+      return mockUsers.map((u) => ({
+        id: u.id,
+        tenant_id: 'test-tenant',
+        email: u.email,
+        username: u.username,
+        status: u.status.toUpperCase(),
+        display_name: `${u.firstName} ${u.lastName}`,
+        roles: u.roleIds,
+        mfa_enabled: u.mfaEnabled,
+        last_login_at: u.lastLoginAt ?? null,
+      }));
     }
     if (url.startsWith('/iam/users/')) {
-      // Detail endpoint — find the user by id.
+      // Detail endpoint — find the user by id; the client unwraps { data }.
       const id = url.split('/').pop();
       const u = mockUsers.find((m) => m.id === id);
-      return {
-        data: u
-          ? {
-              id: u.id,
-              tenant_id: 'test-tenant',
-              email: u.email,
-              username: u.username,
-              status: u.status.toUpperCase(),
-              display_name: `${u.firstName} ${u.lastName}`,
-              roles: u.roleIds,
-              mfa_enabled: u.mfaEnabled,
-              last_login_at: u.lastLoginAt ?? null,
-            }
-          : null,
-      };
+      return u
+        ? {
+            id: u.id,
+            tenant_id: 'test-tenant',
+            email: u.email,
+            username: u.username,
+            status: u.status.toUpperCase(),
+            display_name: `${u.firstName} ${u.lastName}`,
+            roles: u.roleIds,
+            mfa_enabled: u.mfaEnabled,
+            last_login_at: u.lastLoginAt ?? null,
+          }
+        : null;
     }
-    return { data: null };
+    return null;
   }),
   apiClient: { interceptors: { request: { use: () => {} }, response: { use: () => {} } } },
+  apiGetRaw: vi.fn(async () => []),
   apiPost: vi.fn(),
   apiPostNoContent: vi.fn(),
+  apiPut: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(async () => undefined),
+  apiDeleteNoContent: vi.fn(async () => undefined),
 }));
 
 function makeClient() {

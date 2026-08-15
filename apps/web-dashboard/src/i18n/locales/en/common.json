@@ -290,7 +290,8 @@
       "sendMessage": "Message",
       "history": "History",
       "recentEvents": "Recent events",
-      "noEvents": "No recent events"
+      "noEvents": "No recent events",
+      "addressUnavailable": "Address unavailable"
     },
     "presence": {
       "ONLINE": "Online",
@@ -310,7 +311,33 @@
       "disconnected": "Disconnected"
     },
     "emptyTitle": "No vehicles yet",
-    "emptyHelp": "No vehicles are being tracked yet. Vehicles appear here once devices start reporting."
+    "emptyHelp": "No vehicles are being tracked yet. Vehicles appear here once devices start reporting.",
+    "history": {
+      "mode": "HISTORY",
+      "liveMode": "Live mode",
+      "historyMode": "History mode",
+      "range": "Time range",
+      "selectVehicle": "Select a vehicle to load its track",
+      "loading": "Loading track…",
+      "error": "Track failed — click to retry",
+      "points": "{{count}} points",
+      "preset": {
+        "1h": "Last hour",
+        "6h": "Last 6 hours",
+        "24h": "Last 24 hours",
+        "7d": "Last 7 days"
+      }
+    },
+    "route": {
+      "planner": "Route planner",
+      "origin": "Origin (lat,lng or address)",
+      "destination": "Destination (lat,lng or address)",
+      "hint": "Enter coordinates as lat,lng or a place name (geocoded by the map engine).",
+      "compute": "Compute route",
+      "needBoth": "Enter both origin and destination.",
+      "unresolved": "Could not resolve one of the inputs to a location.",
+      "summary": "{{km}} km · ~{{min}} min (via {{provider}})"
+    }
   },
   "trips": {
     "title": "Trips",

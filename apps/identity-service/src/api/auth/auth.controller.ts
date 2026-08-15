@@ -16,6 +16,8 @@ import { LoginUseCase, LogoutUseCase, RefreshTokenUseCase } from '../../applicat
 import { InvalidCredentialsError } from '../../domain/errors.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 import { loginSchema, refreshSchema } from './auth.dto.js';
@@ -29,6 +31,7 @@ export class AuthController {
     private readonly refreshUseCase: RefreshTokenUseCase,
     private readonly logoutUseCase: LogoutUseCase,
     private readonly tenants: TenantRepository,
+    private readonly users: UserRepository,
   ) {}
 
   /**
@@ -147,7 +150,7 @@ export class AuthController {
   }
 
   @Get('me')
-  public me(@Req() req: Request): {
+  public async me(@Req() req: Request): Promise<{
     data: {
       id: string;
       email: string;
@@ -155,12 +158,15 @@ export class AuthController {
       roles: readonly string[];
       permissions: readonly string[];
     };
-  } {
+  }> {
     const p = getPrincipal(req);
+    // Email is not carried in the JWT — hydrate it from the user record so the
+    // dashboard can show the signed-in identity (Sprint E §5).
+    const user = await this.users.findById(p.tenantId, p.userId);
     return {
       data: {
         id: p.userId,
-        email: '', // email not carried in JWT; a use-case could hydrate it
+        email: user?.email ?? '',
         tenant_id: p.tenantId,
         roles: p.roles,
         permissions: p.permissions,

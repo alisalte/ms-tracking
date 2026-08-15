@@ -12,15 +12,19 @@ import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { ClusterService } from '../application/cluster-service.js';
 import { GeofenceService } from '../application/geofence-service.js';
+import { HeatService } from '../application/heat-service.js';
 import { PoiService } from '../application/poi-service.js';
 import { ProviderRouter } from '../application/provider-router.js';
 import { ReplayService } from '../application/replay-service.js';
 import type { MapEngineConfig } from '../config/map-engine.config.js';
+import type { MapProvider } from '../domain/map-provider.js';
 import { RedisGeoCache } from '../infrastructure/cache/redis-geo-cache.js';
 import { GeofenceRepository } from '../infrastructure/persistence/geofence.repository.js';
 import { PoiRepository } from '../infrastructure/persistence/poi.repository.js';
 import { ReplayRepository } from '../infrastructure/persistence/replay.repository.js';
 import { LocalProvider } from '../infrastructure/provider/local-provider.js';
+import { NominatimProvider } from '../infrastructure/provider/nominatim-provider.js';
+import { OsrmProvider } from '../infrastructure/provider/osrm-provider.js';
 import { LocationController } from './location.controller.js';
 import { MapController } from './map.controller.js';
 import { RouteController } from './route.controller.js';
@@ -29,6 +33,7 @@ import {
   GEOFENCE_REPOSITORY,
   GEOFENCE_SERVICE,
   GEO_CACHE,
+  HEAT_SERVICE,
   MAP_ENGINE_CONFIG,
   MAP_PROVIDER,
   POI_REPOSITORY,
@@ -75,7 +80,7 @@ export class MapEngineModule {
             ),
         },
 
-        // --- Provider abstraction (local provider + router) ---
+        // --- Provider abstraction (Sprint F: local + optional OSRM + Nominatim) ---
         {
           provide: MAP_PROVIDER,
           inject: [KNEX_TOKEN, GEO_CACHE],
@@ -84,16 +89,45 @@ export class MapEngineModule {
         },
         {
           provide: PROVIDER_ROUTER,
-          inject: [MAP_PROVIDER, MAP_ENGINE_CONFIG],
-          useFactory: (provider: LocalProvider, cfg: MapEngineConfig) =>
-            new ProviderRouter({
-              providers: new Map([[cfg.MAP_DEFAULT_PROVIDER, provider]]),
+          inject: [MAP_PROVIDER, MAP_ENGINE_CONFIG, GEO_CACHE],
+          useFactory: (local: MapProvider, cfg: MapEngineConfig, cache: RedisGeoCache) => {
+            // Configuration-driven provider selection (Sprint F §5): the local
+            // provider is always registered; OSRM (routing) and Nominatim
+            // (geocoding) register only when their URL is configured. The
+            // router resolves per-capability, so e.g. routing works whenever an
+            // OSRM_URL exists regardless of the default provider.
+            const providers = new Map<string, MapProvider>([['local', local]]);
+            if (cfg.OSRM_URL) {
+              providers.set(
+                'osrm',
+                new OsrmProvider({ baseUrl: cfg.OSRM_URL, profile: cfg.OSRM_PROFILE, cache }),
+              );
+            }
+            if (cfg.NOMINATIM_URL) {
+              providers.set(
+                'nominatim',
+                new NominatimProvider({
+                  baseUrl: cfg.NOMINATIM_URL,
+                  userAgent: cfg.NOMINATIM_USER_AGENT,
+                  cache,
+                }),
+              );
+            }
+            return new ProviderRouter({
+              providers,
               defaultProvider: cfg.MAP_DEFAULT_PROVIDER,
               region: cfg.MAP_PROVIDER_REGION,
-            }),
+            });
+          },
         },
 
         // --- Application services ---
+        {
+          provide: HEAT_SERVICE,
+          inject: [KNEX_TOKEN, GEO_CACHE, MAP_ENGINE_CONFIG],
+          useFactory: (knex: unknown, cache: RedisGeoCache, cfg: MapEngineConfig) =>
+            new HeatService({ knex: knex as never, cache, maxCells: cfg.MAP_MAX_CLUSTERS }),
+        },
         {
           provide: CLUSTER_SERVICE,
           inject: [KNEX_TOKEN, GEO_CACHE, MAP_ENGINE_CONFIG],

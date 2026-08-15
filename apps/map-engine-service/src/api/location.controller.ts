@@ -31,6 +31,7 @@ import type { GeofenceService } from '../application/geofence-service.js';
 import type { PoiService } from '../application/poi-service.js';
 import type { ProviderRouter } from '../application/provider-router.js';
 import { parseBbox } from '../domain/geo-types.js';
+import { MapProviderUnavailableError, RouteUnavailableError } from '../domain/provider-errors.js';
 import { GEOFENCE_SERVICE, POI_SERVICE, PROVIDER_ROUTER } from './tokens.js';
 
 @Controller()
@@ -47,8 +48,12 @@ export class LocationController {
   @RequirePermissions('maps.read')
   public async geocode(@CurrentTenant() tenantId: string, @Query('q') q: string) {
     if (!q) throw new HttpException('Query q required', HttpStatus.BAD_REQUEST);
-    const provider = this.router.select({ tenantId });
-    return provider.geocode({ query: q, tenantId });
+    try {
+      const provider = this.router.selectFor('geocode', { tenantId });
+      return await provider.geocode({ query: q, tenantId });
+    } catch (err) {
+      throw toServiceUnavailable(err);
+    }
   }
 
   @Get('location/reverse')
@@ -63,8 +68,12 @@ export class LocationController {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       throw new HttpException('Valid lat + lng required', HttpStatus.BAD_REQUEST);
     }
-    const provider = this.router.select({ tenantId });
-    return provider.reverseGeocode(latitude, longitude, tenantId);
+    try {
+      const provider = this.router.selectFor('reverseGeocode', { tenantId });
+      return await provider.reverseGeocode(latitude, longitude, tenantId);
+    } catch (err) {
+      throw toServiceUnavailable(err);
+    }
   }
 
   // --- POIs ---
@@ -169,4 +178,17 @@ export class LocationController {
     const geofenceIds = await this.geofenceService.containsPoint(tenantId, latitude, longitude);
     return { geofenceIds };
   }
+}
+
+/** Map controlled provider failures to HTTP 503 (never fabricated data). */
+function toServiceUnavailable(err: unknown): HttpException {
+  if (err instanceof MapProviderUnavailableError || err instanceof RouteUnavailableError) {
+    return new HttpException(
+      { message: err.message, code: err.code },
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+  return err instanceof HttpException
+    ? err
+    : new HttpException('Geocoding failed', HttpStatus.BAD_GATEWAY);
 }

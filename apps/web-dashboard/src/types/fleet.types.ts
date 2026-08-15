@@ -233,8 +233,9 @@ export interface Trip {
   avgSpeed: number;
   /** number of stops (stationary ≥ min-stop-duration, GPSEngine §4). */
   stopCount: number;
-  /** minutes spent idling (ignition ON, speed ≤ idle threshold, §5). */
-  idleMin: number;
+  /** minutes spent idling (ignition ON, speed ≤ idle threshold, §5). Omitted
+   * when the source projection does not expose it (never fabricated). */
+  idleMin?: number;
   /** litres, if fuel data is available. */
   fuelL?: number;
 }
@@ -261,8 +262,9 @@ export interface TripEvent {
   /** ISO timestamp. */
   ts: string;
   type: TripEventType;
-  lat: number;
-  lng: number;
+  /** Position when the projection carries one (idle windows may not). */
+  lat?: number;
+  lng?: number;
   /** Short localized descriptor, e.g. "Customer A" or "128 km/h". */
   label: string;
   /** minutes, for stop/idle events. */

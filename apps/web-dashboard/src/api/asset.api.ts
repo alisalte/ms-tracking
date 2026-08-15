@@ -29,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { mockMapVehicles } from '@/mock/fleet-data';
+import type { Page } from '@/types/api.types';
 import type {
   BindDevicePayload,
   BoundDevice,
@@ -46,8 +47,7 @@ import type {
   Vehicle,
   VehicleStatus,
 } from '@/types/asset.types';
-import type { Page } from '@/types/api.types';
-import { apiDeleteNoContent, apiGet, apiPatch, apiPost } from './client';
+import { apiDeleteNoContent, apiGet, apiGetRaw, apiPatch, apiPost } from './client';
 import { queryKeys } from './query-keys';
 
 // ── Cursor-pagination follower ───────────────────────────────────────────────
@@ -55,12 +55,19 @@ import { queryKeys } from './query-keys';
 const PAGE_SIZE = 200;
 const MAX_PAGES = 50; // hard bound (10k rows) — never loop a broken cursor forever
 
-/** Follow the cursor chain to exhaustion and return every row. */
+/**
+ * Follow the cursor chain to exhaustion and return every row.
+ *
+ * Uses `apiGetRaw` (NOT `apiGet`): the fleet-management LIST endpoints return
+ * `Page<T> { data, nextCursor }` as the RAW top-level body — it is NOT wrapped
+ * in the `{ data }` singleton envelope — so the envelope-unwrapping `apiGet`
+ * would reduce it to the bare rows array and lose `nextCursor`.
+ */
 async function fetchAll<T>(path: string, params?: Record<string, unknown>): Promise<T[]> {
   const out: T[] = [];
   let cursor: string | null | undefined;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const result = await apiGet<Page<T>>(path, { ...params, limit: PAGE_SIZE, cursor });
+    const result = await apiGetRaw<Page<T>>(path, { ...params, limit: PAGE_SIZE, cursor });
     out.push(...result.data);
     cursor = result.nextCursor;
     if (!cursor) break;
@@ -375,7 +382,8 @@ export function useCreateDevice() {
 export function useUpdateDevice() {
   const qc = useQueryClient();
   return useMutation<Device, Error, { id: string; changes: UpdateDevicePayload }>({
-    mutationFn: ({ id, changes }) => apiPatch<UpdateDevicePayload, Device>(`/devices/${id}`, changes),
+    mutationFn: ({ id, changes }) =>
+      apiPatch<UpdateDevicePayload, Device>(`/devices/${id}`, changes),
     onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.assets.deviceDetail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.assets.all });
@@ -402,7 +410,11 @@ export const useDeleteDevice = useDecommissionDevice;
  */
 export function useBindDeviceToVehicle() {
   const qc = useQueryClient();
-  return useMutation<BoundDevice, Error, { vehicleId: string; deviceId: string } & BindDevicePayload>({
+  return useMutation<
+    BoundDevice,
+    Error,
+    { vehicleId: string; deviceId: string } & BindDevicePayload
+  >({
     mutationFn: ({ vehicleId, deviceId, role, isPrimary }) =>
       apiPost<BindDevicePayload, BoundDevice>(`/vehicles/${vehicleId}/devices/${deviceId}`, {
         ...(role ? { role } : {}),

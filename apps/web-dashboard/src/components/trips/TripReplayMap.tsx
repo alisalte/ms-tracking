@@ -92,8 +92,10 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
         },
       });
 
-      // Event markers (stop / idle / overspeed / geofence).
+      // Event markers (stop / idle / overspeed / geofence). Events whose
+      // projection carries no position (idle windows) stay on the timeline only.
       for (const e of events) {
+        if (e.lat === undefined || e.lng === undefined) continue;
         const el = document.createElement('img');
         el.src = markerDataUrl(EVENT_COLOR[e.type]);
         el.alt = `${e.type} marker`;

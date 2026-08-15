@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useChartSeries, useDashboards, useKpis } from '@/api/report.api';
 import { KpiRow } from '@/components/reports/KpiRow';
 import { ReportChart } from '@/components/reports/ReportChart';
+import { shouldUseMock } from '@/lib/mock-gate';
 import { mockChartSeriesById } from '@/mock/report-data';
 import type { Dashboard } from '@/types/report.types';
 import {
@@ -123,7 +124,10 @@ function DashboardWidgets({
         sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(12, 1fr)' }, gap: 2 }}
       >
         {chartWidgets.map((w) => {
-          const series = mockChartSeriesById(w.metricId ?? '');
+          // Chart series have no reporting backend yet — the fixture resolver
+          // runs ONLY in explicit mock mode; real mode keeps the skeleton
+          // (honest "no data" instead of fabricated series — Sprint E §31).
+          const series = shouldUseMock() ? mockChartSeriesById(w.metricId ?? '') : undefined;
           return (
             <Box key={w.id} sx={{ gridColumn: { xs: '1', lg: `span ${Math.min(w.span, 12)}` } }}>
               {series ? (
