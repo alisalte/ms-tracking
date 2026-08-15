@@ -56,6 +56,12 @@ export interface TripBoundaryEvent {
   readonly durationSec: number;
   readonly maxSpeedKmh: number;
   readonly stopCount: number;
+  /**
+   * messageId of the position that triggered this boundary — the idempotency
+   * key for the projection insert (Sprint D §6): a Kafka redelivery re-emits
+   * the same event and must not create a duplicate row.
+   */
+  readonly sourceEventId?: string;
 }
 
 /** Emitted when a trip closes — the location where it ended (07 §5.3). */
@@ -67,6 +73,30 @@ export interface StopDetectedEvent {
   readonly lng: number;
   readonly arrivedAt: Date;
   readonly purpose: 'UNRESOLVED'; // POI resolution via map-engine is a later sprint
+}
+
+/**
+ * Emitted when a trip candidate is discarded as a micro-trip (below
+ * min-trip-distance). Unlike `trip.ended`, this carries no user-facing signal —
+ * its sole purpose is to reconcile the ACTIVE row already persisted on
+ * `trip.started` so it does not remain ACTIVE forever (Sprint A data-integrity
+ * fix). Mirrors the `TripBoundaryEvent` shape plus a discard reason.
+ */
+export interface TripDiscardedEvent {
+  readonly type: 'trip.discarded';
+  readonly vehicleId: string;
+  readonly tenantId: string;
+  readonly startLat: number;
+  readonly startLng: number;
+  readonly endLat: number;
+  readonly endLng: number;
+  readonly startedAt: Date;
+  readonly endedAt: Date;
+  /** Accumulated distance (km) — below the min-trip-distance threshold. */
+  readonly distanceKm: number;
+  readonly durationSec: number;
+  /** Why the trip candidate was discarded. Only MICRO_TRIP today. */
+  readonly reason: 'MICRO_TRIP';
 }
 
 // --- Idle FSM (07 §5.4 / GPSEngine.md §5) ----------------------------------
@@ -96,6 +126,8 @@ export interface IdleEvent {
   readonly startedAt: Date | null;
   readonly endedAt: Date;
   readonly durationSec: number;
+  /** Triggering position's messageId — projection idempotency key (Sprint D §6). */
+  readonly sourceEventId?: string;
 }
 
 // --- Parking FSM (07 §5.5) --------------------------------------------------
@@ -128,6 +160,32 @@ export interface ParkingEvent {
   readonly lat: number;
   readonly lng: number;
   readonly durationSec: number;
+  /** Triggering position's messageId — projection idempotency key (Sprint D §6). */
+  readonly sourceEventId?: string;
+}
+
+// --- Engine-Hours (07 §5.6) -------------------------------------------------
+
+/**
+ * Emitted when the engine-on accumulator flushes on an ignition-off edge (07
+ * §5.6). Persisted durably to `tracking.engine_hours` (Sprint A). `sourceEventId`
+ * is the messageId of the position that triggered the flush — it is the
+ * idempotency key so Kafka redelivery does not double-count engine hours.
+ */
+export interface EngineHoursFlushedEvent {
+  readonly type: 'engine.hours.flushed';
+  readonly vehicleId: string;
+  readonly tenantId: string;
+  /** Ignition-on window duration (seconds) — the flushed accumulator total. */
+  readonly durationSec: number;
+  /** Start of the ignition-on window (derived: windowEnd − durationSec). */
+  readonly windowStart: Date;
+  /** End of the ignition-on window (the flush-trigger position's capturedAt). */
+  readonly windowEnd: Date;
+  /** Engine-hours in decimal hours (durationSec / 3600). */
+  readonly engineHours: number;
+  /** messageId of the position that triggered the flush — idempotency key. */
+  readonly sourceEventId: string;
 }
 
 // --- Threshold config (07 §5.2/§5.4/§5.5; GPSEngine.md Appendix B) ----------

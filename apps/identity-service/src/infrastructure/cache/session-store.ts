@@ -84,28 +84,14 @@ export class SessionStore {
   }
 }
 
-/** Access-token revocation lookups (checked on every guarded request). */
-export class RevocationStore {
-  constructor(private readonly redis: Redis) {}
-
-  /** Revoke a single access token by jti for the remainder of its TTL. */
-  public async revokeToken(jti: string, ttlSeconds: number): Promise<void> {
-    if (ttlSeconds > 0) {
-      await this.redis.set(`revocation:${jti}`, '1', 'EX', ttlSeconds);
-    }
-  }
-
-  /** Revoke all tokens for a user (logout-all) — short global TTL. */
-  public async revokeUser(userId: string, ttlSeconds = 900): Promise<void> {
-    await this.redis.set(`revocation:user:${userId}`, '1', 'EX', ttlSeconds);
-  }
-
-  /** Is this jti or its user revoked? (fail-closed if Redis is unreachable.) */
-  public async isRevoked(jti: string, userId: string): Promise<boolean> {
-    const [t, u] = await this.redis.mget(`revocation:${jti}`, `revocation:user:${userId}`);
-    return t === '1' || u === '1';
-  }
-}
+/**
+ * Access-token revocation lookups (checked on every guarded request). Sprint B:
+ * the canonical `RevocationStore` now lives in `@fleetvision/auth` so every
+ * service shares the same Redis-backed store (a logout/role-change in identity
+ * is honored by all downstream services). Re-exported here to keep identity's
+ * existing import paths (`../../infrastructure/cache/session-store.js`) intact.
+ */
+export { RevocationStore } from '@fleetvision/auth';
 
 /** Refresh-token reuse fast-path mirror. */
 export class RefreshStore {

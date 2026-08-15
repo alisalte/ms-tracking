@@ -2,8 +2,13 @@
  * API-key use-cases — issue (returns plaintext once) and revoke. Keys are
  * Argon2id-hashed at rest (16_Public-API-Platform.md §8.1). The plaintext
  * follows the `fv_<env>_<secret>` format; only the prefix + hash are stored.
+ *
+ * Sprint B: scopes are validated against the creator's own permissions (an API
+ * key may never carry a permission its creator does not have) and a wildcard
+ * creator (`*`, e.g. tenant-admin) may mint any scope.
  */
 import { randomBytes } from 'node:crypto';
+import { WILDCARD_PERMISSION, permissionSatisfies } from '@fleetvision/auth';
 import { Injectable } from '@nestjs/common';
 import { ApiKey as ApiKeyClass, NotFoundError } from '../../domain/index.js';
 import type { ApiKeyRepository } from '../../infrastructure/persistence/api-key.repository.js';
@@ -18,6 +23,8 @@ export interface CreateApiKeyInput {
   readonly expiresAt?: Date | null;
   readonly env?: string;
   readonly correlationId?: string;
+  /** Creator's resolved permissions — scopes must be a subset (Sprint B). */
+  readonly creatorPermissions?: readonly string[];
 }
 
 export interface CreatedApiKey {
@@ -34,6 +41,9 @@ export class CreateApiKeyUseCase {
   ) {}
 
   public async execute(input: CreateApiKeyInput): Promise<CreatedApiKey> {
+    // An API key's scopes cannot exceed what the creator is allowed to do.
+    this.assertScopesWithin(input.scopes, input.creatorPermissions);
+
     const env = input.env ?? 'live';
     const secret = randomBytes(24).toString('base64url');
     const plaintext = `fv_${env}_${secret}`;
@@ -56,6 +66,26 @@ export class CreateApiKeyUseCase {
     );
     await this.apiKeys.save(key, ctx);
     return { id, plaintext, keyPrefix };
+  }
+
+  /**
+   * Every requested scope must be satisfied by the creator's permissions. A
+   * wildcard creator (`*`) may mint any scope. If creator permissions are not
+   * supplied (e.g. a platform/bootstrap path), validation is skipped.
+   */
+  private assertScopesWithin(scopes: readonly string[], creator?: readonly string[]): void {
+    if (!creator || creator.length === 0) return;
+    for (const scope of scopes) {
+      if (scope === WILDCARD_PERMISSION) {
+        if (!creator.includes(WILDCARD_PERMISSION)) {
+          throw new Error('API key scope exceeds creator permissions.');
+        }
+        continue;
+      }
+      if (!permissionSatisfies(creator, scope)) {
+        throw new Error('API key scope exceeds creator permissions.');
+      }
+    }
   }
 }
 

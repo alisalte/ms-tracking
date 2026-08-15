@@ -25,6 +25,15 @@ export class DeviceStatusPipeline {
   constructor(private readonly deps: DeviceStatusPipelineDeps) {}
 
   public async process(record: DeviceStatusRecord): Promise<void> {
+    // Sprint D §7/§8 — a DUPLICATE_SESSION disconnect is the OLD session's
+    // socket being reclaimed after a newer connection took over the device. It
+    // must NOT flip the device to OFFLINE: the new session owns the state now.
+    if (record.state === 'OFFLINE' && record.reason === 'DUPLICATE_SESSION') {
+      this.logger.debug(
+        `Ignoring DUPLICATE_SESSION disconnect for ${record.deviceId} — newer session owns the device.`,
+      );
+      return;
+    }
     try {
       await this.deps.statusRepo.upsert(record);
     } catch (err) {

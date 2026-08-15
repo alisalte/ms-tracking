@@ -1,3 +1,4 @@
+import { authConfigSchema } from '@fleetvision/auth';
 import { baseConfigSchema } from '@fleetvision/config';
 import { z } from 'zod';
 
@@ -9,10 +10,15 @@ import { z } from 'zod';
  * Kafka producer settings. Env var names are the UPPERCASE keys zod reads off
  * process.env (infra/docker/.env for local dev).
  *
+ * Sprint B merges `authConfigSchema` so the ADMIN/control HTTP API verifies the
+ * same JWT as identity-service. The device TCP/UDP protocol listeners are NOT
+ * HTTP routes and remain authenticated by their device-protocol auth (IMEI/serial),
+ * untouched by the HTTP auth guard.
+ *
  * Kafka/Redis are non-fatal at boot (06 §15.4): the service starts even when
  * they are down and reconnects lazily, mirroring the identity-service outbox.
  */
-export const deviceGatewayConfigSchema = baseConfigSchema.merge(
+export const deviceGatewayConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
     /** Admin HTTP port (health + admin API). Protocol listeners open their own ports. */
     GATEWAY_ADMIN_PORT: z.coerce.number().int().min(1).max(65535).default(8081),
@@ -29,8 +35,18 @@ export const deviceGatewayConfigSchema = baseConfigSchema.merge(
     GATEWAY_MAX_CONNECTIONS: z.coerce.number().int().min(1).default(100_000),
     /** TCP idle timeout (seconds) — socket.setTimeout (06 §12.2; default 180s). */
     GATEWAY_TCP_IDLE_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(180),
-    /** Auth grace (seconds) — NEW/IDENTIFY older than this is closed (06 §12.4). */
-    GATEWAY_AUTH_GRACE_SECONDS: z.coerce.number().int().min(1).default(10),
+    /** TCP global session Redis TTL (seconds) — 06 §16.1 default 60s (Sprint D). */
+    GATEWAY_TCP_SESSION_TTL_SECONDS: z.coerce.number().int().min(5).default(60),
+    /** Auth grace (seconds) — NEW/IDENTIFY older than this is swept (06 §12.4). */
+    GATEWAY_AUTH_GRACE_SECONDS: z.coerce.number().int().min(1).default(15),
+    /** Liveness sweep interval (seconds) — dup-detect + auth-grace + UDP TTL (Sprint D §7). */
+    GATEWAY_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(5).default(20),
+    /** Auth-resolver L1 cache TTL (seconds) — default 30s (06 §7.2). */
+    GATEWAY_AUTH_L1_TTL_SECONDS: z.coerce.number().int().min(1).default(30),
+    /** Auth-resolver L1 LRU size — hottest devices kept in-process (06 §7.2). */
+    GATEWAY_AUTH_L1_MAX_ENTRIES: z.coerce.number().int().min(1).default(10_000),
+    /** Auth-resolver L2 Redis TTL (seconds) — default 5m (06 §7.2). */
+    GATEWAY_AUTH_L2_TTL_SECONDS: z.coerce.number().int().min(1).default(300),
     /** Data-liveness factor — stale after factor * reporting interval (06 §12.1). */
     GATEWAY_DATA_STALE_FACTOR: z.coerce.number().int().min(1).default(3),
     /** Default reporting interval (seconds) when a device hasn't declared one. */
@@ -60,6 +76,29 @@ export const deviceGatewayConfigSchema = baseConfigSchema.merge(
       .string()
       .min(1)
       .default('fleetvision.telemetry.session.lifecycle'),
+    /** Kafka producer bounded retry attempts (Sprint D §13). */
+    GATEWAY_KAFKA_RETRIES: z.coerce.number().int().min(0).default(8),
+    /** Kafka producer initial retry backoff (ms) — Sprint D §13. */
+    GATEWAY_KAFKA_RETRY_INITIAL_MS: z.coerce.number().int().min(10).default(300),
+    /** Kafka producer retry backoff ceiling (ms) — Sprint D §13. */
+    GATEWAY_KAFKA_RETRY_MAX_MS: z.coerce.number().int().min(100).default(30_000),
+    /** Kafka producer linger/batch (ms) — 06 §13.2. */
+    GATEWAY_KAFKA_LINGER_MS: z.coerce.number().int().min(0).default(20),
+    /** Expose GET /metrics (Prometheus) — Sprint D §33. */
+    GATEWAY_METRICS_ENABLED: z.coerce.boolean().default(true),
+
+    // --- Fleet device registry (Sprint C) ---
+    // The gateway resolves IMEI → device identity from fleet-management-service over
+    // HTTP (L3, cache-miss only). baseUrl = fleet-management's address; apiKey is the
+    // service API key carrying `device.registry.resolve`. Empty key → fail-closed.
+    FLEET_REGISTRY_URL: z.string().min(1).default('http://localhost:3006'),
+    FLEET_REGISTRY_API_KEY: z.string().default(''),
+    /** Fleet registry resolve HTTP timeout (ms) — Sprint D §12. */
+    FLEET_REGISTRY_TIMEOUT_MS: z.coerce.number().int().min(100).default(3_000),
+    /** Fleet registry bounded retries on TRANSIENT failures (§12). */
+    FLEET_REGISTRY_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
+    /** Fleet registry retry backoff base (ms). */
+    FLEET_REGISTRY_RETRY_BACKOFF_MS: z.coerce.number().int().min(10).default(250),
   }),
 );
 

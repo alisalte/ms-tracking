@@ -83,6 +83,26 @@ export class SessionRedisStore {
     await this.redis.del(this.key(tenantId, deviceId));
   }
 
+  /**
+   * Remove the global session entry ONLY when it still names `sessionId`.
+   *
+   * Sprint D §7: when a reconnect claims the global slot and the OLD session
+   * then closes (its socket EOF arrives late), an unconditional DEL would
+   * destroy the NEW session's entry. The GET-then-DEL is not atomic, but the
+   * race window is the steady-state case (old closes right after new writes)
+   * and worst case only leaves a TTL-bounded (≤60s) stale entry.
+   */
+  public async removeIfSession(
+    tenantId: string,
+    deviceId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const key = this.key(tenantId, deviceId);
+    const current = await this.get(tenantId, deviceId);
+    if (current && current.sessionID !== sessionId) return;
+    await this.redis.del(key);
+  }
+
   /** Convenience: upsert from a domain snapshot. */
   public async upsertSnapshot(
     snapshot: DeviceSessionSnapshot,

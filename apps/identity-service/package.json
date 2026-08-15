@@ -13,6 +13,7 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
+    "@fleetvision/auth": "workspace:*",
     "@fleetvision/cache-redis": "workspace:*",
     "@fleetvision/config": "workspace:*",
     "@fleetvision/health": "workspace:*",

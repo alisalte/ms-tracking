@@ -32,13 +32,16 @@ export interface UdpListenerOptions {
   readonly adapter: ProtocolAdapter;
   readonly port: number;
   readonly host?: string;
-  /** Factory that opens/refreshes a UDP pseudo-session for a source. */
+  /**
+   * Factory that opens/refreshes a UDP pseudo-session for a source. Returning
+   * null drops the datagram (pool full / back-pressure — Sprint D §7).
+   */
   readonly openSession: (init: {
     readonly transport: Transport;
     readonly protocolId: string;
     readonly remoteAddress: string;
     readonly remotePort: number;
-  }) => DeviceSession;
+  }) => DeviceSession | null;
   /** Per-frame handler (the dispatcher). */
   readonly onPacket: UdpPacketHandler;
 }
@@ -107,6 +110,8 @@ export class UdpListener implements OnApplicationShutdown {
       remoteAddress,
       remotePort,
     });
+    // Pool full — drop the datagram (back-pressure; UDP has no connection to reject).
+    if (!session) return;
 
     const ctx: UdpDatagramContext = {
       adapter,

@@ -1,3 +1,4 @@
+import { authConfigSchema } from '@fleetvision/auth';
 import { baseConfigSchema } from '@fleetvision/config';
 import { z } from 'zod';
 
@@ -9,11 +10,14 @@ import { z } from 'zod';
  * GPS-engine-specific knobs: consumer group, topics, WebSocket port, and the
  * freshness/stale thresholds that drive position quality + device status.
  *
+ * Sprint B merges `authConfigSchema` so the service validates the same JWT
+ * secret/issuer/audience as identity-service and verifies tokens locally.
+ *
  * Kafka/Redis/Postgres are non-fatal at boot (07 §15.4, mirroring the gateway):
  * the service starts even when they are down, reconnects lazily, and serves
  * cached/DB data meanwhile.
  */
-export const gpsEngineConfigSchema = baseConfigSchema.merge(
+export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
     /** Postgres/TimescaleDB connection URL. */
     DBURL: z.string().min(1),
@@ -31,12 +35,50 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(
     GPS_KAFKA_POSITION_TOPIC: z.string().min(1).default('fleetvision.telemetry.position.raw'),
     /** Session-lifecycle topic (device online/offline/stale). */
     GPS_KAFKA_SESSION_TOPIC: z.string().min(1).default('fleetvision.telemetry.session.lifecycle'),
+    /**
+     * Sprint D §15 — bounded in-process processing attempts per message before
+     * it is routed to the DLQ. 1 = no retry (fail-fast to DLQ).
+     */
+    GPS_KAFKA_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(3),
+    /** Sprint D §15 — initial retry backoff (ms), doubling per attempt. */
+    GPS_KAFKA_RETRY_BACKOFF_MS: z.coerce.number().int().min(10).default(250),
 
     // --- WebSocket (real-time broadcaster, 07 §11) ---
     /** WebSocket (Socket.IO) port. */
     GPS_WS_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
     /** Enable/disable the WebSocket broadcaster (graceful disable for headless testing). */
     GPS_WS_ENABLED: z.coerce.boolean().default(true),
+    /**
+     * Comma-separated allowed CORS origins for the WebSocket server (Sprint B).
+     * Empty (default) = no cross-origin browser clients (the dashboard must be
+     * listed here to subscribe). NEVER `*` in production.
+     */
+    GPS_WS_CORS_ORIGIN: z.string().default(''),
+    /**
+     * Sprint D §29 — position coalescing window (ms): the broadcaster emits at
+     * most one position update per room per window; intermediate positions are
+     * dropped (latest-position semantics for live tracking). 0 = disabled.
+     */
+    GPS_WS_COALESCE_INTERVAL_MS: z.coerce.number().int().min(0).default(250),
+    /** Sprint D §29 — max rooms one client may subscribe to (bounded memory). */
+    GPS_WS_MAX_ROOMS_PER_CLIENT: z.coerce.number().int().min(1).default(50),
+
+    // --- Device-status liveness (Sprint D §9/§10) ---
+    /**
+     * Throttle for flushing per-position last-seen updates to
+     * tracking.device_status (seconds per device). One UPDATE per device per
+     * window — never one per packet.
+     */
+    GPS_LAST_SEEN_FLUSH_SECONDS: z.coerce.number().int().min(5).default(60),
+    /**
+     * ONLINE→STALE sweep interval (seconds). A device whose last_seen_at is
+     * older than GPS_STALE_AFTER_SECONDS is transitioned to STALE (covers a
+     * crashed gateway that never emitted DISCONNECTED).
+     */
+    GPS_DEVICE_STALE_SWEEP_SECONDS: z.coerce.number().int().min(5).default(60),
+
+    /** Expose GET /metrics (Prometheus) — Sprint D §33. */
+    GPS_METRICS_ENABLED: z.coerce.boolean().default(true),
 
     // --- Position quality + freshness (07 §3.3, §3.4) ---
     /**
@@ -83,6 +125,15 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(
     GPS_MILEAGE_DEDUPE_DISTANCE_M: z.coerce.number().min(0).default(1),
     /** Ignore steps implying a speed above this (km/h jump filter). Default 300. */
     GPS_MILEAGE_MAX_SPEED_KMH: z.coerce.number().min(0).default(300),
+
+    // --- TimescaleDB lifecycle (03 §11.1/§11.2; 07 §9.3/§9.5) ---
+    // Applied once at migration time to the vehicle_positions hypertable. The
+    // migration reads these same env vars (with these defaults); changing the
+    // intervals after first run requires `alter_job` or a follow-up migration.
+    /** Compress vehicle_positions chunks older than this (days). Default 7. */
+    GPS_POSITIONS_COMPRESS_AFTER_DAYS: z.coerce.number().int().min(1).default(7),
+    /** Drop vehicle_positions chunks older than this (days). Default 180. */
+    GPS_POSITIONS_RETENTION_DAYS: z.coerce.number().int().min(1).default(180),
   }),
 );
 

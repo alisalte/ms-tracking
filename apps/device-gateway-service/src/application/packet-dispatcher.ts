@@ -90,6 +90,8 @@ export class PacketDispatcher {
             deviceId: outcome.device.deviceId,
             tenantId: outcome.device.tenantId,
             serialOrImei: msg.serialOrImei,
+            // Registry-sourced trusted vehicle identity (Sprint D §5).
+            vehicleId: outcome.device.pairedVehicleId,
             now: raw.receivedAt,
           });
           await this.deps.sessionManager.registerAuthenticated(session);
@@ -130,6 +132,8 @@ export class PacketDispatcher {
           deviceId: outcome.device.deviceId,
           tenantId: outcome.device.tenantId,
           serialOrImei: msg.serialOrImei,
+          // Registry-sourced trusted vehicle identity (Sprint D §5).
+          vehicleId: outcome.device.pairedVehicleId,
           now: raw.receivedAt,
         });
         await this.deps.sessionManager.registerAuthenticated(session);
@@ -168,6 +172,10 @@ export class PacketDispatcher {
     return new DeviceMessage({
       messageId: msg.messageId,
       deviceId: session.deviceId ?? msg.deviceId,
+      // Registry-sourced trusted identity (Sprint D §5) + per-session
+      // correlation id for end-to-end tracing.
+      vehicleId: session.vehicleId ?? msg.vehicleId ?? null,
+      correlationId: (session.id as string) ?? msg.correlationId ?? null,
       serialOrImei: msg.serialOrImei || session.serialOrImei || '',
       tenantId: session.tenantId ?? msg.tenantId,
       protocolId: msg.protocolId,

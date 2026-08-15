@@ -70,6 +70,12 @@ export interface DeviceSessionProps {
   deviceId: string | null;
   tenantId: string | null;
   serialOrImei: string | null;
+  /**
+   * Vehicle the device is bound to — REGISTRY-SOURCED trusted identity bound at
+   * authentication (Sprint D §5); immutable for the session's life. Null when
+   * the device is unpaired. NEVER taken from the device payload.
+   */
+  vehicleId?: string | null;
   /** First useful payload (POSITION/TELEMETRY) time — drives ACTIVE transition. */
   firstDataAt: Date | null;
   /** Last useful payload time — drives data-liveness / STALE_DATA (06 §12.1). */
@@ -107,6 +113,7 @@ export class DeviceSession extends AggregateRoot<SessionId> {
       deviceId: null,
       tenantId: null,
       serialOrImei: null,
+      vehicleId: null,
       firstDataAt: null,
       lastDataAt: null,
       closeReason: null,
@@ -153,6 +160,9 @@ export class DeviceSession extends AggregateRoot<SessionId> {
   public get serialOrImei(): string | null {
     return this.props.serialOrImei;
   }
+  public get vehicleId(): string | null {
+    return this.props.vehicleId ?? null;
+  }
   public get firstDataAt(): Date | null {
     return this.props.firstDataAt;
   }
@@ -184,18 +194,22 @@ export class DeviceSession extends AggregateRoot<SessionId> {
 
   /**
    * Device resolved and auth ok — IDENTIFY → AUTHENTICATED.
-   * The resolved identity is bound here; it is immutable for the session's life.
+   * The resolved identity (incl. registry-sourced vehicleId) is bound here; it
+   * is immutable for the session's life.
    */
   public authenticate(resolved: {
     deviceId: string;
     tenantId: string;
     serialOrImei: string;
+    /** Registry-sourced vehicle binding (Sprint D §5); null when unpaired. */
+    vehicleId?: string | null;
     now?: Date;
   }): void {
     this.requireFrom(['IDENTIFY'], 'AUTHENTICATED');
     this.props.deviceId = resolved.deviceId;
     this.props.tenantId = resolved.tenantId;
     this.props.serialOrImei = resolved.serialOrImei;
+    this.props.vehicleId = resolved.vehicleId ?? null;
     this.props.state = 'AUTHENTICATED';
     this.touch(resolved.now ?? new Date());
   }

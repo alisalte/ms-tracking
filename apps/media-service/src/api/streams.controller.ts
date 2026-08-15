@@ -1,3 +1,9 @@
+import {
+  type AuthenticatedContext,
+  CurrentTenant,
+  CurrentUser,
+  RequirePermissions,
+} from '@fleetvision/auth';
 /**
  * Streams + Channels REST API (09 §5; 10 §3.1).
  *
@@ -8,6 +14,11 @@
  *   GET    /channels/:id          — channel detail.
  *   POST   /channels              — register a channel.
  *   GET    /vehicles/:id/channels — list a vehicle's cameras (multi-channel).
+ *
+ * Sprint B: authentication enforced globally; reads require `media.read`,
+ * stream/channel create+close require `media.write`. Tenant + userId are taken
+ * from the verified JWT (INV-I02) — never from the request body. Closing a
+ * session is tenant-scoped (WS7): a cross-tenant caller gets 404.
  */
 import {
   Body,
@@ -20,9 +31,7 @@ import {
   Param,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import type { ChannelManager } from '../application/channel-manager.js';
 import type { StreamManager } from '../application/stream-manager.js';
 import { CHANNEL_MANAGER, STREAM_MANAGER } from './tokens.js';
@@ -37,22 +46,31 @@ export class StreamsController {
   // --- Stream sessions ---
 
   @Post('streams')
-  public async openStream(@Body() body: Record<string, unknown>, @Req() req: Request) {
-    const tenantId = tenantOf(req);
+  @RequirePermissions('media.write')
+  public async openStream(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const tenantId = auth.tenantId;
     const channelId = String(body.channelId ?? '');
     if (!channelId) throw new HttpException('channelId required', HttpStatus.BAD_REQUEST);
     const channel = await this.channels.findById(channelId, tenantId);
     if (!channel) throw new HttpException('Channel not found', HttpStatus.NOT_FOUND);
+    // userId comes from the verified principal, NOT the request body (WS7).
     return this.streams.openSession(channel, {
-      userId: body.userId ? String(body.userId) : null,
+      userId: auth.authMethod === 'API_KEY' ? null : auth.userId,
       quality: body.quality ? String(body.quality) : 'auto',
       mode: body.mode ? String(body.mode) : 'LIVE',
     });
   }
 
   @Post('streams/batch')
-  public async openBatch(@Body() body: Record<string, unknown>, @Req() req: Request) {
-    const tenantId = tenantOf(req);
+  @RequirePermissions('media.write')
+  public async openBatch(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const tenantId = auth.tenantId;
     const channelIds = (body.channelIds as string[]) ?? [];
     if (channelIds.length === 0) {
       throw new HttpException('channelIds required', HttpStatus.BAD_REQUEST);
@@ -62,6 +80,7 @@ export class StreamsController {
         const channel = await this.channels.findById(cid, tenantId);
         if (!channel) throw new Error(`Channel ${cid} not found`);
         return this.streams.openSession(channel, {
+          userId: auth.authMethod === 'API_KEY' ? null : auth.userId,
           quality: body.quality ? String(body.quality) : 'auto',
         });
       }),
@@ -85,35 +104,45 @@ export class StreamsController {
   }
 
   @Delete('streams/:id')
-  public async closeStream(@Param('id') id: string) {
-    await this.streams.closeSession(id);
+  @RequirePermissions('media.write')
+  public async closeStream(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    const updated = await this.streams.closeSessionForTenant(id, tenantId);
+    if (updated === 0) {
+      // Cross-tenant or unknown — no existence oracle.
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
     return { closed: true };
   }
 
   // --- Channels ---
 
   @Get('channels')
+  @RequirePermissions('media.read')
   public async listChannels(
+    @CurrentTenant() tenantId: string,
     @Query('vehicleId') vehicleId: string | undefined,
-    @Req() req: Request,
   ) {
-    const tenantId = tenantOf(req);
     return vehicleId
       ? this.channels.listByVehicle(tenantId, vehicleId)
       : this.channels.listByTenant(tenantId);
   }
 
   @Get('channels/:id')
-  public async getChannel(@Param('id') id: string, @Req() req: Request) {
-    const ch = await this.channels.findById(id, tenantOf(req));
+  @RequirePermissions('media.read')
+  public async getChannel(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    const ch = await this.channels.findById(id, tenantId);
     if (!ch) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return ch;
   }
 
   @Post('channels')
-  public async registerChannel(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  @RequirePermissions('media.write')
+  public async registerChannel(
+    @CurrentTenant() tenantId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.channels.register({
-      tenantId: tenantOf(req),
+      tenantId,
       vehicleId: body.vehicleId ? String(body.vehicleId) : null,
       siteId: body.siteId ? String(body.siteId) : null,
       deviceId: body.deviceId ? String(body.deviceId) : null,
@@ -127,16 +156,8 @@ export class StreamsController {
   }
 
   @Get('vehicles/:id/channels')
-  public async vehicleChannels(@Param('id') id: string, @Req() req: Request) {
-    return this.channels.listByVehicle(tenantOf(req), id);
+  @RequirePermissions('media.read')
+  public async vehicleChannels(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.channels.listByVehicle(tenantId, id);
   }
-}
-
-function tenantOf(req: Request): string {
-  const tid =
-    (req.headers['tenant-id'] as string | undefined) ??
-    (req.query['tenant-id'] as string | undefined);
-  if (!tid)
-    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
-  return tid;
 }

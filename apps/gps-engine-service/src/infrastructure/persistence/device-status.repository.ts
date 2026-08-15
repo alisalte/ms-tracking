@@ -31,11 +31,16 @@ export class DeviceStatusRepository {
       .merge();
   }
 
-  /** Read a device's current status. Null if unknown. */
-  public async find(deviceId: string): Promise<DeviceStatusRecord | null> {
+  /**
+   * Read a device's current status, scoped to the caller's tenant (Sprint B
+   * WS7). Null if unknown OR if the device belongs to a different tenant — so a
+   * cross-tenant caller learns nothing (no enumeration oracle).
+   */
+  public async find(tenantId: string, deviceId: string): Promise<DeviceStatusRecord | null> {
     const row = await this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
       .whereRaw('device_id = ?::uuid', [deviceId])
       .first();
     if (!row) return null;
@@ -47,5 +52,60 @@ export class DeviceStatusRepository {
       reason: row.reason ?? null,
       lastSeenAt: new Date(row.last_seen_at),
     });
+  }
+
+  /**
+   * Refresh last_seen_at only (Sprint D §9). Called throttled from the position
+   * pipeline (≈ once per GPS_LAST_SEEN_FLUSH_SECONDS per device — never per
+   * packet). UPDATE-only: 0 rows when the lifecycle pipeline hasn't created the
+   * device's row yet (it will, on the next lifecycle event).
+   */
+  public async touchLastSeen(
+    tenantId: string,
+    deviceId: string,
+    lastSeenAt: Date,
+  ): Promise<void> {
+    await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('device_id = ?::uuid', [deviceId])
+      .update({ last_seen_at: lastSeenAt, updated_at: this.knex.fn.now() });
+  }
+
+  /**
+   * ONLINE → STALE sweep (Sprint D §10): transitions devices whose last_seen_at
+   * is older than `staleAfterSeconds` (covers a crashed gateway that never
+   * emitted DISCONNECTED — the Redis session entry TTL-expires and the next
+   * reconnect re-ONLINEs the device). Returns the transitioned rows so the
+   * caller can broadcast STALE signals.
+   */
+  public async markStale(
+    staleAfterSeconds: number,
+    limit = 500,
+  ): Promise<DeviceStatusRecord[]> {
+    const rows = (await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('state = \'ONLINE\' AND last_seen_at < now() - (? || \' seconds\')::interval', [
+        String(staleAfterSeconds),
+      ])
+      .limit(limit)
+      .update({ state: 'STALE', updated_at: this.knex.fn.now() })
+      .returning(['device_id', 'tenant_id', 'state', 'protocol_id', 'reason', 'last_seen_at'])) as Record<
+      string,
+      unknown
+    >[];
+    return rows.map(
+      (row) =>
+        new DeviceStatusRecord({
+          deviceId: String(row.device_id),
+          tenantId: String(row.tenant_id),
+          state: row.state as DeviceStatusRecord['state'],
+          protocolId: (row.protocol_id as string | null) ?? null,
+          reason: (row.reason as string | null) ?? null,
+          lastSeenAt: new Date(row.last_seen_at as string),
+        }),
+    );
   }
 }

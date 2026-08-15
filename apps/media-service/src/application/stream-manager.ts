@@ -172,7 +172,32 @@ export class StreamManager {
       set.delete(sessionId);
       if (set.size === 0) this.channelSessions.delete(session.channelId);
     }
-    this.logger.log(`Closed session ${sessionId}.`);
+  }
+
+  /**
+   * Close a session scoped to the caller's tenant (Sprint B WS7). Returns the
+   * number of persisted rows updated — 0 means the session belongs to another
+   * tenant or is unknown (the caller maps that to 404, no existence oracle).
+   * Only tears down the live source when the session is active in THIS process
+   * AND owned by the caller's tenant.
+   */
+  public async closeSessionForTenant(sessionId: string, tenantId: string): Promise<number> {
+    const session = this.sessions.get(sessionId);
+    if (session && session.tenantId === tenantId) {
+      await this.deps.router.endStreamSession(sessionId);
+      await this.deps.sessionRepo.close(sessionId, tenantId);
+      await this.deps.sessionCache.deleteToken(sessionId);
+      this.sessions.delete(sessionId);
+      const set = this.channelSessions.get(session.channelId);
+      if (set) {
+        set.delete(sessionId);
+        if (set.size === 0) this.channelSessions.delete(session.channelId);
+      }
+      return 1;
+    }
+    // Not active here — still persist a tenant-scoped close (covers sessions
+    // opened on another pod / before a restart). 0 rows → cross-tenant/unknown.
+    return this.deps.sessionRepo.close(sessionId, tenantId);
   }
 
   private channelSessionSet(channelId: string): Set<string> {

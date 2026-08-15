@@ -2,16 +2,21 @@
  * AppModule — the composition root for gps-engine-service.
  *
  * Wires the cross-cutting modules (config → logger → persistence → redis →
- * health) in dependency order, then the GpsEngineModule (Kafka position consumer,
- * session-lifecycle consumer, position pipeline, Redis caches, WebSocket
- * broadcaster, REST API). Migrations run eagerly inside PersistenceModule before
- * the HTTP server starts.
+ * health → metrics) in dependency order, then the GpsEngineModule (Kafka
+ * position consumer + DLQ, session-lifecycle consumer, position pipeline, Redis
+ * caches, WebSocket broadcaster, REST API). Migrations run eagerly inside
+ * PersistenceModule before the HTTP server starts.
+ *
+ * Sprint D: /metrics (Prometheus) + Kafka-consumer readiness (§33/§35). The
+ * same GpsEngineModule instance is passed to HealthModule.forRoot so its
+ * exported readiness indicators are injectable there (Nest instantiates it once).
  */
 import { join } from 'node:path';
+import { AuthModule } from '@fleetvision/auth';
 import { RedisModule } from '@fleetvision/cache-redis';
 import { type BaseConfig, ConfigModule } from '@fleetvision/config';
 import { HealthModule } from '@fleetvision/health';
-import { LoggerModule } from '@fleetvision/observability';
+import { LoggerModule, MetricsModule } from '@fleetvision/observability';
 import { PersistenceModule } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { GpsEngineModule } from './api/gps-engine.module.js';
@@ -20,6 +25,7 @@ import { type GpsEngineConfig, gpsEngineConfigSchema } from './config/gps-engine
 @Module({})
 export class AppModule {
   public static forRoot(config: GpsEngineConfig): DynamicModule {
+    const engineModule = GpsEngineModule.forRoot(config);
     return {
       module: AppModule,
       imports: [
@@ -36,8 +42,23 @@ export class AppModule {
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
-        HealthModule,
-        GpsEngineModule.forRoot(config),
+        // Sprint B: JWT/API-key auth + global CompositeAuthGuard + PermissionsGuard.
+        AuthModule.forRoot({
+          jwt: {
+            JWT_SECRET: config.JWT_SECRET,
+            JWT_ISSUER: config.JWT_ISSUER,
+            JWT_AUDIENCE: config.JWT_AUDIENCE,
+          },
+        }),
+        // Sprint D §33 — Prometheus /metrics endpoint.
+        MetricsModule.forRoot({
+          telemetry: { prefix: 'fleetvision' },
+          exposeEndpoint: config.GPS_METRICS_ENABLED,
+        }),
+        // Sprint D §35 — readiness includes the Kafka consumer (via the SAME
+        // engine module instance, whose indicators are exported).
+        HealthModule.forRoot({ imports: [engineModule] }),
+        engineModule,
       ],
     };
   }

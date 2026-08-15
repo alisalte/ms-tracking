@@ -1,11 +1,15 @@
+import { RequirePermissions } from '@fleetvision/auth';
 /**
  * Admin REST API (06 §11.4 queries, §9.4 hot reload).
  *
  * Read-only introspection + adapter enable/disable. Mounted under the admin HTTP
- * port (GATEWAY_ADMIN_PORT). Sprint 3 ships these endpoints unauthenticated for
- * local/cluster-internal use; production guards them behind the platform IAM
- * permission `telemetry.gateway.manage` (02 §6) via the auth package's guards
- * once that wiring lands for this service.
+ * port (GATEWAY_ADMIN_PORT).
+ *
+ * Sprint B: these endpoints are protected by JWT authentication + the
+ * `telemetry.gateway.manage` permission (02 §6), enforced by the global
+ * CompositeAuthGuard + PermissionsGuard. The device TCP/UDP protocol listeners
+ * are NOT HTTP routes and remain authenticated by device-protocol auth
+ * (IMEI/serial) — they are unaffected by this guard.
  */
 import { Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import type { ConnectionPool } from '../../application/connection-pool.js';
@@ -14,6 +18,7 @@ import type { AdapterRegistry } from '../../infrastructure/protocol/index.js';
 import { ADAPTER_REGISTRY, CONNECTION_POOL, SESSION_MANAGER } from '../tokens.js';
 
 @Controller('admin')
+@RequirePermissions('telemetry.gateway.manage')
 export class AdminController {
   constructor(
     @Inject(ADAPTER_REGISTRY) private readonly adapters: AdapterRegistry,

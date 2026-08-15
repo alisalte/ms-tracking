@@ -3,30 +3,22 @@
  * exactly once at creation (16_Public-API-Platform.md §8.1). Base
  * `/api/v1/auth/api-keys`.
  */
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { CreateApiKeyUseCase, RevokeApiKeyUseCase } from '../../application/index.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { ApiKeyRepository } from '../../infrastructure/persistence/api-key.repository.js';
-import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
-import { PermissionsGuard, RequirePermissions } from '../shared/permissions.guard.js';
+import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 import { createApiKeySchema } from './auth.dto.js';
 
+/**
+ * API keys management. Authentication + RBAC are enforced by the global guards
+ * (CompositeAuthGuard + PermissionsGuard); each route declares its permission.
+ */
 @Controller('api/v1/auth/api-keys')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ApiKeysController {
   constructor(
     private readonly createUseCase: CreateApiKeyUseCase,
@@ -70,6 +62,7 @@ export class ApiKeysController {
       scopes: body.scopes,
       assignedUserId: body.assigned_user_id ?? undefined,
       expiresAt: body.expires_at ? new Date(body.expires_at) : null,
+      creatorPermissions: p.permissions,
     });
     // Plaintext returned once.
     return {

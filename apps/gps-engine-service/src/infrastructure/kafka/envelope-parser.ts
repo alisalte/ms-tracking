@@ -3,21 +3,38 @@ import { DeviceStatusRecord, mapSessionState } from '../../domain/device-status.
  * CloudEvents envelope parser — device-gateway JSON → domain objects.
  *
  * The gateway produces CloudEvents-aligned JSON (06 §13.2 `toEnvelope`) with
- * fields: specversion, type, time, id, messageId, deviceId, tenantId, protocolId,
- * messageType, timestamp, position{latitude, longitude, speedKph, headingDeg,
- * altitudeM, satellites, ignitionOn}, alarms, telemetry, io, rawSize, checksum.
+ * fields: specversion, type, time, id, messageId, correlationId, deviceId,
+ * vehicleId, tenantId, protocolId, messageType, timestamp, position{latitude,
+ * longitude, speedKph, headingDeg, altitudeM, satellites, ignitionOn}, alarms,
+ * telemetry, io, rawSize, checksum.
  *
- * This module parses that JSON into the GPS engine's domain objects, validating
- * the presence of the fields the pipeline needs. Throws on a malformed envelope
- * so the consumer can route it to the DLQ / bump the error metric.
+ * Sprint D §18/§22 hardening: this is the consumer-boundary validator. All
+ * structural validation failures throw `EnvelopeValidationError` — a
+ * NON-RETRYABLE class (a malformed event will never parse, so retrying is
+ * pointless; the consumer routes it straight to the DLQ). Timestamps are
+ * strictly validated (an unparseable date previously produced `Invalid Date`,
+ * sailed through quality validation as NaN comparisons, and got persisted).
+ *
+ * The gateway's `vehicleId` is the REGISTRY-SOURCED trusted identity (Sprint D
+ * §5); when absent (pre-Sprint-D producers), the parser falls back to deviceId
+ * — the documented Sprint-7 semantic.
  */
 import { PositionEvent } from '../../domain/position-event.js';
+
+/** Structural validation failure — non-retryable (Sprint D §18). */
+export class EnvelopeValidationError extends Error {
+  public override readonly name = 'EnvelopeValidationError';
+  constructor(message: string) {
+    super(message);
+  }
+}
 
 /** Raw envelope shape produced by the device-gateway (a subset we consume). */
 interface PositionEnvelope {
   readonly messageId?: string;
   readonly id?: string;
   readonly deviceId?: string;
+  readonly vehicleId?: string | null;
   readonly tenantId?: string;
   readonly protocolId?: string;
   readonly messageType?: string;
@@ -34,28 +51,69 @@ interface PositionEnvelope {
   };
 }
 
+/** Require a string field (null/undefined/empty → EnvelopeValidationError). */
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new EnvelopeValidationError(`envelope ${field} missing/not-a-string`);
+  }
+  return value;
+}
+
+/** Parse a timestamp field; unparseable/absent (when required) → error (§22). */
+function parseTimestamp(value: unknown, field: string, fallback: Date | null): Date {
+  if (value === undefined || value === null || value === '') {
+    if (fallback) return fallback;
+    throw new EnvelopeValidationError(`envelope ${field} missing`);
+  }
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    throw new EnvelopeValidationError(`envelope ${field} not a string/number`);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    throw new EnvelopeValidationError(`envelope ${field} is not a valid date: ${String(value)}`);
+  }
+  return d;
+}
+
 /** Parse a CloudEvents JSON buffer/string into a PositionEvent (pre-quality). */
 export function parsePositionEnvelope(raw: Buffer | string): PositionEvent {
-  const env = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8')) as PositionEnvelope;
-  const messageId = env.messageId ?? env.id;
-  if (!messageId) throw new Error('envelope missing messageId/id');
-  if (!env.deviceId) throw new Error('envelope missing deviceId');
-  if (!env.tenantId) throw new Error('envelope missing tenantId');
-  if (!env.position) throw new Error('envelope missing position');
+  let env: PositionEnvelope;
+  try {
+    env = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8')) as PositionEnvelope;
+  } catch (err) {
+    throw new EnvelopeValidationError(`envelope is not valid JSON: ${(err as Error).message}`);
+  }
+  if (env === null || typeof env !== 'object' || Array.isArray(env)) {
+    throw new EnvelopeValidationError('envelope is not a JSON object');
+  }
+
+  const messageId = requireString(env.messageId ?? env.id, 'messageId/id');
+  const deviceId = requireString(env.deviceId, 'deviceId');
+  const tenantId = requireString(env.tenantId, 'tenantId');
+  if (!env.position || typeof env.position !== 'object') {
+    throw new EnvelopeValidationError('envelope missing position');
+  }
 
   const pos = env.position;
   if (typeof pos.latitude !== 'number' || typeof pos.longitude !== 'number') {
-    throw new Error('envelope position missing numeric latitude/longitude');
+    throw new EnvelopeValidationError('envelope position missing numeric latitude/longitude');
+  }
+  if (!Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) {
+    throw new EnvelopeValidationError('envelope position latitude/longitude not finite');
   }
 
-  const capturedAt = env.timestamp ? new Date(env.timestamp) : new Date();
-  const ingestedAt = env.time ? new Date(env.time) : new Date();
+  // §22 — event time (device timestamp) and ingestion time (gateway `time`).
+  // Never overwrite device event time with server time; both are stored.
+  const capturedAt = parseTimestamp(env.timestamp, 'timestamp', null);
+  const ingestedAt = parseTimestamp(env.time, 'time', new Date());
 
   return new PositionEvent({
     messageId,
-    // Sprint 7: deviceId is the entity key (see position-event.ts doc).
-    vehicleId: env.deviceId,
-    tenantId: env.tenantId,
+    // Sprint 7: deviceId is the entity key; the registry-sourced vehicleId
+    // (Sprint D §5) overrides it when the gateway provides one.
+    vehicleId:
+      typeof env.vehicleId === 'string' && env.vehicleId.length > 0 ? env.vehicleId : deviceId,
+    tenantId,
     latitude: pos.latitude,
     longitude: pos.longitude,
     speedKph: pos.speedKph ?? 0,
@@ -83,17 +141,25 @@ interface SessionEnvelope {
 
 /** Parse a session-lifecycle CloudEvents JSON into a DeviceStatusRecord. */
 export function parseSessionEnvelope(raw: Buffer | string): DeviceStatusRecord {
-  const env = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8')) as SessionEnvelope;
-  if (!env.deviceId) throw new Error('session envelope missing deviceId');
-  if (!env.tenantId) throw new Error('session envelope missing tenantId');
-  if (!env.state) throw new Error('session envelope missing state');
+  let env: SessionEnvelope;
+  try {
+    env = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8')) as SessionEnvelope;
+  } catch (err) {
+    throw new EnvelopeValidationError(`session envelope is not valid JSON: ${(err as Error).message}`);
+  }
+  if (env === null || typeof env !== 'object' || Array.isArray(env)) {
+    throw new EnvelopeValidationError('session envelope is not a JSON object');
+  }
+  const deviceId = requireString(env.deviceId, 'deviceId');
+  const tenantId = requireString(env.tenantId, 'tenantId');
+  const state = requireString(env.state, 'state');
 
   return new DeviceStatusRecord({
-    deviceId: env.deviceId,
-    tenantId: env.tenantId,
-    state: mapSessionState(env.state),
+    deviceId,
+    tenantId,
+    state: mapSessionState(state),
     protocolId: env.protocolId ?? null,
     reason: env.reason ?? null,
-    lastSeenAt: env.time ? new Date(env.time) : new Date(),
+    lastSeenAt: parseTimestamp(env.time, 'time', new Date()),
   });
 }

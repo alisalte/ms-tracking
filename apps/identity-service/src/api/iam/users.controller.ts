@@ -3,7 +3,7 @@
  * routes require a JWT + the relevant IAM permission. tenant_id comes from the
  * principal, never the body (INV-I02).
  */
-import { Body, Controller, Get, HttpCode, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Req } from '@nestjs/common';
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import {
@@ -14,13 +14,16 @@ import {
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import { createUserSchema } from '../auth/auth.dto.js';
-import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
-import { PermissionsGuard, RequirePermissions } from '../shared/permissions.guard.js';
+import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 
+/**
+ * Users admin management. Authentication + RBAC are enforced by the global
+ * guards; each route declares its permission. tenant_id comes from the
+ * principal (INV-I02).
+ */
 @Controller('api/v1/iam/users')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class UsersController {
   constructor(
     private readonly createUserUseCase: CreateUserUseCase,

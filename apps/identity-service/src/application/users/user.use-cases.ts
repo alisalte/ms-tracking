@@ -12,6 +12,7 @@ import {
 } from '../../domain/index.js';
 import { User as UserClass } from '../../domain/index.js';
 import { assertPasswordPolicy } from '../../domain/password-policy.js';
+import type { RevocationStore } from '../../infrastructure/cache/session-store.js';
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
 import { buildEventContext } from '../shared/context.js';
@@ -93,13 +94,25 @@ export class UpdateUserUseCase {
   }
 }
 
+/**
+ * Assign-role use-case. After a role grant the user's permission set changes,
+ * so any outstanding access token (which carries the previous permission union,
+ * Sprint B) must be invalidated: setting `revocation:user:<uid>` kills the
+ * user's tokens within the access-token TTL — the client then refreshes and
+ * obtains a token with the new permissions.
+ */
 @Injectable()
 export class AssignRoleUseCase {
-  constructor(private readonly users: UserRepository) {}
+  constructor(
+    private readonly users: UserRepository,
+    private readonly revocation: RevocationStore,
+    private readonly config: { accessTtlSeconds: number },
+  ) {}
 
   public async execute(input: AssignRoleInput): Promise<void> {
     const user = await this.users.findById(input.tenantId, input.userId);
     if (!user) throw new NotFoundError('User');
     await this.users.assignRole(input.tenantId, input.userId, input.roleId);
+    await this.revocation.revokeUser(input.userId, this.config.accessTtlSeconds);
   }
 }

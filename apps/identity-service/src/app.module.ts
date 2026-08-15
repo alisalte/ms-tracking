@@ -35,7 +35,7 @@ export class AppModule {
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
-        HealthModule,
+        HealthModule.forRoot(),
         AuthModule.forRoot(config),
       ],
       providers: [{ provide: 'IDENTITY_CONFIG', useValue: config }],

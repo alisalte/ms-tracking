@@ -45,8 +45,12 @@ export class SignalingGateway implements OnApplicationBootstrap, OnApplicationSh
   }
 
   private async start(): Promise<void> {
+    // Sprint B: CORS restricted to a configured origin list (no wildcard).
+    const corsOrigin = this.deps.config.MEDIA_WS_CORS_ORIGIN.split(',')
+      .map((o) => o.trim())
+      .filter((o) => o.length > 0);
     const io = new IoServer(this.deps.config.MEDIA_WS_PORT, {
-      cors: { origin: '*' },
+      cors: { origin: corsOrigin, methods: ['GET', 'POST'] },
       maxHttpBufferSize: 1e6,
       pingTimeout: 30_000,
     });

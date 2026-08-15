@@ -42,15 +42,21 @@ export interface TcpListenerOptions {
   readonly host?: string;
   /** Idle timeout (ms) — socket.setTimeout, reset on each framed read (06 §3.3). */
   readonly idleTimeoutMs: number;
-  /** Factory that opens a DeviceSession for a newly accepted socket. */
+  /**
+   * Factory that opens a DeviceSession for a newly accepted socket. Returning
+   * null REJECTS the connection (pool full / back-pressure) — the socket is
+   * destroyed so the load balancer retries another pod (Sprint D §7).
+   */
   readonly openSession: (init: {
     readonly transport: Transport;
     readonly protocolId: string;
     readonly remoteAddress: string;
     readonly remotePort: number;
-  }) => DeviceSession;
+  }) => DeviceSession | null;
   /** Per-frame handler (the dispatcher). */
   readonly onPacket: TcpPacketHandler;
+  /** Called once after a session is opened (register transport terminator, §7). */
+  readonly onOpen?: (ctx: TcpConnectionContext) => void;
   /** Called once when the socket closes (graceful teardown hook). */
   readonly onClose?: (ctx: TcpConnectionContext, reason: string) => void;
   /** Called on an inbound-error before the socket closes. */
@@ -101,7 +107,8 @@ export class TcpListener implements OnApplicationShutdown {
   private handle(socket: Socket): void {
     const remoteAddress = socket.remoteAddress ?? 'unknown';
     const remotePort = socket.remotePort ?? 0;
-    const { adapter, openSession, onClose, onError, onIdleTimeout, idleTimeoutMs } = this.options;
+    const { adapter, openSession, onClose, onOpen, onError, onIdleTimeout, idleTimeoutMs } =
+      this.options;
 
     socket.setNoDelay(true);
     socket.setTimeout(idleTimeoutMs);
@@ -112,9 +119,18 @@ export class TcpListener implements OnApplicationShutdown {
       remoteAddress,
       remotePort,
     });
+    // Sprint D §7 — pool full: reject by destroying the socket (LB retries).
+    if (!session) {
+      socket.destroy();
+      return;
+    }
     const reader = new ByteReader();
     const ctx: TcpConnectionContext = { socket, session, adapter, remoteAddress, remotePort };
     let closed = false;
+
+    // Register the transport terminator so manager-initiated closes (duplicate
+    // session, sweep, shutdown) also destroy this socket (Sprint D §7/§36).
+    onOpen?.(ctx);
 
     const cleanup = (reason: string) => {
       if (closed) return;

@@ -34,8 +34,11 @@ export class PositionRepository {
 
   /**
    * Persist a position event. Idempotent: a duplicate (same event_id derived from
-   * messageId) inserts nothing and does not throw. Uses a generated event_id from
-   * the messageId UUIDv7 so redelivery collides cleanly.
+   * messageId + same captured_at) inserts nothing and does not throw. Uses a
+   * generated event_id from the messageId UUIDv7 so redelivery collides cleanly.
+   * The conflict target is the composite PK (event_id, captured_at) — TimescaleDB
+   * requires the partition column in every unique index, so there is no
+   * single-column unique constraint on event_id alone.
    */
   public async insert(event: PositionEvent): Promise<void> {
     const geom = `SRID=4326;POINT(${event.longitude} ${event.latitude})`;
@@ -58,7 +61,7 @@ export class PositionRepository {
         quality: QUALITY_CODE[event.quality],
         metadata: this.knex.raw('?::jsonb', [JSON.stringify({ protocolId: event.protocolId })]),
       })
-      .onConflict('event_id')
+      .onConflict(['event_id', 'captured_at'])
       .ignore();
   }
 

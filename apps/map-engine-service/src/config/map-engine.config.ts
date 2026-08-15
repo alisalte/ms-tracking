@@ -1,3 +1,4 @@
+import { authConfigSchema } from '@fleetvision/auth';
 import { baseConfigSchema } from '@fleetvision/config';
 import { z } from 'zod';
 
@@ -8,8 +9,11 @@ import { z } from 'zod';
  * Redis) and the map-engine-specific knobs: provider selection, cache TTLs,
  * and optional external-provider credentials. External providers are non-fatal
  * at boot — the local provider is the default fallback.
+ *
+ * Sprint B merges `authConfigSchema` so the service verifies the same JWT as
+ * identity-service.
  */
-export const mapEngineConfigSchema = baseConfigSchema.merge(
+export const mapEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
     /** Postgres/PostGIS connection URL (the geo + tracking schemas live here). */
     DBURL: z.string().min(1),

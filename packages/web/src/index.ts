@@ -3,6 +3,7 @@
  */
 export { GlobalExceptionFilter } from './global-exception.filter.js';
 export { RequestIdInterceptor } from './request-id.interceptor.js';
+export { Public, IS_PUBLIC_KEY } from './public.decorator.js';
 export {
   errorDocument,
   type JsonApiError,

@@ -18,3 +18,4 @@ export {
 } from './knex.factory.js';
 export { BaseRepository, type Row, type BaseRepositoryOptions } from './base.repository.js';
 export { runMigrations, rollbackLastBatch, type MigrationsOptions } from './migrations.js';
+export { withTenantContext, withoutTenantContext } from './tenant-context.js';

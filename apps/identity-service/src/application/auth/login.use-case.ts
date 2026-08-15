@@ -24,6 +24,7 @@ import {
 import { RefreshTokenFamily } from '../../domain/refresh-token-family.js';
 import type { RateLimiterStore, SessionStore } from '../../infrastructure/cache/session-store.js';
 import type { AuthRepository } from '../../infrastructure/persistence/auth.repository.js';
+import type { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 import type { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
@@ -67,6 +68,7 @@ export class LoginUseCase {
     private readonly tokens: TokenService,
     private readonly sessions: SessionStore,
     private readonly rateLimiter: RateLimiterStore,
+    private readonly roles: RoleRepository,
     private readonly config: LoginConfig,
   ) {}
 
@@ -116,7 +118,10 @@ export class LoginUseCase {
     // 6. Issue tokens + create session + start refresh family.
     const sessionId = randomUUID();
     const refreshFamilyId = randomUUID();
-    const issued = await this.tokens.issuePair(this.claims(user, tenant, sessionId), sessionId);
+    const issued = await this.tokens.issuePair(
+      await this.claims(user, tenant, sessionId),
+      sessionId,
+    );
     const family = RefreshTokenFamily.start(
       refreshFamilyId,
       {
@@ -166,12 +171,18 @@ export class LoginUseCase {
     };
   }
 
-  private claims(user: User, tenant: Tenant, sessionId: string) {
+  /**
+   * Build the access-token claims, embedding the resolved permission union so
+   * downstream services authorize statelessly (Sprint B).
+   */
+  private async claims(user: User, tenant: Tenant, sessionId: string) {
+    const permissions = await this.roles.permissionsForUser(user.tenantId, user.id as string);
     return {
       sub: user.id as string,
       tenant_id: user.tenantId,
       tenant_tier: tenant.tier,
       roles: [...user.roles],
+      permissions,
       scope: 'openid offline_access',
       aal: 1,
       auth_time: Math.floor(Date.now() / 1000),

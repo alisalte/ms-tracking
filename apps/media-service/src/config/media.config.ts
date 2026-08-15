@@ -1,3 +1,4 @@
+import { authConfigSchema } from '@fleetvision/auth';
 import { baseConfigSchema } from '@fleetvision/config';
 import { z } from 'zod';
 
@@ -9,8 +10,11 @@ import { z } from 'zod';
  * signaling. The actual media-router/SFU is an infra-class dependency reached via
  * the MEDIA_ROUTER_URL gRPC endpoint — non-fatal at boot (the service starts even
  * when the router is down, serving metadata + signaling token minting).
+ *
+ * Sprint B merges `authConfigSchema` so the service verifies the same JWT as
+ * identity-service.
  */
-export const mediaConfigSchema = baseConfigSchema.merge(
+export const mediaConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
     /** Postgres connection URL (media.* schema). */
     DBURL: z.string().min(1),
@@ -37,6 +41,11 @@ export const mediaConfigSchema = baseConfigSchema.merge(
 
     // --- Session defaults ---
     /** Signaling token TTL in seconds (10 §5.4 — 5min sliding). */
+    /**
+     * Comma-separated allowed CORS origins for the signaling WebSocket (Sprint B).
+     * Empty (default) = no cross-origin browser clients. NEVER `*` in production.
+     */
+    MEDIA_WS_CORS_ORIGIN: z.string().default(''),
     MEDIA_SIGNALING_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(300),
     /** Idle close timeout — source torn down after this with 0 viewers (09 §3.8). */
     MEDIA_IDLE_CLOSE_SECONDS: z.coerce.number().int().min(60).default(300),

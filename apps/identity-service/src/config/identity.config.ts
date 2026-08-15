@@ -23,8 +23,11 @@ export const identityConfigSchema = baseConfigSchema.merge(
     // --- JWT / OAuth2 identity (docs/specs/16_Public-API-Platform.md §7) ---
     /** Token issuer claim (`iss`). */
     JWT_ISSUER: z.string().min(1).default('fleetvision'),
-    /** Expected audience claim (`aud`) for tokens this service accepts. */
-    JWT_AUDIENCE: z.string().min(1).default('fleetvision-identity'),
+    /**
+     * Expected audience claim (`aud`). Sprint B standardizes the audience
+     * platform-wide (`fleetvision`) so one token verifies in every service.
+     */
+    JWT_AUDIENCE: z.string().min(1).default('fleetvision'),
     /**
      * HMAC signing secret for the MVP (HS256). Must be >= 32 chars. Migrates to
      * RS256/JWKS (Vault Transit) in a later security hardening sprint.

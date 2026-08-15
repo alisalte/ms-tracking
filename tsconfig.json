@@ -9,7 +9,9 @@
     { "path": "packages/cache-redis" },
     { "path": "packages/health" },
     { "path": "packages/web" },
+    { "path": "packages/auth" },
     { "path": "apps/identity-service" },
-    { "path": "apps/device-gateway-service" }
+    { "path": "apps/device-gateway-service" },
+    { "path": "apps/fleet-management-service" }
   ]
 }

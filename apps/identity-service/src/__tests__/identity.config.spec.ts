@@ -24,7 +24,7 @@ describe('identityConfigSchema', () => {
     expect(cfg.DBURL).toContain('postgres://');
     expect(cfg.REDISURL).toContain('redis://');
     expect(cfg.JWT_ISSUER).toBe('fleetvision');
-    expect(cfg.JWT_AUDIENCE).toBe('fleetvision-identity');
+    expect(cfg.JWT_AUDIENCE).toBe('fleetvision');
   });
 
   it('applies JWT/argon2/lockout defaults when omitted', () => {

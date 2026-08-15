@@ -35,22 +35,35 @@ export class SessionRepository {
       });
   }
 
-  public async close(sessionId: string): Promise<void> {
-    await this.knex
+  /**
+   * Close a session. When `tenantId` is supplied (Sprint B), the update is scoped
+   * to that tenant — a cross-tenant caller cannot close another tenant's session
+   * (0 rows updated). Returns the number of rows updated so callers can map a
+   * cross-tenant attempt to 404 (no existence oracle).
+   */
+  public async close(sessionId: string, tenantId?: string): Promise<number> {
+    const query = this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
-      .whereRaw('session_id = ?::uuid', [sessionId])
-      .update({
-        state: 'CLOSED',
-        ended_at: this.knex.fn.now(),
-      });
+      .whereRaw('session_id = ?::uuid', [sessionId]);
+    if (tenantId) query.whereRaw('tenant_id = ?::uuid', [tenantId]);
+    return query.update({
+      state: 'CLOSED',
+      ended_at: this.knex.fn.now(),
+    });
   }
 
-  public async updateViewerCount(sessionId: string, count: number, state: string): Promise<void> {
-    await this.knex
+  public async updateViewerCount(
+    sessionId: string,
+    count: number,
+    state: string,
+    tenantId?: string,
+  ): Promise<void> {
+    const query = this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
-      .whereRaw('session_id = ?::uuid', [sessionId])
-      .update({ viewer_count: count, state });
+      .whereRaw('session_id = ?::uuid', [sessionId]);
+    if (tenantId) query.whereRaw('tenant_id = ?::uuid', [tenantId]);
+    await query.update({ viewer_count: count, state });
   }
 }

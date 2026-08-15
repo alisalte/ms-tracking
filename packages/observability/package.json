@@ -12,7 +12,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -b tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -26,6 +29,7 @@
     "pino": "9.5.0",
     "pino-http": "10.3.0",
     "pino-pretty": "11.3.0",
+    "prom-client": "15",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.1"
   },

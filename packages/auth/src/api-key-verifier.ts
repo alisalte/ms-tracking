@@ -1,0 +1,89 @@
+import type { Knex } from '@fleetvision/persistence-knex';
+/**
+ * API-key verifier — resolves a presented `fv_<env>_<secret>` key to a trusted
+ * identity. Cross-tenant by design (the caller's tenant is unknown until the key
+ * resolves): looks up by the 11-char prefix, then Argon2id-verifies the secret
+ * against the stored hash. The resolved `tenantId` becomes the authenticated
+ * tenant and `scopes` become the context permissions — so an API key can never
+ * reach another tenant's data (every downstream repository filters by tenant_id).
+ *
+ * identity-service owns the `iam.api_keys` schema; this default verifier is
+ * usable by any service because the schema is shared. Services that do not need
+ * API-key auth simply omit the provider.
+ */
+import argon2 from 'argon2';
+
+/** The trusted identity an API key resolves to. */
+export interface VerifiedApiKey {
+  readonly keyId: string;
+  readonly tenantId: string;
+  readonly scopes: readonly string[];
+  readonly assignedUserId: string | null;
+}
+
+/** Port — services may provide their own implementation. */
+export abstract class ApiKeyVerifier {
+  /** Resolve a presented plaintext key, or return null if invalid/inactive. */
+  public abstract verify(presentedKey: string): Promise<VerifiedApiKey | null>;
+}
+
+interface ApiKeyRow {
+  id: string;
+  tenant_id: string;
+  key_hash: string;
+  key_prefix: string;
+  scopes: string[] | readonly string[];
+  assigned_user_id: string | null;
+  expires_at: Date | null;
+  status: 'ACTIVE' | 'REVOKED';
+}
+
+/**
+ * Default verifier backed by the shared `iam.api_keys` table. Cross-tenant
+ * lookup (no tenant predicate) — the tenant is taken from the resolved key row,
+ * never from the request.
+ */
+export class KnexApiKeyVerifier extends ApiKeyVerifier {
+  constructor(private readonly knex: Knex) {
+    super();
+  }
+
+  public async verify(presentedKey: string): Promise<VerifiedApiKey | null> {
+    if (!presentedKey.startsWith('fv_') || presentedKey.length < 12) return null;
+    const prefix = presentedKey.slice(0, 11);
+
+    let rows: ApiKeyRow[];
+    try {
+      const result = (await this.knex.raw('SELECT * FROM iam.api_keys WHERE key_prefix = ?', [
+        prefix,
+      ])) as { rows: ApiKeyRow[] };
+      rows = result.rows;
+    } catch {
+      // DB unreachable — fail-closed (no API key authenticates against an
+      // unreachable store). The guard maps this to 401.
+      throw new Error('API-key store unreachable.');
+    }
+    if (rows.length === 0) return null;
+
+    // Verify each candidate (prefix collisions are ~impossible but cheap to be
+    // exhaustive). Only an ACTIVE, non-expired key whose hash matches resolves.
+    for (const row of rows) {
+      let matches = false;
+      try {
+        matches = await argon2.verify(row.key_hash, presentedKey);
+      } catch {
+        matches = false;
+      }
+      if (!matches) continue;
+      if (row.status !== 'ACTIVE') return null;
+      if (row.expires_at && new Date(row.expires_at) <= new Date()) return null;
+      return {
+        keyId: row.id,
+        tenantId: row.tenant_id,
+        scopes: [...(row.scopes ?? [])],
+        assignedUserId: row.assigned_user_id,
+      };
+    }
+    return null;
+  }
+}

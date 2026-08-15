@@ -1,15 +1,15 @@
+// Sprint B: auth primitives (JWT/API-key guards, RBAC, revocation, permission
+// catalog) now live in the shared @fleetvision/auth package. identity imports
+// it here; the global CompositeAuthGuard + PermissionsGuard it registers secure
+// every HTTP route. This module owns only identity-specific feature wiring
+// (repositories, cache stores, TokenService, use-cases, controllers).
+import { RevocationStore, AuthModule as SharedAuthModule } from '@fleetvision/auth';
 import { REDIS_TOKEN } from '@fleetvision/cache-redis';
 import type { Redis } from '@fleetvision/cache-redis';
 import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import type { Knex } from '@fleetvision/persistence-knex';
 import { Module } from '@nestjs/common';
-/**
- * AuthModule — wires the auth feature: repositories, cache stores, services,
- * use-cases, and the auth/api-keys controllers. Config (TTLs, secrets, argon2
- * params) is read from the validated IdentityConfig via the IDENTITY_CONFIG
- * token registered in AppModule.
- */
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { JwtService } from '@nestjs/jwt';
 import {
   AssignRoleUseCase,
   CreateApiKeyUseCase,
@@ -29,7 +29,6 @@ import {
   PasswordHasher,
   RateLimiterStore,
   RefreshStore,
-  RevocationStore,
   RoleRepository,
   SessionStore,
   TenantRepository,
@@ -39,8 +38,6 @@ import {
 import { KafkaOutboxRelay } from '../../infrastructure/index.js';
 import { UsersController } from '../iam/users.controller.js';
 import { BootstrapSeed } from '../shared/bootstrap-seed.js';
-import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
-import { PermissionsGuard } from '../shared/permissions.guard.js';
 import { TenantsController } from '../tenants/tenants.controller.js';
 import { ApiKeysController } from './api-keys.controller.js';
 import { AuthController } from './auth.controller.js';
@@ -60,18 +57,20 @@ export class AuthModule {
     return {
       module: AuthModule,
       imports: [
-        JwtModule.register({
-          secret: config.JWT_SECRET,
-          signOptions: {
-            algorithm: 'HS256',
-            issuer: config.JWT_ISSUER,
-            audience: config.JWT_AUDIENCE,
+        // Brings JwtModule, the global CompositeAuthGuard + PermissionsGuard, the
+        // shared Redis-backed RevocationStore, and the KnexApiKeyVerifier.
+        SharedAuthModule.forRoot({
+          jwt: {
+            JWT_SECRET: config.JWT_SECRET,
+            JWT_ISSUER: config.JWT_ISSUER,
+            JWT_AUDIENCE: config.JWT_AUDIENCE,
           },
+          enableApiKeys: true,
         }),
       ],
       controllers: [AuthController, ApiKeysController, UsersController, TenantsController],
       providers: [
-        // Repositories (constructed from the global knex/redis tokens).
+        // Repositories (constructed from the global knex token).
         {
           provide: UserRepository,
           inject: [KNEX_TOKEN],
@@ -102,16 +101,12 @@ export class AuthModule {
           inject: [KNEX_TOKEN],
           useFactory: (knex: Knex) => new AuditRepository(knex),
         },
-        // Cache stores.
+        // Cache stores (RevocationStore is provided by the shared AuthModule and
+        // injected by class into the use-cases below).
         {
           provide: SessionStore,
           inject: [REDIS_TOKEN],
           useFactory: (redis: Redis) => new SessionStore(redis),
-        },
-        {
-          provide: RevocationStore,
-          inject: [REDIS_TOKEN],
-          useFactory: (redis: Redis) => new RevocationStore(redis),
         },
         {
           provide: RefreshStore,
@@ -155,10 +150,7 @@ export class AuthModule {
               auditTopic: config.KAFKA_AUDIT_TOPIC,
             }),
         },
-        // Guards.
-        JwtAuthGuard,
-        PermissionsGuard,
-        // Use-cases.
+        // Use-cases. RevocationStore resolves from the shared AuthModule.
         {
           provide: LoginUseCase,
           inject: [
@@ -169,6 +161,7 @@ export class AuthModule {
             TokenService,
             SessionStore,
             RateLimiterStore,
+            RoleRepository,
           ],
           useFactory: (
             u: UserRepository,
@@ -178,8 +171,9 @@ export class AuthModule {
             tk: TokenService,
             s: SessionStore,
             r: RateLimiterStore,
+            roles: RoleRepository,
           ) =>
-            new LoginUseCase(u, t, a, h, tk, s, r, {
+            new LoginUseCase(u, t, a, h, tk, s, r, roles, {
               accessTtlSeconds: accessTtl,
               refreshTtlSeconds: refreshTtl,
               maxAttempts: config.LOGIN_MAX_ATTEMPTS,
@@ -190,20 +184,31 @@ export class AuthModule {
         },
         {
           provide: RefreshTokenUseCase,
-          inject: [AuthRepository, UserRepository, TenantRepository, TokenService, RevocationStore],
+          inject: [
+            AuthRepository,
+            UserRepository,
+            TenantRepository,
+            TokenService,
+            RevocationStore,
+            RoleRepository,
+          ],
           useFactory: (
             a: AuthRepository,
             u: UserRepository,
             t: TenantRepository,
             tk: TokenService,
-            rv: RevocationStore,
-          ) => new RefreshTokenUseCase(a, u, t, tk, rv, { accessTtlSeconds: accessTtl }),
+            revocation: RevocationStore,
+            roles: RoleRepository,
+          ) =>
+            new RefreshTokenUseCase(a, u, t, tk, revocation, roles, {
+              accessTtlSeconds: accessTtl,
+            }),
         },
         {
           provide: LogoutUseCase,
           inject: [AuthRepository, SessionStore, RevocationStore],
-          useFactory: (a: AuthRepository, s: SessionStore, rv: RevocationStore) =>
-            new LogoutUseCase(a, s, rv),
+          useFactory: (a: AuthRepository, s: SessionStore, revocation: RevocationStore) =>
+            new LogoutUseCase(a, s, revocation),
         },
         {
           provide: CreateUserUseCase,
@@ -218,8 +223,9 @@ export class AuthModule {
         },
         {
           provide: AssignRoleUseCase,
-          inject: [UserRepository],
-          useFactory: (u: UserRepository) => new AssignRoleUseCase(u),
+          inject: [UserRepository, RevocationStore],
+          useFactory: (u: UserRepository, revocation: RevocationStore) =>
+            new AssignRoleUseCase(u, revocation, { accessTtlSeconds: accessTtl }),
         },
         {
           provide: CreateApiKeyUseCase,

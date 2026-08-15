@@ -1,3 +1,4 @@
+import { CurrentTenant, RequirePermissions } from '@fleetvision/auth';
 /**
  * Location + Geofence REST API (08 §5).
  *
@@ -10,6 +11,9 @@
  *   POST /location/geofences          — create geofence.
  *   DELETE /location/geofences/:id    — delete geofence.
  *   GET  /location/geofences/contains?lat=&lng= — point-in-geofence check.
+ *
+ * Sprint B: authentication enforced globally; reads require `maps.read`, POI/
+ * geofence create+delete require `maps.write`. Tenant from the verified JWT.
  */
 import {
   Body,
@@ -22,9 +26,7 @@ import {
   Param,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import type { GeofenceService } from '../application/geofence-service.js';
 import type { PoiService } from '../application/poi-service.js';
 import type { ProviderRouter } from '../application/provider-router.js';
@@ -42,45 +44,49 @@ export class LocationController {
   // --- Geocoding (provider-routed) ---
 
   @Get('location/geocode')
-  public async geocode(@Query('q') q: string, @Req() req: Request) {
+  @RequirePermissions('maps.read')
+  public async geocode(@CurrentTenant() tenantId: string, @Query('q') q: string) {
     if (!q) throw new HttpException('Query q required', HttpStatus.BAD_REQUEST);
-    const provider = this.router.select({ tenantId: tenantOf(req) });
-    return provider.geocode({ query: q, tenantId: tenantOf(req) });
+    const provider = this.router.select({ tenantId });
+    return provider.geocode({ query: q, tenantId });
   }
 
   @Get('location/reverse')
+  @RequirePermissions('maps.read')
   public async reverse(
+    @CurrentTenant() tenantId: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
-    @Req() req?: Request,
   ) {
     const latitude = lat ? Number(lat) : Number.NaN;
     const longitude = lng ? Number(lng) : Number.NaN;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       throw new HttpException('Valid lat + lng required', HttpStatus.BAD_REQUEST);
     }
-    const provider = this.router.select({ tenantId: tenantOf(req) });
-    return provider.reverseGeocode(latitude, longitude, tenantOf(req));
+    const provider = this.router.select({ tenantId });
+    return provider.reverseGeocode(latitude, longitude, tenantId);
   }
 
   // --- POIs ---
 
   @Get('location/pois')
+  @RequirePermissions('maps.read')
   public async listPois(
+    @CurrentTenant() tenantId: string,
     @Query('bbox') bbox?: string,
     @Query('category') category?: string,
-    @Req() req?: Request,
   ) {
     if (!bbox) return [];
     const bb = parseBbox(bbox);
     if (!bb) throw new HttpException('Invalid bbox', HttpStatus.BAD_REQUEST);
-    return this.poiService.findInBbox(tenantOf(req), bb, category);
+    return this.poiService.findInBbox(tenantId, bb, category);
   }
 
   @Post('location/pois')
-  public async createPoi(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  @RequirePermissions('maps.write')
+  public async createPoi(@CurrentTenant() tenantId: string, @Body() body: Record<string, unknown>) {
     return this.poiService.create({
-      tenantId: tenantOf(req),
+      tenantId,
       name: String(body.name ?? ''),
       category: String(body.category ?? 'UNKNOWN'),
       latitude: Number(body.latitude ?? 0),
@@ -91,12 +97,13 @@ export class LocationController {
   }
 
   @Get('location/nearest')
+  @RequirePermissions('maps.read')
   public async nearest(
+    @CurrentTenant() tenantId: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
     @Query('radius') radius?: string,
     @Query('k') k?: string,
-    @Req() req?: Request,
   ) {
     const latitude = lat ? Number(lat) : Number.NaN;
     const longitude = lng ? Number(lng) : Number.NaN;
@@ -107,7 +114,7 @@ export class LocationController {
       latitude,
       longitude,
       radius ? Number(radius) : 500,
-      tenantOf(req),
+      tenantId,
       k ? Number(k) : 5,
     );
   }
@@ -115,14 +122,19 @@ export class LocationController {
   // --- Geofences ---
 
   @Get('location/geofences')
-  public async listGeofences(@Req() req: Request) {
-    return this.geofenceService.list(tenantOf(req));
+  @RequirePermissions('maps.read')
+  public async listGeofences(@CurrentTenant() tenantId: string) {
+    return this.geofenceService.list(tenantId);
   }
 
   @Post('location/geofences')
-  public async createGeofence(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  @RequirePermissions('maps.write')
+  public async createGeofence(
+    @CurrentTenant() tenantId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.geofenceService.create({
-      tenantId: tenantOf(req),
+      tenantId,
       name: String(body.name ?? ''),
       type: (body.type as 'POLYGON' | 'CIRCLE' | 'CORRIDOR') ?? 'POLYGON',
       boundaryGeoJson: body.boundary as { type: 'Polygon'; coordinates: number[][][] },
@@ -135,37 +147,26 @@ export class LocationController {
   }
 
   @Delete('location/geofences/:id')
-  public async deleteGeofence(@Param('id') id: string, @Req() req: Request) {
-    const ok = await this.geofenceService.delete(id, tenantOf(req));
+  @RequirePermissions('maps.write')
+  public async deleteGeofence(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    const ok = await this.geofenceService.delete(id, tenantId);
     if (!ok) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return { deleted: true };
   }
 
   @Get('location/geofences/contains')
+  @RequirePermissions('maps.read')
   public async containsPoint(
+    @CurrentTenant() tenantId: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
-    @Req() req?: Request,
   ) {
     const latitude = lat ? Number(lat) : Number.NaN;
     const longitude = lng ? Number(lng) : Number.NaN;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       throw new HttpException('Valid lat + lng required', HttpStatus.BAD_REQUEST);
     }
-    const geofenceIds = await this.geofenceService.containsPoint(
-      tenantOf(req),
-      latitude,
-      longitude,
-    );
+    const geofenceIds = await this.geofenceService.containsPoint(tenantId, latitude, longitude);
     return { geofenceIds };
   }
-}
-
-function tenantOf(req?: Request): string {
-  const tid =
-    (req?.headers['tenant-id'] as string | undefined) ??
-    (req?.query['tenant-id'] as string | undefined);
-  if (!tid)
-    throw new HttpException('tenant-id header or query is required.', HttpStatus.BAD_REQUEST);
-  return tid;
 }

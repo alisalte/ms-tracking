@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { RefreshTokenReuseError, TokenInvalidError } from '../../domain/index.js';
 import type { RevocationStore } from '../../infrastructure/cache/session-store.js';
 import type { AuthRepository } from '../../infrastructure/persistence/auth.repository.js';
+import type { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 import type { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { TokenService } from '../../infrastructure/services/token-service.js';
@@ -36,6 +37,7 @@ export class RefreshTokenUseCase {
     private readonly tenants: TenantRepository,
     private readonly tokens: TokenService,
     private readonly revocation: RevocationStore,
+    private readonly roles: RoleRepository,
     private readonly config: RefreshConfig,
   ) {}
 
@@ -82,11 +84,15 @@ export class RefreshTokenUseCase {
     const user = await this.users.findById(tenantId, userId);
     const tenant = await this.tenants.findById(tenantId);
     if (!user || !tenant) throw new TokenInvalidError();
+    // Re-resolve permissions on refresh so a rotated token reflects the latest
+    // role grants (Sprint B).
+    const permissions = await this.roles.permissionsForUser(tenantId, userId);
     return {
       sub: user.id as string,
       tenant_id: tenantId,
       tenant_tier: tenant.tier,
       roles: [...user.roles],
+      permissions,
       scope: 'openid offline_access',
       aal: 1,
       auth_time: Math.floor(Date.now() / 1000),

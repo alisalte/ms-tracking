@@ -46,10 +46,21 @@ export interface DeviceMessageProps {
   readonly messageId: string;
   /** Resolved FleetVision device id (only known after auth — 06 §6.1 invariant). */
   readonly deviceId: string;
+  /**
+   * Vehicle the device is bound to — REGISTRY-SOURCED trusted identity (Sprint D
+   * §5: tenantId/vehicleId must originate from the Device Registry / Gateway
+   * context, never from the device payload). Null when the device is unpaired.
+   */
+  readonly vehicleId?: string | null;
   /** Raw identifier from the wire (IMEI / serial / UID). */
   readonly serialOrImei: string;
   /** Resolved tenant (only known after auth). */
   readonly tenantId: string;
+  /**
+   * Correlation id for end-to-end tracing (Sprint D §32/§34) — the originating
+   * device session id, so every message of one connection shares one correlation.
+   */
+  readonly correlationId?: string | null;
   readonly protocolId: string;
   readonly type: MessageType;
   /** Device-reported time (UTC). */
@@ -71,8 +82,10 @@ export interface DeviceMessageProps {
 export class DeviceMessage {
   public readonly messageId: string;
   public readonly deviceId: string;
+  public readonly vehicleId?: string | null;
   public readonly serialOrImei: string;
   public readonly tenantId: string;
+  public readonly correlationId?: string | null;
   public readonly protocolId: string;
   public readonly type: MessageType;
   public readonly timestamp: Date;
@@ -88,8 +101,10 @@ export class DeviceMessage {
   constructor(props: DeviceMessageProps) {
     this.messageId = props.messageId;
     this.deviceId = props.deviceId;
+    this.vehicleId = props.vehicleId ?? null;
     this.serialOrImei = props.serialOrImei;
     this.tenantId = props.tenantId;
+    this.correlationId = props.correlationId ?? null;
     this.protocolId = props.protocolId;
     this.type = props.type;
     this.timestamp = props.timestamp;

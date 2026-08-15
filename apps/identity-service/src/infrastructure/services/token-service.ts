@@ -1,7 +1,9 @@
 /**
  * Token service — issues and verifies JWTs (HS256 for the MVP) and mints opaque
  * refresh tokens. Claims are flat (Authentication.md §6.1, 16_Public-API-Platform
- * §7.3): tenant_id, tenant_tier, roles, scope, aal, session_id, auth_time.
+ * §7.3): tenant_id, tenant_tier, roles, permissions, scope, aal, session_id,
+ * auth_time. Sprint B embeds `permissions` so downstream services authorize
+ * statelessly without a per-request DB read.
  *
  * HS256 migrates to RS256 + JWKS (Vault Transit) in a later sprint; the public
  * surface here (`signAccess`, `verifyAccess`, `signRefresh`, `hashRefresh`)
@@ -10,18 +12,10 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
+// Sprint B: the claims contract is shared so every service reads the same shape.
+export type { AccessTokenClaims } from '@fleetvision/auth';
+import type { AccessTokenClaims } from '@fleetvision/auth';
 import { TokenInvalidError } from '../../domain/index.js';
-
-export interface AccessTokenClaims {
-  readonly sub: string;
-  readonly tenant_id: string;
-  readonly tenant_tier: string;
-  readonly roles: readonly string[];
-  readonly scope: string;
-  readonly aal: number;
-  readonly session_id: string;
-  readonly auth_time: number;
-}
 
 export interface TokenServiceConfig {
   readonly issuer: string;

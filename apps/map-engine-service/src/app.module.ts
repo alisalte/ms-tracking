@@ -6,6 +6,7 @@
  * clustering, replay, geofences, POIs, provider abstraction, REST API).
  */
 import { join } from 'node:path';
+import { AuthModule } from '@fleetvision/auth';
 import { RedisModule } from '@fleetvision/cache-redis';
 import { type BaseConfig, ConfigModule } from '@fleetvision/config';
 import { HealthModule } from '@fleetvision/health';
@@ -34,7 +35,15 @@ export class AppModule {
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
-        HealthModule,
+        // Sprint B: JWT/API-key auth + global CompositeAuthGuard + PermissionsGuard.
+        AuthModule.forRoot({
+          jwt: {
+            JWT_SECRET: config.JWT_SECRET,
+            JWT_ISSUER: config.JWT_ISSUER,
+            JWT_AUDIENCE: config.JWT_AUDIENCE,
+          },
+        }),
+        HealthModule.forRoot(),
         MapEngineModule.forRoot(config),
       ],
     };

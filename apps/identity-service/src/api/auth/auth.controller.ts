@@ -1,3 +1,4 @@
+import { Public } from '@fleetvision/auth';
 /**
  * Auth controller — login, refresh, logout, /me, sessions. Base path
  * `/api/v1/auth` (ARR API-1, Authentication.md §5).
@@ -8,14 +9,13 @@
  * the canonical UUID before reaching the use case (INV-I02: tenant_id is always
  * server-verified, never trusted from the request body).
  */
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { LoginUseCase, LogoutUseCase, RefreshTokenUseCase } from '../../application/index.js';
 import { InvalidCredentialsError } from '../../domain/errors.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
-import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 import { loginSchema, refreshSchema } from './auth.dto.js';
@@ -59,6 +59,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Public()
   @HttpCode(HttpStatus.OK)
   public async login(
     @Body(new ZodValidationPipe(loginSchema)) body: { email: string; password: string },
@@ -97,6 +98,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   @HttpCode(HttpStatus.OK)
   public async refresh(
     @Body(new ZodValidationPipe(refreshSchema)) body: { refresh_token: string },
@@ -118,7 +120,6 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard)
   public async logout(@Req() req: Request): Promise<void> {
     const p = getPrincipal(req);
     await this.logoutUseCase.execute({
@@ -133,7 +134,6 @@ export class AuthController {
 
   @Post('logout-all')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard)
   public async logoutAll(@Req() req: Request): Promise<void> {
     const p = getPrincipal(req);
     await this.logoutUseCase.execute({
@@ -147,7 +147,6 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
   public me(@Req() req: Request): {
     data: {
       id: string;

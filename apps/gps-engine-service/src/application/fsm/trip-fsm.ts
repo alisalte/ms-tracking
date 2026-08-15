@@ -8,7 +8,9 @@
  *   MOVING      → PENDING_STOP: speed ≤ stop-speed.
  *   PENDING_STOP→ MOVING: movement resumes before min-stop-duration (a traffic-light pause).
  *   PENDING_STOP→ CLOSED: stationary ≥ min-stop-duration OR ignition-off.
- *   CLOSED      → STOP: emit trip.ended (if ≥ min-trip-distance) else discard micro-trip.
+ *   CLOSED      → STOP: emit trip.ended (if ≥ min-trip-distance) else emit
+ *                 trip.discarded (micro-trip) so the persisted ACTIVE row is
+ *                 reconciled and does not remain ACTIVE forever.
  *
  * Gap handling: a time gap ≥ max-gap-in-trip-s between consecutive positions
  * breaks the current trip (forces a close).
@@ -21,6 +23,7 @@ import type { PositionEvent } from '../../domain/position-event.js';
 import type {
   StopDetectedEvent,
   TripBoundaryEvent,
+  TripDiscardedEvent,
   TripEngineThresholds,
   TripFsmState,
 } from '../../domain/trip/trip-types.js';
@@ -38,13 +41,13 @@ export interface TripFsmInput {
 
 export interface TripFsmOutput {
   readonly state: TripFsmState;
-  readonly events: readonly (TripBoundaryEvent | StopDetectedEvent)[];
+  readonly events: readonly (TripBoundaryEvent | StopDetectedEvent | TripDiscardedEvent)[];
 }
 
 /** Advance the trip FSM by one position. Pure. */
 export function advanceTripFsm(input: TripFsmInput): TripFsmOutput {
   const { state, position, prevPosition, distanceStepM, thresholds } = input;
-  const events: (TripBoundaryEvent | StopDetectedEvent)[] = [];
+  const events: (TripBoundaryEvent | StopDetectedEvent | TripDiscardedEvent)[] = [];
   const speed = position.speedKph;
   const moving = speed >= thresholds.tripStartSpeedKmh;
   const slow = speed <= thresholds.tripStopSpeedKmh;
@@ -192,16 +195,33 @@ function closeTrip(
   state: TripFsmState,
   position: PositionEvent,
   thresholds: TripEngineThresholds,
-  events: (TripBoundaryEvent | StopDetectedEvent)[],
+  events: (TripBoundaryEvent | StopDetectedEvent | TripDiscardedEvent)[],
 ): TripFsmOutput {
   const distanceKm = state.distanceM / 1000;
   const durationSec = state.tripStartAt
     ? (position.capturedAt.getTime() - state.tripStartAt.getTime()) / 1000
     : 0;
 
-  // Micro-trip discard: below min-trip-distance → no events, silent reset.
+  // Micro-trip discard: below min-trip-distance → emit trip.discarded so the
+  // ACTIVE row persisted on trip.started is reconciled (closed as DISCARDED)
+  // instead of remaining ACTIVE forever (Sprint A data-integrity fix). No
+  // user-facing trip.ended/stop.detected is emitted.
   if (state.distanceM < thresholds.minTripDistanceM) {
-    return { state: { ...INITIAL_TRIP_FSM }, events: [] };
+    const discarded: TripDiscardedEvent = {
+      type: 'trip.discarded',
+      vehicleId: position.vehicleId,
+      tenantId: position.tenantId,
+      startLat: state.startLat ?? position.latitude,
+      startLng: state.startLng ?? position.longitude,
+      endLat: position.latitude,
+      endLng: position.longitude,
+      startedAt: state.tripStartAt ?? position.capturedAt,
+      endedAt: position.capturedAt,
+      distanceKm,
+      durationSec,
+      reason: 'MICRO_TRIP',
+    };
+    return { state: { ...INITIAL_TRIP_FSM }, events: [discarded] };
   }
 
   const endedEvent: TripBoundaryEvent = {

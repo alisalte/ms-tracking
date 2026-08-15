@@ -101,7 +101,7 @@ describe('advanceTripFsm (07 §5.2)', () => {
     expect(types).toContain('stop.detected');
   });
 
-  it('discards a micro-trip (< minTripDistance) with no trip.ended event', () => {
+  it('discards a micro-trip (< minTripDistance): no trip.ended, emits trip.discarded', () => {
     const { state, types } = runSequence(
       [pos(50, T0), pos(0, T400)],
       [0, 100], // 100m < 250m minTripDistance
@@ -109,6 +109,42 @@ describe('advanceTripFsm (07 §5.2)', () => {
     expect(state.state).toBe('STOP');
     expect(types).not.toContain('trip.ended');
     expect(types).not.toContain('stop.detected');
+    // Sprint A: the discard is surfaced as trip.discarded so the ACTIVE row
+    // persisted on trip.started can be reconciled (no orphan ACTIVE trip).
+    expect(types).toContain('trip.discarded');
+  });
+
+  it('emits trip.discarded with reason MICRO_TRIP and the micro-trip distance', () => {
+    const { state } = runSequence([pos(50, T0), pos(0, T400)], [0, 42]); // 42m
+    expect(state.state).toBe('STOP');
+    // Re-run capturing the full event to inspect discard fields.
+    let s: TripFsmState = { ...INITIAL_TRIP_FSM };
+    let prev: PositionEvent | null = null;
+    let discardedEvent: import('../domain/trip/trip-types.js').TripDiscardedEvent | undefined;
+    for (const [p, step] of [
+      [pos(50, T0), 0],
+      [pos(0, T400), 42],
+    ] as const) {
+      const out = advanceTripFsm({
+        state: s,
+        position: p,
+        prevPosition: prev,
+        distanceStepM: step,
+        thresholds: THRESHOLDS,
+      });
+      s = out.state;
+      discardedEvent =
+        out.events.find(
+          (e): e is import('../domain/trip/trip-types.js').TripDiscardedEvent =>
+            e.type === 'trip.discarded',
+        ) ?? discardedEvent;
+      prev = p;
+    }
+    expect(discardedEvent).toBeDefined();
+    expect(discardedEvent?.reason).toBe('MICRO_TRIP');
+    expect(discardedEvent?.distanceKm).toBeCloseTo(0.042, 3);
+    expect(discardedEvent?.startedAt.toISOString()).toBe(T0.toISOString());
+    expect(discardedEvent?.endedAt.toISOString()).toBe(T400.toISOString());
   });
 
   it('force-closes the trip on ignition-off', () => {

@@ -22,11 +22,11 @@ export async function up(knex) {
     t.text('status').notNullable().checkIn(['ACTIVE', 'COMPLETED', 'DISCARDED']);
     t.timestamp('started_at', { useTz: true }).notNullable();
     t.timestamp('ended_at', { useTz: true });
-    t.doublePrecision('start_lat').notNullable();
-    t.doublePrecision('start_lng').notNullable();
-    t.doublePrecision('end_lat');
-    t.doublePrecision('end_lng');
-    t.doublePrecision('distance_km').notNullable().defaultTo(0);
+    t.double('start_lat').notNullable();
+    t.double('start_lng').notNullable();
+    t.double('end_lat');
+    t.double('end_lng');
+    t.double('distance_km').notNullable().defaultTo(0);
     t.integer('duration_s').notNullable().defaultTo(0);
     t.float('max_speed_kmh').notNullable().defaultTo(0);
     t.integer('stop_count').notNullable().defaultTo(0);
@@ -64,8 +64,8 @@ export async function up(knex) {
     t.timestamp('started_at', { useTz: true }).notNullable();
     t.timestamp('ended_at', { useTz: true });
     t.integer('duration_s').notNullable().defaultTo(0);
-    t.doublePrecision('lat').notNullable();
-    t.doublePrecision('lng').notNullable();
+    t.double('lat').notNullable();
+    t.double('lng').notNullable();
     t.timestamp('created_at', { useTz: true }).notNullable().defaultTo(knex.fn.now());
   });
   await knex.raw(

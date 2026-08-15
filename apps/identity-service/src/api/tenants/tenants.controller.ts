@@ -3,18 +3,17 @@
  * reactivate. Provisioning is a platform-SaaS-Ops operation
  * (`billing.tenant.manage`); self-view is any authenticated user (own tenant).
  */
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { ProvisionTenantUseCase } from '../../application/index.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
-import { JwtAuthGuard } from '../shared/jwt-auth.guard.js';
-import { PermissionsGuard, RequirePermissions } from '../shared/permissions.guard.js';
+import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 
+/** Tenant provisioning + self-view. Authentication + RBAC are global (Sprint B). */
 @Controller('api/v1')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class TenantsController {
   constructor(
     private readonly provisionUseCase: ProvisionTenantUseCase,

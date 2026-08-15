@@ -25,8 +25,11 @@ export async function up(knex) {
 
   // --- tracking.vehicle_positions (TimescaleDB hypertable) ---
   await knex.schema.withSchema('tracking').createTable('vehicle_positions', (t) => {
-    // UUIDv7 PK — time-ordered, disambiguates same-instant multi-device (03 §11.1).
-    t.uuid('event_id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    // UUIDv7 event id — time-ordered, disambiguates same-instant multi-device
+    // (03 §11.1). NOT a single-column PK: TimescaleDB requires the hypertable's
+    // time partition column (captured_at) to be part of every unique constraint,
+    // so the PK is composite (event_id, captured_at) — see t.primary() below.
+    t.uuid('event_id').notNullable().defaultTo(knex.raw('gen_random_uuid()'));
     // device_id from the gateway for Sprint 7 (see module doc); reamaps to the
     // real vehicle_id once device-management-service provides the mapping.
     t.uuid('vehicle_id').notNullable();
@@ -36,19 +39,23 @@ export async function up(knex) {
     t.timestamp('ingested_at', { useTz: true }).notNullable().defaultTo(knex.fn.now());
     // PostGIS geography point for spatial queries.
     t.specificType('geom', 'geography(Point, 4326)').notNullable();
-    t.doublePrecision('latitude').notNullable();
-    t.doublePrecision('longitude').notNullable();
+    t.double('latitude').notNullable();
+    t.double('longitude').notNullable();
     t.float('altitude_m').nullable();
     t.float('heading_deg').nullable();
     t.float('speed_kmh').notNullable().defaultTo(0);
     t.float('accuracy_m').nullable();
-    t.doublePrecision('odometer_km').nullable();
+    t.double('odometer_km').nullable();
     t.boolean('ignition_on').nullable();
     t.uuid('source_device').nullable();
     // Quality: 1=VALID, 2=STALE, 3=LOW_ACCURACY, 4=SUSPECT_JUMP, 0=REJECTED (07 §3.4).
     t.smallint('quality').notNullable().defaultTo(1);
     t.uuid('session_id').nullable();
     t.jsonb('metadata').notNullable().defaultTo(JSON.stringify({}));
+    // Composite PK: event_id remains the logical identity (globally unique via
+    // gen_random_uuid), but captured_at is included so TimescaleDB permits the
+    // hypertable conversion (partition column must be in every unique index).
+    t.primary(['event_id', 'captured_at']);
   });
 
   // Hypertable: 1-day chunks. TimescaleDB extension is installed via

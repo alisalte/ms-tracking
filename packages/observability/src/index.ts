@@ -16,3 +16,14 @@ export {
   type CorrelationContext,
 } from './correlation-context.js';
 export { generateTraceparent, parseTraceparent } from './traceparent.js';
+export {
+  MetricsModule,
+  MetricsController,
+  METRICS_TOKEN,
+  type MetricsModuleOptions,
+} from './metrics/metrics.module.js';
+export {
+  createTelemetryMetrics,
+  type TelemetryMetrics,
+  type TelemetryMetricsOptions,
+} from './metrics/telemetry-metrics.js';
