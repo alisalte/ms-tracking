@@ -93,8 +93,9 @@ export class SignalBus {
     this.emitter.on(SIGNAL.POSITION, listener);
   }
 
-  public onDeviceStatus(listener: (signal: DeviceStatusSignal) => void): void {
+  public onDeviceStatus(listener: (signal: DeviceStatusSignal) => void): () => void {
     this.emitter.on(SIGNAL.DEVICE_STATUS, listener);
+    return () => this.emitter.removeListener(SIGNAL.DEVICE_STATUS, listener);
   }
 
   // --- Sprint 8: Trip / Idle / Parking / Engine-Hours signals ---
@@ -115,20 +116,24 @@ export class SignalBus {
     this.emitter.emit(SIGNAL.ENGINE_HOURS, signal);
   }
 
-  public onTrip(listener: (event: TripSignal) => void): void {
+  public onTrip(listener: (event: TripSignal) => void): () => void {
     this.emitter.on(SIGNAL.TRIP, listener);
+    return () => this.emitter.removeListener(SIGNAL.TRIP, listener);
   }
 
-  public onIdle(listener: (event: IdleSignal) => void): void {
+  public onIdle(listener: (event: IdleSignal) => void): () => void {
     this.emitter.on(SIGNAL.IDLE, listener);
+    return () => this.emitter.removeListener(SIGNAL.IDLE, listener);
   }
 
-  public onParking(listener: (event: ParkingSignal) => void): void {
+  public onParking(listener: (event: ParkingSignal) => void): () => void {
     this.emitter.on(SIGNAL.PARKING, listener);
+    return () => this.emitter.removeListener(SIGNAL.PARKING, listener);
   }
 
-  public onEngineHours(listener: (signal: EngineHoursSignal) => void): void {
+  public onEngineHours(listener: (signal: EngineHoursSignal) => void): () => void {
     this.emitter.on(SIGNAL.ENGINE_HOURS, listener);
+    return () => this.emitter.removeListener(SIGNAL.ENGINE_HOURS, listener);
   }
 
   /** Remove all listeners (test cleanup / shutdown). */

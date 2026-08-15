@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useAlarmDetail, useTransitionAlarm } from '@/api/alarm.api';
+import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 import { alarmTypeIcon, severityColor } from '@/components/alarms/AlarmTypeIcon';
 import type { Alarm } from '@/types/alarm.types';
@@ -267,39 +268,34 @@ function AlarmDetailContent({
 
         <Divider />
 
-        {/* Operator actions (§5.3) */}
+        {/* Operator actions (§5.3) — gated by the real backend permissions
+            (notification.alert.ack / notification.alert.resolve). UX-only; the
+            backend re-checks on every call (Sprint G Part 44). */}
         <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap' }}>
           {!isResolved && alarm.status !== 'acked' && (
-            <Button
-              size="small"
-              variant="contained"
-              color="primary"
-              disabled={acting}
-              onClick={() => onAction('acked')}
-            >
-              {t('alarms.actions.ack')}
-            </Button>
+            <PermissionGate requires={PERMISSIONS.alertAck}>
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                disabled={acting}
+                onClick={() => onAction('acked')}
+              >
+                {t('alarms.actions.ack')}
+              </Button>
+            </PermissionGate>
           )}
           {!isResolved && (
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={acting}
-              onClick={() => onAction('resolved')}
-            >
-              {t('alarms.actions.resolve')}
-            </Button>
-          )}
-          {!isResolved && (
-            <Button
-              size="small"
-              variant="text"
-              color="warning"
-              disabled={acting}
-              onClick={() => onAction('resolved')}
-            >
-              {t('alarms.actions.contest')}
-            </Button>
+            <PermissionGate requires={PERMISSIONS.alertResolve}>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={acting}
+                onClick={() => onAction('resolved')}
+              >
+                {t('alarms.actions.resolve')}
+              </Button>
+            </PermissionGate>
           )}
         </Stack>
       </Stack>

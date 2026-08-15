@@ -1,7 +1,5 @@
 import {
-  JwtAuthGuard,
   type PageRequestDto,
-  PermissionsGuard,
   RequirePermissions,
   type UuidParamDto,
   ZodValidationPipe,
@@ -9,6 +7,7 @@ import {
   pageRequestSchema,
   uuidParamSchema,
 } from '@fleetvision/auth';
+import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
 import { decodeCursor } from '@fleetvision/shared-kernel';
 /**
  * Alarms controller — alarm list/detail + acknowledge/resolve lifecycle.
@@ -20,11 +19,12 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
+  Optional,
   Param,
   Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AlarmNotFoundError } from '../domain/index.js';
@@ -34,13 +34,16 @@ import type {
 } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
 import { type ResolveAlarmDto, resolveAlarmSchema } from './notification.dto.js';
+import { ALARM_REALTIME_GATEWAY } from './notification.tokens.js';
 
 @Controller('api/v1/notification/alerts')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AlarmsController {
   constructor(
     private readonly alarms: AlarmOccurrenceRepository,
+    @Optional()
+    @Inject(ALARM_REALTIME_GATEWAY)
     private readonly gateway: AlarmRealtimeGateway | null,
+    @Optional() @Inject(METRICS_TOKEN) private readonly metrics: TelemetryMetrics | null,
   ) {}
 
   @Get()
@@ -95,6 +98,7 @@ export class AlarmsController {
     const prev = alarm.status;
     alarm.acknowledge(p.userId);
     await this.alarms.updateStatus(alarm, 'ACKNOWLEDGE', prev, alarm.status, p.userId);
+    this.metrics?.alarmsAcknowledged.inc({ actor: 'user' });
     this.gateway?.emitAlarmAcknowledged(p.tenantId, alarm);
     return { data: { id: alarm.id, status: alarm.status } };
   }
@@ -113,6 +117,7 @@ export class AlarmsController {
     const prev = alarm.status;
     alarm.resolve(p.userId, body.reason);
     await this.alarms.updateStatus(alarm, 'RESOLVE', prev, alarm.status, p.userId, body.reason);
+    this.metrics?.alarmsResolved.inc({ actor: 'user' });
     this.gateway?.emitAlarmResolved(p.tenantId, alarm);
     return { data: { id: alarm.id, status: alarm.status } };
   }

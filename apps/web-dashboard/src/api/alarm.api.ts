@@ -55,13 +55,28 @@ function mapStatus(status: string): AlarmStatus {
 
 // ── Fetchers ─────────────────────────────────────────────────────────────────
 
+/** Server-side alarm list filters (Sprint G Part 32 — bounded server pagination). */
+export interface AlarmListParams {
+  status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+  severity?: string;
+  vehicleId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
 /** GET /notification/alerts — real backend; mock fallback in dev. */
-export async function fetchAlarms(): Promise<Alarm[]> {
+export async function fetchAlarms(params: AlarmListParams = {}): Promise<Alarm[]> {
   if (shouldUseMock()) return resolveMock(mockAlarms);
   return withMockFallback(
     async () => {
       const page = await apiGet<{ data: Record<string, unknown>[] }>('/notification/alerts', {
-        limit: 100,
+        limit: params.limit ?? 100,
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.severity ? { severity: params.severity } : {}),
+        ...(params.vehicleId ? { vehicleId: params.vehicleId } : {}),
+        ...(params.from ? { from: params.from } : {}),
+        ...(params.to ? { to: params.to } : {}),
       });
       return page.data.map(mapAlarm);
     },
@@ -83,9 +98,12 @@ async function fetchAlarmDetail(id: string): Promise<Alarm | undefined> {
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
-/** The full alert list (filtering is client-side in the UI). */
-export function useAlarms() {
-  return useQuery({ queryKey: queryKeys.alarms.list(), queryFn: fetchAlarms });
+/** The full alert list (filtering server-side; optional params). */
+export function useAlarms(params: AlarmListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.alarms.list(),
+    queryFn: () => fetchAlarms(params),
+  });
 }
 
 /** Enriched detail for one alarm (the drawer). */

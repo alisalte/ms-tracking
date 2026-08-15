@@ -7,6 +7,7 @@ import { withTenantContext } from '@fleetvision/persistence-knex';
 import { type Page, toCursor } from '@fleetvision/shared-kernel';
 import type {
   NotificationCategory,
+  NotificationPriority,
   NotificationSeverity,
 } from '../../domain/notification-types.js';
 import {
@@ -20,14 +21,27 @@ export interface NotificationRow {
   user_id: string | null;
   category: NotificationCategory;
   severity: NotificationSeverity;
+  event_type: string;
+  vehicle_id: string | null;
+  priority: NotificationPriority;
   title: string;
   body: string;
   link: string | null;
+  metadata: Record<string, unknown>;
   read: boolean;
   read_at: Date | null;
   source_type: string;
   source_id: string | null;
   created_at: Date;
+}
+
+/** Filters for notification history queries (Sprint H §35/§42). */
+export interface NotificationListFilters {
+  eventType?: string;
+  severity?: NotificationSeverity;
+  vehicleId?: string;
+  from?: Date;
+  to?: Date;
 }
 
 export class NotificationRepository {
@@ -43,9 +57,13 @@ export class NotificationRepository {
           user_id: notification.userId,
           category: notification.category,
           severity: notification.severity,
+          event_type: notification.eventType,
+          vehicle_id: notification.vehicleId,
+          priority: notification.priority,
           title: notification.title,
           body: notification.body,
           link: notification.link,
+          metadata: JSON.stringify(notification.metadata ?? {}),
           source_type: notification.sourceType,
           source_id: notification.sourceId,
         });
@@ -57,19 +75,26 @@ export class NotificationRepository {
     }
   }
 
-  /** Cursor-paginated list for a user. */
+  /** Cursor-paginated list for a user (own + broadcast). */
   public async listPage(
     tenantId: string,
-    userId: string,
+    userId: string | null,
     limit: number,
     unreadOnly: boolean,
     cursor?: { createdAt: string; id: string },
+    filters: NotificationListFilters = {},
   ): Promise<Page<NotificationEntity>> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
-      let query = trx<NotificationRow>('notification.notifications').where((q) =>
-        q.where({ user_id: userId }).orWhereNull('user_id'),
-      );
+      let query = trx<NotificationRow>('notification.notifications').where((q) => {
+        if (userId === null) return;
+        q.where({ user_id: userId }).orWhereNull('user_id');
+      });
       if (unreadOnly) query = query.where({ read: false });
+      if (filters.eventType) query = query.where({ event_type: filters.eventType });
+      if (filters.severity) query = query.where({ severity: filters.severity });
+      if (filters.vehicleId) query = query.where({ vehicle_id: filters.vehicleId });
+      if (filters.from) query = query.where('created_at', '>=', filters.from);
+      if (filters.to) query = query.where('created_at', '<=', filters.to);
       if (cursor) {
         query = query.where((q) =>
           q
@@ -89,6 +114,24 @@ export class NotificationRepository {
       const nextCursor =
         hasMore && last ? toCursor('created_at', last.created_at.toISOString(), last.id) : null;
       return { data: page.map((r) => this.toDomain(r)), nextCursor };
+    });
+  }
+
+  /** Get a single notification by id (tenant-scoped). */
+  public async getById(
+    tenantId: string,
+    userId: string | null,
+    notificationId: string,
+  ): Promise<NotificationEntity | null> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx<NotificationRow>('notification.notifications')
+        .where({ id: notificationId, tenant_id: tenantId })
+        .where((q) => {
+          if (userId === null) return;
+          q.where({ user_id: userId }).orWhereNull('user_id');
+        })
+        .first();
+      return row ? this.toDomain(row) : null;
     });
   }
 
@@ -135,14 +178,22 @@ export class NotificationRepository {
   }
 
   private toDomain(row: NotificationRow): NotificationEntity {
+    const metadata =
+      row.metadata && typeof row.metadata === 'object'
+        ? (row.metadata as Record<string, unknown>)
+        : {};
     return NotificationClass.rehydrate(row.id, {
       tenantId: row.tenant_id,
       userId: row.user_id,
       category: row.category,
       severity: row.severity,
+      eventType: row.event_type,
+      vehicleId: row.vehicle_id,
+      priority: row.priority,
       title: row.title,
       body: row.body,
       link: row.link,
+      metadata,
       read: row.read,
       readAt: row.read_at,
       sourceType: row.source_type,

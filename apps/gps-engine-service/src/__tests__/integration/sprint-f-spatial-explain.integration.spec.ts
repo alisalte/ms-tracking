@@ -13,7 +13,6 @@
  * green without Docker; CI runs it for real).
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { PositionEvent } from '../../domain/position-event.js';
 import { PositionRepository } from '../../infrastructure/persistence/position.repository.js';
 import { type IntegrationCtx, bootstrap, dropTestDb } from './db.js';
 
@@ -28,35 +27,33 @@ let ctx: IntegrationCtx | null = null;
 beforeAll(async () => {
   ctx = await bootstrap(DB);
   if (!ctx) return;
-  const repo = new PositionRepository(ctx.knex);
-  const base = Date.now();
-  let _i = 0;
-  for (const tenant of [TENANT_A, TENANT_B]) {
-    for (const vehicle of [VEHICLE_A, VEHICLE_B]) {
-      for (let k = 0; k < 50; k++) {
-        _i += 1;
-        await repo.insert(
-          new PositionEvent({
-            messageId: crypto.randomUUID(),
-            tenantId: tenant,
-            vehicleId: vehicle,
-            capturedAt: new Date(base - k * 60_000),
-            ingestedAt: new Date(),
-            latitude: 35.7 + (tenant === TENANT_A ? 0 : 5) + k * 0.0001,
-            longitude: 51.4 + (tenant === TENANT_A ? 0 : 5) + k * 0.0001,
-            speedKph: 30,
-            headingDeg: 90,
-            altitudeM: null,
-            ignitionOn: true,
-            quality: 'VALID',
-            protocolId: 'gt06',
-            satellites: 10,
-          }),
-        );
-      }
-    }
-  }
-}, 60_000);
+  // Bulk-seed a REALISTIC volume via generate_series (Sprint G G-0 finding:
+  // the original 200-row seed made the planner legitimately prefer Seq Scans —
+  // GiST index usage only wins on non-trivial tables). 5,000 positions across
+  // two tenants/two vehicles. Points are SPREAD over a wide area (±2°) so the
+  // nearby/in-bounds probes match a small fraction of rows — the realistic
+  // selectivity that makes the GiST index the genuinely cheapest plan.
+  await ctx.knex.raw(
+    `INSERT INTO tracking.vehicle_positions
+       (event_id, vehicle_id, tenant_id, captured_at, ingested_at, geom,
+        latitude, longitude, altitude_m, heading_deg, speed_kmh, ignition_on, quality, metadata)
+     SELECT
+       gen_random_uuid(),
+       (ARRAY['${VEHICLE_A}'::uuid, '${VEHICLE_B}'::uuid])[1 + (g % 2)],
+       (ARRAY['${TENANT_A}'::uuid, '${TENANT_B}'::uuid])[1 + (g % 2)],
+       now() - (g || ' seconds')::interval,
+       now(),
+       ST_SetSRID(ST_MakePoint(
+         51.4 + (CASE WHEN g % 2 = 0 THEN 0 ELSE 5 END) + (random() - 0.5) * 4,
+         35.7 + (CASE WHEN g % 2 = 0 THEN 0 ELSE 5 END) + (random() - 0.5) * 4
+       ), 4326)::geography,
+       35.7 + (CASE WHEN g % 2 = 0 THEN 0 ELSE 5 END) + (random() - 0.5) * 4,
+       51.4 + (CASE WHEN g % 2 = 0 THEN 0 ELSE 5 END) + (random() - 0.5) * 4,
+       NULL, 90, 30, true, 1, '{"protocolId":"gt06"}'::jsonb
+     FROM generate_series(0, 4999) AS g`,
+  );
+  await ctx.knex.raw('ANALYZE tracking.vehicle_positions');
+}, 120_000);
 
 afterAll(async () => {
   if (!ctx) return;
@@ -108,7 +105,9 @@ describe('Sprint F spatial query plans (EXPLAIN)', () => {
       [TENANT_A, point],
     );
     expect(plan).toMatch(
-      /Index Scan.*using ix_positions_geom_gist|Bitmap Index Scan.*ix_positions_geom_gist/,
+      // Chunk indexes carry the TimescaleDB chunk prefix (e.g.
+      // _hyper_1_1_chunk_ix_positions_geom_gist) — match the suffix.
+      /Index Scan.*using \S*ix_positions_geom_gist|Bitmap Index Scan.*\S*ix_positions_geom_gist/,
     );
   });
 
@@ -121,7 +120,7 @@ describe('Sprint F spatial query plans (EXPLAIN)', () => {
       [TENANT_A, bbox],
     );
     expect(plan).toMatch(
-      /Index Scan.*using ix_positions_geom_gist|Bitmap Index Scan.*ix_positions_geom_gist/,
+      /Index Scan.*using \S*ix_positions_geom_gist|Bitmap Index Scan.*\S*ix_positions_geom_gist/,
     );
   });
 

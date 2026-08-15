@@ -4,6 +4,9 @@
  *
  * Geofence evaluation is handled separately (by the AlarmEvaluatorService) because
  * it requires async spatial queries + Redis state tracking.
+ *
+ * Sprint G: prolonged_idle + parking evaluators consume the gps-engine
+ * FleetEvent topic (idle.ended / parking.ended carry the final durationSec).
  */
 import type { AlarmEvent } from '../../domain/alarm-event.js';
 import type { AlarmRule } from '../../domain/alarm-rule.js';
@@ -14,7 +17,10 @@ export class OverspeedEvaluator implements RuleEvaluator {
   public evaluate(signal: InputSignal, rule: AlarmRule): AlarmEvent | null {
     if (signal.kind !== 'position') return null;
     const threshold = rule.conditionNum('thresholdKmh', 120);
-    if (signal.speedKph <= threshold) return null;
+    // Guard against implausible GPS speed spikes (jump filter agrees with the
+    // gps-engine's maxPlausibleSpeedKmh cap) — a single bogus packet must not
+    // raise a speeding alarm (Sprint G Part 13).
+    if (signal.speedKph <= threshold || signal.speedKph > 300) return null;
     return {
       ruleId: rule.id,
       type: 'overspeed',
@@ -24,7 +30,12 @@ export class OverspeedEvaluator implements RuleEvaluator {
       lat: signal.lat,
       lng: signal.lng,
       message: `Vehicle exceeded speed limit: ${signal.speedKph.toFixed(1)} km/h (limit ${threshold} km/h)`,
-      sourceEvent: { kind: 'position', speedKph: signal.speedKph, capturedAt: signal.capturedAt },
+      sourceEvent: {
+        kind: 'position',
+        speedKph: signal.speedKph,
+        capturedAt: signal.capturedAt,
+        sourceEventId: signal.sourceEventId,
+      },
       detectedAt: new Date(signal.capturedAt),
     };
   }
@@ -43,7 +54,12 @@ export class IgnitionOnEvaluator implements RuleEvaluator {
       lat: signal.lat,
       lng: signal.lng,
       message: 'Ignition turned on',
-      sourceEvent: { kind: 'position', ignitionOn: true, capturedAt: signal.capturedAt },
+      sourceEvent: {
+        kind: 'position',
+        ignitionOn: true,
+        capturedAt: signal.capturedAt,
+        sourceEventId: signal.sourceEventId,
+      },
       detectedAt: new Date(signal.capturedAt),
     };
   }
@@ -61,7 +77,12 @@ export class IgnitionOffEvaluator implements RuleEvaluator {
       lat: signal.lat,
       lng: signal.lng,
       message: 'Ignition turned off',
-      sourceEvent: { kind: 'position', ignitionOn: false, capturedAt: signal.capturedAt },
+      sourceEvent: {
+        kind: 'position',
+        ignitionOn: false,
+        capturedAt: signal.capturedAt,
+        sourceEventId: signal.sourceEventId,
+      },
       detectedAt: new Date(signal.capturedAt),
     };
   }
@@ -76,12 +97,17 @@ export class DeviceOfflineEvaluator implements RuleEvaluator {
       ruleId: rule.id,
       type: 'device_offline',
       tenantId: signal.tenantId,
-      vehicleId: signal.deviceId,
+      vehicleId: signal.vehicleId,
       severity: rule.severity,
       lat: null,
       lng: null,
       message: `Device went ${signal.state}`,
-      sourceEvent: { kind: 'device_status', state: signal.state, lastSeenAt: signal.lastSeenAt },
+      sourceEvent: {
+        kind: 'device_status',
+        state: signal.state,
+        lastSeenAt: signal.lastSeenAt,
+        sourceEventId: signal.sourceEventId,
+      },
       detectedAt: new Date(signal.lastSeenAt),
     };
   }
@@ -100,7 +126,12 @@ export class TripStartedEvaluator implements RuleEvaluator {
       lat: null,
       lng: null,
       message: 'Trip started',
-      sourceEvent: { kind: 'trip', type: signal.type, startedAt: signal.startedAt },
+      sourceEvent: {
+        kind: 'trip',
+        type: signal.type,
+        startedAt: signal.startedAt,
+        sourceEventId: signal.sourceEventId,
+      },
       detectedAt: new Date(signal.startedAt),
     };
   }
@@ -124,6 +155,7 @@ export class TripEndedEvaluator implements RuleEvaluator {
         type: signal.type,
         distanceKm: signal.distanceKm,
         durationSec: signal.durationSec,
+        sourceEventId: signal.sourceEventId,
       },
       detectedAt: new Date(signal.endedAt),
     };
@@ -151,20 +183,68 @@ export class ExcessiveTripDurationEvaluator implements RuleEvaluator {
   }
 }
 
+/**
+ * Prolonged idle: idle.ended whose duration met/exceeded the rule's
+ * minDurationSec (Sprint G — fed by the gps-engine idle FSM via the
+ * FleetEvent topic; NOT re-derived here).
+ */
+export class ProlongedIdleEvaluator implements RuleEvaluator {
+  public evaluate(signal: InputSignal, rule: AlarmRule): AlarmEvent | null {
+    if (signal.kind !== 'idle') return null;
+    const min = rule.conditionNum('minDurationSec', 900); // default 15 min
+    if (signal.durationSec < min) return null;
+    return {
+      ruleId: rule.id,
+      type: 'prolonged_idle',
+      tenantId: signal.tenantId,
+      vehicleId: signal.vehicleId,
+      severity: rule.severity,
+      lat: null,
+      lng: null,
+      message: `Prolonged idle: ${Math.round(signal.durationSec / 60)} min (limit ${Math.round(min / 60)} min)`,
+      sourceEvent: {
+        kind: 'idle',
+        type: signal.type,
+        durationSec: signal.durationSec,
+        sourceEventId: signal.sourceEventId,
+      },
+      detectedAt: new Date(signal.endedAt),
+    };
+  }
+}
+
+/**
+ * Parking: parking.ended whose duration met/exceeded the rule's
+ * minDurationSec (Sprint G — fed by the gps-engine parking FSM).
+ */
+export class ParkingEvaluator implements RuleEvaluator {
+  public evaluate(signal: InputSignal, rule: AlarmRule): AlarmEvent | null {
+    if (signal.kind !== 'parking') return null;
+    const min = rule.conditionNum('minDurationSec', 3_600); // default 1h
+    if (signal.durationSec < min) return null;
+    return {
+      ruleId: rule.id,
+      type: 'parking',
+      tenantId: signal.tenantId,
+      vehicleId: signal.vehicleId,
+      severity: rule.severity,
+      lat: null,
+      lng: null,
+      message: `Extended parking: ${Math.round(signal.durationSec / 3600)} h (limit ${min / 3600} h)`,
+      sourceEvent: {
+        kind: 'parking',
+        type: signal.type,
+        durationSec: signal.durationSec,
+        sourceEventId: signal.sourceEventId,
+      },
+      detectedAt: new Date(signal.endedAt),
+    };
+  }
+}
+
 /** Evaluator registry — maps rule type to evaluator instance. */
 export function buildEvaluatorRegistry(): Map<string, RuleEvaluator> {
   const map = new Map<string, RuleEvaluator>();
-  const evaluators: RuleEvaluator[] = [
-    new OverspeedEvaluator(),
-    new IgnitionOnEvaluator(),
-    new IgnitionOffEvaluator(),
-    new DeviceOfflineEvaluator(),
-    new TripStartedEvaluator(),
-    new TripEndedEvaluator(),
-    new ExcessiveTripDurationEvaluator(),
-  ];
-  // Each evaluator handles one type; the AlarmEvaluatorService dispatches by rule.type.
-  // The registry maps the type string → evaluator. An evaluator may handle multiple types.
   const typeMap: Record<string, RuleEvaluator> = {
     overspeed: new OverspeedEvaluator(),
     ignition_on: new IgnitionOnEvaluator(),
@@ -173,10 +253,11 @@ export function buildEvaluatorRegistry(): Map<string, RuleEvaluator> {
     trip_started: new TripStartedEvaluator(),
     trip_ended: new TripEndedEvaluator(),
     excessive_trip_duration: new ExcessiveTripDurationEvaluator(),
+    prolonged_idle: new ProlongedIdleEvaluator(),
+    parking: new ParkingEvaluator(),
   };
   for (const [type, evalInstance] of Object.entries(typeMap)) {
     map.set(type, evalInstance);
   }
-  void evaluators; // retained for documentation — the typeMap is the actual registry
   return map;
 }

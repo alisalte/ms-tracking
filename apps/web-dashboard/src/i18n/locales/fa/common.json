@@ -60,7 +60,8 @@
     "reports": "گزارش‌ها",
     "admin": "مدیریت",
     "geofences": "محدوده‌های جغرافیایی",
-    "commands": "فرمان‌ها"
+    "commands": "فرمان‌ها",
+    "notifications": "اعلان‌ها"
   },
   "common": {
     "search": "جستجو...",
@@ -475,6 +476,75 @@
     "snapshot": {
       "saved": "عکس فوری ذخیره شد",
       "failed": "عکس فوری ناموفق بود — دوباره تلاش کنید"
+    }
+  },
+  "notifications": {
+    "title": "اعلان‌ها",
+    "markAllRead": "علامت‌گذاری همه به‌عنوان خوانده‌شده",
+    "empty": "هیچ اعلانی وجود ندارد",
+    "viewAll": "مشاهده همه اعلان‌ها",
+    "center": {
+      "title": "مرکز اعلان‌ها",
+      "subtitle": "اعلان‌های مبتنی بر هشدار، وضعیت تحویل و ترجیحات شما",
+      "history": "تاریخچه",
+      "preferences": "ترجیحات",
+      "deliveries": "تلاش‌های تحویل",
+      "noDeliveries": "هیچ تلاش تحویلی ثبت نشده است",
+      "attempts": "{{count}} تلاش",
+      "filters": {
+        "type": "نوع",
+        "severity": "شدت",
+        "from": "از",
+        "to": "تا",
+        "unreadOnly": "فقط خوانده‌نشده"
+      }
+    },
+    "preferences": {
+      "hint": "انتخاب کنید چگونه اعلان دریافت کنید. ایمیل نیازمند ارائه‌دهنده پیکربندی‌شده است؛ پیامک و پوش تا زمان پیکربندی ارائه‌دهنده در دسترس نیستند.",
+      "enabled": "فعال",
+      "channelUnavailable": "پیکربندی نشده — در دسترس نیست"
+    },
+    "severity": {
+      "critical": "بحرانی",
+      "high": "بالا",
+      "normal": "عادی",
+      "low": "پایین"
+    },
+    "status": {
+      "PENDING": "در انتظار",
+      "SENT": "ارسال‌شده",
+      "DELIVERED": "تحویل‌شده",
+      "FAILED": "ناموفق",
+      "READ": "خوانده‌شده",
+      "UNREAD": "خوانده‌نشده"
+    },
+    "channel": {
+      "in_app": "درون‌برنامه",
+      "websocket": "بلادرنگ",
+      "email": "ایمیل",
+      "sms": "پیامک",
+      "push": "پوش",
+      "webhook": "وب‌هوک"
+    },
+    "category": {
+      "alarm": "هشدار"
+    },
+    "eventTypes": {
+      "overspeed": "سرعت غیرمجاز",
+      "geofence_enter": "ورود به حصار جغرافیایی",
+      "geofence_exit": "خروج از حصار جغرافیایی",
+      "geofence_dwell": "توقف در حصار جغرافیایی",
+      "device_offline": "قطع ارتباط دستگاه",
+      "device_online": "برقراری ارتباط دستگاه",
+      "prolonged_idle": "کارکرد بیهوده طولانی",
+      "parking": "پارک غیرمجاز",
+      "low_battery": "باتری ضعیف",
+      "ignition_on": "روشن شدن موتور",
+      "ignition_off": "خاموش شدن موتور",
+      "trip_started": "شروع سفر",
+      "trip_ended": "پایان سفر",
+      "excessive_trip_duration": "مدت سفر غیرعادی",
+      "excessive_stop_duration": "توقف طولانی"
     }
   },
   "alarms": {

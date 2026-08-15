@@ -79,6 +79,51 @@ export class AlarmOccurrenceRepository {
   }
 
   /**
+   * Sprint G Part 12 — the one-open-alarm gate: find the OPEN alarm for a
+   * (rule, vehicle, type) triple, if any. Additional detections while this
+   * row exists update its detail instead of creating new OPEN alarms.
+   */
+  public async findOpenByRuleAndVehicle(
+    tenantId: string,
+    ruleId: string,
+    vehicleId: string,
+    type: string,
+  ): Promise<AlarmOccurrence | null> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx<AlarmOccurrenceRow>('notification.alerts')
+        .where({
+          tenant_id: tenantId,
+          rule_id: ruleId,
+          vehicle_id: vehicleId,
+          type,
+          status: 'OPEN',
+        })
+        .orderBy('raised_at', 'desc')
+        .first();
+      return row ? this.toDomain(row) : null;
+    });
+  }
+
+  /**
+   * Sprint G Part 12 — merge detection metadata into an OPEN alarm's detail
+   * (occurrenceCount/lastSeenAt/last detection). Optimistic-versioned.
+   */
+  public async updateDetail(
+    alarm: AlarmOccurrence,
+    detail: Record<string, unknown>,
+  ): Promise<void> {
+    await withTenantContext(this.knex, alarm.tenantId, async (trx) => {
+      await trx('notification.alerts')
+        .where({ id: alarm.id, tenant_id: alarm.tenantId, version: alarm.version })
+        .update({
+          detail: JSON.stringify(detail),
+          version: this.knex.raw('version + 1'),
+          updated_at: this.knex.fn.now(),
+        });
+    });
+  }
+
+  /**
    * Cursor-paginated list with optional filters. Ordered by raised_at DESC + id
    * for stable keyset pagination.
    */

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Bell,
+  BellRing,
   LayoutDashboard,
   Map as MapIcon,
   MapPin,
@@ -68,6 +69,13 @@ export const NAV_GROUPS: NavGroup[] = [
     groupKey: 'operations',
     items: [
       { key: 'alarms', path: '/alarms', icon: Bell },
+      {
+        // Sprint H — Notification Center (bell history + preferences).
+        key: 'notifications',
+        path: '/notifications',
+        icon: BellRing,
+        permission: PERMISSIONS.notificationRead,
+      },
       { key: 'commands', path: '/commands', icon: TerminalSquare },
       { key: 'geofences', path: '/geofences', icon: MapPin },
     ],

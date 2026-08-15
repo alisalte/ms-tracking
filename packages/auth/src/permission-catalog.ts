@@ -64,6 +64,22 @@ export const Permissions = {
   // resolve endpoint additionally rejects JWTs (API-key-only). Prevents cross-tenant
   // device enumeration by any user (including tenant-admin's wildcard).
   DEVICE_REGISTRY_RESOLVE: 'device.registry.resolve',
+
+  // --- Alarm/Event engine (notification-service) — Sprint G ---
+  NOTIFICATION_ALERT_READ: 'notification.alert.read', // alarm list/detail + in-app notifications
+  NOTIFICATION_ALERT_ACK: 'notification.alert.ack', // acknowledge alarms
+  NOTIFICATION_ALERT_RESOLVE: 'notification.alert.resolve', // resolve alarms
+  NOTIFICATION_RULE_READ: 'notification.rule.read', // alarm rule reads
+  NOTIFICATION_RULE_CREATE: 'notification.rule.create',
+  NOTIFICATION_RULE_UPDATE: 'notification.rule.update', // update + enable/disable
+  NOTIFICATION_RULE_DELETE: 'notification.rule.delete',
+  NOTIFICATION_EVENT_READ: 'notification.event.read', // FleetEvent history reads
+
+  // --- Notification Center (notification-service) — Sprint H ---
+  NOTIFICATION_READ: 'notification.read', // own notification bell/center reads + mark read
+  NOTIFICATION_READ_ALL: 'notification.read.all', // tenant-wide notification history
+  NOTIFICATION_PREFERENCE_READ: 'notification.preference.read', // own preference reads
+  NOTIFICATION_PREFERENCE_WRITE: 'notification.preference.write', // own preference updates
 } as const;
 
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
@@ -132,6 +148,20 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       Permissions.VEHICLE_WRITE,
       Permissions.DEVICE_READ,
       Permissions.DEVICE_WRITE,
+      // Sprint G — alarm engine administration (rules + lifecycle actions).
+      Permissions.NOTIFICATION_ALERT_READ,
+      Permissions.NOTIFICATION_ALERT_ACK,
+      Permissions.NOTIFICATION_ALERT_RESOLVE,
+      Permissions.NOTIFICATION_RULE_READ,
+      Permissions.NOTIFICATION_RULE_CREATE,
+      Permissions.NOTIFICATION_RULE_UPDATE,
+      Permissions.NOTIFICATION_RULE_DELETE,
+      Permissions.NOTIFICATION_EVENT_READ,
+      // Sprint H — notification center incl. tenant-wide history.
+      Permissions.NOTIFICATION_READ,
+      Permissions.NOTIFICATION_READ_ALL,
+      Permissions.NOTIFICATION_PREFERENCE_READ,
+      Permissions.NOTIFICATION_PREFERENCE_WRITE,
     ],
     mfaRequired: false,
   },
@@ -151,6 +181,14 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       Permissions.FLEET_READ,
       Permissions.VEHICLE_READ,
       Permissions.DEVICE_READ,
+      // Sprint G — read-only alarm/event visibility (no lifecycle actions).
+      Permissions.NOTIFICATION_ALERT_READ,
+      Permissions.NOTIFICATION_RULE_READ,
+      Permissions.NOTIFICATION_EVENT_READ,
+      // Sprint H — own notification bell/center + own preferences.
+      Permissions.NOTIFICATION_READ,
+      Permissions.NOTIFICATION_PREFERENCE_READ,
+      Permissions.NOTIFICATION_PREFERENCE_WRITE,
     ],
     mfaRequired: false,
   },

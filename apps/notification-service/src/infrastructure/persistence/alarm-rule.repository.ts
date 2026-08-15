@@ -1,7 +1,13 @@
 /**
  * Alarm rule repository — CRUD for notification.alert_rules.
  * Tenant-scoped via withTenantContext (RLS enforced).
+ *
+ * Sprint G Part 38: `listEnabled` (called per consumed event) is backed by a
+ * short-TTL Redis cache, invalidated on EVERY rule mutation (create/update/
+ * delete/enable/disable all funnel through update()/delete() here) — a
+ * disabled rule can never keep triggering for longer than the TTL.
  */
+import type { Redis } from '@fleetvision/cache-redis';
 import type { Knex } from '@fleetvision/persistence-knex';
 import { withTenantContext } from '@fleetvision/persistence-knex';
 import { type Page, toCursor } from '@fleetvision/shared-kernel';
@@ -32,7 +38,25 @@ export interface AlarmRuleRow {
 }
 
 export class AlarmRuleRepository {
-  constructor(private readonly knex: Knex) {}
+  constructor(
+    private readonly knex: Knex,
+    private readonly redis: Redis | null = null,
+    private readonly cacheTtlSec = 30,
+  ) {}
+
+  private cacheKey(tenantId: string): string {
+    return `tenant:${tenantId}:rules:enabled`;
+  }
+
+  /** Drop the tenant's enabled-rule cache (call-site: any rule mutation). */
+  public async invalidateCache(tenantId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(this.cacheKey(tenantId));
+    } catch {
+      // best-effort — TTL bounds staleness anyway
+    }
+  }
 
   /** Create a new rule. */
   public async create(rule: AlarmRule): Promise<void> {
@@ -53,6 +77,7 @@ export class AlarmRuleRepository {
         version: rule.version,
       });
     });
+    await this.invalidateCache(rule.tenantId);
   }
 
   /** Find a rule by id. */
@@ -65,15 +90,49 @@ export class AlarmRuleRepository {
     });
   }
 
-  /** List all enabled rules for a tenant (used by the evaluator to load active rules). */
+  /**
+   * List all enabled rules for a tenant (used by the evaluator to load active
+   * rules). Redis-cached with a short TTL (Sprint G Part 38) — invalidated on
+   * every mutation above, so a disabled rule stops triggering immediately.
+   */
   public async listEnabled(tenantId: string): Promise<AlarmRule[]> {
-    return withTenantContext(this.knex, tenantId, async (trx) => {
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(this.cacheKey(tenantId));
+        if (cached) {
+          const rows = JSON.parse(cached) as AlarmRuleRow[];
+          return rows.map((r) =>
+            this.toDomain({
+              ...r,
+              created_at: new Date(r.created_at),
+              updated_at: new Date(r.updated_at),
+            }),
+          );
+        }
+      } catch {
+        // cache read failure → fall through to the DB
+      }
+    }
+    const rules = await withTenantContext(this.knex, tenantId, async (trx) => {
       const rows = await trx<AlarmRuleRow>('notification.alert_rules').where({
         tenant_id: tenantId,
         enabled: true,
       });
       return rows.map((r) => this.toDomain(r));
     });
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          this.cacheKey(tenantId),
+          JSON.stringify(rules.map((r) => this.toRow(r))),
+          'EX',
+          this.cacheTtlSec,
+        );
+      } catch {
+        // best-effort
+      }
+    }
+    return rules;
   }
 
   /** Cursor-paginated list. */
@@ -124,6 +183,7 @@ export class AlarmRuleRepository {
         });
       if (updated === 0) throw new Error('Optimistic concurrency conflict on alarm rule update.');
     });
+    await this.invalidateCache(rule.tenantId);
   }
 
   /** Delete a rule. */
@@ -131,6 +191,28 @@ export class AlarmRuleRepository {
     await withTenantContext(this.knex, tenantId, async (trx) => {
       await trx('notification.alert_rules').where({ id, tenant_id: tenantId }).del();
     });
+    await this.invalidateCache(tenantId);
+  }
+
+  /** Serialize a domain rule for the Redis cache. */
+  private toRow(rule: AlarmRule): Record<string, unknown> {
+    return {
+      id: rule.id,
+      tenant_id: rule.tenantId,
+      name: rule.name,
+      type: rule.type,
+      severity: rule.severity,
+      enabled: rule.enabled,
+      entity_type: rule.entityType,
+      entity_id: rule.entityId,
+      conditions: rule.conditions,
+      cooldown_sec: rule.cooldownSec,
+      dedup_window_sec: rule.dedupWindowSec,
+      repeat_policy: rule.repeatPolicy,
+      version: rule.version,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   }
 
   private toDomain(row: AlarmRuleRow): AlarmRule {

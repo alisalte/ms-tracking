@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { RedisModule } from '@fleetvision/cache-redis';
 import { type BaseConfig, ConfigModule } from '@fleetvision/config';
 import { HealthModule } from '@fleetvision/health';
-import { LoggerModule } from '@fleetvision/observability';
+import { LoggerModule, MetricsModule } from '@fleetvision/observability';
 import { PersistenceModule } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { NotificationModule } from './api/notification.module.js';
@@ -35,9 +35,19 @@ export class AppModule {
           platformClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            // Per-service migration ledger: the shared dev database records
+            // identity-service's migrations in the default `schema_migrations`
+            // table — a shared ledger makes knex reject this directory as
+            // "corrupt". Each service tracks its own applied set.
+            tableName: 'notification_schema_migrations',
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
+        // Sprint G Part 36 — Prometheus /metrics (events/alarms/dlq counters).
+        MetricsModule.forRoot({
+          telemetry: { prefix: 'fleetvision' },
+          exposeEndpoint: config.NOTIF_METRICS_ENABLED,
+        }),
         HealthModule,
         NotificationModule.forRoot(config),
       ],

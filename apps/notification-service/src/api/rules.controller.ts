@@ -1,7 +1,5 @@
 import {
-  JwtAuthGuard,
   type PageRequestDto,
-  PermissionsGuard,
   RequirePermissions,
   type UuidParamDto,
   ZodValidationPipe,
@@ -15,6 +13,7 @@ import { type Page, decodeCursor } from '@fleetvision/shared-kernel';
  * All routes require JWT + notification.rule.* permissions.
  */
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -26,7 +25,6 @@ import {
   Put,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AlarmRule } from '../domain/index.js';
@@ -35,12 +33,12 @@ import type { AlarmRuleRepository } from '../infrastructure/persistence/alarm-ru
 import {
   type CreateRuleDto,
   type UpdateRuleDto,
+  conditionsForType,
   createRuleSchema,
   updateRuleSchema,
 } from './notification.dto.js';
 
 @Controller('api/v1/notification/rules')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class RulesController {
   constructor(private readonly rules: AlarmRuleRepository) {}
 
@@ -106,6 +104,15 @@ export class RulesController {
     const p = getPrincipal(req);
     const rule = await this.rules.findById(p.tenantId, params.id);
     if (!rule) throw new AlarmRuleNotFoundError();
+    if (body.conditions !== undefined) {
+      // Type-aware condition validation (Part 28) — the update keeps the rule's
+      // type, so validate the new conditions against THAT type.
+      try {
+        conditionsForType(rule.type, body.conditions);
+      } catch (err) {
+        throw new BadRequestException(`Invalid rule conditions: ${(err as Error).message}`);
+      }
+    }
     if (body.name !== undefined) rule.name = body.name;
     if (body.severity !== undefined) rule.severity = body.severity;
     if (body.conditions !== undefined) rule.conditions = body.conditions;

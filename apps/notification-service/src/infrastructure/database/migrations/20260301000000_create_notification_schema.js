@@ -71,8 +71,8 @@ export async function up(knex) {
     t.text('severity').notNullable().checkIn(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
     t.text('status').notNullable().checkIn(['OPEN', 'ACKNOWLEDGED', 'RESOLVED']).defaultTo('OPEN');
     t.uuid('vehicle_id').nullable();
-    t.doublePrecision('lat').nullable();
-    t.doublePrecision('lng').nullable();
+    t.double('lat').nullable();
+    t.double('lng').nullable();
     t.text('message').notNullable();
     t.jsonb('detail').notNullable().defaultTo(JSON.stringify({}));
     t.jsonb('source_events').notNullable().defaultTo(JSON.stringify([]));
@@ -82,6 +82,9 @@ export async function up(knex) {
     t.timestamp('resolved_at', { useTz: true }).nullable();
     t.uuid('resolved_by').nullable();
     t.text('resolution_reason').nullable();
+    // Optimistic-concurrency version (the repository updates with
+    // WHERE version = <loaded> and version = version + 1 — Sprint G Part 12).
+    t.integer('version').notNullable().defaultTo(1);
     t.timestamp('created_at', { useTz: true }).notNullable().defaultTo(knex.fn.now());
     t.timestamp('updated_at', { useTz: true }).notNullable().defaultTo(knex.fn.now());
   });

@@ -31,6 +31,7 @@ import { RedisFsmCache } from '../infrastructure/cache/redis-fsm-cache.js';
 import { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
 import { DlqProducer } from '../infrastructure/kafka/dlq-producer.js';
 import { GpsEngineKafkaConsumer } from '../infrastructure/kafka/kafka-consumer.js';
+import { TrackingEventProducer } from '../infrastructure/kafka/tracking-event-producer.js';
 import { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
 import { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import { TripRepository } from '../infrastructure/persistence/trip.repository.js';
@@ -53,6 +54,7 @@ import {
   REALTIME_GATEWAY,
   SIGNAL_BUS,
   STALE_SWEEPER,
+  TRACKING_EVENT_PRODUCER,
   TRIP_ENGINE,
   TRIP_REPOSITORY,
 } from './tokens.js';
@@ -215,6 +217,25 @@ export class GpsEngineModule {
               dlq,
               metrics,
             }),
+        },
+        // Sprint G — FleetEvent publisher (trip/idle/parking/device-status →
+        // the tracking.events topic; non-fatal, lazy connect, disabled by config).
+        {
+          provide: TRACKING_EVENT_PRODUCER,
+          inject: [GPS_ENGINE_CONFIG, SIGNAL_BUS, METRICS_TOKEN],
+          useFactory: (cfg: GpsEngineConfig, signalBus: SignalBus, metrics: TelemetryMetrics) => {
+            const producer = new TrackingEventProducer({
+              brokers: cfg.GPS_KAFKA_BROKERS.split(','),
+              clientId: `${cfg.GPS_KAFKA_CLIENT_ID}-events`,
+              topic: cfg.GPS_KAFKA_TRACKING_EVENT_TOPIC,
+              signalBus,
+              metrics,
+            });
+            if (cfg.GPS_TRACKING_EVENT_PUBLISH_ENABLED) {
+              producer.start();
+            }
+            return producer;
+          },
         },
         // Sprint D §10 — ONLINE→STALE sweeper (covers crashed-gateway devices).
         {

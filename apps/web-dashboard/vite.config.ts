@@ -35,6 +35,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Don't watch Playwright E2E artifacts (traces/reports churn + lock files
+    // crash the dev-server watcher with EBUSY on Windows).
+    watch: {
+      ignored: ['**/e2e/.results/**', '**/playwright-report/**', '**/test-results/**'],
+    },
     proxy: {
       '/api/v1/fleets': { target: fleetTarget, changeOrigin: true },
       '/api/v1/vehicles': { target: fleetTarget, changeOrigin: true },

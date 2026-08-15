@@ -1,6 +1,5 @@
 import {
   Avatar,
-  Badge,
   Box,
   Divider,
   IconButton,
@@ -12,21 +11,13 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import {
-  Bell,
-  HelpCircle,
-  LogOut,
-  Menu as MenuIcon,
-  Moon,
-  Search,
-  Sun,
-  UserCircle,
-} from 'lucide-react';
+import { HelpCircle, LogOut, Menu as MenuIcon, Moon, Search, Sun, UserCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { NotificationBell } from '@/components/shell/NotificationBell';
 import { useAuth } from '@/hooks/useAuth';
 import { useThemeContext } from '@/theme/ThemeRegistry';
 
@@ -115,17 +106,8 @@ export function Topbar({ onMobileMenu }: TopbarProps) {
 
       {/* Right cluster */}
       <Stack direction="row" alignItems="center" spacing={0.25}>
-        <Tooltip title={t('common.alerts')}>
-          <IconButton
-            size="small"
-            aria-label={t('common.alerts')}
-            onClick={() => navigate('/alarms')}
-          >
-            <Badge badgeContent="" color="error" variant="dot">
-              <Bell size={19} />
-            </Badge>
-          </IconButton>
-        </Tooltip>
+        {/* Sprint H — real notification bell (live unread badge + dropdown). */}
+        <NotificationBell />
 
         <Tooltip title={t('common.help')}>
           <IconButton size="small" aria-label={t('common.help')}>

@@ -18,6 +18,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { MaintenancePage } from '@/pages/MaintenancePage';
 import { MapPage } from '@/pages/MapPage';
 import { MfaVerifyPage } from '@/pages/MfaVerifyPage';
+import { NotificationCenterPage } from '@/pages/NotificationCenterPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { ReportsPage } from '@/pages/ReportsPage';
@@ -138,6 +139,15 @@ export const router = createBrowserRouter([
           {
             path: '/alarms',
             element: <AlarmCenterPage />,
+          },
+          {
+            // Sprint H — Notification Center (history + preferences).
+            path: '/notifications',
+            element: (
+              <RequirePermission permission={PERMISSIONS.notificationRead}>
+                <NotificationCenterPage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/assets',

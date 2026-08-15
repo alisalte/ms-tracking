@@ -9,7 +9,7 @@
  * `*` is the tenant-admin wildcard (identity's WILDCARD_PERMISSION) and
  * satisfies any requirement, mirroring the backend's permissionSatisfies().
  */
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '@/auth/auth.store';
@@ -25,6 +25,18 @@ export const PERMISSIONS = {
   deviceRead: 'device.read',
   deviceWrite: 'device.write',
   trackingRead: 'tracking.read',
+  // Sprint G — alarm/event engine (notification-service).
+  alertRead: 'notification.alert.read',
+  alertAck: 'notification.alert.ack',
+  alertResolve: 'notification.alert.resolve',
+  ruleRead: 'notification.rule.read',
+  ruleWrite: 'notification.rule.update',
+  eventRead: 'notification.event.read',
+  // Sprint H — notification center.
+  notificationRead: 'notification.read',
+  notificationReadAll: 'notification.read.all',
+  notificationPreferenceRead: 'notification.preference.read',
+  notificationPreferenceWrite: 'notification.preference.write',
 } as const;
 
 /** Does the granted set (incl. the `*` wildcard) satisfy one requirement? */
@@ -33,7 +45,10 @@ export function permissionSatisfies(granted: readonly string[], required: string
 }
 
 /** Do the granted sets satisfy EVERY requirement (backend = AND semantics)? */
-export function permissionsSatisfy(granted: readonly string[], required: readonly string[]): boolean {
+export function permissionsSatisfy(
+  granted: readonly string[],
+  required: readonly string[],
+): boolean {
   return required.every((r) => permissionSatisfies(granted, r));
 }
 
@@ -81,9 +96,7 @@ export function PermissionDeniedState({ hint }: { hint?: string }) {
     <EmptyState
       icon={ShieldAlert}
       title={t('errors.permissionDeniedTitle', 'Permission denied')}
-      description={
-        hint ?? t('errors.permissionDeniedBody', 'You do not have access to this area.')
-      }
+      description={hint ?? t('errors.permissionDeniedBody', 'You do not have access to this area.')}
     />
   );
 }

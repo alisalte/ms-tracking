@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useCreateGeofence, useDeleteGeofence, useGeofences } from '@/api/geofence.api';
 import { ErrorState } from '@/components/common/ErrorState';
+import { GeofenceDrawMap } from '@/components/geofences/GeofenceDrawMap';
 import { PageHeader } from '@/components/ui';
 import type { AlertOn, GeofenceType } from '@/types/geofence.types';
 import {
@@ -31,7 +32,6 @@ import {
   Typography,
 } from '@mui/material';
 
-const TYPES: GeofenceType[] = ['POLYGON', 'CIRCLE', 'CORRIDOR'];
 const ALERT_OPTIONS: AlertOn[] = ['ENTER', 'EXIT', 'DWELL'];
 
 export function GeofencePage() {
@@ -88,8 +88,12 @@ export function GeofencePage() {
         </Box>
       )}
 
-      {/* Create dialog */}
-      <CreateGeofenceDialog open={showCreate} onClose={() => setShowCreate(false)} />
+      {/* Create dialog (map drawing — Sprint G) */}
+      <CreateGeofenceDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        geofences={geofences ?? []}
+      />
     </Stack>
   );
 }
@@ -156,81 +160,88 @@ function GeofenceCard({ geofence }: { geofence: import('@/types/geofence.types')
   );
 }
 
-/** Create geofence dialog — supports CIRCLE and POLYGON. */
-function CreateGeofenceDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** Create geofence dialog — map drawing (polygon/circle) + form (Sprint G). */
+function CreateGeofenceDialog({
+  open,
+  onClose,
+  geofences,
+}: {
+  open: boolean;
+  onClose: () => void;
+  geofences: readonly import('@/types/geofence.types').Geofence[];
+}) {
   const { t } = useTranslation();
   const create = useCreateGeofence();
   const [name, setName] = useState('');
   const [type, setType] = useState<GeofenceType>('CIRCLE');
-  const [centerLat, setCenterLat] = useState('');
-  const [centerLng, setCenterLng] = useState('');
   const [radius, setRadius] = useState('500');
   const [alerts, setAlerts] = useState<AlertOn[]>(['ENTER']);
+  const [drawn, setDrawn] = useState<
+    import('@/components/geofences/GeofenceDrawMap').DrawnGeofence | null
+  >(null);
 
   const submit = () => {
+    if (!drawn) return;
     create.mutate(
       {
         name,
         type,
-        centerLat: type === 'CIRCLE' ? Number(centerLat) : undefined,
-        centerLng: type === 'CIRCLE' ? Number(centerLng) : undefined,
-        radiusM: type === 'CIRCLE' ? Number(radius) : undefined,
+        // The PostGIS polygon boundary IS the operative geometry (ST_Covers
+        // drives geofence alarms) — always send it, incl. circle approximations.
+        boundary: drawn.boundary,
+        centerLat: type === 'CIRCLE' ? drawn.centerLat : undefined,
+        centerLng: type === 'CIRCLE' ? drawn.centerLng : undefined,
+        radiusM: type === 'CIRCLE' ? drawn.radiusM : undefined,
         alertOn: alerts,
       },
-      { onSuccess: onClose },
+      {
+        onSuccess: () => {
+          setDrawn(null);
+          onClose();
+        },
+      },
     );
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>{t('geofences.createTitle', { defaultValue: 'Create Geofence' })}</DialogTitle>
       <DialogContent>
         <Stack gap={2} sx={{ mt: 1 }}>
-          <TextField
-            label={t('geofences.name', { defaultValue: 'Name' })}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            size="small"
-            fullWidth
-          />
-          <Select
-            value={type}
-            onChange={(e) => setType(e.target.value as GeofenceType)}
-            size="small"
-            fullWidth
-          >
-            {TYPES.map((ty) => (
-              <MenuItem key={ty} value={ty}>
-                {ty}
-              </MenuItem>
-            ))}
-          </Select>
-          {type === 'CIRCLE' && (
-            <Stack direction="row" gap={1}>
-              <TextField
-                label="Lat"
-                value={centerLat}
-                onChange={(e) => setCenterLat(e.target.value)}
-                size="small"
-                type="number"
-              />
-              <TextField
-                label="Lng"
-                value={centerLng}
-                onChange={(e) => setCenterLng(e.target.value)}
-                size="small"
-                type="number"
-              />
+          <Stack direction="row" gap={1}>
+            <TextField
+              label={t('geofences.name', { defaultValue: 'Name' })}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              size="small"
+              fullWidth
+            />
+            <Select
+              value={type}
+              onChange={(e) => setType(e.target.value as GeofenceType)}
+              size="small"
+              sx={{ minWidth: 140 }}
+            >
+              <MenuItem value="CIRCLE">CIRCLE</MenuItem>
+              <MenuItem value="POLYGON">POLYGON</MenuItem>
+            </Select>
+            {type === 'CIRCLE' && (
               <TextField
                 label={t('geofences.radius', { defaultValue: 'Radius (m)' })}
                 value={radius}
                 onChange={(e) => setRadius(e.target.value)}
                 size="small"
                 type="number"
-                sx={{ minWidth: 120 }}
+                sx={{ minWidth: 140 }}
               />
-            </Stack>
-          )}
+            )}
+          </Stack>
+          <GeofenceDrawMap
+            geofences={geofences}
+            mode={type === 'CIRCLE' ? 'circle' : 'polygon'}
+            circleRadiusM={Number(radius) || 0}
+            onDrawn={setDrawn}
+          />
           <Select
             multiple
             value={alerts}
@@ -249,7 +260,7 @@ function CreateGeofenceDialog({ open, onClose }: { open: boolean; onClose: () =>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.close')}</Button>
-        <Button variant="contained" disabled={create.isPending || !name} onClick={submit}>
+        <Button variant="contained" disabled={create.isPending || !name || !drawn} onClick={submit}>
           {create.isPending ? t('common.submitting') : t('geofences.create')}
         </Button>
       </DialogActions>

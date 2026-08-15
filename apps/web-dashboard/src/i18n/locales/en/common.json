@@ -60,7 +60,8 @@
     "reports": "Reports",
     "admin": "Admin",
     "geofences": "Geofences",
-    "commands": "Commands"
+    "commands": "Commands",
+    "notifications": "Notifications"
   },
   "common": {
     "search": "Search...",
@@ -475,6 +476,75 @@
     "snapshot": {
       "saved": "Snapshot saved",
       "failed": "Snapshot failed — try again"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications",
+    "viewAll": "View all notifications",
+    "center": {
+      "title": "Notification Center",
+      "subtitle": "Alarm-driven notifications, delivery status, and your preferences",
+      "history": "History",
+      "preferences": "Preferences",
+      "deliveries": "Delivery attempts",
+      "noDeliveries": "No delivery attempts recorded",
+      "attempts": "{{count}} attempts",
+      "filters": {
+        "type": "Type",
+        "severity": "Severity",
+        "from": "From",
+        "to": "To",
+        "unreadOnly": "Unread only"
+      }
+    },
+    "preferences": {
+      "hint": "Choose how you are notified. Email requires a configured provider; SMS and push are unavailable until providers are configured.",
+      "enabled": "Enabled",
+      "channelUnavailable": "Not configured — unavailable"
+    },
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "normal": "Normal",
+      "low": "Low"
+    },
+    "status": {
+      "PENDING": "Pending",
+      "SENT": "Sent",
+      "DELIVERED": "Delivered",
+      "FAILED": "Failed",
+      "READ": "Read",
+      "UNREAD": "Unread"
+    },
+    "channel": {
+      "in_app": "In-App",
+      "websocket": "Realtime",
+      "email": "Email",
+      "sms": "SMS",
+      "push": "Push",
+      "webhook": "Webhook"
+    },
+    "category": {
+      "alarm": "Alarm"
+    },
+    "eventTypes": {
+      "overspeed": "Overspeed",
+      "geofence_enter": "Geofence Entry",
+      "geofence_exit": "Geofence Exit",
+      "geofence_dwell": "Geofence Dwell",
+      "device_offline": "Device Offline",
+      "device_online": "Device Online",
+      "prolonged_idle": "Prolonged Idle",
+      "parking": "Unauthorized Parking",
+      "low_battery": "Low Battery",
+      "ignition_on": "Ignition On",
+      "ignition_off": "Ignition Off",
+      "trip_started": "Trip Started",
+      "trip_ended": "Trip Ended",
+      "excessive_trip_duration": "Excessive Trip Duration",
+      "excessive_stop_duration": "Excessive Stop Duration"
     }
   },
   "alarms": {

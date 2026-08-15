@@ -7,16 +7,28 @@
  * for the same source does NOT create a duplicate notification.
  */
 import { randomUUID } from 'node:crypto';
-import type { NotificationCategory, NotificationSeverity } from './notification-types.js';
+import type {
+  NotificationCategory,
+  NotificationPriority,
+  NotificationSeverity,
+} from './notification-types.js';
+import { severityToPriority } from './notification-types.js';
 
 export interface NotificationProps {
   readonly tenantId: string;
   readonly userId: string | null;
   readonly category: NotificationCategory;
   readonly severity: NotificationSeverity;
+  /** Alarm/event type (e.g. overspeed, geofence_enter) — Sprint H §7. */
+  readonly eventType: string;
+  /** Vehicle the notification is about (nullable for system notifications). */
+  readonly vehicleId: string | null;
+  priority: NotificationPriority;
   title: string;
   body: string;
   readonly link: string | null;
+  /** Trusted server-side template context (whitelisted keys only — Sprint H §28). */
+  readonly metadata: Record<string, unknown>;
   read: boolean;
   readAt: Date | null;
   readonly sourceType: string;
@@ -29,9 +41,13 @@ export class Notification {
   public readonly userId: string | null;
   public readonly category: NotificationCategory;
   public readonly severity: NotificationSeverity;
+  public readonly eventType: string;
+  public readonly vehicleId: string | null;
+  public priority: NotificationPriority;
   public title: string;
   public body: string;
   public readonly link: string | null;
+  public readonly metadata: Record<string, unknown>;
   public read: boolean;
   public readAt: Date | null;
   public readonly sourceType: string;
@@ -45,9 +61,13 @@ export class Notification {
     this.userId = props.userId;
     this.category = props.category;
     this.severity = props.severity;
+    this.eventType = props.eventType;
+    this.vehicleId = props.vehicleId;
+    this.priority = props.priority ?? severityToPriority(props.severity);
     this.title = props.title;
     this.body = props.body;
     this.link = props.link;
+    this.metadata = props.metadata;
     this.read = props.read;
     this.readAt = props.readAt;
     this.sourceType = props.sourceType;
@@ -57,10 +77,15 @@ export class Notification {
 
   public static create(
     id: string | undefined,
-    props: Omit<NotificationProps, 'read' | 'readAt' | 'createdAt'>,
+    props: Omit<NotificationProps, 'read' | 'readAt' | 'createdAt' | 'priority' | 'metadata'> & {
+      priority?: NotificationPriority;
+      metadata?: Record<string, unknown>;
+    },
   ): Notification {
     return new Notification(id ?? randomUUID(), {
       ...props,
+      priority: props.priority ?? severityToPriority(props.severity),
+      metadata: props.metadata ?? {},
       read: false,
       readAt: null,
       createdAt: new Date(),

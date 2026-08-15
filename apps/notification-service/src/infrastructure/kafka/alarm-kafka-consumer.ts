@@ -1,20 +1,58 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
- * Alarm Kafka consumer — consumes the same telemetry topics as gps-engine-service
- * (position.raw + session.lifecycle) with its own consumer group, routing each
- * message to the AlarmEvaluatorService.
+ * Alarm Kafka consumer — Sprint G.
  *
- * Non-fatal at boot: the service starts even when Kafka is down (serves REST/WS
- * from existing data). Mirrors the gps-engine consumer pattern exactly.
+ * Consumes with its own consumer group:
+ *   - fleetvision.telemetry.position.raw      (device-gateway positions)
+ *   - fleetvision.telemetry.session.lifecycle (gateway session transitions)
+ *   - fleetvision.tracking.events             (gps-engine FleetEvents:
+ *     trip/idle/parking boundaries + device-status transitions)
+ *
+ * Reliability (Part 22 — mirrors the gps-engine Sprint D §15/§19 pattern):
+ *   - Envelope validation at the boundary — malformed events are
+ *     NON-RETRYABLE → straight to the DLQ; they never crash the consumer.
+ *   - Transient failures → bounded in-process retries w/ exponential backoff;
+ *     exhausted → DLQ (`<topic>.dlq` suffix convention).
+ *   - One bad event never throws to the kafkajs runner.
+ *
+ * Idempotency (Part 6): every event carries a deterministic eventId; a
+ * redelivered event is detected via Redis SET NX and skipped (counted as a
+ * duplicate). Tracking events are additionally persisted idempotently to
+ * notification.fleet_events (PK = eventId).
+ *
+ * Non-fatal at boot: the service starts even when Kafka is down (serves
+ * REST/WS from existing data).
  */
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { Kafka } from 'kafkajs';
 import type { AlarmEvaluatorService } from '../../application/alarm-evaluator.service.js';
 import type { InputSignal } from '../../application/evaluators/rule-evaluator.js';
 import type { NotificationConfig } from '../../config/notification.config.js';
+import type { AlarmStateCache } from '../../infrastructure/cache/alarm-state-cache.js';
+import type { FleetEventRepository } from '../../infrastructure/persistence/fleet-event.repository.js';
+import type { AlarmDlqProducer } from './alarm-dlq-producer.js';
+import {
+  EventEnvelopeValidationError,
+  parsePositionSignalEnvelope,
+  parseSessionSignalEnvelope,
+  parseTrackingEventEnvelope,
+} from './envelope-validation.js';
 
 export interface AlarmKafkaConsumerDeps {
   readonly config: NotificationConfig;
   readonly evaluator: AlarmEvaluatorService;
+  readonly stateCache: AlarmStateCache;
+  readonly fleetEvents: FleetEventRepository | null;
+  readonly dlq: AlarmDlqProducer | null;
+  readonly metrics?: TelemetryMetrics | null;
+}
+
+interface ConsumedMessage {
+  readonly topic: string;
+  readonly partition: number;
+  readonly offset: string;
+  readonly key: Buffer | null;
+  readonly value: Buffer;
 }
 
 export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -36,6 +74,10 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
   }
 
   public async onApplicationBootstrap(): Promise<void> {
+    if (!this.deps.config.NOTIF_KAFKA_CONSUMER_ENABLED) {
+      this.logger.log('Kafka consumer disabled (NOTIF_KAFKA_CONSUMER_ENABLED=false).');
+      return;
+    }
     try {
       await this.start();
     } catch (err) {
@@ -57,78 +99,189 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
     await this.consumer.connect();
     await this.consumer.subscribe({
       topic: config.NOTIF_KAFKA_POSITION_TOPIC,
-      fromBeginning: false,
+      fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
     });
     await this.consumer.subscribe({
       topic: config.NOTIF_KAFKA_SESSION_TOPIC,
-      fromBeginning: false,
+      fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
+    });
+    await this.consumer.subscribe({
+      topic: config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC,
+      fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
     });
     this.started = true;
     this.logger.log(
-      `Kafka consumer connected — topics: ${config.NOTIF_KAFKA_POSITION_TOPIC}, ${config.NOTIF_KAFKA_SESSION_TOPIC}`,
+      `Kafka consumer connected — topics: ${config.NOTIF_KAFKA_POSITION_TOPIC}, ${config.NOTIF_KAFKA_SESSION_TOPIC}, ${config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC}`,
     );
-    await this.consumer.run({ eachMessage: (payload) => this.eachMessage(payload) });
+    await this.consumer.run({
+      eachMessage: (payload) =>
+        this.processWithRetry(
+          {
+            topic: payload.topic,
+            partition: payload.partition,
+            offset: payload.message.offset,
+            key: payload.message.key ?? null,
+            value: payload.message.value ?? Buffer.alloc(0),
+          },
+          () => this.dispatch(payload.topic, payload.message.value ?? Buffer.alloc(0)),
+        ),
+    });
   }
 
-  private async eachMessage(payload: {
-    topic: string;
-    message: { value: Buffer | null | undefined };
-  }): Promise<void> {
-    const { topic, message } = payload;
-    try {
-      if (topic === this.deps.config.NOTIF_KAFKA_POSITION_TOPIC) {
-        await this.handlePosition(message.value ?? Buffer.alloc(0));
-      } else if (topic === this.deps.config.NOTIF_KAFKA_SESSION_TOPIC) {
-        await this.handleSession(message.value ?? Buffer.alloc(0));
+  /** Route one validated payload to the evaluator + persistence. */
+  private async dispatch(topic: string, raw: Buffer): Promise<void> {
+    const { config } = this.deps;
+    if (topic === config.NOTIF_KAFKA_POSITION_TOPIC) {
+      const signal = parsePositionSignalEnvelope(raw);
+      await this.handleSignal(signal, 'position', signal.sourceEventId);
+      return;
+    }
+    if (topic === config.NOTIF_KAFKA_SESSION_TOPIC) {
+      const signal = parseSessionSignalEnvelope(raw);
+      await this.handleSignal(signal, 'session', signal.sourceEventId);
+      return;
+    }
+    if (topic === config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC) {
+      const signal = parseTrackingEventEnvelope(raw);
+      if (signal === null) return; // valid but not alarm-relevant
+      await this.handleSignal(signal, 'tracking', signal.sourceEventId);
+      await this.persistFleetEvent(raw, signal);
+      return;
+    }
+    // Subscribed-but-unknown topic — ignore.
+  }
+
+  /** Idempotency gate + evaluation dispatch (Part 6). */
+  private async handleSignal(
+    signal: InputSignal,
+    source: 'position' | 'session' | 'tracking',
+    eventId: string | null,
+  ): Promise<void> {
+    this.deps.metrics?.eventsReceived.inc({ source });
+    if (eventId !== null) {
+      const dup = await this.deps.stateCache.isDuplicateEvent(signal.tenantId, eventId);
+      if (dup) {
+        this.deps.metrics?.duplicateEvents.inc({ source });
+        this.logger.debug(`Duplicate event ${eventId} suppressed (tenant ${signal.tenantId})`);
+        return;
       }
+    }
+    switch (signal.kind) {
+      case 'position':
+        await this.deps.evaluator.processPosition(signal);
+        break;
+      case 'device_status':
+        await this.deps.evaluator.processDeviceStatus(signal);
+        break;
+      case 'trip':
+        await this.deps.evaluator.processTrip(signal);
+        break;
+      case 'idle':
+        await this.deps.evaluator.processIdle(signal);
+        break;
+      case 'parking':
+        await this.deps.evaluator.processParking(signal);
+        break;
+    }
+    this.deps.metrics?.eventsProcessed.inc({ source });
+  }
+
+  /** Persist tracking FleetEvents to the event-history table (idempotent PK). */
+  private async persistFleetEvent(raw: Buffer, signal: InputSignal): Promise<void> {
+    if (!this.deps.fleetEvents) return;
+    try {
+      const env = JSON.parse(raw.toString('utf8')) as {
+        eventId?: string;
+        eventType?: string;
+        occurredAt?: string;
+        severity?: string | null;
+        deviceId?: string | null;
+        metadata?: Record<string, unknown>;
+      };
+      if (!env.eventId || !env.eventType) return;
+      await this.deps.fleetEvents.record({
+        id: env.eventId,
+        tenantId: signal.tenantId,
+        vehicleId: signal.vehicleId,
+        deviceId: env.deviceId ?? null,
+        eventType: env.eventType,
+        occurredAt: new Date(env.occurredAt ?? signal.sourceEventId ?? Date.now()),
+        severity: env.severity ?? null,
+        metadata: env.metadata ?? {},
+      });
     } catch (err) {
-      this.logger.warn(`Kafka message error on topic ${topic}: ${(err as Error).message}`);
+      // Event history is best-effort — evaluation already succeeded.
+      this.logger.warn(`FleetEvent history persist error: ${(err as Error).message}`);
     }
   }
 
-  private async handlePosition(raw: Buffer): Promise<void> {
-    const env = JSON.parse(raw.toString()) as {
-      deviceId?: string;
-      tenantId?: string;
-      timestamp?: string;
-      position?: {
-        latitude?: number;
-        longitude?: number;
-        speedKph?: number;
-        headingDeg?: number;
-        ignitionOn?: boolean | null;
-      };
-    };
-    if (!env.deviceId || !env.tenantId || !env.position?.latitude) return;
-    const signal: InputSignal = {
-      kind: 'position',
-      tenantId: env.tenantId,
-      vehicleId: env.deviceId,
-      lat: env.position.latitude,
-      lng: env.position.longitude ?? 0,
-      speedKph: env.position.speedKph ?? 0,
-      headingDeg: env.position.headingDeg ?? 0,
-      capturedAt: env.timestamp ?? new Date().toISOString(),
-      ignitionOn: env.position.ignitionOn ?? null,
-    };
-    await this.deps.evaluator.processPosition(signal);
-  }
+  /**
+   * Bounded retry + DLQ (Part 22). Malformed (non-retryable) → DLQ immediately;
+   * transient → NOTIF_KAFKA_MAX_ATTEMPTS attempts with exponential backoff,
+   * then DLQ. Never throws to the kafkajs runner.
+   */
+  private async processWithRetry(
+    message: ConsumedMessage,
+    handler: () => Promise<void>,
+  ): Promise<void> {
+    const maxAttempts = Math.max(1, this.deps.config.NOTIF_KAFKA_MAX_ATTEMPTS);
+    const backoffMs = this.deps.config.NOTIF_KAFKA_RETRY_BACKOFF_MS;
+    let attempts = 0;
+    let lastError: Error | null = null;
 
-  private async handleSession(raw: Buffer): Promise<void> {
-    const env = JSON.parse(raw.toString()) as {
-      deviceId?: string;
-      tenantId?: string;
-      state?: string;
-      timestamp?: string;
-    };
-    if (!env.deviceId || !env.tenantId || !env.state) return;
-    const signal: InputSignal = {
-      kind: 'device_status',
-      tenantId: env.tenantId,
-      deviceId: env.deviceId,
-      state: env.state,
-      lastSeenAt: env.timestamp ?? new Date().toISOString(),
-    };
-    await this.deps.evaluator.processDeviceStatus(signal);
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        await handler();
+        return;
+      } catch (err) {
+        lastError = err as Error;
+        if (lastError instanceof EventEnvelopeValidationError) break; // non-retryable
+        if (attempts < maxAttempts) {
+          await sleep(Math.min(backoffMs * 2 ** (attempts - 1), 5_000));
+        }
+      }
+    }
+
+    this.deps.metrics?.eventsFailed.inc({ source: 'tracking' });
+    this.logger.warn(
+      `Kafka message ${message.topic}:${message.partition}:${message.offset} failed after ${attempts} attempt(s): ${lastError?.message}`,
+    );
+    if (!this.deps.dlq) return; // DLQ disabled (tests) — drop after logging
+    const eventId = extractEventId(message.value);
+    await this.deps.dlq.write({
+      originalTopic: message.topic,
+      partition: message.partition,
+      offset: message.offset,
+      key: message.key,
+      value: message.value,
+      reason: lastError?.message ?? 'unknown error',
+      errorClass:
+        lastError instanceof EventEnvelopeValidationError
+          ? 'EventEnvelopeValidationError'
+          : (lastError?.name ?? 'Error'),
+      attempts,
+      eventId,
+      correlationId: eventId,
+      firstSeen: new Date(),
+    });
   }
+}
+
+/** Best-effort eventId/correlationId extraction for DLQ headers. */
+function extractEventId(value: Buffer): string | null {
+  try {
+    const env = JSON.parse(value.toString('utf8')) as {
+      eventId?: string;
+      id?: string;
+      messageId?: string;
+    };
+    return env.eventId ?? env.id ?? env.messageId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

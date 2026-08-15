@@ -36,6 +36,16 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     /** Session-lifecycle topic (device online/offline/stale). */
     GPS_KAFKA_SESSION_TOPIC: z.string().min(1).default('fleetvision.telemetry.session.lifecycle'),
     /**
+     * Sprint G — FleetEvent output topic. The gps-engine republishes its trip/
+     * idle/parking FSM boundary events + device-status transitions as
+     * CloudEvents `tracking.event.v1` envelopes so downstream consumers (the
+     * alarm engine in notification-service) get a single typed event stream
+     * instead of re-deriving trips from raw positions.
+     */
+    GPS_KAFKA_TRACKING_EVENT_TOPIC: z.string().min(1).default('fleetvision.tracking.events'),
+    /** Sprint G — enable/disable FleetEvent publishing (graceful off for tests). */
+    GPS_TRACKING_EVENT_PUBLISH_ENABLED: z.coerce.boolean().default(true),
+    /**
      * Sprint D §15 — bounded in-process processing attempts per message before
      * it is routed to the DLQ. 1 = no retry (fail-fast to DLQ).
      */

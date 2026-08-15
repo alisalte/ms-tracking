@@ -132,6 +132,79 @@
 > "routing is straight-line / geocode returns 0,0 / heat is a stub" statements in
 > the pre-Sprint-F audit body below.
 
+---
+
+> **Update 2026-08-15 — Sprint G (Alarm & Event Engine + Infrastructure Verification) COMPLETE.**
+> The Event→Rule→Alarm→Alarm-history→Frontend pipeline is REAL and verified against live
+> Docker (Kafka + PostgreSQL/PostGIS + Redis). The pre-existing alarm engine in
+> notification-service was audited, not duplicated — Sprint G **wired and repaired** it:
+> gps-engine's trip/idle/parking FSM boundaries + device-status transitions now flow as
+> CloudEvents `tracking.event.v1` on the new `fleetvision.tracking.events` topic with
+> deterministic (idempotent) event ids; the alarm consumer gained strict envelope
+> validation, bounded retry + DLQ, canonicalized session states, and the registry-sourced
+> vehicleId (three latent defects found by the live-stack integration suite, incl. an
+> alerts migration that had never successfully executed). Alarm semantics: overspeed grace
+> period + plausibility cap + **auto-resolve on recovery**, geofence enter/exit with
+> state-based duplicate prevention (PostGIS ST_Covers), device offline/online lifecycle,
+> one-OPEN-alarm dedup (a sustained speed run updates the open alarm's metadata instead of
+> multiplying rows), vehicle>tenant rule-scope precedence, Redis rule cache with mutation
+> invalidation, and per-type rule-configuration validation (unsupported types are rejected,
+> not stored-but-never-firing). New: FleetEvent history table + `GET /api/v1/notification/events`,
+> `notification.*` permissions in the shared RBAC catalog (fleet-admin/viewer grants),
+> Prometheus metrics on notification-service (events/alarms/dlq counters), a fixed alarm
+> realtime hook (the old payload mapping silently dropped every WS event), permission-gated
+> ack/resolve actions, and a real **map-drawing geofence creator** (polygon +
+> circle-as-polygon). Infra (G-0): map-engine added to docker-compose (new Dockerfile,
+> healthcheck); OSRM/Nominatim added as **opt-in compose profiles** per the documented
+> external-dependency deployment model; Sprint F EXPLAIN + integration suites re-run
+> against live Docker (6/6 and 26/26 PASS — the EXPLAIN seed was fixed to a realistic
+> 5,000-row volume so the planner choices are genuine). Tests: notification 89 (incl. 6
+> live-stack acceptance scenarios: speeding no-dup/auto-resolve, geofence one-transition,
+> device offline→online, tenant isolation, event-idempotency), gps-engine +producer suite,
+> web 174. Browser E2E remains **BLOCKED** (no browser automation in the repo). Full
+> report: `docs/implementation/SPRINT-G-ALARM-EVENT-ENGINE.md`. **Supersedes** the
+> "alarms are produced to Kafka; no alarm-processing service consumes them" statements in
+> the pre-Sprint-G audit body below.
+
+---
+
+> **Update 2026-08-15 — Sprint H (Notification Center) COMPLETE.** Alarm→Notification→
+> Channel-Dispatcher→Retry→History is REAL and verified end-to-end. The pre-existing
+> Sprint 5/G notification skeleton was **extended, not duplicated**: the dispatcher now
+> fans out **per-user** notifications (trusted recipients from `iam.users` via a
+> platform-scoped UserDirectory — never alarm payloads), consults per-user preferences
+> (defaults: IN_APP/realtime ON, email/sms/push opt-in), enforces a Redis per-
+> tenant/user/channel rate limit, and renders **en/fa templates** with safe
+> `{{key}}` interpolation (whitelisted data; secrets can't leak). Idempotency:
+> unique `(tenant,user,source_type,source_id)` — Kafka redeliveries cannot duplicate
+> notifications (proven live). Channels via a config-driven
+> `NotificationProviderRegistry`: IN_APP + websocket fully functional (new
+> JWT-validated per-user WS room `user:<tid>:<uid>`), EMAIL via real SMTP/nodemailer
+> (**IMPLEMENTED / NOT CONFIGURED** here — verified with an injected mock provider;
+> Mailpit added as an opt-in `mail` compose profile), SMS/PUSH abstractions
+> (**PROVIDER READY / NOT CONFIGURED** — honestly DISABLED, never faked). Delivery
+> retries are now **durable** (`next_attempt_at` in PostgreSQL + `FOR UPDATE SKIP
+> LOCKED` lease claim — restart-safe, multi-worker) with permanent-vs-transient error
+> classification; the in-memory setTimeout retry is gone. New APIs: notification
+> detail + per-channel delivery-attempt timeline, history filters
+> (type/severity/vehicle/date/scope), provider health; dedicated RBAC permissions
+> (`notification.read(.all)`, `notification.preference.*`) + identity backfill
+> migration. Frontend: the real NotificationBell is mounted in the Topbar with live
+> badge over WS (incremental cache updates), a full **Notification Center page**
+> (URL-synced filters, cursor pagination, delivery-status drawer, preferences matrix
+> with unavailable channels visibly disabled) and complete en/fa i18n. **First
+> browser automation in the repo: Playwright** — login → bell → center → mark-read +
+> authenticated per-user-room socket: **2/2 PASS** against the live stack. Booting the
+> compiled service surfaced and fixed several latent Sprint G defects (missing
+> TOKEN_VERIFIER provider, type-only-import DI tokens, MetricsModule DI, redundant
+> @UseGuards, shared-DB migration-ledger clash). Tests: notification-service 124
+> (19 new unit + 8 live-stack integration scenarios: IN_APP fan-out, email dispatch
+> persistence, disabled-email, duplicate-dispatch, transient-retry, tenant isolation,
+> per-user read state), web-dashboard 181 (7 new), root suite green. Sprint H files
+> are lint-clean (the 353 pre-existing repo lint errors in legacy files are unchanged).
+> Full report: `docs/implementation/SPRINT-H-NOTIFICATION-CENTER.md`. **Supersedes**
+> the "browser E2E BLOCKED (no browser automation)" note from Sprint G.
+
 ## 0. TL;DR
 
 FleetVision is a **well-engineered monorepo with a strong foundation and one genuinely deep
@@ -831,6 +904,16 @@ but the README's "Architecture at a Glance" overstates the implementation by a w
   SPRINT-D-REALTIME-TRACKING-HARDENING.md) — duplicate-connection enforcement, retry+DLQ,
   idempotent projections, out-of-order policy, WS back-pressure, metrics/readiness,
   graceful shutdown, real-Kafka E2E.
+- **Sprint E — Real Frontend & Live Tracking: COMPLETE** (report:
+  SPRINT-E-REAL-FRONTEND-LIVE-TRACKING.md).
+- **Sprint F — Map & Geospatial Tracking: COMPLETE** (report:
+  SPRINT-F-MAP-GEOSPATIAL-TRACKING.md).
+- **Sprint G — Alarm & Event Engine + Infrastructure Verification: COMPLETE** (report:
+  SPRINT-G-ALARM-EVENT-ENGINE.md) — FleetEvent pipeline (tracking.events topic,
+  deterministic ids), alarm-consumer validation/retry/DLQ, one-open-alarm dedup +
+  recovery auto-resolve, geofence/idle/parking/device rules, rule validation + cache,
+  RBAC + WS fix + geofence drawing UI, FleetEvent history API, map-engine in compose +
+  opt-in OSRM/Nominatim profiles. Browser E2E BLOCKED (no automation harness).
 
 (Original audit note: no formal sprint backlog file existed at audit time.) Sprint intent is only inferable from `package.json` descriptions, README
 "Sprint 1" notes, and code comments ("Sprint 1" foundation → "Sprint 2" IAM → "Sprint 3" gateway →
@@ -991,7 +1074,10 @@ Of the README's 14 bounded contexts, these have **no backing service at all**:
 `fleet-management-service` + persistent registry, Sprint C; Driver Management and business-trip
 management — `fleet-service` (parallel line); Notification & Alerting / Alarm Engine —
 `notification-service` (parallel line).)*
-- **Dedicated Alarm engine** (alarms are produced to Kafka; no alarm-processing service consumes them)
+- ~~**Dedicated Alarm engine**~~ — **RESOLVED (Sprint G)**: the notification-service alarm
+  engine now consumes position + session-lifecycle + the new `fleetvision.tracking.events`
+  FleetEvent topic end-to-end (verified against live Kafka/PG/Redis), with retry+DLQ,
+  dedup, auto-resolve, and RBAC/tenant isolation. See the Sprint G banner above.
 - **device-management-service** (referenced by gateway, not built)
 - **API Gateway** (Kong — not present; services are directly exposed, header-auth only)
 - Production platform: Kubernetes, Istio, ArgoCD, Terraform, Helm, OPA, Vault, Keycloak, OTel/Prom/

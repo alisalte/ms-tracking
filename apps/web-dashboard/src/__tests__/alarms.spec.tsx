@@ -5,6 +5,7 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAuthStore } from '@/auth/auth.store';
 import { mockAlarms } from '@/mock/alarm-data';
 import { AlarmCenterPage } from '@/pages/AlarmCenterPage';
 
@@ -67,6 +68,20 @@ function renderAlarms(initialEntry = '/alarms') {
 describe('AlarmCenterPage', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
+    // Sprint G: the drawer's Acknowledge/Resolve actions are permission-gated
+    // (notification.alert.ack/resolve) — seed an admin user so the operator
+    // action tests can click them.
+    useAuthStore.setState({
+      user: {
+        id: 'u1',
+        email: 'admin@test.local',
+        fullName: 'Admin',
+        roles: ['tenant-admin'],
+        permissions: ['*'],
+      } as never,
+      tenantId: 't1',
+      isAuthenticated: true,
+    });
   });
 
   it('renders the title + live stats', async () => {

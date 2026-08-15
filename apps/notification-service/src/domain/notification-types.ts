@@ -17,7 +17,15 @@ export type NotificationSeverity = 'critical' | 'high' | 'normal' | 'low';
 
 export type NotificationChannel = 'websocket' | 'in_app' | 'email' | 'sms' | 'push' | 'webhook';
 
-export type NotificationStatus = 'PENDING' | 'SENT' | 'FAILED' | 'READ';
+export type NotificationStatus = 'PENDING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'READ';
+
+/**
+ * Delivery priority — derived deterministically from notification severity
+ * (Sprint H §25 mapping):
+ *   critical → urgent, high → high, normal → normal, low → low.
+ * Priority influences channel ordering only; it does NOT create queues.
+ */
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 /** Severity rank for preference filtering (higher = more urgent). */
 export const notifSeverityRank: Record<NotificationSeverity, number> = {
@@ -26,6 +34,20 @@ export const notifSeverityRank: Record<NotificationSeverity, number> = {
   normal: 1,
   low: 0,
 };
+
+/** Deterministic severity → priority mapping (documented Sprint H §25). */
+export function severityToPriority(severity: NotificationSeverity): NotificationPriority {
+  switch (severity) {
+    case 'critical':
+      return 'urgent';
+    case 'high':
+      return 'high';
+    case 'normal':
+      return 'normal';
+    default:
+      return 'low';
+  }
+}
 
 /** Default channels when no preference is set. */
 export const DEFAULT_CHANNELS: NotificationChannel[] = ['websocket', 'in_app'];

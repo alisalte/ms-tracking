@@ -117,14 +117,18 @@ export class AlarmOccurrence {
     this.acknowledgedBy = userId;
   }
 
-  /** Transition to RESOLVED. Legal from OPEN or ACKNOWLEDGED. */
-  public resolve(userId: string, reason?: string): void {
+  /**
+   * Transition to RESOLVED. Legal from OPEN or ACKNOWLEDGED. `userId` null =
+   * system auto-resolve (condition recovery — Sprint G Parts 14/17); the
+   * resolution reason carries the automation context.
+   */
+  public resolve(userId: string | null, reason?: string): void {
     if (!isValidTransition(this.status, 'RESOLVED')) {
       throw new IllegalStatusTransitionError(`Cannot resolve an alarm in ${this.status} state.`);
     }
     this.status = 'RESOLVED';
     this.resolvedAt = new Date();
     this.resolvedBy = userId;
-    this.resolutionReason = reason ?? null;
+    this.resolutionReason = userId === null ? `[auto] ${reason ?? ''}`.trim() : (reason ?? null);
   }
 }

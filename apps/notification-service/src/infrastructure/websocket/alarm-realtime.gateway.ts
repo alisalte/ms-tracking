@@ -92,6 +92,9 @@ export class AlarmRealtimeGateway implements OnApplicationBootstrap, OnApplicati
         const allowedRooms = [
           `tenant:${principal.tenantId}:alerts`,
           `tenant:${principal.tenantId}:notifications`,
+          // Sprint H §39/45 — per-user room so targeted notifications reach
+          // only the authorized user.
+          `user:${principal.tenantId}:${principal.userId}`,
         ];
         if (!allowedRooms.includes(room)) {
           this.logger.warn(`WS ${socket.id} denied join to ${room}`);
@@ -144,14 +147,23 @@ export class AlarmRealtimeGateway implements OnApplicationBootstrap, OnApplicati
     });
   }
 
-  /** Emit notification.new to the tenant's notifications room (the bell). */
+  /**
+   * Emit notification.new (the bell). Targeted notifications (userId set) go
+   * to the per-user room; broadcasts go to the tenant-wide notifications room.
+   */
   public emitNotification(tenantId: string, notification: NotificationEntity): void {
-    this.io?.to(`tenant:${tenantId}:notifications`).emit('notification.new', {
+    const room = notification.userId
+      ? `user:${tenantId}:${notification.userId}`
+      : `tenant:${tenantId}:notifications`;
+    this.io?.to(room).emit('notification.new', {
       id: notification.id,
       title: notification.title,
       body: notification.body,
       category: notification.category,
       severity: notification.severity,
+      eventType: notification.eventType,
+      vehicleId: notification.vehicleId,
+      priority: notification.priority,
       link: notification.link,
       createdAt: notification.createdAt,
     });

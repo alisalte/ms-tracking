@@ -73,9 +73,32 @@ export function useAlarmRealtime(tenantId: string | null, wsUrl?: string): Alarm
 
     const unsubs = channels.map(([eventName, type]) =>
       subscribe(eventName, (raw) => {
-        const alarm =
-          (raw as { alert?: Alarm; data?: Alarm }).alert ?? (raw as { data?: Alarm }).data;
-        if (!alarm) return;
+        // The notification-service gateway (alarm-realtime.gateway.ts) emits a
+        // FLAT payload: { id, type, severity, status, vehicleId, message, … } —
+        // map it to the frontend Alarm shape (Sprint G fix; the old extraction
+        // expected nested { alert | data } envelopes and silently dropped
+        // every event).
+        const flat = raw as Record<string, unknown>;
+        const alarm: Alarm | null = flat
+          ? ({
+              id: String(flat.id ?? ''),
+              type: (flat.type as string) ?? 'other',
+              severity: ((flat.severity as string) ?? 'info').toLowerCase(),
+              status:
+                flat.status === 'ACKNOWLEDGED'
+                  ? 'acked'
+                  : flat.status === 'RESOLVED'
+                    ? 'resolved'
+                    : 'raised',
+              vehicleId: (flat.vehicleId as string) ?? (flat.vehicle_id as string) ?? '',
+              vehicleLabel: (flat.vehicleId as string) ?? '',
+              message: (flat.message as string) ?? '',
+              raisedAt: (flat.raisedAt as string) ?? new Date().toISOString(),
+              ackedAt: (flat.acknowledgedAt as string) ?? undefined,
+              resolvedAt: (flat.resolvedAt as string) ?? undefined,
+            } as Alarm)
+          : null;
+        if (!alarm || !alarm.id) return;
         setEvents((prev) => [...prev, { type, alarm }]);
       }),
     );

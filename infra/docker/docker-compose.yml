@@ -210,6 +210,136 @@ services:
     ports:
       - "${WEB_PORT:-8080}:8080"
 
+  # ── Sprint G (G-0) — map-engine + optional routing/geocoding deps ──────────
+  #
+  # Deployment model (docs/specs/08_Map_Engine.md, MAP-1 under ADR-021/022):
+  # OSRM and Nominatim are EXTERNAL, stateless, regionally-deployed services —
+  # NOT platform runtime components. They are therefore NOT part of the default
+  # stack: each is opt-in via a compose profile, so `pnpm stack:up` stays lean.
+  #
+  #   docker compose ... --profile routing up map-engine   # + OSRM routing
+  #   docker compose ... --profile geocoding up map-engine # + Nominatim
+  #
+  # Resource notes (local dev):
+  #   - osrm/osrm-backend: ~256 MB RAM idle + the loaded graph; car OSM extract
+  #     for one country is typically 0.5–2 GB disk. MUST mount your own
+  #     .osm.pbf at /data/map.osm.pbf (see OSRM_DATA_URL below — none bundled).
+  #   - mediagris/nominatim: heavy — needs ≥2 GB RAM for import, ~1 GB idle;
+  #     imports a .pbf at first boot (NOMINATIM_IMPORT_WIKIPEDIA=0 speeds it up).
+  # Never point these at production public endpoints without reading their
+  # usage policies; the compose defaults bind localhost only.
+
+  map-engine:
+    build:
+      context: ../..
+      dockerfile: apps/map-engine-service/Dockerfile
+    container_name: fleetvision-map-engine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3009"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      # map-engine OWNS the geo + tracking.geofences DDL, so its client needs
+      # the platform role for migrations (runtime reads stay tenant-scoped via
+      # withTenantContext + RLS).
+      DBURL: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      JWT_SECRET: ${JWT_SECRET}
+      MAP_DEFAULT_PROVIDER: ${MAP_DEFAULT_PROVIDER:-local}
+      MAP_PROVIDER_REGION: ${MAP_PROVIDER_REGION:-global}
+      # External deps are wired by URL — never hardcoded. Empty = controlled
+      # 503 fallback (Sprint F §13); set when the profile containers run.
+      OSRM_URL: ${OSRM_URL:-}
+      OSRM_PROFILE: ${OSRM_PROFILE:-driving}
+      NOMINATIM_URL: ${NOMINATIM_URL:-}
+      NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-FleetVision-MapEngine/1.0}
+      MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
+      MAP_CACHE_TTL_SECONDS: ${MAP_CACHE_TTL_SECONDS:-300}
+    ports:
+      - "${MAP_ENGINE_PORT:-3009}:3009"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3009/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  osrm:
+    # Opt-in (`--profile routing`). Stateless routing engine on a loaded graph.
+    # The image is a car profile; mount your extract at /data/map.osm.pbf —
+    # without data the container exits (intentional: no bundled map data).
+    image: osrm/osrm-backend:latest
+    container_name: fleetvision-osrm
+    restart: unless-stopped
+    profiles: ["routing"]
+    command: ["osrm-routed", "--algorithm", "mld", "/data/map.osm.pbf"]
+    volumes:
+      - ./osrm-data:/data
+    ports:
+      - "${OSRM_PORT:-5000}:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:5000/route/v1/driving/0,0;0,0 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  nominatim:
+    # Opt-in (`--profile geocoding`). Self-hosted geocoder; imports the PBF at
+    # first boot (slow — minutes to hours depending on extract size).
+    image: mediagis/nominatim:4.4
+    container_name: fleetvision-nominatim
+    restart: unless-stopped
+    profiles: ["geocoding"]
+    environment:
+      PBF_PATH: /nominatim/data/map.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/nominatim-updates.txt
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-fleetvision_dev}
+      # ≤4 threads / no update loop keeps dev resource use bounded.
+      THREADS: 2
+      IMPORT_WIKIPEDIA: "false"
+    volumes:
+      - ./nominatim-data:/nominatim/data
+    ports:
+      - "${NOMINATIM_PORT:-8088}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
+  # ── Sprint H (optional) — Mailpit: local SMTP test sink ────────────────────
+  #
+  # Dev-only SMTP catcher for the notification-service EMAIL channel: point
+  # NOTIF_SMTP_HOST at it (localhost:1025) and read captured messages in the
+  # web UI (http://localhost:8025). Opt-in via the `mail` profile so the
+  # default dev stack stays lean; NEVER use for real recipients.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: fleetvision-mailpit
+    restart: unless-stopped
+    profiles: ["mail"]
+    environment:
+      SMTP_MAX_MESSAGE_SIZE: "10485760"
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8025/livez || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres-data:
   redis-data:

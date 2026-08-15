@@ -16,6 +16,7 @@ import {
   useNotifications,
   useUnreadCount,
 } from '@/api/notification.api';
+import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import {
   Badge,
   Box,
@@ -35,6 +36,10 @@ export function NotificationBell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+
+  // Realtime: new notifications arrive over WebSocket and update the caches
+  // incrementally; the 30s unread-count polling stays as a fallback.
+  useNotificationRealtime();
 
   const { data: count } = useUnreadCount();
   const { data: notifications, isLoading } = useNotifications();
@@ -137,6 +142,18 @@ export function NotificationBell() {
             ))}
           </List>
         )}
+        <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider' }}>
+          <Button
+            fullWidth
+            size="small"
+            onClick={() => {
+              setAnchorEl(null);
+              navigate('/notifications');
+            }}
+          >
+            {t('notifications.viewAll', { defaultValue: 'View all notifications' })}
+          </Button>
+        </Box>
       </Popover>
     </>
   );

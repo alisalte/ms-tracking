@@ -48,6 +48,46 @@ export interface TelemetryMetrics {
   readonly wsSubscriptions: Gauge<string>;
   /** Position updates dropped by coalescing (back-pressure). */
   readonly wsDroppedUpdates: Counter<string>;
+
+  // --- Alarm/Event engine (notification-service) — Sprint G ------------------
+  /** FleetEvents received by source (position | session | tracking). */
+  readonly eventsReceived: Counter<string>;
+  /** FleetEvents processed successfully by source. */
+  readonly eventsProcessed: Counter<string>;
+  /** FleetEvent processing failures by source. */
+  readonly eventsFailed: Counter<string>;
+  /** Duplicate FleetEvents suppressed by eventId idempotency, by source. */
+  readonly duplicateEvents: Counter<string>;
+  /** Rule evaluations run by outcome (evaluated). */
+  readonly rulesEvaluated: Counter<string>;
+  /** Alarm occurrences opened by type. */
+  readonly alarmsOpened: Counter<string>;
+  /** Alarm occurrences acknowledged by actor kind (user | system). */
+  readonly alarmsAcknowledged: Counter<string>;
+  /** Alarm occurrences resolved by actor kind (user | system). */
+  readonly alarmsResolved: Counter<string>;
+
+  // --- Notification Center (notification-service) — Sprint H ----------------
+  /** Notifications created (per-user records) by event type. */
+  readonly notificationsCreated: Counter<string>;
+  /** Channel dispatches attempted by channel. */
+  readonly notificationsDispatched: Counter<string>;
+  /** Channel deliveries accepted by the provider by channel. */
+  readonly notificationsSent: Counter<string>;
+  /** Provider-confirmed deliveries by channel. */
+  readonly notificationsDelivered: Counter<string>;
+  /** Terminal delivery failures by channel. */
+  readonly notificationsFailed: Counter<string>;
+  /** Retry attempts executed by channel. */
+  readonly notificationsRetried: Counter<string>;
+  /** Deliveries abandoned after retry exhaustion by channel. */
+  readonly notificationsDlq: Counter<string>;
+  /** Duplicate notification sources suppressed by idempotency, by event type. */
+  readonly notificationsDeduplicated: Counter<string>;
+  /** Dispatches suppressed by the per-tenant/user/channel rate limiter, by channel. */
+  readonly notificationsRateLimited: Counter<string>;
+  /** Provider-level outcomes by channel × result (success | failure). */
+  readonly notificationProvider: Counter<string>;
 }
 
 export interface TelemetryMetricsOptions {
@@ -57,8 +97,16 @@ export interface TelemetryMetricsOptions {
   readonly defaultMetrics?: boolean;
 }
 
-const GATEWAY_TOPICS = ['position', 'alarm', 'device', 'commandAck', 'session'] as const;
-const CONSUME_TOPICS = ['position', 'session'] as const;
+const GATEWAY_TOPICS = [
+  'position',
+  'alarm',
+  'device',
+  'commandAck',
+  'session',
+  'tracking',
+] as const;
+const CONSUME_TOPICS = ['position', 'session', 'tracking'] as const;
+const EVENT_SOURCES = ['position', 'session', 'tracking'] as const;
 
 /** Create the telemetry metric set on a fresh registry. */
 export function createTelemetryMetrics(options: TelemetryMetricsOptions = {}): TelemetryMetrics {
@@ -152,6 +200,118 @@ export function createTelemetryMetrics(options: TelemetryMetricsOptions = {}): T
     registers: [registry],
   });
 
+  // --- Alarm/Event engine (Sprint G) ----------------------------------------
+  const eventsReceived = new Counter({
+    name: `${prefix}_events_received_total`,
+    help: 'FleetEvents received by source.',
+    labelNames: ['source'],
+    registers: [registry],
+  });
+  const eventsProcessed = new Counter({
+    name: `${prefix}_events_processed_total`,
+    help: 'FleetEvents processed successfully by source.',
+    labelNames: ['source'],
+    registers: [registry],
+  });
+  const eventsFailed = new Counter({
+    name: `${prefix}_events_failed_total`,
+    help: 'FleetEvent processing failures by source.',
+    labelNames: ['source'],
+    registers: [registry],
+  });
+  const duplicateEvents = new Counter({
+    name: `${prefix}_duplicate_events_total`,
+    help: 'Duplicate FleetEvents suppressed by eventId idempotency, by source.',
+    labelNames: ['source'],
+    registers: [registry],
+  });
+  const rulesEvaluated = new Counter({
+    name: `${prefix}_rules_evaluated_total`,
+    help: 'Alarm rule evaluations run.',
+    registers: [registry],
+  });
+  const alarmsOpened = new Counter({
+    name: `${prefix}_alarms_opened_total`,
+    help: 'Alarm occurrences opened by type.',
+    labelNames: ['type'],
+    registers: [registry],
+  });
+  const alarmsAcknowledged = new Counter({
+    name: `${prefix}_alarms_acknowledged_total`,
+    help: 'Alarm occurrences acknowledged by actor kind.',
+    labelNames: ['actor'],
+    registers: [registry],
+  });
+  const alarmsResolved = new Counter({
+    name: `${prefix}_alarms_resolved_total`,
+    help: 'Alarm occurrences resolved by actor kind.',
+    labelNames: ['actor'],
+    registers: [registry],
+  });
+
+  // --- Notification Center (Sprint H) ---------------------------------------
+  const NOTIF_CHANNELS = ['websocket', 'in_app', 'email', 'sms', 'push', 'webhook'] as const;
+  const notificationsCreated = new Counter({
+    name: `${prefix}_notifications_created_total`,
+    help: 'Notifications created by event type.',
+    labelNames: ['type'],
+    registers: [registry],
+  });
+  const notificationsDispatched = new Counter({
+    name: `${prefix}_notifications_dispatched_total`,
+    help: 'Notification channel dispatches attempted by channel.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationsSent = new Counter({
+    name: `${prefix}_notifications_sent_total`,
+    help: 'Notification deliveries accepted by the provider by channel.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationsDelivered = new Counter({
+    name: `${prefix}_notifications_delivered_total`,
+    help: 'Provider-confirmed notification deliveries by channel.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationsFailed = new Counter({
+    name: `${prefix}_notifications_failed_total`,
+    help: 'Terminal notification delivery failures by channel.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationsRetried = new Counter({
+    name: `${prefix}_notifications_retried_total`,
+    help: 'Notification delivery retry attempts by channel.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationsDlq = new Counter({
+    name: `${prefix}_notifications_dlq_total`,
+    help: 'Notification deliveries abandoned after retry exhaustion by channel.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationsDeduplicated = new Counter({
+    name: `${prefix}_notifications_deduplicated_total`,
+    help: 'Duplicate notification sources suppressed by idempotency, by event type.',
+    labelNames: ['type'],
+    registers: [registry],
+  });
+  const notificationsRateLimited = new Counter({
+    name: `${prefix}_notifications_rate_limited_total`,
+    help: 'Dispatches suppressed by the per-tenant/user/channel rate limiter.',
+    labelNames: ['channel'],
+    registers: [registry],
+  });
+  const notificationProvider = new Counter({
+    name: `${prefix}_notification_provider_total`,
+    help: 'Notification provider outcomes by channel × result.',
+    labelNames: ['channel', 'result'],
+    registers: [registry],
+  });
+
   // Pre-seed the bounded label domains so early scrapes expose complete series.
   for (const result of ['accepted', 'rejected_pool_full']) gatewayConnections.inc({ result }, 0);
   for (const scope of ['local', 'cross_instance']) {
@@ -172,6 +332,31 @@ export function createTelemetryMetrics(options: TelemetryMetricsOptions = {}): T
   for (const result of ['accepted', 'rejected', 'stale', 'out_of_order', 'duplicate']) {
     positions.inc({ result }, 0);
   }
+  for (const source of EVENT_SOURCES) {
+    eventsReceived.inc({ source }, 0);
+    eventsProcessed.inc({ source }, 0);
+    eventsFailed.inc({ source }, 0);
+    duplicateEvents.inc({ source }, 0);
+  }
+  rulesEvaluated.inc(0);
+  for (const actor of ['user', 'system']) {
+    alarmsAcknowledged.inc({ actor }, 0);
+    alarmsResolved.inc({ actor }, 0);
+  }
+  for (const channel of NOTIF_CHANNELS) {
+    notificationsDispatched.inc({ channel }, 0);
+    notificationsSent.inc({ channel }, 0);
+    notificationsDelivered.inc({ channel }, 0);
+    notificationsFailed.inc({ channel }, 0);
+    notificationsRetried.inc({ channel }, 0);
+    notificationsDlq.inc({ channel }, 0);
+    notificationsRateLimited.inc({ channel }, 0);
+    for (const result of ['success', 'failure']) {
+      notificationProvider.inc({ channel, result }, 0);
+    }
+  }
+  notificationsCreated.inc(0);
+  notificationsDeduplicated.inc(0);
 
   return {
     registry,
@@ -187,5 +372,23 @@ export function createTelemetryMetrics(options: TelemetryMetricsOptions = {}): T
     wsClients,
     wsSubscriptions,
     wsDroppedUpdates,
+    eventsReceived,
+    eventsProcessed,
+    eventsFailed,
+    duplicateEvents,
+    rulesEvaluated,
+    alarmsOpened,
+    alarmsAcknowledged,
+    alarmsResolved,
+    notificationsCreated,
+    notificationsDispatched,
+    notificationsSent,
+    notificationsDelivered,
+    notificationsFailed,
+    notificationsRetried,
+    notificationsDlq,
+    notificationsDeduplicated,
+    notificationsRateLimited,
+    notificationProvider,
   };
 }
