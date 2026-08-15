@@ -53,6 +53,41 @@
 > gps-engine envelope-persistence). typecheck/build/test/lint all GREEN. Full report:
 > `docs/implementation/SPRINT-C-DEVICE-FLEET-MANAGEMENT.md`.
 
+---
+
+> **Update 2026-08-15 — Sprint D (Real-Time Tracking & Production Telemetry Hardening) COMPLETE.**
+> The telemetry vertical is now **reliable, observable, idempotent, recoverable, tenant-safe, and
+> resilient to reconnects / Kafka failures / service restarts**. Highlights (full report:
+> `docs/implementation/SPRINT-D-REALTIME-TRACKING-HARDENING.md`):
+> - **Duplicate device connections enforced** (newest session wins; local eviction +
+>   cross-pod supersession sweep; the old session can no longer delete the new session's Redis
+>   entry; UDP per-datagram session leak fixed; pool-full now rejects instead of "triage").
+> - **Kafka consumer reliability**: bounded in-process retry → **real DLQ** topics
+>   (`<topic>.dlq`, forensic headers, no secrets) for poison/malformed messages — the old
+>   behavior (swallow + advance = silent data loss on DB outage) is gone; boot-time Kafka outage
+>   now retries with backoff instead of leaving the consumer dead.
+> - **Idempotency completed**: trip/idle/parking projections gained `source_event_id` UNIQUE
+>   (redelivered `trip.started` no longer double-inserts); pipeline dedupe key fixed to
+>   (vehicleId, messageId).
+> - **Out-of-order telemetry policy** (§21): delayed packets are persisted but never regress the
+>   FSM/prev-pos baseline or the live map (previously corrupted Δt accumulators).
+> - **Envelope hardening**: strict consumer-boundary validation (invalid timestamps — previously
+>   `Invalid Date` classified VALID — now non-retryable → DLQ); registry `vehicleId` +
+>   `correlationId` propagate end-to-end.
+> - **WebSocket**: coalescing back-pressure (latest-position semantics, dropped counted),
+>   duplicate-delivery fix (fleet+vehicle room union), room cap, reconnect re-auth verified.
+> - **Device state**: throttled `last_seen` flush (≈1 write/min/device, not per packet) +
+>   ONLINE→STALE sweeper (crashed gateway no longer leaves devices ONLINE forever).
+> - **Registry cache invalidation**: push-based via Redis pub/sub (disable/reassign takes effect
+>   immediately) + bounded HTTP retry/backoff on transient fleet-management failures.
+> - **Observability**: Prometheus `/metrics` on gateway + gps-engine (bounded labels);
+>   Kafka readiness added to `/health/ready` (liveness stays dependency-free); graceful gateway
+>   shutdown (listeners → sessions → producer — TCP/UDP listeners were previously never closed).
+> - **Tests**: gateway 156 (was 124), gps-engine 114 incl. a **real-Kafka → real-Timescale →
+>   real-WebSocket E2E**; the Sprint A/B integration suites that silently skipped now execute
+>   (16 real-PG tests). typecheck/build/test/lint GREEN.
+
+
 ## 0. TL;DR
 
 FleetVision is a **well-engineered monorepo with a strong foundation and one genuinely deep
@@ -65,8 +100,11 @@ data, and ~9 of the 14 documented bounded contexts have no
 service at all. *(Sprint C added the Fleet Management context + a persistent device registry; the
 mock dashboard Fleet pages remain future work.)*
 
-**Build/typecheck/tests: GREEN. Lint: RED (2 trivial working-tree drifts).**
-**Estimated overall completion: ~22 %** (foundation + telemetry vertical much higher; breadth low).
+**Build/typecheck/tests/lint: ALL GREEN (verified 2026-08-15, Sprint D).**
+**Estimated overall completion: ~28 %** (foundation + telemetry vertical production-grade;
+breadth low). Sprint D hardened the telemetry vertical end-to-end — reliability (retry+DLQ,
+duplicate-connection enforcement, restart recovery), idempotent projections, out-of-order
+policy, WS back-pressure, metrics + Kafka readiness, and a real-Kafka→Timescale→WebSocket E2E.
 
 ---
 
@@ -187,7 +225,7 @@ superficial. **No integration tests against real PG/Redis/Kafka.**
 
 ---
 
-### 2.2 device-gateway-service — **PARTIAL (real protocols; in-memory registry)**
+### 2.2 device-gateway-service — **HARDENED (real protocols; persistent registry; Sprint D reliability)**
 
 A genuine multi-protocol binary gateway, not scaffolding.
 
@@ -213,17 +251,18 @@ A genuine multi-protocol binary gateway, not scaffolding.
 - **SessionManager, ConnectionPool** (real cap/back-pressure), **AdapterRegistry** + plugin loader.
 
 **What is PARTIAL / MISSING (evidence):**
-- **Device registry = `InMemoryDeviceRegistry`** (in-memory, seeded from config/tests). The real
-  `device-management-service` **does not exist**; the "gRPC client" is a later swap behind the port —
-  `infrastructure/registry/device-registry.port.ts:56-89`. → Devices cannot be managed/registered at
-  runtime via any service; the gateway only authenticates pre-seeded IMEIs.
+- ✅ **Device registry** — RESOLVED (Sprint C `HttpDeviceRegistry` → fleet-management; Sprint D
+  adds push-based cache invalidation via Redis pub/sub + bounded transient-failure retries).
 - **Raw packet retention = `NullRawRetentionSink` (no-op)** by default. SHA-256 forensic checksum is
   computed, but raw bytes are **not** retained to S3/MinIO (deferred) —
-  `infrastructure/storage/raw-packet-storage.ts:22-26`.
-- **Admin API is UNAUTHENTICATED** (5 endpoints) — the controller comment admits production guards
-  are deferred — `api/admin/admin.controller.ts:6-9`.
+  `infrastructure/storage/raw-packet-storage.ts`.
+- ✅ **Admin API authentication** — RESOLVED (Sprint B guard). Sprint D adds `/metrics` and
+  Kafka-producer readiness.
 - **Command dispatch (device commands downstream): MISSING** — frontend `CommandCenterPage` is a
-  typed placeholder; gateway has no command-dispatch REST path.
+  typed placeholder; gateway has no command-dispatch REST path (documented gap, §31 of Sprint D).
+- Sprint D hardening applied: duplicate-connection enforcement (newest wins, local + cross-pod),
+  UDP pseudo-session reuse (leak fixed), pool-full rejection, auth-grace/UDP-TTL sweeps,
+  graceful listener shutdown, producer retry/event-listener/readiness fixes.
 
 **Endpoints (5 admin + 2 health):** `GET admin/sessions`, `GET admin/listeners`,
 `POST admin/listeners/:id/{enable,disable}`, `GET admin/stats`, `/health/{live,ready}` — all REAL
@@ -238,7 +277,7 @@ session-manager. **Validate real binary decoding and pipeline behavior** — str
 
 ---
 
-### 2.3 gps-engine-service — **PARTIAL (real pipeline; Sprint A data-integrity fixes applied)**
+### 2.3 gps-engine-service — **HARDENED (real pipeline; Sprint A fixes + Sprint D reliability)**
 
 A real-time pipeline that genuinely works end-to-end (verified by reading every stage).
 
@@ -278,10 +317,13 @@ A real-time pipeline that genuinely works end-to-end (verified by reading every 
 - ✅ **[MED] Timescale policies — RESOLVED (Sprint A).** Compression (7d, segmentby `vehicle_id`) +
   retention (180d) policies added (env-configurable). Required dropping the permissive RLS stub
   (Timescale forbids compression with RLS; isolation stays at the repository layer).
-- **[LOW] Kafka DLQ/retry missing** — malformed messages are dropped silently.
-- **[LOW] WebSocket `subscribe` has no authz; CORS `origin:'*'`** — `realtime.gateway.ts:15-16,69`.
-- **No stale-timeout sweeper** — STALE state only arrives from gateway events.
-- **`vehicleId` is really `deviceId`** pending a device/vehicle management service.
+- ✅ **[LOW] Kafka DLQ/retry** — RESOLVED (Sprint D): bounded in-process retry → real
+  `<topic>.dlq` with forensic headers; malformed = non-retryable → DLQ; boot-retry fixed.
+- ✅ **WebSocket authz/CORS** — RESOLVED (Sprint B guards; Sprint D adds coalescing
+  back-pressure, room caps, union delivery, reconnect re-auth).
+- ✅ **Stale-timeout sweeper** — RESOLVED (Sprint D): ONLINE→STALE sweep + throttled last-seen.
+- ✅ **`vehicleId` is really `deviceId`** — RESOLVED (Sprint C/D): registry-sourced
+  `vehicleId` now propagates through the envelope (deviceId fallback for old producers).
 
 **Endpoints (3 + 2 health + WS):** `GET /positions/:vehicleId/latest`, `GET /positions/:vehicleId`
 (range), `GET /devices/:deviceId/status` — all COMPLETE (Redis→DB fallback), tenant-scoped via
@@ -505,8 +547,10 @@ election). Not HA.
 - → This forms a **real pipeline: device → gateway → Kafka → gps-engine → TimescaleDB/Redis/WS.**
 - Envelopes are **CloudEvents-aligned JSON**. **Avro + Schema Registry: NOT implemented**
   (deferred `bus-kafka` package).
-- **No DLQ / retry / explicit idempotency layer** beyond the DB unique constraint
-  (`event_id` ON CONFLICT) and idempotent Kafka producers. Malformed Kafka messages are dropped.
+- ✅ **DLQ / retry (Sprint D)**: gps-engine wraps every message in bounded in-process retries
+  (transient) or straight-to-DLQ (structural), republishing to `<topic>.dlq` with forensic
+  headers (original topic/partition/offset, reason, attempts, event/correlation ids).
+  Idempotency now also covers trip/idle/parking projections (UNIQUE source_event_id).
 - **Consumer groups / ordering:** ordering via `device_id` partition key; single consumer group.
 
 **RabbitMQ — NOT USED in code.** No `amqp`/`rabbitmq` import anywhere. Pure infrastructure.
@@ -527,12 +571,11 @@ audit events). map/media/identity-business do not consume events. RabbitMQ and g
 + `/health/ready`.
 
 **Authentication/authorization across services (critical pattern):**
-- **identity-service: JWT + RBAC guards (real).**
-- **device-gateway, gps-engine, map-engine, media-service: NO JWT, NO RBAC.** They trust a
-  `tenant-id` / `X-Tenant-Id` header (or query) for tenancy and have **no authentication at all**.
-  The design assumes an API Gateway + OPA in front (documented, not present). → Today any client
-  that knows a tenant id can call these services directly.
-- **device-gateway admin API: unauthenticated** by design (cluster-internal).
+- ✅ **Sprint B resolved this**: every backend service authenticates JWT/API keys via the shared
+  `@fleetvision/auth` package (global CompositeAuthGuard + PermissionsGuard); the tenant is
+  derived from the verified credential — never a client header. WS handshakes verify JWTs;
+  rooms are tenant-scoped; the gateway admin API requires `telemetry.gateway.manage`.
+  (Historical note: before Sprint B these services trusted `X-Tenant-Id` with no auth.)
 
 **Status split:** ~85 % of endpoints are REAL implementations. Stubs/broken: map `/heat`,
 map `/layers` (static), map `geocode` (returns 0,0), map routing/match (approximation),
@@ -548,13 +591,14 @@ in the frontend.
 | Suite | Files | Cases | Result |
 |---|---|---|---|
 | identity-service | 8 | 42 | ✅ pass |
-| device-gateway-service | 10 | 124 | ✅ pass |
-| gps-engine-service | 10 | 58 | ✅ pass |
+| device-gateway-service | 14 | 156 | ✅ pass (Sprint D: +32 reliability) |
+| gps-engine-service | 19 | 114 | ✅ pass (Sprint D: +56 incl. E2E/WS/DLQ; integration suites now EXECUTE — 16 real-PG tests that previously skipped) |
+| fleet-management-service | 5 | 45 | ✅ pass |
 | map-engine-service | 5 | 26 | ✅ pass |
 | media-service | 4 | 58 | ✅ pass |
-| packages (7 libs) | 7 | ~25 | ✅ pass |
+| packages (8 libs incl. auth) | ~10 | ~50 | ✅ pass |
 | web-dashboard (vitest) | 14 | 107 | ✅ pass |
-| **Total** | **~58** | **~440 backend + 107 web ≈ 545** | **all green** |
+| **Total** | **~79** | **~548 backend + 107 web ≈ 655** | **all green** (2026-08-15) |
 
 **Quality:** Tests **validate real behavior** in the strongest areas (binary protocol decoding,
 FSM transitions, refresh-token reuse detection, auth rate-limiting, pagination-cursor tamper
@@ -579,16 +623,10 @@ resistance, traceparent compliance). They are **not** superficial.
 | `pnpm typecheck` (`tsc -b` + per-pkg `--noEmit`) | ✅ PASS | exit 0 |
 | `pnpm build` (`tsc -b`) | ✅ PASS | exit 0; `dist/` emitted |
 | `pnpm test` (jest workspace + vitest web) | ✅ PASS | all suites green |
-| `pnpm lint` (`biome check .`) | ❌ **FAIL** | exit 1 — **2 trivial issues only** |
+| `pnpm lint` (`biome check .`) | ✅ PASS | exit 0 (Sprint D — biome autofix applied repo-wide)
 
-**Lint failure detail (working-tree drift, not structural):**
-1. `apps/web-dashboard/vite.config.ts` — import order (organizeImports).
-2. `.claude/settings.local.json` — JSON formatting.
-
-Both files are already dirty in `git status`; the **committed** code likely passes. No code-quality
-defects. (Docker build / `stack:up` / live migrations were **not** executed to avoid mutating the
-environment, per audit constraints — they are low-risk given typecheck/build/tests pass and
-migrations are standard knex.)
+(Sprint D also ran the docker-backed integration/E2E suites against the live local stack:
+PostgreSQL/Timescale, Kafka, Redis all exercised — see Sprint D report §Testing.)
 
 ---
 
@@ -723,8 +761,16 @@ but the README's "Architecture at a Glance" overstates the implementation by a w
 
 ## 14. Sprint Mapping
 
-There is **no formal sprint backlog file** in the repo (no `sprint*.md`; the `docs/` sprint grep
-returned nothing). Sprint intent is only inferable from `package.json` descriptions, README
+**Formal sprint status (docs/implementation/):**
+- **Sprint A — GPS Data Integrity: COMPLETE** (report: SPRINT-A-GPS-DATA-INTEGRITY.md)
+- **Sprint B — Security & Tenant Isolation: COMPLETE** (report: SPRINT-B-SECURITY-TENANT-ISOLATION.md)
+- **Sprint C — Device & Fleet Management: COMPLETE** (report: SPRINT-C-DEVICE-FLEET-MANAGEMENT.md)
+- **Sprint D — Real-Time Tracking & Telemetry Hardening: COMPLETE** (report:
+  SPRINT-D-REALTIME-TRACKING-HARDENING.md) — duplicate-connection enforcement, retry+DLQ,
+  idempotent projections, out-of-order policy, WS back-pressure, metrics/readiness,
+  graceful shutdown, real-Kafka E2E.
+
+(Original audit note: no formal sprint backlog file existed at audit time.) Sprint intent is only inferable from `package.json` descriptions, README
 "Sprint 1" notes, and code comments ("Sprint 1" foundation → "Sprint 2" IAM → "Sprint 3" gateway →
 "Sprint 8/9/10" gps/map/media). **Reconciling those implicit claims against code:**
 
@@ -777,17 +823,18 @@ integration. Applying this:
    which bypasses RLS; the repository-layer `WHERE tenant_id` filter is the real boundary today.
 
 ### P1 — Critical for MVP / architecture
-4. **Engine-hours never persisted** (`trip-engine.ts:212`) — computed then discarded.
-5. **No durable device registry** — `InMemoryDeviceRegistry` means devices can't be managed; the
-   telemetry loop can't run against real provisioned devices without a device/asset service.
+4. ✅ **RESOLVED (Sprint A)** — engine-hours persist durably (idempotent on source_event_id).
+5. ✅ **RESOLVED (Sprint C/D)** — persistent registry (`HttpDeviceRegistry` → fleet-management)
+   with push-based cache invalidation + bounded retries.
 6. **Map routing/geocode non-functional** for real use (straight-line; geocode returns 0,0); no
    external provider wired.
 7. **Media path is a stub** — no real video/SFU; flagship live-video/playback features non-functional.
 8. **Frontend is mock-fed** — every business page returns mock data; turning mocks off yields empty
    pages because backends don't exist.
-9. **Audit log unused** — `AuditRepository.append` never called; compliance/forensic gap.
-10. **No service authz model** — gps/map/media trust `tenant-id` header; no JWT propagation/RBAC.
-11. **Timescale retention/compression missing** — `vehicle_positions` grows unbounded.
+9. ✅ **RESOLVED (Sprint C)** — audit wired (fleet mutations) with the request_id column fixed.
+10. ✅ **RESOLVED (Sprint B)** — JWT + RBAC guards on every service; WS authenticated/authorized.
+11. ✅ **RESOLVED (Sprint A, verified intact Sprint D)** — Timescale compression (7d) +
+    retention (180d) on `vehicle_positions`.
 
 ### P2 — Important
 12. Password reset/forgot/change + MFA missing (identity).
@@ -817,8 +864,8 @@ integration. Applying this:
 | TD9 | map geocode returns 0,0 | `map-engine/.../local-provider.ts:27-41` | broken forward geocode | Med | return real `geo.addresses` geom | P1 |
 | TD10 | map routing straight-line | `local-provider.ts:67-88` | wrong distances/ETAs | Med | wire OSRM/Mapbox in `ProviderRouter` | P1 |
 | TD11 | StubMediaRouter | `media-service/.../media-router-port.ts:53` | no real video | High (flagship feature) | integrate Pion/mediasoup SFU | P1 |
-| TD12 | No DLQ/retry on Kafka | `gps-engine/.../kafka-consumer.ts` | silent message loss | Med | add retry topic + DLQ | P2 |
-| TD13 | No integration tests | all services | regressions undetected | Med | add pg/redis/kafka testcontainers | P2 |
+| TD12 | ✅ RESOLVED (Sprint D) — bounded retry + `<topic>.dlq` with forensic headers | `gps-engine/.../kafka-consumer.ts` + `message-processor.ts` + `dlq-producer.ts` | — | — | — | done |
+| TD13 | ✅ largely RESOLVED (Sprint D) — real-PG integration suites execute (were silently skipping); real-Kafka E2E added | gps-engine/fleet/gateway | — | — | — | done |
 
 ---
 
@@ -1056,15 +1103,15 @@ Backend APIs:
 - Stub/broken: ~6 endpoints (map heat/layers/geocode/route; media stream SDP)
 
 Tests:
-- Test files:  ~58  (44 backend suites + 14 frontend files)
-- Test cases:  ~545 (440 backend + 107 frontend)
-- Passing:     ~545
+- Test files:  ~79 (65 backend suites + 14 frontend files)
+- Test cases:  ~655 (548 backend + 107 frontend)
+- Passing:     ~655  (verified 2026-08-15)
 - Failing:     0
-- Integration/E2E: 0
+- Integration/E2E: 22+ real-PG integration + 1 real-Kafka→Timescale→WS E2E (Sprint D;
+                  graceful skip without Docker)
 
 Build:
-- Status:      GREEN (typecheck ✅, build ✅, test ✅)
-- Lint:        RED — 2 trivial working-tree drifts only
+- Status:      GREEN (typecheck ✅, build ✅, test ✅, lint ✅ — Sprint D)
 
 Docker:
 - Stack status: infra + identity + web in compose; gateway/gps/map/media run via `pnpm dev`
@@ -1073,25 +1120,29 @@ Docker:
 
 Database:
 - Status:      PostgreSQL 16 + TimescaleDB + PostGIS — schemas/migrations real & consistent
-- RLS:         enabled but PERMISSIVE (app-layer isolation only)
-- Hypertables: vehicle_positions only; no retention/compression
-- Audit table: present but never written
+- RLS:         hardened predicates (Sprint B); app connects as owner → repository-layer
+               WHERE tenant_id is the enforcing boundary; vehicle_positions: no RLS
+               (Timescale compression constraint — documented Sprint A decision)
+- Hypertables: vehicle_positions; compression (7d) + retention (180d) ACTIVE
+- Audit table: written (fleet mutations — Sprint C)
 
 Events:
-- Kafka:       REAL (gateway + identity produce; gps-engine consumes)
+- Kafka:       REAL (gateway + identity produce; gps-engine + fleet-mgmt consume; Sprint D adds
+               bounded retry + DLQ topics `<topic>.dlq` with forensic headers)
 - RabbitMQ:    unused (infra only)
-- gRPC:        not implemented (in-memory stub behind a port)
-- Avro/Schema Registry / DLQ: not implemented
+- gRPC:        not implemented (HTTP registry adapter instead — Sprint C)
+- Avro/Schema Registry: deferred (JSON + strict boundary validation); DLQ: implemented (Sprint D)
 
 Overall Project Completion:
 - Estimated:   ~22%  (foundation + telemetry vertical ~65–70%; breadth ~5–10%)
 - Confidence:  Medium-High
 
-One-line verdict:
-  Strong, well-tested foundation + a real auth/IAM service + a working device→Kafka→GPS→Timescale
-  pipeline + a polished (mock-backed) dashboard — but video is a stub, routing is approximate,
-  ~9 of 14 contexts are unbuilt, the frontend is demo-only, and the trip write path has
-  correctness bugs that must be fixed before trusting live data.
+One-line verdict (post-Sprint D):
+  Strong, well-tested foundation + a real auth/IAM service + a fleet/device registry + a
+  production-hardened device→gateway→Kafka→GPS→Timescale→Redis→WebSocket telemetry vertical
+  (retry+DLQ, idempotent, duplicate-safe, observable, restart-resilient — E2E-proven) + a
+  polished (mock-backed) dashboard — but video is a stub, routing is approximate, ~9 of 14
+  contexts are unbuilt, and the frontend remains demo-only until Sprint E.
 ```
 
 ---
