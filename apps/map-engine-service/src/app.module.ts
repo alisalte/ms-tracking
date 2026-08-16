@@ -10,7 +10,7 @@ import { AuthModule } from '@fleetvision/auth';
 import { RedisModule } from '@fleetvision/cache-redis';
 import { type BaseConfig, ConfigModule } from '@fleetvision/config';
 import { HealthModule } from '@fleetvision/health';
-import { LoggerModule } from '@fleetvision/observability';
+import { LoggerModule, MetricsModule } from '@fleetvision/observability';
 import { PersistenceModule } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { MapEngineModule } from './api/map-engine.module.js';
@@ -32,6 +32,13 @@ export class AppModule {
           client: { url: config.DBURL },
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            // Per-service migration ledger (Sprint I docker verification
+            // finding): the shared dev database records identity-service's
+            // migrations in the default `schema_migrations` table — a shared
+            // ledger makes map-engine's container crash at boot ("relation
+            // schema_migrations already exists"). Same convention as
+            // notification-service.
+            tableName: 'map_engine_schema_migrations',
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
@@ -42,6 +49,11 @@ export class AppModule {
             JWT_ISSUER: config.JWT_ISSUER,
             JWT_AUDIENCE: config.JWT_AUDIENCE,
           },
+        }),
+        // Sprint I: Prometheus metrics (geofence mutations + map-match outcomes).
+        MetricsModule.forRoot({
+          telemetry: { prefix: 'fleetvision' },
+          exposeEndpoint: config.MAP_METRICS_ENABLED,
         }),
         HealthModule.forRoot(),
         MapEngineModule.forRoot(config),

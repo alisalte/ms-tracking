@@ -25,6 +25,12 @@ export const PERMISSIONS = {
   deviceRead: 'device.read',
   deviceWrite: 'device.write',
   trackingRead: 'tracking.read',
+  // Sprint I — geofence management (map-engine; reused Sprint F permission names).
+  mapsRead: 'maps.read',
+  mapsWrite: 'maps.write',
+  // Sprint J — reporting & analytics (reporting-service).
+  reportRead: 'report.read',
+  reportExport: 'report.export',
   // Sprint G — alarm/event engine (notification-service).
   alertRead: 'notification.alert.read',
   alertAck: 'notification.alert.ack',
@@ -56,8 +62,13 @@ export function permissionsSatisfy(
  * `can(permission)` / `canAll([...])` against the signed-in user's real
  * permissions. Unauthenticated → nothing is granted.
  */
+/** Stable empty-set — `?? []` in the selector would allocate a new array per
+ * snapshot and trip React's useSyncExternalStore loop guard (infinite
+ * re-render when the user is signed out). */
+const NO_PERMISSIONS: readonly string[] = [];
+
 export function usePermissions() {
-  const permissions = useAuthStore((s) => s.user?.permissions ?? []);
+  const permissions = useAuthStore((s) => s.user?.permissions ?? NO_PERMISSIONS);
   return {
     permissions,
     can: (required: string) => permissionSatisfies(permissions, required),

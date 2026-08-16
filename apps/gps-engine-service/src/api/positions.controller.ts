@@ -1,4 +1,5 @@
 import { CurrentTenant, RequirePermissions } from '@fleetvision/auth';
+import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
 /**
  * Positions REST API (07 §12.5 replay; last-position cache→DB fallback §13.5).
  *
@@ -6,37 +7,25 @@ import { CurrentTenant, RequirePermissions } from '@fleetvision/auth';
  *   GET /positions/nearby?lat=&lng=&radius=    — spatial nearest-vehicles query (Sprint F §17).
  *   GET /positions/in-bounds?n=&s=&e=&w=       — viewport bbox query (Sprint F §18).
  *   GET /positions/:vehicleId/latest           — last known position (Redis → DB).
- *   GET /positions/:vehicleId?from=&to=&limit= — historical track (hypertable scan).
+ *   GET /positions/:vehicleId?preset=          — historical track by preset (Sprint I §30).
+ *   GET /positions/:vehicleId?from=&to=&limit= — CUSTOM historical range (Sprint I §29).
  *
  * Sprint B: authentication + `tracking.read` are enforced by the global guards.
  * The tenant is taken from the verified JWT (INV-I02) — never a client header.
  * Sprint F §21: historical/spatial queries validate their inputs (parseable
  * UTC-ish ISO timestamps, from < to, bounded range) and reject unlimited scans.
+ * Sprint I §29/§30: preset XOR from/to (both → 400), custom range bounded by
+ * HISTORY_MAX_RANGE_DAYS (default 31 — the documented Sprint F bound).
  */
 import { Controller, Get, HttpException, HttpStatus, Inject, Param, Query } from '@nestjs/common';
+import {
+  historyWindowErrorMessage,
+  parseHistoryWindow,
+} from '../application/history-window.js';
+import type { GpsEngineConfig } from '../config/gps-engine.config.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
 import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
-import { POSITION_CACHE, POSITION_REPOSITORY } from './tokens.js';
-
-/** Maximum historical track window (31 days) — Sprint F §21. */
-const MAX_RANGE_MS = 31 * 86_400_000;
-
-/** Parse + validate a timestamp pair; throws 400 on invalid or reversed input. */
-function parseTimeRange(from?: string, to?: string): { fromTime: Date; toTime: Date } {
-  const now = new Date();
-  const fromTime = from ? new Date(from) : new Date(now.getTime() - 86_400_000); // default 24h
-  const toTime = to ? new Date(to) : now;
-  if (Number.isNaN(fromTime.getTime()) || Number.isNaN(toTime.getTime())) {
-    throw new HttpException('from/to must be valid ISO timestamps', HttpStatus.BAD_REQUEST);
-  }
-  if (fromTime >= toTime) {
-    throw new HttpException('from must be before to', HttpStatus.BAD_REQUEST);
-  }
-  if (toTime.getTime() - fromTime.getTime() > MAX_RANGE_MS) {
-    throw new HttpException('Time range too large (max 31 days)', HttpStatus.BAD_REQUEST);
-  }
-  return { fromTime, toTime };
-}
+import { GPS_ENGINE_CONFIG, POSITION_CACHE, POSITION_REPOSITORY } from './tokens.js';
 
 /** Parse a finite coordinate query param or throw 400. */
 function parseCoord(name: string, value: string | undefined): number {
@@ -52,6 +41,8 @@ export class PositionsController {
   constructor(
     @Inject(POSITION_CACHE) private readonly cache: RedisPositionCache,
     @Inject(POSITION_REPOSITORY) private readonly repo: PositionRepository,
+    @Inject(GPS_ENGINE_CONFIG) private readonly config: GpsEngineConfig,
+    @Inject(METRICS_TOKEN) private readonly metrics: TelemetryMetrics,
   ) {}
 
   /**
@@ -136,17 +127,30 @@ export class PositionsController {
    * Position history / historical track (hypertable scan, 07 §12.5; Sprint F §8).
    * Tenant-scoped + validated time range; the row cap bounds the payload (the
    * client-side renderer splits the polyline at large temporal gaps).
+   * Sprint I §29/§30: `preset` XOR `from`/`to`; custom ranges are bounded by
+   * HISTORY_MAX_RANGE_DAYS (default 31 — the documented Sprint F maximum).
    */
   @Get(':vehicleId')
   @RequirePermissions('tracking.read')
   public async range(
     @Param('vehicleId') vehicleId: string,
     @CurrentTenant() tenantId: string,
+    @Query('preset') preset?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
   ) {
-    const { fromTime, toTime } = parseTimeRange(from, to);
+    const maxRangeDays = this.config.HISTORY_MAX_RANGE_DAYS;
+    const parsedWindow = parseHistoryWindow({ preset, from, to, maxRangeDays });
+    if (parsedWindow.error) {
+      this.metrics?.historyQueries.inc({ result: 'invalid' });
+      throw new HttpException(
+        historyWindowErrorMessage(parsedWindow.error, maxRangeDays),
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    this.metrics?.historyQueries.inc({ result: 'ok' });
+    const { fromTime, toTime } = parsedWindow.window;
     // Sprint D §24 — clamp the row cap (a NaN/garbage/huge limit previously
     // passed straight into the hypertable scan).
     const parsed = limit ? Number.parseInt(limit, 10) : 1000;

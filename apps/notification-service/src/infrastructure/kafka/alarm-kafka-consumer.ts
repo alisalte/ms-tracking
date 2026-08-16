@@ -182,6 +182,10 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
       case 'parking':
         await this.deps.evaluator.processParking(signal);
         break;
+      case 'geofence':
+        // Sprint I — gps-engine geofence membership events.
+        await this.deps.evaluator.processGeofence(signal);
+        break;
     }
     this.deps.metrics?.eventsProcessed.inc({ source });
   }

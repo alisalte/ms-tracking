@@ -1,157 +1,314 @@
 /**
- * Reports & Analytics API + data hooks.
+ * Reporting API + data hooks — REAL backend (Sprint J).
  *
- * The Reports page (Reporting.md §5, Analytics-Reporting.md §3) needs report
- * definitions, jobs, KPIs, chart series, and saved dashboards, plus the
- * generate (async job) + export actions. None of these endpoints exist in the
- * backend yet — so each query resolves from static mock data
- * (`mock/report-data.ts`) with a small latency. The generate/export mutations
- * simulate the async job lifecycle (Reporting §5.2). When the REST endpoints
- * land, swap the mock body for `apiGet`/`apiPost` and the hooks stay unchanged.
+ * Source: reporting-service (`GET /reports/*`, port 3011 via the dev proxy).
+ * Every number comes from the backend's documented KPI formulas
+ * (docs/implementation/REPORTING-KPI-DEFINITIONS.md) — the frontend only
+ * formats and displays (§66). No mock analytics: on network error the hooks
+ * surface ErrorState; the old mock plumbing is gone.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-import { resolveMock, shouldUseMock } from '@/lib/mock-gate';
 import { downloadBlob } from '@/lib/video-stream';
-import {
-  mockChartSeries,
-  mockDashboards,
-  mockGenerateJob,
-  mockKpis,
-  mockReportDefinitions,
-  mockReportJobs,
-} from '@/mock/report-data';
-import type {
-  Dashboard,
-  Kpi,
-  MetricSeries,
-  ReportDefinition,
-  ReportFormat,
-  ReportJob,
-} from '@/types/report.types';
-import { queryKeys } from './query-keys';
+import { apiGetBlob, apiGetRaw } from './client';
 
-// ── Fetchers (reporting/analytics services not built — mock in demo, empty in real) ──
+// ── Wire types (raw reporting-service responses) ─────────────────────────────
 
-/** GET /api/v1/reports/definitions (no backend; mock-only). */
-function fetchDefinitions(): Promise<ReportDefinition[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockReportDefinitions);
+export type ReportPresetId = 'today' | 'yesterday' | '7d' | '30d';
+
+export interface ReportRange {
+  preset?: ReportPresetId;
+  from?: string;
+  to?: string;
 }
-/** GET /api/v1/reports/jobs (no backend; mock-only). */
-function fetchJobs(): Promise<ReportJob[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockReportJobs);
+
+export interface FleetOverviewResponse {
+  totalVehicles: number;
+  vehiclesWithTelemetry: number;
+  noTelemetryVehicles: number;
+  movingVehicles: number;
+  idleVehicles: number;
+  parkedVehicles: number;
+  totalDistanceKm: number;
+  totalTrips: number;
+  totalAlarms: number;
+  openAlarms: number;
+  geofenceEvents: number;
+  avgUtilizationPct: number | null;
+  from: string;
+  to: string;
+  dataAsOf: string;
+  freshness: 'NEAR_REALTIME' | 'AGGREGATED';
 }
-/** GET /api/v1/analytics/kpis (no backend; mock-only). */
-function fetchKpis(): Promise<Kpi[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockKpis);
+
+export interface TrendPointWire {
+  day: string;
+  distanceKm: number;
+  trips: number;
+  alarms: number;
+  alarmSpeeding: number;
+  alarmGeofence: number;
+  alarmOffline: number;
+  alarmOther: number;
 }
-/** GET /api/v1/analytics/charts (no backend; mock-only). */
-function fetchCharts(): Promise<MetricSeries[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockChartSeries);
+
+export interface TrendResponse {
+  points: TrendPointWire[];
+  from: string;
+  to: string;
+  dataAsOf: string;
+  freshness: 'AGGREGATED';
 }
-/** GET /api/v1/analytics/dashboards (no backend; mock-only). */
-function fetchDashboards(): Promise<Dashboard[]> {
-  if (!shouldUseMock()) return Promise.resolve([]);
-  return resolveMock(mockDashboards);
+
+export interface UtilizationRowWire {
+  vehicleId: string;
+  label: string;
+  movingSec: number;
+  idleSec: number;
+  parkingSec: number;
+  observedSec: number | null;
+  utilizationPct: number | null;
+  distanceKm: number;
+  trips: number;
+}
+
+export interface TripRowWire {
+  id: string;
+  vehicleId: string;
+  label: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSec: number;
+  distanceKm: number;
+  avgSpeedKph: number | null;
+  maxSpeedKph: number;
+  startLat: number;
+  startLng: number;
+  endLat: number | null;
+  endLng: number | null;
+  idleSec: number;
+  parkingSec: number;
+}
+
+export interface DistanceRowWire {
+  vehicleId: string;
+  label: string;
+  distanceKm: number;
+  trips: number;
+  avgTripKm: number | null;
+  maxTripKm: number | null;
+  discardedTrips: number;
+}
+
+export interface SpeedRowWire {
+  vehicleId: string;
+  label: string;
+  avgSpeedKph: number | null;
+  maxSpeedKph: number | null;
+  speedingAlarms: number;
+}
+
+export interface PeriodRowWire {
+  id: string;
+  kind: 'IDLE' | 'PARKING';
+  vehicleId: string;
+  label: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSec: number;
+  lat: number | null;
+  lng: number | null;
+  status: string | null;
+}
+
+export interface AlarmAggRowWire {
+  vehicleId: string | null;
+  label: string | null;
+  type: string;
+  severity: string;
+  total: number;
+  open: number;
+  acknowledged: number;
+  resolved: number;
+}
+
+export interface AlarmSummaryWire {
+  total: number;
+  open: number;
+  acknowledged: number;
+  resolved: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
+
+export interface GeofenceReportRowWire {
+  geofenceId: string | null;
+  geofenceName: string | null;
+  vehicleId: string | null;
+  label: string | null;
+  enters: number;
+  exits: number;
+  dwells: number;
+  timeInsideSec: number;
+}
+
+export interface ActivityEventWire {
+  at: string;
+  source: string;
+  kind: string;
+  vehicleId: string | null;
+  label: string | null;
+  detail: string | null;
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function rangeParams(range: ReportRange, extra: Record<string, unknown> = {}) {
+  return {
+    ...(range.preset ? { preset: range.preset } : {}),
+    ...(range.from ? { from: range.from } : {}),
+    ...(range.to ? { to: range.to } : {}),
+    ...extra,
+  };
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
-export function useReportDefinitions() {
-  return useQuery({ queryKey: queryKeys.reports.definitions(), queryFn: fetchDefinitions });
-}
-export function useReportJobs() {
-  return useQuery({ queryKey: queryKeys.reports.jobs(), queryFn: fetchJobs });
-}
-export function useKpis() {
-  return useQuery({ queryKey: queryKeys.reports.kpis(), queryFn: fetchKpis });
-}
-export function useChartSeries() {
-  return useQuery({ queryKey: queryKeys.reports.charts(), queryFn: fetchCharts });
-}
-export function useDashboards() {
-  return useQuery({ queryKey: queryKeys.reports.dashboards(), queryFn: fetchDashboards });
-}
-
-/**
- * Generate a report on-demand → `POST /api/v1/reports/generate` (Reporting §5.2).
- *
- * The reports backend does not exist yet. In mock/demo mode this simulates the
- * async job lifecycle (pending → running → succeeded) so the Jobs table is
- * demonstrable. In REAL mode it REJECTS honestly (no backend) rather than
- * fabricating a "succeeded" job — callers surface the error instead of a fake
- * success. Swap the mock body for `apiPost` + job polling when the endpoint
- * lands.
- */
-export function useGenerateReport() {
-  const qc = useQueryClient();
-  return useMutation<
-    ReportJob,
-    Error,
-    { definitionId: string; formats: ReportFormat[] },
-    { prev: ReportJob[] | undefined }
-  >({
-    mutationFn: async ({ definitionId, formats }) => {
-      if (!shouldUseMock()) {
-        // No reporting backend exists — fail honestly instead of faking success.
-        throw new Error('Report generation is not available (reports backend not implemented).');
-      }
-      const { job, artifact } = mockGenerateJob(definitionId, formats);
-      // Simulate the pending → running → succeeded transitions.
-      await new Promise((r) => setTimeout(r, 600));
-      job.status = 'running';
-      await artifact();
-      job.status = 'succeeded';
-      job.completedAt = new Date().toISOString();
-      job.artifactUrl = `#/download/${job.id}`;
-      return job;
-    },
-    onMutate: async ({ definitionId, formats }) => {
-      const listKey = queryKeys.reports.jobs();
-      await qc.cancelQueries({ queryKey: listKey });
-      const prev = qc.getQueryData<ReportJob[]>(listKey);
-      const pending = mockGenerateJob(definitionId, formats).job;
-      qc.setQueryData<ReportJob[]>(listKey, (old) => [pending, ...(old ?? [])]);
-      return { prev };
-    },
-    onSuccess: (job) => {
-      qc.setQueryData<ReportJob[]>(queryKeys.reports.jobs(), (old) =>
-        (old ?? []).map((j) => (j.id === job.id ? job : j)),
-      );
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(queryKeys.reports.jobs(), ctx.prev);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.reports.all }),
+export function useFleetOverview(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'overview', range, filters],
+    queryFn: () =>
+      apiGetRaw<FleetOverviewResponse>('/reports/fleet-overview', rangeParams(range, filters)),
+    staleTime: 30_000,
   });
 }
 
-/**
- * Export raw data → `POST /api/v1/reports/export` (REP-FR-11).
- *
- * Mock/demo: builds a small CSV blob and triggers a download. In REAL mode it
- * REJECTS honestly (no reporting backend yet) instead of producing a fake file.
- */
-export function useExportRaw() {
-  return useMutation<Blob, Error, { name: string }>({
-    mutationFn: async () => {
-      if (!shouldUseMock()) {
-        throw new Error('Raw export is not available (reports backend not implemented).');
-      }
-      await new Promise((r) => setTimeout(r, 800));
-      const header = 'entity,date,metric,value';
-      const rows = Array.from(
-        { length: 8 },
-        (_, i) => `entity-${i},2026-08-0${i + 1},metric,${Math.random().toFixed(2)}`,
-      );
-      return new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
-    },
-    onSuccess: (blob, { name }) => {
-      downloadBlob(blob, `${name}-export.csv`);
-    },
+export function useTrend(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'trend', range, filters],
+    queryFn: () => apiGetRaw<TrendResponse>('/reports/trend', rangeParams(range, filters)),
+    staleTime: 30_000,
   });
+}
+
+export function useUtilization(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'utilization', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: UtilizationRowWire[]; total: number }>(
+        '/reports/vehicle-utilization',
+        rangeParams(range, filters),
+      ),
+  });
+}
+
+export function useTrips(range: ReportRange, filters: { vehicleId?: string; fleetId?: string } = {}) {
+  return useQuery({
+    queryKey: ['reports', 'trips', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: TripRowWire[]; nextCursor: string | null }>('/reports/trips', rangeParams(range, { ...filters, limit: 50 })),
+  });
+}
+
+export function useDistance(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'distance', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: DistanceRowWire[]; total: number }>(
+        '/reports/distance',
+        rangeParams(range, filters),
+      ),
+  });
+}
+
+export function useSpeed(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'speed', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: SpeedRowWire[]; total: number }>(
+        '/reports/speed',
+        rangeParams(range, filters),
+      ),
+  });
+}
+
+export function useIdleParking(
+  range: ReportRange,
+  filters: { vehicleId?: string; kind?: 'IDLE' | 'PARKING' } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'idle-parking', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: PeriodRowWire[]; nextCursor: string | null }>(
+        '/reports/idle-parking',
+        rangeParams(range, { ...filters, limit: 50 }),
+      ),
+  });
+}
+
+export function useAlarmReport(
+  range: ReportRange,
+  filters: { vehicleId?: string; type?: string; severity?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'alarms', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: AlarmAggRowWire[]; total: number; summary: AlarmSummaryWire }>(
+        '/reports/alarms',
+        rangeParams(range, filters),
+      ),
+  });
+}
+
+export function useGeofenceReport(
+  range: ReportRange,
+  filters: { vehicleId?: string; geofenceId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'geofences', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: GeofenceReportRowWire[]; total: number }>(
+        '/reports/geofences',
+        rangeParams(range, filters),
+      ),
+  });
+}
+
+export function useActivity(range: ReportRange, filters: { vehicleId?: string } = {}) {
+  return useQuery({
+    queryKey: ['reports', 'activity', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: ActivityEventWire[]; nextCursor: string | null }>(
+        '/reports/activity',
+        rangeParams(range, { ...filters, limit: 50 }),
+      ),
+  });
+}
+
+/** CSV export (§31): authenticated blob download from the reporting service. */
+export async function exportReportCsv(
+  report: 'trips' | 'vehicle-utilization' | 'alarms',
+  range: ReportRange,
+  filters: Record<string, unknown> = {},
+): Promise<void> {
+  const blob = await apiGetBlob(`/reports/export/${report}`, rangeParams(range, filters));
+  downloadBlob(blob, `${report}-${new Date().toISOString().slice(0, 10)}.csv`);
 }

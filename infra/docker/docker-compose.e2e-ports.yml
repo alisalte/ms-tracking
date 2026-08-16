@@ -1,0 +1,7 @@
+# Sprint I E2E convenience: publish identity-service on the host so the
+# web-dashboard dev proxy (localhost:3000) and Playwright specs can reach the
+# containerized identity stack without a host-run instance.
+services:
+  identity-service:
+    ports:
+      - "3000:3000"

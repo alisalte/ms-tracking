@@ -9,9 +9,14 @@
  *   → if an AlarmEvent is produced, check dedup (Redis)
  *   → if not suppressed, create an AlarmOccurrence (persist) + emit WS event
  *
- * Geofence alarms require async spatial queries, so they're handled inline here
- * (not via the sync evaluator registry). Sprint G adds the same inline handling
- * for overspeed (grace period + recovery) — see evaluateOverspeed.
+ * Sprint G adds inline handling for overspeed (grace period + recovery) — see
+ * evaluateOverspeed. Geofence alarms were ALSO inline (per-position PostGIS
+ * ST_Covers) in Sprint G; Sprint I moves the geospatial detection to the
+ * gps-engine evaluator, which publishes geofence.entered/exited/dwell
+ * FleetEvents — this service now consumes those EVENTS (processGeofence) and
+ * stays purely an alarm engine (no second spatial evaluation, no double
+ * firing). The architectural change is documented in
+ * docs/implementation/SPRINT-I-GEOFENCE-TRACKING.md.
  *
  * Sprint G semantics implemented here:
  *   - Rule scope precedence (Part 9): a vehicle-scoped rule of a given type
@@ -38,7 +43,6 @@ import type { AlarmRule } from '../domain/alarm-rule.js';
 import type { AlarmStateCache } from '../infrastructure/cache/alarm-state-cache.js';
 import type { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
-import type { GeofenceQuery } from '../infrastructure/persistence/geofence-query.js';
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
 import { buildEvaluatorRegistry } from './evaluators/evaluators.js';
 import type { InputSignal } from './evaluators/rule-evaluator.js';
@@ -48,7 +52,6 @@ export interface AlarmEvaluatorDeps {
   readonly rules: AlarmRuleRepository;
   readonly alarms: AlarmOccurrenceRepository;
   readonly stateCache: AlarmStateCache;
-  readonly geofenceQuery: GeofenceQuery;
   readonly gateway: AlarmRealtimeGateway | null;
   readonly dispatcher: NotificationDispatcherService | null;
   /** Sprint G observability (optional — unit tests construct without). */
@@ -69,23 +72,26 @@ export class AlarmEvaluatorService {
   public async processPosition(signal: InputSignal & { kind: 'position' }): Promise<void> {
     try {
       const rules = await this.deps.rules.listEnabled(signal.tenantId);
-      const geofenceRules: AlarmRule[] = [];
       for (const rule of this.rulesForVehicle(rules, signal.vehicleId)) {
-        if (rule.type === 'geofence_enter' || rule.type === 'geofence_exit') {
-          geofenceRules.push(rule);
-          continue;
-        }
         if (rule.type === 'overspeed') {
           await this.evaluateOverspeed(signal, rule);
+          continue;
+        }
+        if (
+          rule.type === 'geofence_enter' ||
+          rule.type === 'geofence_exit' ||
+          rule.type === 'geofence_dwell'
+        ) {
+          // Sprint I — geofence alarms are event-driven now: the gps-engine
+          // evaluator publishes geofence.* FleetEvents which arrive via
+          // processGeofence. Raw positions no longer trigger geofence alarms
+          // (no double evaluation, no per-position PostGIS round-trip here).
           continue;
         }
         const evaluator = this.evaluators.get(rule.type);
         if (!evaluator) continue;
         const event = evaluator.evaluate(signal, rule);
         if (event) await this.raiseIfAllowed(event, rule);
-      }
-      if (geofenceRules.length > 0) {
-        await this.evaluateGeofences(signal, geofenceRules);
       }
     } catch (err) {
       this.metrics?.eventsFailed.inc({ source: 'position' });
@@ -258,90 +264,108 @@ export class AlarmEvaluatorService {
   }
 
   /**
-   * Evaluate geofence enter/exit by querying PostGIS ONCE per signal and
-   * tracking per-vehicle state in Redis (Parts 15/16). Duplicate positions and
-   * GPS jitter cannot flap ENTER/ENTER: state transitions require an actual
-   * inside-set change.
+   * Sprint I — process a geofence membership FleetEvent (gps-engine evaluator
+   * → `fleetvision.tracking.events`). This is the ONLY geofence alarm path:
+   * detection (PostGIS, jitter-protected, dwell-aware) already happened in the
+   * GPS Engine; here we only match rules.
+   *
+   * Matching:
+   *   geofence_enter rule ← geofence.entered event
+   *   geofence_exit  rule ← geofence.exited event
+   *   geofence_dwell rule ← geofence.dwell event (rule.dwellSec, when set,
+   *                          requires the event's elapsed dwellSec ≥ it)
+   * A rule's conditions.geofenceId (when set) must match the event's
+   * geofenceId; without it the rule matches ANY geofence.
    */
-  private async evaluateGeofences(
-    signal: InputSignal & { kind: 'position' },
-    geofenceRules: readonly AlarmRule[],
-  ): Promise<void> {
-    const currentInside = await this.deps.geofenceQuery.containsPoint(
-      signal.tenantId,
-      signal.lat,
-      signal.lng,
-    );
-    const prevState = await this.deps.stateCache.getGeofenceState(
-      signal.tenantId,
-      signal.vehicleId,
-    );
-    const currentSet = new Set(currentInside);
-
-    for (const rule of geofenceRules) {
-      const targetGeofenceId = rule.conditions.geofenceId as string | undefined;
-      if (rule.type === 'geofence_enter') {
-        const entered = targetGeofenceId
-          ? currentSet.has(targetGeofenceId) && !prevState.has(targetGeofenceId)
-          : currentInside.some((id) => !prevState.has(id));
-        if (entered) {
-          await this.raiseIfAllowed(
-            {
+  public async processGeofence(signal: InputSignal & { kind: 'geofence' }): Promise<void> {
+    try {
+      const rules = await this.deps.rules.listEnabled(signal.tenantId);
+      const applicable = this.rulesForVehicle(rules, signal.vehicleId).filter((r) =>
+        r.type === 'geofence_enter' || r.type === 'geofence_exit' || r.type === 'geofence_dwell',
+      );
+      if (applicable.length === 0) return;
+      for (const rule of applicable) {
+        const targetGeofenceId = rule.conditions.geofenceId as string | undefined;
+        if (targetGeofenceId && signal.geofenceId && targetGeofenceId !== signal.geofenceId) {
+          continue;
+        }
+        const fenceLabel = signal.geofenceName ?? signal.geofenceId ?? 'a geofence zone';
+        let matched: AlarmEvent | null = null;
+        if (rule.type === 'geofence_enter' && signal.type === 'geofence.entered') {
+          matched = {
+            ruleId: rule.id,
+            type: 'geofence_enter',
+            tenantId: signal.tenantId,
+            vehicleId: signal.vehicleId,
+            severity: rule.severity,
+            lat: signal.lat,
+            lng: signal.lng,
+            message: `Entered geofence ${fenceLabel}`,
+            sourceEvent: {
+              kind: 'geofence',
+              eventType: signal.type,
+              geofenceId: signal.geofenceId,
+              geofenceName: signal.geofenceName,
+              occurredAt: signal.occurredAt,
+              sourceEventId: signal.sourceEventId,
+            },
+            detectedAt: new Date(signal.occurredAt),
+          };
+        } else if (rule.type === 'geofence_exit' && signal.type === 'geofence.exited') {
+          matched = {
+            ruleId: rule.id,
+            type: 'geofence_exit',
+            tenantId: signal.tenantId,
+            vehicleId: signal.vehicleId,
+            severity: rule.severity,
+            lat: signal.lat,
+            lng: signal.lng,
+            message:
+              signal.dwellSec !== null
+                ? `Exited geofence ${fenceLabel} after ${Math.round(signal.dwellSec / 60)} min`
+                : `Exited geofence ${fenceLabel}`,
+            sourceEvent: {
+              kind: 'geofence',
+              eventType: signal.type,
+              geofenceId: signal.geofenceId,
+              geofenceName: signal.geofenceName,
+              dwellSec: signal.dwellSec,
+              occurredAt: signal.occurredAt,
+              sourceEventId: signal.sourceEventId,
+            },
+            detectedAt: new Date(signal.occurredAt),
+          };
+        } else if (rule.type === 'geofence_dwell' && signal.type === 'geofence.dwell') {
+          const threshold = rule.conditionNum('dwellSec', 0);
+          if (signal.dwellSec !== null && signal.dwellSec >= Math.max(1, threshold)) {
+            matched = {
               ruleId: rule.id,
-              type: 'geofence_enter',
+              type: 'geofence_dwell',
               tenantId: signal.tenantId,
               vehicleId: signal.vehicleId,
               severity: rule.severity,
               lat: signal.lat,
               lng: signal.lng,
-              message: targetGeofenceId
-                ? `Entered geofence ${targetGeofenceId}`
-                : 'Entered a geofence zone',
+              message: `Dwelt in geofence ${fenceLabel} for ${Math.round(signal.dwellSec / 60)} min`,
               sourceEvent: {
-                kind: 'position',
-                geofenceIds: currentInside,
-                capturedAt: signal.capturedAt,
+                kind: 'geofence',
+                eventType: signal.type,
+                geofenceId: signal.geofenceId,
+                geofenceName: signal.geofenceName,
+                dwellSec: signal.dwellSec,
+                occurredAt: signal.occurredAt,
                 sourceEventId: signal.sourceEventId,
               },
-              detectedAt: new Date(signal.capturedAt),
-            },
-            rule,
-          );
+              detectedAt: new Date(signal.occurredAt),
+            };
+          }
         }
+        if (matched) await this.raiseIfAllowed(matched, rule);
       }
-      if (rule.type === 'geofence_exit') {
-        const exited = targetGeofenceId
-          ? prevState.has(targetGeofenceId) && !currentSet.has(targetGeofenceId)
-          : [...prevState].some((id) => !currentSet.has(id));
-        if (exited) {
-          await this.raiseIfAllowed(
-            {
-              ruleId: rule.id,
-              type: 'geofence_exit',
-              tenantId: signal.tenantId,
-              vehicleId: signal.vehicleId,
-              severity: rule.severity,
-              lat: signal.lat,
-              lng: signal.lng,
-              message: targetGeofenceId
-                ? `Exited geofence ${targetGeofenceId}`
-                : 'Exited a geofence zone',
-              sourceEvent: {
-                kind: 'position',
-                geofenceIds: currentInside,
-                capturedAt: signal.capturedAt,
-                sourceEventId: signal.sourceEventId,
-              },
-              detectedAt: new Date(signal.capturedAt),
-            },
-            rule,
-          );
-        }
-      }
+    } catch (err) {
+      this.metrics?.eventsFailed.inc({ source: 'tracking' });
+      this.logger.warn(`Geofence alarm evaluation error: ${(err as Error).message}`);
     }
-
-    // Persist the new inside-set once per signal (Part 16 — state, not edges).
-    await this.deps.stateCache.setGeofenceState(signal.tenantId, signal.vehicleId, currentSet);
   }
 
   /**

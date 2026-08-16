@@ -49,6 +49,20 @@ interface OsrmNearestResponse {
   }>;
 }
 
+/**
+ * OSRM /match response (Sprint I §38). `tracepoints` is aligned 1:1 with the
+ * input coordinate list: entry i corresponds to input point i, and is `null`
+ * when OSRM could not match that point to the road network.
+ */
+interface OsrmMatchResponse {
+  readonly code: string;
+  readonly message?: string;
+  readonly tracepoints?: ReadonlyArray<{
+    readonly location?: [number, number];
+    readonly name?: string;
+  } | null>;
+}
+
 export class OsrmProvider implements MapProvider {
   public readonly name = 'osrm';
   public readonly capabilities: ReadonlySet<ProviderCapability> = new Set([
@@ -107,26 +121,50 @@ export class OsrmProvider implements MapProvider {
     if (points.length < 2) {
       throw new RouteUnavailableError('At least 2 points are required for map matching');
     }
+    // Sprint I §42 — bounded-TTL Redis cache keyed on quantized points.
+    const cacheKey = this.deps.cache.matchKey(points);
+    const cached = await this.deps.cache.get<SnappedPoint[]>(cacheKey);
+    if (cached) return cached;
+
     const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
-    const url = `${this.deps.baseUrl}/match/v1/${this.profile}/${coords}?geometries=geojson`;
-    const body = await this.osrmFetch<OsrmRouteResponse>(url);
+    const url =
+      `${this.deps.baseUrl}/match/v1/${this.profile}/${coords}` +
+      '?geometries=geojson&overview=false&steps=false';
+    const body = await this.osrmFetch<OsrmMatchResponse>(url);
     if (body.code !== 'Ok') {
-      throw new RouteUnavailableError(`OSRM match failed (${body.code})`);
+      throw new RouteUnavailableError(
+        `OSRM match failed (${body.code}${body.message ? `: ${body.message}` : ''})`,
+      );
     }
-    // The match service snaps each input point onto the road path.
-    const snapped =
-      body.routes?.[0]?.geometry?.coordinates.map(([lng, lat]) => ({ lat, lng })) ?? [];
-    return points.map((p, i) => {
-      const s = snapped[i];
+    // Sprint I — use the tracepoints array (aligned 1:1 with the input points)
+    // instead of index-pairing the route geometry: the match geometry length is
+    // NOT guaranteed to equal the input length. Unmatched points (null
+    // tracepoint) fall back to the RAW GPS coordinate with confidence 0 — the
+    // result never fabricates a road position.
+    const tracepoints = body.tracepoints ?? [];
+    const result: SnappedPoint[] = points.map((p, i) => {
+      const tp = tracepoints[i];
+      if (tp?.location) {
+        return {
+          latitude: tp.location[1],
+          longitude: tp.location[0],
+          roadName: tp.name || null,
+          postedLimitKmh: null,
+          confidence: 1,
+          provider: this.name,
+        };
+      }
       return {
-        latitude: s?.lat ?? p.lat,
-        longitude: s?.lng ?? p.lng,
+        latitude: p.lat,
+        longitude: p.lng,
         roadName: null,
         postedLimitKmh: null,
-        confidence: s ? 1 : 0,
+        confidence: 0,
         provider: this.name,
       };
     });
+    await this.deps.cache.set(cacheKey, result);
+    return result;
   }
 
   public async snapPoint(req: { latitude: number; longitude: number }): Promise<SnappedPoint> {

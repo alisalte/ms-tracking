@@ -116,7 +116,9 @@
     "sendCommand": "Send Command",
     "optional": "Optional",
     "required": "Required",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "clear": "Clear",
+    "loadMore": "Load more"
   },
   "errors": {
     "retry": "Retry",
@@ -327,7 +329,11 @@
         "6h": "Last 6 hours",
         "24h": "Last 24 hours",
         "7d": "Last 7 days"
-      }
+      },
+      "customRange": "Custom range",
+      "from": "From (date & time)",
+      "to": "To (date & time)",
+      "load": "Load Track"
     },
     "route": {
       "planner": "Route planner",
@@ -338,6 +344,20 @@
       "needBoth": "Enter both origin and destination.",
       "unresolved": "Could not resolve one of the inputs to a location.",
       "summary": "{{km}} km · ~{{min}} min (via {{provider}})"
+    },
+    "playback": {
+      "play": "Play",
+      "pause": "Pause",
+      "stop": "Stop",
+      "prev": "Previous point",
+      "next": "Next point",
+      "speed": "Playback speed",
+      "timeline": "Playback timeline"
+    },
+    "matching": {
+      "toggle": "Map Matching",
+      "tooltip": "Snap the track to roads via OSRM (falls back to raw GPS when unavailable)",
+      "unavailable": "Map matching unavailable — showing raw GPS"
     }
   },
   "trips": {
@@ -365,7 +385,8 @@
     "detail": {
       "back": "Back to trips",
       "notFound": "Trip not found.",
-      "notFoundHelp": "This trip does not exist or has been removed."
+      "notFoundHelp": "This trip does not exist or has been removed.",
+      "showOnMap": "Show on map"
     },
     "summary": {
       "distance": "Distance",
@@ -752,67 +773,116 @@
   },
   "reports": {
     "title": "Reports & Analytics",
-    "subtitle": "KPIs, charts, and report exports",
-    "target": "Target",
-    "generate": "Generate",
-    "generateTitle": "Generate report",
-    "generating": "Generating…",
-    "cancel": "Cancel",
-    "formats": "Formats",
-    "download": "Download",
-    "exportRaw": "Export raw data",
-    "exporting": "Exporting…",
+    "subtitle": "Fleet performance based on real telemetry",
+    "empty": "No data for the selected range.",
+    "noData": "no telemetry in range",
+    "freshness": "{{freshness}} · as of {{asOf}} (UTC)",
+    "freshnessNear": "Near real-time",
+    "freshnessAgg": "Aggregated",
+    "viewOnMap": "View on Map",
+    "viewAlarm": "View Alarm",
+    "utilization": {
+      "note": "Utilization = moving / observed telemetry time (see KPI definitions). “—” means no telemetry in range — not zero."
+    },
+    "geofence": {
+      "note": "Counts come from the geofence event pipeline; time inside is summed from EXIT occupancies."
+    },
+    "range": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "custom": "Custom",
+      "from": "From (local → UTC)",
+      "to": "To (local → UTC)",
+      "apply": "Apply"
+    },
     "sections": {
       "overview": "Overview",
-      "reports": "Reports",
-      "jobs": "Jobs & Exports",
-      "dashboards": "Dashboards"
+      "vehicles": "Vehicles",
+      "trips": "Trips",
+      "alarms": "Alarms",
+      "geofences": "Geofences",
+      "activity": "Activity"
     },
-    "filters": {
-      "allCategories": "All categories"
+    "vehicles": {
+      "tabs": "Vehicle reports",
+      "utilization": "Utilization"
     },
-    "category": {
-      "operational": "Operational",
-      "safety": "Safety",
-      "compliance": "Compliance",
-      "maintenance": "Maintenance",
-      "fuel": "Fuel",
-      "financial": "Financial",
-      "asset": "Asset",
-      "executive": "Executive"
+    "distance": {
+      "title": "Distance"
+    },
+    "speed": {
+      "title": "Speed"
+    },
+    "idleParking": {
+      "title": "Idle / Parking",
+      "all": "All",
+      "idle": "Idle",
+      "parking": "Parking"
     },
     "kpi": {
-      "kpi-util": "Fleet Utilization",
-      "kpi-mpg": "Fleet MPG",
-      "kpi-safety": "Safety Score",
-      "kpi-ontime": "On-time Delivery",
-      "kpi-costkm": "Cost per km"
+      "totalVehicles": "Total vehicles",
+      "withTelemetry": "With telemetry",
+      "moving": "Moving",
+      "idle": "Idle",
+      "parked": "Parked",
+      "noTelemetry": "No telemetry",
+      "distance": "Distance",
+      "trips": "Trips",
+      "alarms": "Alarms",
+      "open": "open",
+      "geofenceEvents": "Geofence events",
+      "utilization": "Avg utilization"
     },
     "charts": {
-      "activity": "Fleet Activity (24h)",
-      "utilization": "Utilization Breakdown",
-      "behavior": "Driver Behavior Events",
-      "fuel": "Fuel Efficiency Trend",
-      "loading": "Loading…"
+      "distanceTrips": "Distance & trips over time (UTC days)",
+      "alarmTrend": "Daily alarms by type",
+      "stateDistribution": "Vehicle state distribution (period)",
+      "empty": "No data in range"
     },
-    "jobs": {
-      "colReport": "Report",
-      "colFormats": "Formats",
-      "colStatus": "Status",
-      "colCreated": "Created",
-      "colActions": "Actions",
-      "status": {
-        "pending": "Pending",
-        "running": "Running",
-        "succeeded": "Succeeded",
-        "failed": "Failed",
-        "cancelled": "Cancelled"
-      }
+    "export": {
+      "csv": "Export CSV",
+      "exporting": "Exporting…",
+      "done": "CSV downloaded"
     },
-    "dashboards": {
-      "widgets": "widgets",
-      "shared": "shared",
-      "selectPrompt": "Select a dashboard to view."
+    "filters": {
+      "vehicleId": "Vehicle",
+      "allVehicles": "All vehicles",
+      "severity": "Severity",
+      "allSeverities": "All severities"
+    },
+    "cols": {
+      "vehicle": "Vehicle",
+      "moving": "Moving",
+      "idle": "Idle",
+      "parking": "Parking",
+      "observed": "Observed",
+      "utilization": "Utilization",
+      "distance": "Distance",
+      "trips": "Trips",
+      "avgTrip": "Avg trip",
+      "maxTrip": "Max trip",
+      "discarded": "Discarded",
+      "avgSpeed": "Avg speed",
+      "maxSpeed": "Max speed",
+      "speeding": "Speeding alarms",
+      "kind": "Kind",
+      "start": "Start (UTC)",
+      "end": "End (UTC)",
+      "duration": "Duration",
+      "status": "Status",
+      "alarmType": "Type",
+      "severity": "Severity",
+      "total": "Total",
+      "open": "Open",
+      "acknowledged": "Ack",
+      "resolved": "Resolved",
+      "geofence": "Geofence",
+      "enters": "ENTER",
+      "exits": "EXIT",
+      "dwells": "DWELL",
+      "timeInside": "Time inside"
     }
   },
   "admin": {
@@ -970,7 +1040,73 @@
     "name": "Name",
     "radius": "Radius (m)",
     "empty": "No geofences defined yet.",
-    "untitled": "Untitled Geofence"
+    "untitled": "Untitled Geofence",
+    "type": "Type",
+    "circle": "Circle",
+    "polygon": "Polygon",
+    "description": "Description",
+    "alerts": "Alerts",
+    "dwellSec": "Dwell threshold (s)",
+    "assignVehicles": "Assigned vehicles",
+    "allVehicles": "All vehicles (tenant-wide)",
+    "nVehicles": "{{count}} vehicles",
+    "noVehicles": "No vehicles in the registry",
+    "editTitle": "Edit Geofence",
+    "edit": "Edit geometry",
+    "archiveTitle": "Archive geofence?",
+    "archiveBody": "\"{{name}}\" will be archived (soft-deleted). Historical events and alarms that reference it stay intact.",
+    "archive": "Archive",
+    "archived": "Geofence archived",
+    "created": "Geofence created",
+    "updated": "Geofence updated",
+    "activated": "Geofence activated",
+    "deactivated": "Geofence deactivated",
+    "toggleStatus": "Activate / deactivate",
+    "assignedTo": "Assigned vehicles:",
+    "radiusM": "Radius: {{m}} m",
+    "dwellBadge": "Dwell ≥ {{sec}} s",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "alertKinds": {
+      "ENTER": "Enter",
+      "EXIT": "Exit",
+      "DWELL": "Dwell"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive",
+      "ARCHIVED": "Archived"
+    },
+    "cols": {
+      "name": "Name",
+      "type": "Type",
+      "status": "Status",
+      "vehicles": "Vehicles",
+      "alerts": "Alerts",
+      "createdAt": "Created"
+    },
+    "filters": {
+      "allTypes": "All types",
+      "active": "Active",
+      "archived": "Archived",
+      "type": "Filter by type",
+      "status": "Filter by status",
+      "search": "Search by name…"
+    },
+    "draw": {
+      "polygonStatus": "{{count}} vertices · {{area}}",
+      "circleStatus": "Center {{lat}}, {{lng}} · radius {{radius}} m",
+      "circleCenterHint": "Click the map to set the center, then drag to set the radius",
+      "circleDragging": "Drag outward to set the radius — release to finish",
+      "selectType": "Select a geometry type to draw",
+      "vertexHint": "Vertex — drag to move, right-click to remove",
+      "centerHint": "Circle center — drag to move",
+      "removeLast": "Remove last vertex",
+      "removeLastLabel": "− Vertex",
+      "clear": "Clear polygon",
+      "redrawCircle": "Clear circle and redraw",
+      "mapLabel": "Geofence drawing map"
+    }
   },
   "commands": {
     "title": "Command Center",

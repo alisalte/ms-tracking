@@ -46,6 +46,21 @@ export interface EngineHoursSignal {
   readonly at: Date;
 }
 
+/** Geofence membership event (Sprint I §18–§22). */
+export interface GeofenceSignal {
+  readonly type: 'geofence.entered' | 'geofence.exited' | 'geofence.dwell';
+  readonly tenantId: string;
+  readonly vehicleId: string;
+  readonly geofenceId: string;
+  readonly geofenceName: string;
+  /** Occupancy seconds (EXIT) or dwell elapsed seconds (DWELL); null on ENTER. */
+  readonly dwellSec: number | null;
+  readonly occurredAt: string;
+  readonly lat: number;
+  readonly lng: number;
+  readonly sourceEventId: string | null;
+}
+
 export const SIGNAL = {
   POSITION: 'position.update',
   DEVICE_STATUS: 'device.status',
@@ -53,6 +68,7 @@ export const SIGNAL = {
   IDLE: 'idle.event',
   PARKING: 'parking.event',
   ENGINE_HOURS: 'engine.hours',
+  GEOFENCE: 'geofence.event',
 } as const;
 
 export class SignalBus {
@@ -116,6 +132,11 @@ export class SignalBus {
     this.emitter.emit(SIGNAL.ENGINE_HOURS, signal);
   }
 
+  /** Emit a geofence membership event (Sprint I — called by the evaluator). */
+  public emitGeofence(signal: GeofenceSignal): void {
+    this.emitter.emit(SIGNAL.GEOFENCE, signal);
+  }
+
   public onTrip(listener: (event: TripSignal) => void): () => void {
     this.emitter.on(SIGNAL.TRIP, listener);
     return () => this.emitter.removeListener(SIGNAL.TRIP, listener);
@@ -134,6 +155,11 @@ export class SignalBus {
   public onEngineHours(listener: (signal: EngineHoursSignal) => void): () => void {
     this.emitter.on(SIGNAL.ENGINE_HOURS, listener);
     return () => this.emitter.removeListener(SIGNAL.ENGINE_HOURS, listener);
+  }
+
+  public onGeofence(listener: (signal: GeofenceSignal) => void): () => void {
+    this.emitter.on(SIGNAL.GEOFENCE, listener);
+    return () => this.emitter.removeListener(SIGNAL.GEOFENCE, listener);
   }
 
   /** Remove all listeners (test cleanup / shutdown). */

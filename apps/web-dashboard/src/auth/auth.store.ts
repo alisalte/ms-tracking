@@ -81,17 +81,23 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       saveTenantId(tenantId);
       const response = await loginApi.login(email, password);
 
-      // Persist tokens
+      // Persist tokens. Sprint I E2E fix: the login form accepts a tenant
+      // NAME ("FleetVision") — persist the server-resolved canonical UUID from
+      // the login response instead. The axios interceptor sends the stored
+      // value as X-Tenant-Id on every call, and identity's tenant-mismatch
+      // guard (Sprint B) 403s a name that differs from the token's tenant.
+      const canonicalTenantId = response.user.tenantId ?? tenantId;
       saveTokens({
         accessToken: response.accessToken,
         refreshToken: response.refreshToken,
-        tenantId,
+        tenantId: canonicalTenantId,
       });
+      saveTenantId(canonicalTenantId);
 
       set({
         accessToken: response.accessToken,
         refreshToken: response.refreshToken,
-        tenantId,
+        tenantId: canonicalTenantId,
         isAuthenticated: true,
         isLoading: false,
         error: null,

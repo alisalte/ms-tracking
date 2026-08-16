@@ -143,6 +143,13 @@ function trackingEventKind(eventType: string): InputSignal['kind'] | null {
   ) {
     return 'parking';
   }
+  if (
+    eventType === 'geofence.entered' ||
+    eventType === 'geofence.exited' ||
+    eventType === 'geofence.dwell'
+  ) {
+    return 'geofence';
+  }
   if (eventType.startsWith('device.')) return 'device_status';
   return null;
 }
@@ -210,6 +217,27 @@ export function parseTrackingEventEnvelope(raw: Buffer): InputSignal | null {
       startedAt: iso('startedAt'),
       endedAt: occurredAt,
       durationSec: num('durationSec', 0),
+      sourceEventId: eventId,
+    };
+  }
+  if (kind === 'geofence') {
+    // Sprint I — geofence membership FleetEvents from the gps-engine evaluator.
+    // geofenceId is trusted metadata from the producer's spatial evaluation.
+    const geofenceId =
+      typeof metadata.geofenceId === 'string' && metadata.geofenceId.length > 0
+        ? metadata.geofenceId
+        : null;
+    return {
+      kind: 'geofence',
+      tenantId,
+      vehicleId,
+      type: eventType as 'geofence.entered' | 'geofence.exited' | 'geofence.dwell',
+      geofenceId,
+      geofenceName: typeof metadata.geofenceName === 'string' ? metadata.geofenceName : null,
+      dwellSec: metadata.dwellSec === null || metadata.dwellSec === undefined ? null : num('dwellSec', 0),
+      occurredAt,
+      lat: num('lat', Number.NaN),
+      lng: num('lng', Number.NaN),
       sourceEventId: eventId,
     };
   }

@@ -31,12 +31,16 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
-import type { NotificationProviderRegistry } from '../application/channels/provider-registry.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { NotificationProviderRegistry } from '../application/channels/provider-registry.js';
 import { NotificationPreference } from '../domain/notification-preference.js';
 import type { NotificationChannel, NotificationSeverity } from '../domain/notification-types.js';
-import type { NotificationDeliveryRepository } from '../infrastructure/persistence/notification-delivery.repository.js';
-import type { NotificationPreferenceRepository } from '../infrastructure/persistence/notification-preference.repository.js';
-import type { NotificationRepository } from '../infrastructure/persistence/notification.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { NotificationDeliveryRepository } from '../infrastructure/persistence/notification-delivery.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { NotificationPreferenceRepository } from '../infrastructure/persistence/notification-preference.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { NotificationRepository } from '../infrastructure/persistence/notification.repository.js';
 import { NOTIFICATION_PROVIDER_REGISTRY } from './notification.tokens.js';
 
 const updatePreferenceSchema = z.object({

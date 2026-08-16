@@ -1,16 +1,24 @@
 import { Map as MapIcon } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
 import { useMapVehicles } from '@/api/fleet.api';
-import { type HistoryPresetId, presetRange, useVehicleTrack } from '@/api/map.api';
+import {
+  type HistoryPresetId,
+  fetchMapMatch,
+  presetRange,
+  useVehicleTrack,
+} from '@/api/map.api';
 import { useAuthStore } from '@/auth/auth.store';
 import { ErrorState } from '@/components/common/ErrorState';
 import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
 import { FleetMap, type HistoryTrack } from '@/components/map/FleetMap';
-import { MapToolbar } from '@/components/map/MapToolbar';
+import { MapToolbar, type CustomRange } from '@/components/map/MapToolbar';
+import { PlaybackControls } from '@/components/map/PlaybackControls';
+import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { RoutePlannerDialog } from '@/components/map/RoutePlannerDialog';
 import { type PresenceFilter, presenceOf } from '@/components/map/types';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
@@ -49,11 +57,17 @@ function wsChip(connectionState: string): {
  * vehicleId, §32). Presence (§18) and last-seen (§19) come from the real
  * status records — never fabricated. §17: list ↔ map selection is bidirectional
  * (row click flies the map, marker click selects the row + opens the drawer).
+ *
+ * Sprint I: HISTORY mode supports a CUSTOM from/to date-time range (§29),
+ * real playback with a transport + timeline (§32/§33), and best-effort OSRM
+ * map matching with an explicit unavailable fallback (§38/§39). Deep links:
+ * `/map?vehicle=<id>&from=<iso>&to=<iso>` preselect history (trips → map, §37).
  */
 export function MapPage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useMapVehicles();
   const tenantId = useAuthStore((s) => s.tenantId);
+  const [searchParams] = useSearchParams();
 
   // §20 filters: fleet registry for the Fleet selector + the vehicle↔fleet join.
   const { data: fleetsData } = useFleets();
@@ -73,6 +87,11 @@ export function MapPage() {
   }, [data, positions, statuses]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Sprint I §31: the device popup is a transient INSPECTOR — closing it must
+  // not clear the selection (history playback keeps running for the selected
+  // vehicle; previously the modal drawer blocked the toolbar until the
+  // selection itself was dropped).
+  const [popupOpen, setPopupOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [presence, setPresence] = useState<PresenceFilter>('all');
   const [fleetId, setFleetId] = useState<string>('all');
@@ -80,33 +99,117 @@ export function MapPage() {
 
   // ── Sprint F §20: LIVE vs HISTORY mode ──
   // LIVE merges WebSocket deltas; HISTORY queries the real track for the
-  // selected vehicle + a bounded preset window. The data models are never
-  // mixed: in history mode the live WS merge is bypassed.
-  const [mode, setMode] = useState<'live' | 'history'>('live');
-  const [historyPreset, setHistoryPreset] = useState<HistoryPresetId>('24h');
+  // selected vehicle + a bounded window (preset OR custom — Sprint I §29/§30).
+  // The data models are never mixed: in history mode the live WS merge is
+  // bypassed. Deep link (?vehicle&from&to) preselects history (§37 trip→map).
+  const [mode, setMode] = useState<'live' | 'history'>(() => {
+    const vehicleParam = searchParams.get('vehicle');
+    return vehicleParam && (searchParams.get('from') || searchParams.get('to')) ? 'history' : 'live';
+  });
+  const [historyPreset, setHistoryPreset] = useState<HistoryPresetId | 'custom'>('24h');
+  const [customRange, setCustomRange] = useState<CustomRange | null>(null);
   const [routePlannerOpen, setRoutePlannerOpen] = useState(false);
   const [routeGeometry, setRouteGeometry] = useState<ReadonlyArray<{
     lat: number;
     lng: number;
   }> | null>(null);
 
-  const historyWindow = useMemo(() => presetRange(historyPreset), [historyPreset]);
+  // Deep-link preselection (?vehicle=…&from=…&to=…) — trip → map (§37).
+  useEffect(() => {
+    const vehicleParam = searchParams.get('vehicle');
+    if (!vehicleParam) return;
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+    if (from && to && new Date(from) < new Date(to)) {
+      setCustomRange({ from, to });
+      setHistoryPreset('custom');
+    }
+    setSelectedId(vehicleParam);
+    setPopupOpen(false); // deep link targets the TRACK, not the inspector
+    setMode('history');
+  }, [searchParams]);
+
+  const historyWindow = useMemo(
+    () =>
+      historyPreset === 'custom' && customRange
+        ? customRange
+        : historyPreset === 'custom'
+          ? presetRange('24h')
+          : presetRange(historyPreset),
+    [historyPreset, customRange],
+  );
   const trackQuery = useVehicleTrack(
     selectedId,
     historyWindow.from,
     historyWindow.to,
     mode === 'history',
   );
-  const track: HistoryTrack | null = useMemo(() => {
-    if (mode !== 'history' || !trackQuery.data) return null;
-    return { segments: splitTrackIntoSegments(trackQuery.data), key: 1 };
-  }, [mode, trackQuery.data]);
 
-  // §17 selection sync: list selections bump a nonce so FleetMap flies to the
-  // vehicle (re-selecting the same row re-focuses).
+  // ── Sprint I §38/§39: map matching (best-effort, explicit fallback) ──
+  const [mapMatching, setMapMatching] = useState(false);
+  const [matchedPoints, setMatchedPoints] = useState<readonly {
+    latitude: number;
+    longitude: number;
+    confidence: number;
+  }[] | null>(null);
+  const [matchingUnavailable, setMatchingUnavailable] = useState(false);
+
+  useEffect(() => {
+    setMatchedPoints(null);
+    setMatchingUnavailable(false);
+    if (!mapMatching || !trackQuery.data || trackQuery.data.length < 2) return;
+    let cancelled = false;
+    void fetchMapMatch(
+      trackQuery.data.map((p) => ({ lat: p.latitude, lng: p.longitude })),
+    )
+      .then((snapped) => {
+        if (!cancelled) setMatchedPoints(snapped);
+      })
+      .catch(() => {
+        // Controlled fallback (Sprint I §39): OSRM absent/unreachable/invalid →
+        // raw GPS track + an explicit "unavailable" indicator. NEVER claim the
+        // raw track is map-matched.
+        if (!cancelled) {
+          setMatchedPoints(null);
+          setMatchingUnavailable(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapMatching, trackQuery.data]);
+
+  const displayPoints = useMemo(() => {
+    const raw = trackQuery.data;
+    if (!raw) return null;
+    if (!matchedPoints || matchedPoints.length !== raw.length) return raw;
+    return raw.map((p, i) => {
+      const snapped = matchedPoints[i];
+      return snapped
+        ? { ...p, latitude: snapped.latitude, longitude: snapped.longitude }
+        : p;
+    });
+  }, [trackQuery.data, matchedPoints]);
+
+  const track: HistoryTrack | null = useMemo(() => {
+    if (mode !== 'history' || !displayPoints) return null;
+    return { segments: splitTrackIntoSegments(displayPoints), key: 1 };
+  }, [mode, displayPoints]);
+
+  // ── Sprint I §32–§35: playback over the loaded (bounded) dataset ──
+  const playback = useTrackPlayback(displayPoints ?? []);
+  const playbackHead =
+    mode === 'history' && displayPoints && displayPoints.length > 0
+      ? playback.sample
+        ? { lat: playback.sample.lat, lng: playback.sample.lng, heading: playback.sample.heading }
+        : null
+      : null;
+
+  // ── Deep-link + selection sync ──
   const [focus, setFocus] = useState<{ id: string; nonce: number } | null>(null);
   const selectFromList = useCallback((id: string) => {
     setSelectedId(id);
+    setPopupOpen(true);
     setFocus((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
@@ -220,8 +323,12 @@ export function MapPage() {
           onModeChange={setMode}
           historyPreset={historyPreset}
           onHistoryPresetChange={setHistoryPreset}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
           hasSelection={selectedId !== null}
           onOpenRoutePlanner={() => setRoutePlannerOpen(true)}
+          mapMatching={mapMatching}
+          onMapMatchingChange={setMapMatching}
         />
         {/* History mode states (§22/§24): loading / error / no data. */}
         {mode === 'history' && selectedId && trackQuery.isLoading && (
@@ -247,6 +354,17 @@ export function MapPage() {
             sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
           />
         )}
+        {/* Sprint I §39 — explicit fallback indicator; the raw track is NOT
+            presented as map-matched. */}
+        {mode === 'history' && mapMatching && matchingUnavailable && (
+          <Chip
+            size="small"
+            color="warning"
+            label={t('map.matching.unavailable')}
+            sx={{ position: 'absolute', top: 120, right: 8, zIndex: 10 }}
+            data-testid="map-matching-unavailable"
+          />
+        )}
         {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
         <Chip
           size="small"
@@ -260,8 +378,14 @@ export function MapPage() {
           <FleetMap
             vehicles={filtered}
             selectedId={selectedId}
-            onSelect={setSelectedId}
-            onDeselect={() => setSelectedId(null)}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setPopupOpen(true);
+            }}
+            onDeselect={() => {
+              setSelectedId(null);
+              setPopupOpen(false);
+            }}
             paused={paused || mode === 'history'}
             focus={focus}
             track={
@@ -273,8 +397,13 @@ export function MapPage() {
                   }
                 : null)
             }
+            playbackHead={playbackHead}
           />
         </Box>
+        {/* Sprint I §32/§33 — playback transport + timeline (history mode only). */}
+        {mode === 'history' && displayPoints && displayPoints.length >= 2 && (
+          <PlaybackControls playback={playback} />
+        )}
       </Box>
 
       {/* ── Route planner (Sprint F §12) ── */}
@@ -286,8 +415,8 @@ export function MapPage() {
 
       {/* ── Right: device popup drawer ── */}
       <DevicePopup
-        vehicleId={selectedId}
-        onClose={() => setSelectedId(null)}
+        vehicleId={popupOpen ? selectedId : null}
+        onClose={() => setPopupOpen(false)}
         onShowHistory={() => setMode('history')}
       />
     </Box>

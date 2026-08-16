@@ -8,6 +8,7 @@
  */
 import { REDIS_TOKEN } from '@fleetvision/cache-redis';
 import type { Redis } from '@fleetvision/cache-redis';
+import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
 import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { ClusterService } from '../application/cluster-service.js';
@@ -19,17 +20,20 @@ import { ReplayService } from '../application/replay-service.js';
 import type { MapEngineConfig } from '../config/map-engine.config.js';
 import type { MapProvider } from '../domain/map-provider.js';
 import { RedisGeoCache } from '../infrastructure/cache/redis-geo-cache.js';
+import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { GeofenceRepository } from '../infrastructure/persistence/geofence.repository.js';
 import { PoiRepository } from '../infrastructure/persistence/poi.repository.js';
 import { ReplayRepository } from '../infrastructure/persistence/replay.repository.js';
 import { LocalProvider } from '../infrastructure/provider/local-provider.js';
 import { NominatimProvider } from '../infrastructure/provider/nominatim-provider.js';
 import { OsrmProvider } from '../infrastructure/provider/osrm-provider.js';
+import { GeofencesController } from './geofences.controller.js';
 import { LocationController } from './location.controller.js';
 import { MapController } from './map.controller.js';
 import { RouteController } from './route.controller.js';
 import {
   CLUSTER_SERVICE,
+  GEO_AUDIT_REPOSITORY,
   GEOFENCE_REPOSITORY,
   GEOFENCE_SERVICE,
   GEO_CACHE,
@@ -121,6 +125,12 @@ export class MapEngineModule {
           },
         },
 
+        {
+          provide: GEO_AUDIT_REPOSITORY,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new AuditRepository(knex as never),
+        },
+
         // --- Application services ---
         {
           provide: HEAT_SERVICE,
@@ -146,8 +156,12 @@ export class MapEngineModule {
         },
         {
           provide: GEOFENCE_SERVICE,
-          inject: [GEOFENCE_REPOSITORY],
-          useFactory: (repo: GeofenceRepository) => new GeofenceService({ repo }),
+          inject: [GEOFENCE_REPOSITORY, GEO_AUDIT_REPOSITORY, METRICS_TOKEN],
+          useFactory: (
+            repo: GeofenceRepository,
+            audit: AuditRepository,
+            metrics: TelemetryMetrics,
+          ) => new GeofenceService({ repo, audit, metrics }),
         },
         {
           provide: POI_SERVICE,
@@ -158,8 +172,9 @@ export class MapEngineModule {
         MapController,
         LocationController,
         RouteController,
+        GeofencesController,
       ],
-      controllers: [MapController, LocationController, RouteController],
+      controllers: [MapController, LocationController, RouteController, GeofencesController],
     };
   }
 }

@@ -30,6 +30,7 @@ import { Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { Kafka, type Message, type Producer } from 'kafkajs';
 import type {
   DeviceStatusSignal,
+  GeofenceSignal,
   IdleSignal,
   ParkingSignal,
   SignalBus,
@@ -87,6 +88,7 @@ export class TrackingEventProducer implements OnApplicationShutdown {
       bus.onIdle((e) => void this.publishIdle(e)),
       bus.onParking((e) => void this.publishParking(e)),
       bus.onDeviceStatus((s) => void this.publishDeviceStatus(s)),
+      bus.onGeofence((s) => void this.publish(this.buildGeofenceEnvelope(s))),
     );
     this.logger.log(`FleetEvent publishing enabled — topic ${this.deps.topic}`);
   }
@@ -199,6 +201,37 @@ export class TrackingEventProducer implements OnApplicationShutdown {
       occurredAt: s.lastSeenAt,
       severity: s.state === 'ONLINE' ? 'INFO' : 'MEDIUM',
       metadata: { state: s.state, lastSeenAt: s.lastSeenAt },
+    };
+  }
+
+  /**
+   * Sprint I — geofence membership event envelope. Deterministic eventId
+   * `<sourceEventId>:<eventType>:<geofenceId>`: a Kafka redelivery or an
+   * evaluator re-emission produces the same id so the alarm engine +
+   * fleet_events store can deduplicate (duplicate-safe by construction).
+   */
+  public buildGeofenceEnvelope(s: GeofenceSignal): FleetEventEnvelope {
+    const eventId = `${s.sourceEventId ?? 'unknown'}:${s.type}:${s.geofenceId}`;
+    return {
+      specversion: '1.0',
+      type: 'tracking.event.v1',
+      id: eventId,
+      eventId,
+      correlationId: s.sourceEventId ?? s.vehicleId,
+      eventType: s.type,
+      tenantId: s.tenantId,
+      vehicleId: s.vehicleId,
+      deviceId: null,
+      occurredAt: s.occurredAt,
+      severity: s.type === 'geofence.exited' ? 'LOW' : s.type === 'geofence.dwell' ? 'MEDIUM' : 'INFO',
+      metadata: {
+        sourceEventId: s.sourceEventId,
+        geofenceId: s.geofenceId,
+        geofenceName: s.geofenceName,
+        dwellSec: s.dwellSec,
+        lat: s.lat,
+        lng: s.lng,
+      },
     };
   }
 

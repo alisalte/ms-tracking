@@ -1,3 +1,5 @@
+import { createRedisClient } from '@fleetvision/cache-redis';
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * Sprint G integration suite — the REAL alarm pipeline against live Docker
  * (Kafka + PostgreSQL + Redis), Part 42/43 acceptance scenarios:
@@ -17,8 +19,6 @@
  * `pnpm test` stays green without Docker; this run is the real thing.
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { createRedisClient } from '@fleetvision/cache-redis';
-import type { Redis } from '@fleetvision/cache-redis';
 import { Kafka } from 'kafkajs';
 import { AlarmEvaluatorService } from '../../application/alarm-evaluator.service.js';
 import type { NotificationConfig } from '../../config/notification.config.js';
@@ -28,8 +28,7 @@ import { AlarmKafkaConsumer } from '../../infrastructure/kafka/alarm-kafka-consu
 import { AlarmOccurrenceRepository } from '../../infrastructure/persistence/alarm-occurrence.repository.js';
 import { AlarmRuleRepository } from '../../infrastructure/persistence/alarm-rule.repository.js';
 import { FleetEventRepository } from '../../infrastructure/persistence/fleet-event.repository.js';
-import { GeofenceQuery } from '../../infrastructure/persistence/geofence-query.js';
-import { type IntegrationCtx, bootstrap, dropTestDb, KAFKA_BROKERS, REDIS_URL } from './db.js';
+import { type IntegrationCtx, KAFKA_BROKERS, REDIS_URL, bootstrap, dropTestDb } from './db.js';
 
 const DB = `notif_sprint_g_${Date.now().toString(36)}`;
 const RUN = Date.now().toString(36);
@@ -94,7 +93,10 @@ beforeAll(async () => {
     } while (cursor !== '0');
   }
   try {
-    const kafka = new Kafka({ brokers: KAFKA_BROKERS.split(','), clientId: `sprint-g-test-${RUN}` });
+    const kafka = new Kafka({
+      brokers: KAFKA_BROKERS.split(','),
+      clientId: `sprint-g-test-${RUN}`,
+    });
     producer = kafka.producer();
     await producer.connect();
   } catch {
@@ -127,7 +129,6 @@ beforeAll(async () => {
     rules: rulesRepo,
     alarms: alarmsRepo,
     stateCache: new AlarmStateCache(redis),
-    geofenceQuery: new GeofenceQuery(ctx.knex),
     gateway: null,
     dispatcher: null,
     metrics: null,
@@ -234,6 +235,50 @@ async function sendSession(state: string, tenantId = TENANT_A, deviceId = DEVICE
   });
 }
 
+/**
+ * Sprint I — publish a gps-engine-style geofence FleetEvent (tracking.event.v1)
+ * on the tracking topic. Detection now lives in the GPS Engine's evaluator;
+ * this is exactly the envelope it produces.
+ */
+async function sendGeofenceEvent(
+  messageType: 'geofence.entered' | 'geofence.exited' | 'geofence.dwell',
+  geofenceId: string,
+  opts: { dwellSec?: number | null; eventIdSuffix?: string; tenantId?: string; vehicleId?: string } = {},
+) {
+  const sourceEventId = `${RUN}:${messageType}:${geofenceId}:${opts.eventIdSuffix ?? '1'}`;
+  const eventId = `${sourceEventId}:${messageType}:${geofenceId}`;
+  await producer!.send({
+    topic: TOPIC_TRACKING,
+    messages: [
+      {
+        key: opts.vehicleId ?? VEHICLE_A,
+        value: JSON.stringify({
+          specversion: '1.0',
+          type: 'tracking.event.v1',
+          id: eventId,
+          eventId,
+          correlationId: sourceEventId,
+          eventType: messageType,
+          tenantId: opts.tenantId ?? TENANT_A,
+          vehicleId: opts.vehicleId ?? VEHICLE_A,
+          deviceId: null,
+          occurredAt: new Date().toISOString(),
+          severity: messageType === 'geofence.dwell' ? 'MEDIUM' : 'INFO',
+          metadata: {
+            sourceEventId,
+            geofenceId,
+            geofenceName: 'zone-a',
+            dwellSec: opts.dwellSec ?? null,
+            lat: 35.72,
+            lng: 51.42,
+          },
+        }),
+      },
+    ],
+  });
+  return eventId;
+}
+
 // ── Scenarios ───────────────────────────────────────────────────────────────
 
 describe('Sprint G acceptance — real Kafka → alarm engine → PostgreSQL', () => {
@@ -252,9 +297,9 @@ describe('Sprint G acceptance — real Kafka → alarm engine → PostgreSQL', (
 
     // 6-8. speed=120 → SPEEDING alarm, ONE OPEN row.
     await sendPosition('s1-b', 120, 35.7, 51.4);
-    expect(
-      await waitFor(async () => (await alarmsFor(TENANT_A, 'overspeed')).length === 1),
-    ).toBe(true);
+    expect(await waitFor(async () => (await alarmsFor(TENANT_A, 'overspeed')).length === 1)).toBe(
+      true,
+    );
 
     // 9-10. additional speeding packets → no duplicate OPEN alarms.
     for (let i = 0; i < 5; i++) {
@@ -275,13 +320,17 @@ describe('Sprint G acceptance — real Kafka → alarm engine → PostgreSQL', (
     ).toBe(true);
   }, 60_000);
 
-  it('Scenario 2 — GEOFENCE ENTER: one transition, one alarm, no duplicates', async () => {
+  it('Scenario 2 — GEOFENCE ENTER (Sprint I event-driven): one event, one alarm, no duplicates', async () => {
     if (!ctx || !producer) return;
-    // A real PostGIS geofence: a 48-gon around (35.72, 51.42), ~500 m radius.
+    // A real PostGIS geofence row (the id the rule + event reference; detection
+    // itself now happens in the gps-engine evaluator — Sprint I).
     const ring: number[][] = [];
     for (let i = 0; i <= 48; i++) {
       const theta = (2 * Math.PI * i) / 48;
-      ring.push([51.42 + (500 * Math.cos(theta)) / (111_320 * Math.cos((35.72 * Math.PI) / 180)), 35.72 + (500 * Math.sin(theta)) / 111_320]);
+      ring.push([
+        51.42 + (500 * Math.cos(theta)) / (111_320 * Math.cos((35.72 * Math.PI) / 180)),
+        35.72 + (500 * Math.sin(theta)) / 111_320,
+      ]);
     }
     const geofenceId = 'aaaaaab1-0000-4000-8000-000000000001';
     await ctx.knex.raw(
@@ -299,21 +348,16 @@ describe('Sprint G acceptance — real Kafka → alarm engine → PostgreSQL', (
     );
     await createRule(TENANT_A, 'geofence_enter', { geofenceId });
 
-    // Position OUTSIDE (a few km away) → establishes outside state.
-    await sendPosition('g1-out', 40, 35.7, 51.4);
-    await new Promise((r) => setTimeout(r, 1500));
-    expect(await alarmsFor(TENANT_A, 'geofence_enter')).toHaveLength(0);
-
-    // Move INSIDE the zone.
-    await sendPosition('g1-in', 30, 35.72, 51.42);
+    // The evaluator-confirmed ENTER arrives as a tracking FleetEvent.
+    await sendGeofenceEvent('geofence.entered', geofenceId);
     expect(
       await waitFor(async () => (await alarmsFor(TENANT_A, 'geofence_enter')).length === 1),
     ).toBe(true);
 
-    // Multiple positions INSIDE → no duplicate ENTER events/alarms.
-    for (let i = 0; i < 4; i++) {
-      await sendPosition(`g1-in${i}`, 30, 35.72, 51.42);
-    }
+    // Kafka redelivery of the SAME event (deterministic eventId) → suppressed.
+    await sendGeofenceEvent('geofence.entered', geofenceId);
+    // A LATER re-entry is a DIFFERENT event id — one-open dedup updates, not duplicates.
+    await sendGeofenceEvent('geofence.entered', geofenceId, { eventIdSuffix: '2' });
     await new Promise((r) => setTimeout(r, 2500));
     expect(await alarmsFor(TENANT_A, 'geofence_enter')).toHaveLength(1);
   }, 60_000);
@@ -352,9 +396,9 @@ describe('Sprint G acceptance — real Kafka → alarm engine → PostgreSQL', (
     // Tenant B rule + tenant B vehicle speeding → tenant B alarm.
     await createRule(TENANT_B, 'overspeed', { thresholdKmh: 100 });
     await sendPosition('t4-b', 150, 35.9, 51.9, TENANT_B, VEHICLE_B);
-    expect(
-      await waitFor(async () => (await alarmsFor(TENANT_B, 'overspeed')).length === 1),
-    ).toBe(true);
+    expect(await waitFor(async () => (await alarmsFor(TENANT_B, 'overspeed')).length === 1)).toBe(
+      true,
+    );
 
     const alarmsA = await alarmsFor(TENANT_A);
     const alarmsB = await alarmsFor(TENANT_B);
@@ -391,7 +435,13 @@ describe('Sprint G acceptance — real Kafka → alarm engine → PostgreSQL', (
         { key: VEHICLE_A, value: JSON.stringify(event) }, // exact duplicate (redelivery)
       ],
     });
-    expect(await waitFor(async () => (await fleetEventsRepo!.listPage(TENANT_A, 10, {})).data.some((e) => e.id === 'dup-1:trip.started'))).toBe(true);
+    expect(
+      await waitFor(async () =>
+        (await fleetEventsRepo!.listPage(TENANT_A, 10, {})).data.some(
+          (e) => e.id === 'dup-1:trip.started',
+        ),
+      ),
+    ).toBe(true);
     await new Promise((r) => setTimeout(r, 1500));
     const rows = (await fleetEventsRepo!.listPage(TENANT_A, 10, {})).data.filter(
       (e) => e.id === 'dup-1:trip.started',

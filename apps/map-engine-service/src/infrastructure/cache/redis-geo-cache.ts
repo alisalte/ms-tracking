@@ -56,6 +56,16 @@ export class RedisGeoCache {
     return `geo:snap:${lat.toFixed(5)}:${lng.toFixed(5)}`;
   }
 
+  /**
+   * Map-match result key (Sprint I §42). Points are quantized to 5 dp
+   * (~1 m) before hashing so the key space stays bounded; the value TTL is
+   * the standard bounded TTL — GPS tracks are never cached indefinitely.
+   */
+  matchKey(points: readonly { lat: number; lng: number }[]): string {
+    const quantized = points.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
+    return `geo:match:${sha(quantized)}`;
+  }
+
   clusterKey(tenantId: string, bbox: string, zoom: number): string {
     return `geo:cluster:${tenantId}:${bbox}:${zoom}`;
   }

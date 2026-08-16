@@ -42,6 +42,10 @@ export class AppModule {
           client: { url: config.DBURL },
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            // Per-service migration ledger (Sprint I convention — see
+            // map-engine/notification): the shared dev database's default
+            // `schema_migrations` table belongs to identity-service.
+            tableName: 'fleet_management_schema_migrations',
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),

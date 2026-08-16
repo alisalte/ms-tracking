@@ -141,6 +141,24 @@ export async function apiGetRaw<T>(url: string, params?: Record<string, unknown>
 }
 
 /**
+ * Typed POST for endpoints that return a RAW body (no { data } envelope) —
+ * map-engine REST (`/route/match`, `/location/*`) responds unwrapped.
+ */
+export async function apiPostRaw<TRes>(url: string, body?: unknown): Promise<TRes> {
+  const response = await apiClient.post<TRes>(url, body);
+  return response.data;
+}
+
+/**
+ * Typed PUT for endpoints that return a RAW body (no { data } envelope) —
+ * map-engine REST (`/geofences/*`) responds unwrapped.
+ */
+export async function apiPutRaw<TRes>(url: string, body?: unknown): Promise<TRes> {
+  const response = await apiClient.put<TRes>(url, body);
+  return response.data;
+}
+
+/**
  * Typed POST request that unwraps the { data: T } envelope.
  */
 export async function apiPost<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {
@@ -153,6 +171,15 @@ export async function apiPost<TReq, TRes>(url: string, body?: TReq): Promise<TRe
  */
 export async function apiPostNoContent(url: string, body?: unknown): Promise<void> {
   await apiClient.post(url, body);
+}
+
+/**
+ * Blob GET for file downloads (CSV export) — authenticated like every other
+ * request; the caller saves the Blob via downloadBlob().
+ */
+export async function apiGetBlob(url: string, params?: Record<string, unknown>): Promise<Blob> {
+  const response = await apiClient.get<Blob>(url, { params, responseType: 'blob' });
+  return response.data;
 }
 
 /**

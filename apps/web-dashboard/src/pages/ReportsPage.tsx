@@ -1,95 +1,77 @@
 /**
- * ReportsPage — the Reports & Analytics surface (`/reports`).
+ * ReportsPage — Reporting & Fleet Analytics (`/reports`) — Sprint J.
  *
- * Four sections — Overview (KPIs + charts), Reports (catalog + generate),
- * Jobs/Exports (history + download), Dashboards (saved layouts) — selected via
- * a section toggle. The active section syncs to the URL (`?section=overview`)
- * for shareable deep links. Generating a report from the Reports section
- * auto-switches to Jobs so the operator sees the new job's lifecycle.
+ * REAL data only (reporting-service). Sections (§33): Overview, Vehicles,
+ * Trips, Alarms, Geofences, Activity — synced to `?section=`. Every number is
+ * a documented backend KPI; the page formats and displays only (§66). No mock
+ * analytics remain.
  */
-import { BarChart3, FileText, LayoutDashboard, ListChecks } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
-import { DashboardsSection } from '@/components/reports/DashboardsSection';
-import { ReportDefinitionsSection } from '@/components/reports/ReportDefinitionsSection';
-import { ReportJobsSection } from '@/components/reports/ReportJobsSection';
-import { ReportsOverview } from '@/components/reports/ReportsOverview';
+import type { ReportRange } from '@/api/report.api';
+import { ActivitySection } from '@/components/reports/ActivitySection';
+import { AlarmsSection } from '@/components/reports/AlarmsSection';
+import { GeofencesSection } from '@/components/reports/GeofencesSection';
+import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
+import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
+import { TripsSection } from '@/components/reports/TripsSection';
+import { VehiclesSection } from '@/components/reports/VehiclesSection';
 import { PageHeader } from '@/components/ui';
-import { Box, Stack, Tab, Tabs } from '@mui/material';
+import { Stack, Tab, Tabs } from '@mui/material';
 
-export type ReportSection = 'overview' | 'reports' | 'jobs' | 'dashboards';
+const SECTIONS = ['overview', 'vehicles', 'trips', 'alarms', 'geofences', 'activity'] as const;
+type Section = (typeof SECTIONS)[number];
 
-const SECTIONS: { key: ReportSection; label: string }[] = [
-  { key: 'overview', label: 'overview' },
-  { key: 'reports', label: 'reports' },
-  { key: 'jobs', label: 'jobs' },
-  { key: 'dashboards', label: 'dashboards' },
-];
-
-function readSection(v: string | null): ReportSection {
-  return (SECTIONS.map((s) => s.key) as readonly string[]).includes(v ?? '')
-    ? (v as ReportSection)
-    : 'overview';
+function isSection(v: string | null): v is Section {
+  return v !== null && (SECTIONS as readonly string[]).includes(v);
 }
 
 export function ReportsPage() {
   const { t } = useTranslation();
-  const [params, setParams] = useSearchParams();
-  const section = readSection(params.get('section'));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const raw = searchParams.get('section');
+  const section: Section = isSection(raw) ? raw : 'overview';
+  const [range, setRange] = useState<ReportRange>({ preset: '7d' });
 
-  const setSection = (next: ReportSection) => {
-    const p = new URLSearchParams(params);
-    p.set('section', next);
-    setParams(p, { replace: true });
+  const setSection = (s: Section) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('section', s);
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   return (
-    <Stack sx={{ height: '100%' }}>
-      {/* Header */}
-      <PageHeader compact title={t('reports.title')} subtitle={t('reports.subtitle')} />
-
-      {/* Section tabs */}
+    <Stack gap={2}>
+      <PageHeader title={t('reports.title')} subtitle={t('reports.subtitle')} />
+      <ReportRangePicker range={range} onChange={setRange} />
       <Tabs
         value={section}
-        onChange={(_, v) => setSection(v as ReportSection)}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
+        onChange={(_, v: Section) => setSection(v)}
+        variant="scrollable"
+        allowScrollButtonsMobile
+        aria-label={t('reports.title')}
       >
-        <Tab
-          icon={<LayoutDashboard size={16} />}
-          iconPosition="start"
-          value="overview"
-          label={t('reports.sections.overview')}
-        />
-        <Tab
-          icon={<FileText size={16} />}
-          iconPosition="start"
-          value="reports"
-          label={t('reports.sections.reports')}
-        />
-        <Tab
-          icon={<ListChecks size={16} />}
-          iconPosition="start"
-          value="jobs"
-          label={t('reports.sections.jobs')}
-        />
-        <Tab
-          icon={<BarChart3 size={16} />}
-          iconPosition="start"
-          value="dashboards"
-          label={t('reports.sections.dashboards')}
-        />
+        {SECTIONS.map((s) => (
+          <Tab
+            key={s}
+            value={s}
+            label={t(`reports.sections.${s}`)}
+            data-testid={`report-section-${s}`}
+          />
+        ))}
       </Tabs>
-
-      {/* Active section */}
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pt: 2 }}>
-        {section === 'overview' && <ReportsOverview />}
-        {section === 'reports' && (
-          <ReportDefinitionsSection onGenerated={() => setSection('jobs')} />
-        )}
-        {section === 'jobs' && <ReportJobsSection />}
-        {section === 'dashboards' && <DashboardsSection />}
-      </Box>
+      {section === 'overview' && <ReportsOverviewSection range={range} />}
+      {section === 'vehicles' && <VehiclesSection range={range} />}
+      {section === 'trips' && <TripsSection range={range} />}
+      {section === 'alarms' && <AlarmsSection range={range} />}
+      {section === 'geofences' && <GeofencesSection range={range} />}
+      {section === 'activity' && <ActivitySection range={range} />}
     </Stack>
   );
 }

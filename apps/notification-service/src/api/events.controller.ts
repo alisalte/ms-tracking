@@ -13,10 +13,9 @@ import { decodeCursor } from '@fleetvision/shared-kernel';
  */
 import { Controller, Get, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import type {
-  FleetEventFilters,
-  FleetEventRepository,
-} from '../infrastructure/persistence/fleet-event.repository.js';
+import type { FleetEventFilters } from '../infrastructure/persistence/fleet-event.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { FleetEventRepository } from '../infrastructure/persistence/fleet-event.repository.js';
 
 @Controller('api/v1/notification/events')
 export class EventsController {

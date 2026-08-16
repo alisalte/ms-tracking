@@ -69,6 +69,20 @@ export type InputSignal =
       endedAt: string;
       durationSec: number;
       sourceEventId: string | null;
+    }
+  | {
+      /** Sprint I — geofence membership FleetEvent (gps-engine evaluator). */
+      kind: 'geofence';
+      tenantId: string;
+      vehicleId: string;
+      type: 'geofence.entered' | 'geofence.exited' | 'geofence.dwell';
+      geofenceId: string | null;
+      geofenceName: string | null;
+      dwellSec: number | null;
+      occurredAt: string;
+      lat: number;
+      lng: number;
+      sourceEventId: string | null;
     };
 
 export interface RuleEvaluator {

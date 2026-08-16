@@ -25,6 +25,10 @@ const MAP_ENGINE_GEO_MIGRATION = resolve(
   process.cwd(),
   '../map-engine-service/src/infrastructure/database/migrations/20260806120000_create_geo_schema.js',
 );
+const MAP_ENGINE_GEOFENCE_SPRINT_I_MIGRATION = resolve(
+  process.cwd(),
+  '../map-engine-service/src/infrastructure/database/migrations/20260816120000_extend_geofences_for_sprint_i.js',
+);
 
 export interface IntegrationCtx {
   readonly knex: Knex;
@@ -73,6 +77,11 @@ export async function bootstrap(testDbName: string): Promise<IntegrationCtx | nu
       up: (knex: Knex) => Promise<void>;
     };
     await geo.up(knex);
+    // Sprint I — status/description columns + geofence_vehicles assignments.
+    const sprintI = (await import(pathToFileURL(MAP_ENGINE_GEOFENCE_SPRINT_I_MIGRATION).href)) as {
+      up: (knex: Knex) => Promise<void>;
+    };
+    await sprintI.up(knex);
     return { knex, admin };
   } catch (e) {
     if (process.env.NOTIF_TEST_DEBUG) {

@@ -13,7 +13,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 
-import { apiGetRaw } from './client';
+import { apiGetRaw, apiPostRaw } from './client';
 
 /** One point of a historical track (gps-engine LatestPosition wire). */
 export interface TrackPoint {
@@ -113,4 +113,35 @@ export function fetchRoute(
 ): Promise<RouteResult> {
   const wp = waypoints.map((w) => `${w.lat},${w.lng}`).join(';');
   return apiGetRaw<RouteResult>('/route', { waypoints: wp, mode });
+}
+
+/** A map-matched track point (map-engine SnappedPoint wire — Sprint I §38). */
+export interface SnappedPoint {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly roadName: string | null;
+  readonly postedLimitKmh: number | null;
+  /** 1 = matched to the road network; 0 = RAW GPS (provider fallback). */
+  readonly confidence: number;
+  readonly provider: string;
+}
+
+/** Max points accepted by POST /route/match (backend cap). */
+export const MAX_MATCH_POINTS = 500;
+
+/**
+ * POST /route/match — OSRM map matching via the ProviderRouter (Sprint I §40).
+ * Throws (503 wrapped in ApiClientError) when no capable provider exists —
+ * the caller falls back to the RAW track and surfaces the unavailability.
+ * Points are down-sampled to the backend cap BEFORE the call.
+ */
+export function fetchMapMatch(
+  points: ReadonlyArray<{ lat: number; lng: number }>,
+): Promise<SnappedPoint[]> {
+  let payload = points;
+  if (points.length > MAX_MATCH_POINTS) {
+    const stride = Math.ceil(points.length / MAX_MATCH_POINTS);
+    payload = points.filter((_, i) => i % stride === 0 || i === points.length - 1);
+  }
+  return apiPostRaw<SnappedPoint[]>('/route/match', { points: payload });
 }

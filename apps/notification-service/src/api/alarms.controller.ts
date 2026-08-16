@@ -28,10 +28,9 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AlarmNotFoundError } from '../domain/index.js';
-import type {
-  AlarmListFilters,
-  AlarmOccurrenceRepository,
-} from '../infrastructure/persistence/alarm-occurrence.repository.js';
+import type { AlarmListFilters } from '../infrastructure/persistence/alarm-occurrence.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
 import { type ResolveAlarmDto, resolveAlarmSchema } from './notification.dto.js';
 import { ALARM_REALTIME_GATEWAY } from './notification.tokens.js';

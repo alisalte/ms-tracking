@@ -151,6 +151,34 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     GPS_POSITIONS_COMPRESS_AFTER_DAYS: z.coerce.number().int().min(1).default(7),
     /** Drop vehicle_positions chunks older than this (days). Default 180. */
     GPS_POSITIONS_RETENTION_DAYS: z.coerce.number().int().min(1).default(180),
+
+    // --- Geofence evaluation (Sprint I §19–§23) ---
+    /** Enable the geofence ENTER/EXIT/DWELL evaluator. */
+    GEOFENCE_ENABLED: z.coerce.boolean().default(true),
+    /**
+     * Jitter protection — consecutive-observation confirmation count. ENTER
+     * requires N contained observations in a row after OUTSIDE; EXIT requires
+     * N non-contained observations in a row after INSIDE. Default 2.
+     */
+    GEOFENCE_CONFIRMATION_POINTS: z.coerce.number().int().min(1).default(2),
+    /**
+     * Default DWELL threshold (seconds) when a geofence has no dwell_sec.
+     * Default 600 (10 minutes). At most ONE dwell event per occupancy.
+     */
+    GEOFENCE_DWELL_SECONDS: z.coerce.number().int().min(1).default(600),
+    /**
+     * Candidate bbox widening (degrees) for the GiST `&&` prefilter
+     * (~0.05° ≈ 5 km). Never misses a containing fence (a containing fence's
+     * bbox always intersects the point bbox); only widens exit confirmation.
+     */
+    GEOFENCE_CANDIDATE_BUFFER_DEG: z.coerce.number().min(0.001).max(5).default(0.05),
+
+    // --- History queries (Sprint I §29/§30/§66) ---
+    /**
+     * Maximum custom history window (days). Keeps the documented Sprint F
+     * 31-day bound configurable WITHOUT silently increasing it.
+     */
+    HISTORY_MAX_RANGE_DAYS: z.coerce.number().int().min(1).default(31),
   }),
 );
 

@@ -116,6 +116,21 @@ export function TripDetailPage() {
         >
           {t('trips.detail.back')}
         </Button>
+        {/*
+         * Sprint I §37 — trip → map: opens the /map history mode preloaded with
+         * the trip's vehicle + time window (custom range deep link).
+         */}
+        <Button
+          component={Link}
+          to={`/map?vehicle=${encodeURIComponent(trip.vehicleId)}&from=${encodeURIComponent(
+            new Date(trip.startTime).toISOString(),
+          )}&to=${encodeURIComponent(new Date(trip.endTime ?? Date.now()).toISOString())}`}
+          size="small"
+          sx={{ textTransform: 'none' }}
+          data-testid="trip-show-on-map"
+        >
+          {t('trips.detail.showOnMap')}
+        </Button>
       </Stack>
       <Stack
         direction={{ xs: 'column', md: 'row' }}

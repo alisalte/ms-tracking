@@ -75,6 +75,9 @@ export const Permissions = {
   NOTIFICATION_RULE_DELETE: 'notification.rule.delete',
   NOTIFICATION_EVENT_READ: 'notification.event.read', // FleetEvent history reads
 
+  // --- Reporting & analytics (reporting-service) — Sprint J ---
+  REPORT_READ: 'report.read', // all report queries (aggregated, tenant-scoped)
+  REPORT_EXPORT: 'report.export', // CSV export endpoints
   // --- Notification Center (notification-service) — Sprint H ---
   NOTIFICATION_READ: 'notification.read', // own notification bell/center reads + mark read
   NOTIFICATION_READ_ALL: 'notification.read.all', // tenant-wide notification history
@@ -162,6 +165,9 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       Permissions.NOTIFICATION_READ_ALL,
       Permissions.NOTIFICATION_PREFERENCE_READ,
       Permissions.NOTIFICATION_PREFERENCE_WRITE,
+      // Sprint J — reporting: fleet-admins read + export.
+      Permissions.REPORT_READ,
+      Permissions.REPORT_EXPORT,
     ],
     mfaRequired: false,
   },
@@ -189,6 +195,8 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       Permissions.NOTIFICATION_READ,
       Permissions.NOTIFICATION_PREFERENCE_READ,
       Permissions.NOTIFICATION_PREFERENCE_WRITE,
+      // Sprint J — read-only reporting (no export).
+      Permissions.REPORT_READ,
     ],
     mfaRequired: false,
   },

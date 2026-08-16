@@ -742,6 +742,8 @@ d('Sprint E E2E — login → fleet CRUD → binding → telemetry → WS (§30)
     const positionsController = new PositionsController(
       { getLatest: async () => null } as never,
       new PositionRepository(knex as never),
+      { HISTORY_MAX_RANGE_DAYS: 31 } as never,
+      null as never,
     );
     const latest = await positionsController.latestForTenant(tenantId);
     const mine = latest.find((p) => p.vehicleId === vehicleId);

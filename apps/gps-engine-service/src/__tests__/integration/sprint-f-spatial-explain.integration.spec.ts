@@ -60,7 +60,7 @@ afterAll(async () => {
   await ctx.knex.destroy();
   await dropTestDb(ctx.admin, DB);
   await ctx.admin.destroy();
-});
+}, 120_000);
 
 /** True when the plan mentions a sequential scan on the hypertable. */
 async function planFor(sql: string, bindings: unknown[]): Promise<string> {

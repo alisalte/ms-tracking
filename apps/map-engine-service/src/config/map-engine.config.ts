@@ -57,6 +57,10 @@ export const mapEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     MAP_CLUSTER_THRESHOLD: z.coerce.number().int().min(1).default(2000),
     /** Max cluster markers returned. Default 100. */
     MAP_MAX_CLUSTERS: z.coerce.number().int().min(1).default(100),
+
+    // --- Sprint I ---
+    /** Expose GET /metrics (Prometheus) — geofence mutation + map-match counters. */
+    MAP_METRICS_ENABLED: z.coerce.boolean().default(true),
   }),
 );
 

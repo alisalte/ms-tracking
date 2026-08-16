@@ -56,19 +56,28 @@ export const CONDITION_SCHEMAS: Record<string, z.ZodTypeAny> = {
       minOfflineSec: positiveInt(1).optional(),
     })
     .strict(),
+  // Sprint I: geofence alarms are EVENT-driven (gps-engine evaluator publishes
+  // geofence.entered/exited/dwell FleetEvents). geofenceId is optional — a rule
+  // without it matches ANY geofence for the rule's vehicle scope.
   geofence_enter: z
     .object({
-      geofenceId: z.string().uuid(),
+      geofenceId: z.string().uuid().optional(),
     })
     .strict(),
   geofence_exit: z
     .object({
-      geofenceId: z.string().uuid(),
+      geofenceId: z.string().uuid().optional(),
     })
     .strict(),
-  // geofence_dwell: dwell evaluation is DEFERRED (Sprint G) — no dwell-state
-  // tracking exists yet, so rules of this type are rejected rather than
-  // stored-but-never-firing.
+  // Sprint I: geofence_dwell is now implementable — the gps-engine evaluator
+  // emits geofence.dwell once per occupancy (its own threshold), and the rule's
+  // optional dwellSec further requires at least that many elapsed seconds.
+  geofence_dwell: z
+    .object({
+      geofenceId: z.string().uuid().optional(),
+      dwellSec: positiveInt(1).optional(),
+    })
+    .strict(),
   trip_started: z.object({}).strict(),
   trip_ended: z.object({}).strict(),
   excessive_trip_duration: z

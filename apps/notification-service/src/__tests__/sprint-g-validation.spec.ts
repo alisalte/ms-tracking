@@ -245,9 +245,11 @@ describe('createRuleSchema — per-type condition validation (Part 28)', () => {
         conditions: { geofenceId: 'zone-a' },
       }),
     ).toThrow();
+    // Sprint I: geofenceId is OPTIONAL (a rule without it matches ANY fence)
+    // — empty conditions are valid; a non-uuid geofenceId is still rejected.
     expect(() =>
       createRuleSchema.parse({ ...base, type: 'geofence_exit', conditions: {} }),
-    ).toThrow();
+    ).not.toThrow();
   });
 
   it('requires positive durations for idle/parking/trip-duration rules', () => {
@@ -273,13 +275,19 @@ describe('createRuleSchema — per-type condition validation (Part 28)', () => {
     ).toThrow();
   });
 
-  it('rejects geofence_dwell (dwell evaluation deferred — Sprint G)', () => {
+  it('accepts geofence_dwell with valid conditions (Sprint I — event-driven dwell)', () => {
     expect(() =>
       createRuleSchema.parse({
         ...base,
         type: 'geofence_dwell',
         conditions: { geofenceId: GEOFENCE, dwellSec: 300 },
       }),
+    ).not.toThrow();
+    expect(() =>
+      createRuleSchema.parse({ ...base, type: 'geofence_dwell', conditions: {} }),
+    ).not.toThrow();
+    expect(() =>
+      createRuleSchema.parse({ ...base, type: 'geofence_dwell', conditions: { dwellSec: 0 } }),
     ).toThrow();
   });
 });

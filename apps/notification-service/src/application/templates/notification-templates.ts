@@ -9,10 +9,7 @@
  * Template keys map 1:1 to the Sprint G alarm rule types — no notification
  * types exist for unsupported events (Sprint H §7).
  */
-import {
-  type TemplateData,
-  renderTemplate,
-} from '../../domain/notification-template.js';
+import { type TemplateData, renderTemplate } from '../../domain/notification-template.js';
 
 export type NotificationLocale = 'en' | 'fa';
 

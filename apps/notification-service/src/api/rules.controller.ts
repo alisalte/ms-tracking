@@ -29,7 +29,8 @@ import {
 import type { Request } from 'express';
 import { AlarmRule } from '../domain/index.js';
 import { AlarmRuleNotFoundError } from '../domain/index.js';
-import type { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
 import {
   type CreateRuleDto,
   type UpdateRuleDto,

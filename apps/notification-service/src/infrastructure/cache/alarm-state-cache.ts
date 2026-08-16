@@ -127,34 +127,7 @@ export class AlarmStateCache {
     }
   }
 
-  // ── Geofence state ──
-
-  /** Get the set of geofence IDs a vehicle is currently inside. */
-  public async getGeofenceState(tenantId: string, vehicleId: string): Promise<Set<string>> {
-    const key = `tenant:${tenantId}:vehicle:${vehicleId}:geofence_state`;
-    try {
-      const raw = await this.redis.get(key);
-      if (!raw) return new Set();
-      const parsed = JSON.parse(raw) as Record<string, boolean>;
-      return new Set(Object.keys(parsed).filter((id) => parsed[id]));
-    } catch {
-      return new Set();
-    }
-  }
-
-  /** Set the full geofence-inside state for a vehicle. */
-  public async setGeofenceState(
-    tenantId: string,
-    vehicleId: string,
-    insideGeofenceIds: Set<string>,
-  ): Promise<void> {
-    const key = `tenant:${tenantId}:vehicle:${vehicleId}:geofence_state`;
-    try {
-      const obj: Record<string, boolean> = {};
-      for (const id of insideGeofenceIds) obj[id] = true;
-      await this.redis.set(key, JSON.stringify(obj), 'EX', 86_400); // 24h TTL
-    } catch {
-      // Best-effort.
-    }
-  }
+  // Sprint I — the geofence inside-set state moved to the gps-engine evaluator
+  // (durable tracking.geofence_state in PostgreSQL); the Redis helpers were
+  // removed with the inline per-position evaluation.
 }

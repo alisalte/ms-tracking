@@ -47,6 +47,11 @@ interface FleetMapProps {
   focus?: { id: string; nonce: number } | null;
   /** Historical track overlay (Sprint F §9) — null in live mode. */
   track?: HistoryTrack | null;
+  /**
+   * Playback head (Sprint I §34): animated marker position + heading. Updated
+   * imperatively (setLngLat + CSS rotation) — never a map re-creation.
+   */
+  playbackHead?: { lat: number; lng: number; heading: number | null } | null;
 }
 
 /** Freshness "age" of the last position fix, locale-aware. */
@@ -90,6 +95,7 @@ export function FleetMap({
   paused = false,
   focus = null,
   track = null,
+  playbackHead = null,
 }: FleetMapProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -317,6 +323,46 @@ export function FleetMap({
     if (map.loaded()) render();
     else map.once('load', render);
   }, [track]);
+
+  // Playback head marker (Sprint I §34): one marker, imperative updates only.
+  const playbackMarkerRef = useRef<MaplibreMarker | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const sync = () => {
+      if (!playbackHead) {
+        playbackMarkerRef.current?.remove();
+        playbackMarkerRef.current = null;
+        return;
+      }
+      if (!playbackMarkerRef.current) {
+        const el = document.createElement('div');
+        el.className = 'fv-playback-marker';
+        const img = document.createElement('img');
+        img.src = headingArrowDataUrl(mapAccents.vehicleOverspeed, 0);
+        img.style.width = '30px';
+        img.style.height = '30px';
+        img.alt = '';
+        el.appendChild(img);
+        playbackMarkerRef.current = new MaplibreMarker({ element: el, anchor: 'center' })
+          .setLngLat([playbackHead.lng, playbackHead.lat])
+          .addTo(map);
+        return;
+      }
+      // Imperative update — no source/layer rebuild, no map recreation.
+      playbackMarkerRef.current.setLngLat([playbackHead.lng, playbackHead.lat]);
+      const img = playbackMarkerRef.current.getElement().firstElementChild as HTMLElement | null;
+      if (img) {
+        img.style.transform = `rotate(${playbackHead.heading ?? 0}deg)`;
+      }
+    };
+    if (map.loaded()) sync();
+    else map.once('load', sync);
+    return () => {
+      playbackMarkerRef.current?.remove();
+      playbackMarkerRef.current = null;
+    };
+  }, [playbackHead, track]);
 
   // §17 selection sync: a list-row selection flies the camera to the vehicle.
   // Depends only on the focus token so live position deltas never re-trigger it.

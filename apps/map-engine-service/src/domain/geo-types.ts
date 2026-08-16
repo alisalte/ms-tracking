@@ -86,14 +86,20 @@ export interface Geofence {
   readonly id: string;
   readonly tenantId: string;
   readonly name: string;
+  readonly description: string | null;
   readonly type: 'POLYGON' | 'CIRCLE' | 'CORRIDOR';
   readonly boundaryGeoJson: unknown; // GeoJSON Polygon
   readonly centerLat: number | null;
   readonly centerLng: number | null;
   readonly radiusM: number | null;
+  readonly status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   readonly alertOn: readonly string[];
   readonly dwellSec: number | null;
   readonly metadata: Record<string, unknown>;
+  readonly createdAt: string | null;
+  readonly updatedAt: string | null;
+  /** Assigned vehicle ids (empty = tenant-wide, legacy Sprint F/G semantics). */
+  readonly assignedVehicleIds: readonly string[];
 }
 
 /** Parse a bbox string "minLng,minLat,maxLng,maxLat" → BoundingBox. */

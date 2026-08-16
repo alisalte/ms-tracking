@@ -77,7 +77,12 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.notificationRead,
       },
       { key: 'commands', path: '/commands', icon: TerminalSquare },
-      { key: 'geofences', path: '/geofences', icon: MapPin },
+      {
+        key: 'geofences',
+        path: '/geofences',
+        icon: MapPin,
+        permission: PERMISSIONS.mapsRead,
+      },
     ],
   },
   {
@@ -94,7 +99,9 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     groupKey: 'reporting',
-    items: [{ key: 'reports', path: '/reports', icon: BarChart3 }],
+    items: [
+      { key: 'reports', path: '/reports', icon: BarChart3, permission: PERMISSIONS.reportRead },
+    ],
   },
   {
     groupKey: 'maintenance',

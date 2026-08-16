@@ -53,7 +53,7 @@ function makePositionsController() {
   };
   const cache = { getLatest: async () => null };
   return {
-    controller: new PositionsController(cache as never, repo as never),
+    controller: new PositionsController(cache as never, repo as never, { HISTORY_MAX_RANGE_DAYS: 31 } as never, null as never),
     nearbyCalls,
     boundsCalls,
     rangeCalls,
@@ -112,29 +112,43 @@ describe('GET /positions/in-bounds (Sprint F §18)', () => {
   });
 });
 
-describe('GET /positions/:vehicleId (historical track — Sprint F §21)', () => {
+describe('GET /positions/:vehicleId (historical track — Sprint F §21; Sprint I §30 adds preset)', () => {
   it('rejects invalid timestamps with 400', async () => {
     const { controller } = makePositionsController();
-    await expect(controller.range('v1', TENANT_A, 'not-a-date')).rejects.toThrow(/ISO timestamps/);
+    await expect(
+      controller.range('v1', TENANT_A, undefined, 'not-a-date'),
+    ).rejects.toThrow(/ISO timestamps/);
   });
 
   it('rejects reversed ranges with 400', async () => {
     const { controller } = makePositionsController();
     await expect(
-      controller.range('v1', TENANT_A, '2026-08-15T10:00:00Z', '2026-08-15T09:00:00Z'),
+      controller.range(
+        'v1',
+        TENANT_A,
+        undefined,
+        '2026-08-15T10:00:00Z',
+        '2026-08-15T09:00:00Z',
+      ),
     ).rejects.toThrow(/from must be before to/);
   });
 
   it('rejects ranges beyond 31 days with 400', async () => {
     const { controller } = makePositionsController();
     await expect(
-      controller.range('v1', TENANT_A, '2026-06-01T00:00:00Z', '2026-08-15T00:00:00Z'),
+      controller.range(
+        'v1',
+        TENANT_A,
+        undefined,
+        '2026-06-01T00:00:00Z',
+        '2026-08-15T00:00:00Z',
+      ),
     ).rejects.toThrow(/31 days/);
   });
 
   it('defaults to the last 24h and clamps the limit', async () => {
     const { controller, rangeCalls } = makePositionsController();
-    await controller.range('v1', TENANT_A, undefined, undefined, '999999');
+    await controller.range('v1', TENANT_A, undefined, undefined, undefined, '999999');
     const [tenant, vehicle, from, to, limit] = rangeCalls[0] as [
       string,
       string,

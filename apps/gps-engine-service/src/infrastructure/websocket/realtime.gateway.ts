@@ -273,6 +273,20 @@ export class RealtimeGateway implements OnApplicationBootstrap, OnApplicationShu
     this.deps.signalBus.onIdle((event) => this.onIdleEvent(event));
     this.deps.signalBus.onParking((event) => this.onParkingEvent(event));
     this.deps.signalBus.onEngineHours((signal) => this.onEngineHours(signal));
+    // Sprint I: geofence membership events (fleet + vehicle rooms).
+    this.deps.signalBus.onGeofence((signal) => this.onGeofenceEvent(signal));
+  }
+
+  /** Sprint I — geofence ENTER/EXIT/DWELL to the fleet + vehicle rooms. */
+  private onGeofenceEvent(signal: {
+    tenantId: string;
+    vehicleId: string;
+    type: string;
+  }): void {
+    if (!this.io) return;
+    const fleetRoom = `tenant:${signal.tenantId}:fleet`;
+    const vehicleRoom = `tenant:${signal.tenantId}:vehicle:${signal.vehicleId}`;
+    this.io.to(fleetRoom).to(vehicleRoom).emit('geofence.event', signal);
   }
 
   /**

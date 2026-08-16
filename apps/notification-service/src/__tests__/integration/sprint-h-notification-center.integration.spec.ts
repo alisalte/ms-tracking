@@ -1,3 +1,5 @@
+import { createRedisClient } from '@fleetvision/cache-redis';
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * Sprint H integration suite — the REAL notification pipeline against live
  * Docker (PostgreSQL + Redis + Kafka), Part 58 acceptance scenarios:
@@ -22,41 +24,38 @@
  * green without Docker; this run is the real thing.
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { createRedisClient } from '@fleetvision/cache-redis';
-import type { Redis } from '@fleetvision/cache-redis';
 import { Kafka } from 'kafkajs';
 import { AlarmEvaluatorService } from '../../application/alarm-evaluator.service.js';
+import type { ChannelProvider } from '../../application/channels/channel-provider.js';
+import { InAppChannel } from '../../application/channels/channels.js';
+import { NotificationProviderRegistry } from '../../application/channels/provider-registry.js';
 import { DeliveryExecutor } from '../../application/delivery-executor.js';
 import { DeliveryRetryWorker } from '../../application/delivery-retry-worker.js';
 import { NotificationDispatcherService } from '../../application/notification-dispatcher.service.js';
-import { InAppChannel } from '../../application/channels/channels.js';
-import type { ChannelProvider } from '../../application/channels/channel-provider.js';
-import { NotificationProviderRegistry } from '../../application/channels/provider-registry.js';
 import type { NotificationConfig } from '../../config/notification.config.js';
 import { AlarmRule } from '../../domain/alarm-rule.js';
+import type { Notification } from '../../domain/notification.js';
 import { AlarmStateCache } from '../../infrastructure/cache/alarm-state-cache.js';
 import { NotificationRateLimiter } from '../../infrastructure/cache/notification-rate-limiter.js';
 import { AlarmKafkaConsumer } from '../../infrastructure/kafka/alarm-kafka-consumer.js';
 import { AlarmOccurrenceRepository } from '../../infrastructure/persistence/alarm-occurrence.repository.js';
 import { AlarmRuleRepository } from '../../infrastructure/persistence/alarm-rule.repository.js';
 import { FleetEventRepository } from '../../infrastructure/persistence/fleet-event.repository.js';
-import { GeofenceQuery } from '../../infrastructure/persistence/geofence-query.js';
 import { NotificationDeliveryRepository } from '../../infrastructure/persistence/notification-delivery.repository.js';
 import { NotificationPreferenceRepository } from '../../infrastructure/persistence/notification-preference.repository.js';
 import { NotificationRepository } from '../../infrastructure/persistence/notification.repository.js';
 import { UserDirectory } from '../../infrastructure/persistence/user-directory.js';
-import type { Notification } from '../../domain/notification.js';
-import { type IntegrationCtx, bootstrap, dropTestDb, KAFKA_BROKERS, REDIS_URL } from './db.js';
+import { type IntegrationCtx, KAFKA_BROKERS, REDIS_URL, bootstrap, dropTestDb } from './db.js';
 
 const DB = `notif_sprint_h_${Date.now().toString(36)}`;
 const RUN = Date.now().toString(36);
-const TENANT_A = 'aaaaaah1-0000-4000-8000-000000000001';
-const TENANT_B = 'aaaaaah2-0000-4000-8000-000000000002';
-const USER_A1 = 'bbbbbbh1-0000-4000-8000-000000000001';
-const USER_A2 = 'bbbbbbh2-0000-4000-8000-000000000002';
-const USER_B1 = 'bbbbbbh3-0000-4000-8000-000000000003';
-const VEHICLE_A = 'ccccccch1-0000-4000-8000-000000000001';
-const DEVICE_A = 'ddddddh1-0000-4000-8000-000000000001';
+const TENANT_A = 'aaaaaa91-0000-4000-8000-000000000001';
+const TENANT_B = 'aaaaaa92-0000-4000-8000-000000000002';
+const USER_A1 = 'bbbbbb91-0000-4000-8000-000000000001';
+const USER_A2 = 'bbbbbb92-0000-4000-8000-000000000002';
+const USER_B1 = 'bbbbbb93-0000-4000-8000-000000000003';
+const VEHICLE_A = 'cccccc91-0000-4000-8000-000000000001';
+const DEVICE_A = 'dddddd91-0000-4000-8000-000000000001';
 
 const TOPIC_POS = `fleetvision.test.${RUN}.position.raw`;
 
@@ -71,7 +70,11 @@ class MockEmailProvider implements ChannelProvider {
   public async deliver(n: Notification) {
     this.calls.push(n);
     if (this.calls.length <= this.failFirst) {
-      return { success: false, error: 'ETIMEDOUT connecting to SMTP relay', errorClass: 'TRANSIENT' as const };
+      return {
+        success: false,
+        error: 'ETIMEDOUT connecting to SMTP relay',
+        errorClass: 'TRANSIENT' as const,
+      };
     }
     return { success: true, providerMessageId: `<mock-${this.calls.length}>` };
   }
@@ -141,7 +144,10 @@ beforeAll(async () => {
     return;
   }
   try {
-    const kafka = new Kafka({ brokers: KAFKA_BROKERS.split(','), clientId: `sprint-h-test-${RUN}` });
+    const kafka = new Kafka({
+      brokers: KAFKA_BROKERS.split(','),
+      clientId: `sprint-h-test-${RUN}`,
+    });
     producer = kafka.producer();
     await producer.connect();
   } catch {
@@ -237,7 +243,6 @@ beforeAll(async () => {
     rules: rulesRepo,
     alarms: alarmsRepo,
     stateCache: new AlarmStateCache(redis),
-    geofenceQuery: new GeofenceQuery(ctx.knex),
     gateway: null,
     dispatcher,
     metrics: null,
@@ -263,8 +268,10 @@ beforeAll(async () => {
       entityType: 'vehicle',
       entityId: null,
       conditions: { thresholdKmh: 100 },
-      cooldownSec: 300,
-      dedupWindowSec: 600,
+      // Short windows so the E2E scenarios can resolve + RE-RAISE a fresh
+      // alarm within test time (Scenario 2/5 depend on a NEW dispatch).
+      cooldownSec: 1,
+      dedupWindowSec: 1,
       repeatPolicy: 'COOLDOWN',
     }),
   );
@@ -278,7 +285,7 @@ afterAll(async () => {
   await ctx.knex.destroy();
   await dropTestDb(ctx.admin, DB);
   await ctx.admin.destroy();
-});
+}, 120_000);
 
 describe('Sprint H acceptance — alarm → per-user notifications → channel dispatch (real PostgreSQL + Redis + Kafka)', () => {
   it('skips when the docker stack is unreachable', () => {
@@ -301,7 +308,7 @@ describe('Sprint H acceptance — alarm → per-user notifications → channel d
     expect(a1.eventType).toBe('overspeed');
     expect(a1.vehicleId).toBe(VEHICLE_A);
     expect(a1.read).toBe(false);
-    expect(a1.title).toBe('Speeding: ' + (a1.metadata.vehicleName ?? VEHICLE_A));
+    expect(a1.title).toBe(`Speeding: ${a1.metadata.vehicleName ?? VEHICLE_A}`);
 
     const unreadA1 = await notificationsRepo!.getUnreadCount(TENANT_A, USER_A1);
     expect(unreadA1.total).toBe(1);
@@ -335,13 +342,15 @@ describe('Sprint H acceptance — alarm → per-user notifications → channel d
     ).toBe(true);
     await new Promise((r) => setTimeout(r, 1500));
     await sendPosition('h2-fast', 140); // raises a NEW overspeed alarm
-    expect(
-      await waitFor(async () => mockEmail!.calls.some((n) => n.userId === USER_A2)),
-    ).toBe(true);
+    expect(await waitFor(async () => mockEmail!.calls.some((n) => n.userId === USER_A2))).toBe(
+      true,
+    );
 
     // Delivery row persisted with provider + SENT status.
     const a2Notifications = await notificationsFor(TENANT_A, USER_A2);
-    const latest = a2Notifications.find((n) => mockEmail!.calls.some((c) => c.sourceId === n.sourceId));
+    const latest = a2Notifications.find((n) =>
+      mockEmail!.calls.some((c) => c.sourceId === n.sourceId),
+    );
     expect(latest).toBeDefined();
     const deliveries = await deliveriesRepo!.listForNotification(TENANT_A, latest!.id);
     const emailDelivery = deliveries.find((d) => d.channel === 'email');
@@ -395,10 +404,12 @@ describe('Sprint H acceptance — alarm → per-user notifications → channel d
 
     // The failed delivery is durable-retry scheduled; the worker claims and
     // completes it (tiny backoff → due immediately).
-    expect(await waitFor(async () => {
-      await retryWorker!.tick();
-      return attempt >= 2;
-    })).toBe(true);
+    expect(
+      await waitFor(async () => {
+        await retryWorker!.tick();
+        return attempt >= 2;
+      }),
+    ).toBe(true);
 
     expect(attempt).toBe(2);
     expect(mockEmail!.calls.length + 1).toBe(2); // first call threw, second recorded

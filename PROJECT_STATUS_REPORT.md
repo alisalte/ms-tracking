@@ -205,6 +205,55 @@
 > Full report: `docs/implementation/SPRINT-H-NOTIFICATION-CENTER.md`. **Supersedes**
 > the "browser E2E BLOCKED (no browser automation)" note from Sprint G.
 
+---
+
+> **Update 2026-08-16 — Sprint I (Advanced Geofence & Tracking Experience) COMPLETE.**
+> The Sprint F/G/H baseline now has a production-oriented geofence + tracking
+> experience. **Geofence lifecycle:** full CRUD on `/geofences` (cursor pagination +
+> status/type/search/vehicle filters, update with geometry re-validation, soft-delete
+> archive, activate/deactivate, vehicle↔fence assignments where an unassigned fence
+> stays tenant-wide), PostGIS-authoritative validation (structural JS checks +
+> `ST_IsValid`/`ST_IsValidReason` — self-intersecting draws get a controlled 4xx, live
+> verified), exact circle semantics (`ST_DWithin` on the sphere, radius never
+> reinterpreted), and audit entries on the shared hash-chained `audit.audit_entries`.
+> **Event engine (documented architectural change):** geofence detection moved from
+> notification-service's per-position inline evaluation to a gps-engine
+> `GeofenceEvaluator` in the position pipeline — per-(vehicle,fence) FSMs with
+> consecutive-observation jitter confirmation (`GEOFENCE_CONFIRMATION_POINTS`),
+> one-dwell-per-occupancy, durable PostgreSQL state (`tracking.geofence_state`,
+> restart-safe, deterministic `eventId` for Kafka-redelivery dedupe), and set-based
+> GiST candidate queries (`&&` + `ST_Covers`/`ST_DWithin`; EXPLAIN-verified Bitmap
+> Index Scan on `ix_geofences_boundary`). It publishes `geofence.entered/exited/dwell`
+> FleetEvents the Sprint G alarm engine consumes (rule matching only — no second
+> spatial engine; `geofence_dwell` rules now supported). **Tracking:** custom
+> `from`/`to` history ranges XOR server-side presets (31-day cap preserved),
+> rAF-driven playback (1/2/4/8×, transport + timeline + seek, gap-aware — never
+> interpolates across >10-min gaps, ≤10 Hz React updates, imperative marker), trip→map
+> deep links, and OSRM map matching reworked to tracepoints with a Redis match cache,
+> routed through the ProviderRouter, and an explicit "map matching unavailable" chip
+> on fallback (raw GPS is never claimed matched; historical positions are never
+> rewritten). Frontend: real map drawing (drag-radius circles with live readouts,
+> click/drag/right-click vertex editing, edit-from-saved-geometry), en/fa i18n for
+> every new string, `maps.read/write` gates, accessible non-map status regions.
+> **Boot-strapping the live stack surfaced and fixed seven latent defects:** the
+> map-engine container had crash-looped since Sprint G (shared migration ledger, a
+> CJS-only migration, missing `CREATE SCHEMA tracking`, an impossible
+> `speed_limits.tenant_id` RLS policy — now healthy with 3/3 migrations),
+> notification-service could not boot (four `import type` DI tokens), the shared
+> AuthModule's JwtModule wasn't global (gps-engine WS gateway unbootable), the
+> dashboard stored the tenant NAME in `X-Tenant-Id` (403 cascade + a React
+> useSyncExternalStore crash loop), the geofence wire returned WKB hex (now
+> `ST_AsGeoJSON`), and updates wrote a camelCase `alert_on` column; the Sprint H
+> integration suite (broken-at-HEAD fixtures) was restored to 8/8. Tests (all
+> executed): **56 new unit + 21 new live-PostGIS integration + 5 new browser E2E
+> (5/5 PASS: draw-create, edit, history+playback, geofence→alarm→notification→bell,
+> tenant isolation; Sprint H E2E 2/2)**; full suites map 74/74, gps 185 (+4 self-skip),
+> notification 132/132, web 190/190; workspace typecheck + builds green. OSRM was NOT
+> running (no PBF mounted) — matching is unit-tested against the OSRM HTTP contract
+> and the live fallback path was exercised; no live-OSRM claim is made. Speed heat
+> map remains deferred (documented). Full report:
+> `docs/implementation/SPRINT-I-GEOFENCE-TRACKING.md`.
+
 ## 0. TL;DR
 
 FleetVision is a **well-engineered monorepo with a strong foundation and one genuinely deep

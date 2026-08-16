@@ -31,6 +31,7 @@ import type { GeofenceService } from '../application/geofence-service.js';
 import type { PoiService } from '../application/poi-service.js';
 import type { ProviderRouter } from '../application/provider-router.js';
 import { parseBbox } from '../domain/geo-types.js';
+import { GeofenceValidationError } from '../domain/geofence-validation.js';
 import { MapProviderUnavailableError, RouteUnavailableError } from '../domain/provider-errors.js';
 import { GEOFENCE_SERVICE, POI_SERVICE, PROVIDER_ROUTER } from './tokens.js';
 
@@ -142,17 +143,30 @@ export class LocationController {
     @CurrentTenant() tenantId: string,
     @Body() body: Record<string, unknown>,
   ) {
-    return this.geofenceService.create({
-      tenantId,
-      name: String(body.name ?? ''),
-      type: (body.type as 'POLYGON' | 'CIRCLE' | 'CORRIDOR') ?? 'POLYGON',
-      boundaryGeoJson: body.boundary as { type: 'Polygon'; coordinates: number[][][] },
-      centerLat: body.centerLat ? Number(body.centerLat) : undefined,
-      centerLng: body.centerLng ? Number(body.centerLng) : undefined,
-      radiusM: body.radiusM ? Number(body.radiusM) : undefined,
-      alertOn: body.alertOn ? (body.alertOn as string[]) : undefined,
-      dwellSec: body.dwellSec ? Number(body.dwellSec) : undefined,
-    });
+    try {
+      return await this.geofenceService.create({
+        tenantId,
+        name: String(body.name ?? ''),
+        type: (body.type as 'POLYGON' | 'CIRCLE' | 'CORRIDOR') ?? 'POLYGON',
+        boundaryGeoJson: body.boundary as { type: 'Polygon'; coordinates: number[][][] },
+        description: body.description !== undefined ? String(body.description ?? '') : undefined,
+        centerLat: body.centerLat ? Number(body.centerLat) : undefined,
+        centerLng: body.centerLng ? Number(body.centerLng) : undefined,
+        radiusM: body.radiusM ? Number(body.radiusM) : undefined,
+        alertOn: body.alertOn ? (body.alertOn as string[]) : undefined,
+        dwellSec: body.dwellSec ? Number(body.dwellSec) : undefined,
+      });
+    } catch (err) {
+      // Sprint I: the service now validates (PostGIS-authoritative); map the
+      // controlled domain error to 400 instead of leaking a 500.
+      if (err instanceof GeofenceValidationError) {
+        throw new HttpException(
+          { message: err.message, code: err.code },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      throw err;
+    }
   }
 
   @Delete('location/geofences/:id')

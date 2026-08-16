@@ -39,6 +39,7 @@ import { validatePosition } from '../domain/quality.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
 import type { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
 import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
+import type { GeofenceEvaluator } from './geofence-evaluator.js';
 import type { SignalBus } from './signal-bus.js';
 import type { TripEngine } from './trip-engine.js';
 
@@ -53,6 +54,8 @@ export interface PositionPipelineDeps {
   readonly deviceStatus?: DeviceStatusRepository | null;
   /** Telemetry metrics (optional). */
   readonly metrics?: TelemetryMetrics | null;
+  /** Sprint I — geofence ENTER/EXIT/DWELL evaluator (optional in tests). */
+  readonly geofenceEvaluator?: GeofenceEvaluator | null;
 }
 
 export class PositionPipeline {
@@ -112,6 +115,17 @@ export class PositionPipeline {
     // 4. Trip engine — run the FSMs + mileage + engine-hours (Sprint 8, 07 §5).
     //    The engine catches its own errors; it reports the §21 out-of-order skip.
     const outcome = await this.deps.tripEngine.process(validated);
+
+    // 4.5 Geofence evaluator (Sprint I §18) — only for in-order, non-STALE
+    //     positions (a stale/old packet must not regress membership state).
+    //     The evaluator never throws; it persists transitions + emits signals.
+    if (
+      this.deps.geofenceEvaluator &&
+      validated.quality !== 'STALE' &&
+      outcome?.skipped !== 'OUT_OF_ORDER'
+    ) {
+      await this.deps.geofenceEvaluator.process(validated);
+    }
 
     // 5. Cache (best-effort, never throws) — only in-order positions: an older
     //    packet must not regress the latest-position view (Sprint D §21).

@@ -116,7 +116,9 @@
     "sendCommand": "ارسال فرمان",
     "optional": "اختیاری",
     "required": "الزامی",
-    "unknown": "نامشخص"
+    "unknown": "نامشخص",
+    "clear": "پاک کردن",
+    "loadMore": "بارگیری بیشتر"
   },
   "errors": {
     "retry": "تلاش مجدد",
@@ -327,7 +329,11 @@
         "6h": "آخرین ۶ ساعت",
         "24h": "آخرین ۲۴ ساعت",
         "7d": "آخرین ۷ روز"
-      }
+      },
+      "customRange": "بازه دلخواه",
+      "from": "از (تاریخ و ساعت)",
+      "to": "تا (تاریخ و ساعت)",
+      "load": "بارگیری مسیر"
     },
     "route": {
       "planner": "مسیریابی",
@@ -338,6 +344,20 @@
       "needBoth": "مبدأ و مقصد را وارد کنید.",
       "unresolved": "یکی از ورودی‌ها به مکان تبدیل نشد.",
       "summary": "{{km}} کیلومتر · ~{{min}} دقیقه (از {{provider}})"
+    },
+    "playback": {
+      "play": "پخش",
+      "pause": "توقف",
+      "stop": "قطع",
+      "prev": "نقطه قبلی",
+      "next": "نقطه بعدی",
+      "speed": "سرعت پخش",
+      "timeline": "خط زمانی پخش"
+    },
+    "matching": {
+      "toggle": "تطبیق نقشه",
+      "tooltip": "چسباندن مسیر به جاده‌ها با OSRM (در صورت عدم دسترسی، مسیر خام GPS نمایش داده می‌شود)",
+      "unavailable": "تطبیق نقشه در دسترس نیست — مسیر خام GPS نمایش داده می‌شود"
     }
   },
   "trips": {
@@ -365,7 +385,8 @@
     "detail": {
       "back": "بازگشت به سفرها",
       "notFound": "سفر یافت نشد.",
-      "notFoundHelp": "این سفر وجود ندارد یا حذف شده است."
+      "notFoundHelp": "این سفر وجود ندارد یا حذف شده است.",
+      "showOnMap": "نمایش روی نقشه"
     },
     "summary": {
       "distance": "مسافت",
@@ -751,68 +772,117 @@
     }
   },
   "reports": {
-    "title": "گزارش‌ها و تحلیل‌ها",
-    "subtitle": "شاخص‌های کلیدی، نمودارها و خروجی گزارش‌ها",
-    "target": "هدف",
-    "generate": "تولید",
-    "generateTitle": "تولید گزارش",
-    "generating": "در حال تولید…",
-    "cancel": "لغو",
-    "formats": "قالب‌ها",
-    "download": "دانلود",
-    "exportRaw": "خروجی داده‌ی خام",
-    "exporting": "در حال خروجی…",
+    "title": "گزارش‌ها و تحلیل",
+    "subtitle": "عملکرد ناوگان بر اساس تله‌متری واقعی",
+    "empty": "برای بازه انتخاب‌شده داده‌ای وجود ندارد.",
+    "noData": "در این بازه تله‌متری نیست",
+    "freshness": "{{freshness}} · تا {{asOf}} (UTC)",
+    "freshnessNear": "نزدیک به لحظه",
+    "freshnessAgg": "تجمیعی",
+    "viewOnMap": "نمایش روی نقشه",
+    "viewAlarm": "مشاهده هشدار",
+    "utilization": {
+      "note": "بهره‌وری = زمان حرکت / زمان پوشش تله‌متری (طبق تعریف شاخص‌ها). «—» یعنی در بازه تله‌متری نیست — نه صفر."
+    },
+    "geofence": {
+      "note": "شمارش‌ها از خط لوله رویدادهای محدوده است؛ زمان داخل از خروج‌ها جمع زده می‌شود."
+    },
+    "range": {
+      "today": "امروز",
+      "yesterday": "دیروز",
+      "7d": "۷ روز اخیر",
+      "30d": "۳۰ روز اخیر",
+      "custom": "دلخواه",
+      "from": "از (محلی → UTC)",
+      "to": "تا (محلی → UTC)",
+      "apply": "اعمال"
+    },
     "sections": {
       "overview": "نمای کلی",
-      "reports": "گزارش‌ها",
-      "jobs": "کارها و خروجی‌ها",
-      "dashboards": "داشبوردها"
+      "vehicles": "خودروها",
+      "trips": "سفرها",
+      "alarms": "هشدارها",
+      "geofences": "محدوده‌ها",
+      "activity": "فعالیت"
     },
-    "filters": {
-      "allCategories": "همه‌ی دسته‌ها"
+    "vehicles": {
+      "tabs": "گزارش‌های خودرو",
+      "utilization": "بهره‌وری"
     },
-    "category": {
-      "operational": "عملیاتی",
-      "safety": "ایمنی",
-      "compliance": "انطباق",
-      "maintenance": "تعمیر و نگهداری",
-      "fuel": "سوخت",
-      "financial": "مالی",
-      "asset": "دارایی",
-      "executive": "مدیریتی"
+    "distance": {
+      "title": "مسافت"
+    },
+    "speed": {
+      "title": "سرعت"
+    },
+    "idleParking": {
+      "title": "درجای / پارک",
+      "all": "همه",
+      "idle": "درجای",
+      "parking": "پارک"
     },
     "kpi": {
-      "kpi-util": "به‌ره‌وری ناوگان",
-      "kpi-mpg": "مصرف سوخت ناوگان",
-      "kpi-safety": "امتیاز ایمنی",
-      "kpi-ontime": "تحویل به‌موقع",
-      "kpi-costkm": "هزینه به ازای کیلومتر"
+      "totalVehicles": "کل خودروها",
+      "withTelemetry": "با تله‌متری",
+      "moving": "در حرکت",
+      "idle": "درجای",
+      "parked": "پارک",
+      "noTelemetry": "بدون تله‌متری",
+      "distance": "مسافت",
+      "trips": "سفرها",
+      "alarms": "هشدارها",
+      "open": "باز",
+      "geofenceEvents": "رویدادهای محدوده",
+      "utilization": "میانگین بهره‌وری"
     },
     "charts": {
-      "activity": "فعالیت ناوگان (۲۴ ساعت)",
-      "utilization": "تفکیک به‌ره‌وری",
-      "behavior": "رویدادهای رفتاری رانندگان",
-      "fuel": "روند مصرف سوخت",
-      "loading": "در حال بارگذاری…"
+      "distanceTrips": "مسافت و سفرها در زمان (روزهای UTC)",
+      "alarmTrend": "هشدارهای روزانه بر اساس نوع",
+      "stateDistribution": "توزیع وضعیت خودروها (بازه)",
+      "empty": "در این بازه داده‌ای نیست"
     },
-    "jobs": {
-      "colReport": "گزارش",
-      "colFormats": "قالب‌ها",
-      "colStatus": "وضعیت",
-      "colCreated": "ایجاد",
-      "colActions": "عملیات",
-      "status": {
-        "pending": "در انتظار",
-        "running": "در حال اجرا",
-        "succeeded": "موفق",
-        "failed": "ناموفق",
-        "cancelled": "لغوشده"
-      }
+    "export": {
+      "csv": "دریافت CSV",
+      "exporting": "در حال دریافت…",
+      "done": "CSV دریافت شد"
     },
-    "dashboards": {
-      "widgets": "ابزارک",
-      "shared": "مشترک",
-      "selectPrompt": "برای مشاهده، یک داشبورد انتخاب کنید."
+    "filters": {
+      "vehicleId": "خودرو",
+      "allVehicles": "همه خودروها",
+      "severity": "شدت",
+      "allSeverities": "همه شدت‌ها"
+    },
+    "cols": {
+      "vehicle": "خودرو",
+      "moving": "حرکت",
+      "idle": "درجای",
+      "parking": "پارک",
+      "observed": "پوشش",
+      "utilization": "بهره‌وری",
+      "distance": "مسافت",
+      "trips": "سفرها",
+      "avgTrip": "میانگین سفر",
+      "maxTrip": "بیشینه سفر",
+      "discarded": "حذف‌شده",
+      "avgSpeed": "سرعت میانگین",
+      "maxSpeed": "سرعت بیشینه",
+      "speeding": "هشدار سرعت",
+      "kind": "نوع",
+      "start": "شروع (UTC)",
+      "end": "پایان (UTC)",
+      "duration": "مدت",
+      "status": "وضعیت",
+      "alarmType": "نوع",
+      "severity": "شدت",
+      "total": "کل",
+      "open": "باز",
+      "acknowledged": "تأییدشده",
+      "resolved": "حل‌شده",
+      "geofence": "محدوده",
+      "enters": "ورود",
+      "exits": "خروج",
+      "dwells": "توقف",
+      "timeInside": "زمان داخل"
     }
   },
   "admin": {
@@ -970,7 +1040,73 @@
     "name": "نام",
     "radius": "شعاع (متر)",
     "empty": "هنوز هیچ محدوده‌ی جغرافیایی‌ای تعریف نشده است.",
-    "untitled": "محدوده‌ی بدون نام"
+    "untitled": "محدوده‌ی بدون نام",
+    "type": "نوع",
+    "circle": "دایره",
+    "polygon": "چندضلعی",
+    "description": "توضیحات",
+    "alerts": "هشدارها",
+    "dwellSec": "آستانه توقف (ثانیه)",
+    "assignVehicles": "خودروهای تخصیص‌یافته",
+    "allVehicles": "همه خودروها (کل سازمان)",
+    "nVehicles": "{{count}} خودرو",
+    "noVehicles": "خودرویی در ثبت موجود نیست",
+    "editTitle": "ویرایش محدوده",
+    "edit": "ویرایش هندسه",
+    "archiveTitle": "بایگانی محدوده؟",
+    "archiveBody": "محدوده «{{name}}» بایگانی می‌شود (حذف نرم). رویدادها و هشدارهای تاریخی مرتبط با آن حفظ می‌شوند.",
+    "archive": "بایگانی",
+    "archived": "محدوده بایگانی شد",
+    "created": "محدوده ایجاد شد",
+    "updated": "محدوده به‌روزرسانی شد",
+    "activated": "محدوده فعال شد",
+    "deactivated": "محدوده غیرفعال شد",
+    "toggleStatus": "فعال‌سازی / غیرفعال‌سازی",
+    "assignedTo": "خودروهای تخصیص‌یافته:",
+    "radiusM": "شعاع: {{m}} متر",
+    "dwellBadge": "توقف ≥ {{sec}} ثانیه",
+    "createdAt": "تاریخ ایجاد",
+    "updatedAt": "آخرین به‌روزرسانی",
+    "alertKinds": {
+      "ENTER": "ورود",
+      "EXIT": "خروج",
+      "DWELL": "توقف"
+    },
+    "status": {
+      "ACTIVE": "فعال",
+      "INACTIVE": "غیرفعال",
+      "ARCHIVED": "بایگانی‌شده"
+    },
+    "cols": {
+      "name": "نام",
+      "type": "نوع",
+      "status": "وضعیت",
+      "vehicles": "خودروها",
+      "alerts": "هشدارها",
+      "createdAt": "تاریخ ایجاد"
+    },
+    "filters": {
+      "allTypes": "همه انواع",
+      "active": "فعال",
+      "archived": "بایگانی‌شده",
+      "type": "فیلتر بر اساس نوع",
+      "status": "فیلتر بر اساس وضعیت",
+      "search": "جستجو بر اساس نام…"
+    },
+    "draw": {
+      "polygonStatus": "{{count}} رأس · {{area}}",
+      "circleStatus": "مرکز {{lat}}، {{lng}} · شعاع {{radius}} متر",
+      "circleCenterHint": "روی نقشه کلیک کنید تا مرکز تعیین شود، سپس برای تنظیم شعاع بکشید",
+      "circleDragging": "برای تنظیم شعاع به بیرون بکشید — رها کنید تا تمام شود",
+      "selectType": "برای ترسیم، یک نوع هندسه انتخاب کنید",
+      "vertexHint": "رأس — برای جابجایی بکشید، با کلیک راست حذف کنید",
+      "centerHint": "مرکز دایره — برای جابجایی بکشید",
+      "removeLast": "حذف آخرین رأس",
+      "removeLastLabel": "− رأس",
+      "clear": "پاک کردن چندضلعی",
+      "redrawCircle": "پاک کردن دایره و ترسیم مجدد",
+      "mapLabel": "نقشه ترسیم محدوده"
+    }
   },
   "commands": {
     "title": "مرکز فرمان",

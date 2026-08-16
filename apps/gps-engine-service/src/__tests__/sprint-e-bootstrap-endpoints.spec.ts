@@ -61,7 +61,7 @@ function makePositionsController() {
     },
   };
   const cache = { getLatest: async () => null };
-  return { controller: new PositionsController(cache as never, repo as never), calls };
+  return { controller: new PositionsController(cache as never, repo as never, { HISTORY_MAX_RANGE_DAYS: 31 } as never, null as never), calls };
 }
 
 describe('GET /devices/status (Sprint E device-status bootstrap)', () => {

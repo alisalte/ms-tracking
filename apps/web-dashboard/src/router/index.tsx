@@ -172,7 +172,12 @@ export const router = createBrowserRouter([
           },
           {
             path: '/reports',
-            element: <ReportsPage />,
+            // Sprint J: reporting surface is permission-gated.
+            element: (
+              <RequirePermission permission={PERMISSIONS.reportRead}>
+                <ReportsPage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/admin',
@@ -180,7 +185,12 @@ export const router = createBrowserRouter([
           },
           {
             path: '/geofences',
-            element: <GeofencePage />,
+            // Sprint I: geofence surface is permission-gated like /map.
+            element: (
+              <RequirePermission permission={PERMISSIONS.mapsRead}>
+                <GeofencePage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/commands',

@@ -148,7 +148,7 @@ test.describe('Notification Center E2E', () => {
     test.info().annotations.push({
       type: 'note',
       description: joined
-        ? 'realtime OK — authenticated WS joined user room on ' + NOTIFICATION_WS_URL
+        ? `realtime OK — authenticated WS joined user room on ${NOTIFICATION_WS_URL}`
         : 'notification-service WS gateway NOT reachable — realtime step DEGRADED (reported honestly)',
     });
 

@@ -58,6 +58,10 @@ export async function up(knex) {
 
   // --- tracking.geofences (03 §17.2, 08 §4) ---
   // Owned by the Map Engine (geometry store + CRUD); evaluated by the GPS Engine.
+  // Sprint I docker-verification finding: in compose-only deployments the GPS
+  // Engine (which normally creates `tracking`) is not present — create the
+  // schema here so a clean install works. Idempotent.
+  await knex.raw('CREATE SCHEMA IF NOT EXISTS tracking');
   await knex.schema.withSchema('tracking').createTable('geofences', (t) => {
     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     t.uuid('tenant_id').notNullable();

@@ -22,7 +22,6 @@ import { AlarmRule } from '../domain/alarm-rule.js';
 import type { AlarmStateCache } from '../infrastructure/cache/alarm-state-cache.js';
 import type { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
-import type { GeofenceQuery } from '../infrastructure/persistence/geofence-query.js';
 
 const TENANT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const TENANT_B = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
@@ -78,16 +77,6 @@ class FakeStateCache {
     const n = (this.occurrenceCounts.get(k) ?? 0) + 1;
     this.occurrenceCounts.set(k, n);
     return n;
-  }
-
-  public readonly geofenceState = new Map<string, Set<string>>();
-
-  public async getGeofenceState(_t: string, v: string): Promise<Set<string>> {
-    return this.geofenceState.get(v) ?? new Set();
-  }
-
-  public async setGeofenceState(_t: string, v: string, inside: Set<string>) {
-    this.geofenceState.set(v, new Set(inside));
   }
 }
 
@@ -148,13 +137,6 @@ class FakeRulesRepo {
   }
 }
 
-class FakeGeofenceQuery {
-  public constructor(public inside: string[] = []) {}
-  public async containsPoint(_t: string, _lat: number, _lng: number): Promise<string[]> {
-    return this.inside;
-  }
-}
-
 class FakeGateway {
   public readonly emitted: Array<{ event: string; tenantId: string; alarmId: string }> = [];
   public emitAlarmCreated(tenantId: string, alarm: AlarmOccurrence) {
@@ -168,22 +150,20 @@ class FakeGateway {
   }
 }
 
-function makeHarness(rules: AlarmRule[], geofenceInside: string[] = []) {
+function makeHarness(rules: AlarmRule[]) {
   const stateCache = new FakeStateCache();
   const alarms = new FakeAlarmsRepo();
   const rulesRepo = new FakeRulesRepo(rules);
-  const geofenceQuery = new FakeGeofenceQuery(geofenceInside);
   const gateway = new FakeGateway();
   const service = new AlarmEvaluatorService({
     rules: rulesRepo as unknown as AlarmRuleRepository,
     alarms: alarms as unknown as AlarmOccurrenceRepository,
     stateCache: stateCache as unknown as AlarmStateCache,
-    geofenceQuery: geofenceQuery as unknown as GeofenceQuery,
     gateway: gateway as never,
     dispatcher: null,
     metrics: null,
   });
-  return { service, stateCache, alarms, rulesRepo, geofenceQuery, gateway };
+  return { service, stateCache, alarms, rulesRepo, gateway };
 }
 
 function makeRule(
@@ -294,41 +274,70 @@ describe('Sprint G — overspeed detection + dedup + recovery', () => {
   });
 });
 
-// ── 5-7: geofence ───────────────────────────────────────────────────────────
+// ── 5-7: geofence (Sprint I — event-driven; detection lives in gps-engine) ──
 
-describe('Sprint G — geofence enter/exit (stateful)', () => {
-  function harness() {
-    const rules = [makeRule('geofence_enter', { geofenceId: GEOFENCE })];
-    const h = makeHarness(rules, []);
-    return h;
-  }
+function geofenceSignal(
+  overrides: Partial<Extract<InputSignal, { kind: 'geofence' }>> = {},
+) {
+  return {
+    kind: 'geofence',
+    tenantId: TENANT,
+    vehicleId: VEHICLE,
+    type: 'geofence.entered',
+    geofenceId: GEOFENCE,
+    geofenceName: 'Warehouse',
+    dwellSec: null,
+    occurredAt: '2026-01-01T00:10:00Z',
+    lat: 35.7,
+    lng: 51.4,
+    sourceEventId: 'm1',
+    ...overrides,
+  } satisfies Extract<InputSignal, { kind: 'geofence' }>;
+}
 
-  it('5. fires ONE enter when the vehicle transitions inside', async () => {
-    const h = harness();
-    await h.service.processPosition(positionSignal({ sourceEventId: 'm0' })); // outside
-    h.geofenceQuery.inside = [GEOFENCE]; // now inside
-    await h.service.processPosition(positionSignal({ sourceEventId: 'm1' }));
+describe('Sprint G/I — geofence enter/exit alarms (event-driven)', () => {
+  it('5. fires ONE enter alarm on a geofence.entered FleetEvent', async () => {
+    const h = makeHarness([makeRule('geofence_enter', { geofenceId: GEOFENCE })]);
+    await h.service.processGeofence(geofenceSignal({ sourceEventId: 'm1' }));
     expect(h.alarms.created).toHaveLength(1);
     expect(h.alarms.created.at(0)?.type).toBe('geofence_enter');
   });
 
-  it('6. staying inside fires NOTHING (duplicate prevention)', async () => {
-    const h = harness();
-    h.geofenceQuery.inside = [GEOFENCE];
-    for (let i = 0; i < 5; i++) {
-      await h.service.processPosition(positionSignal({ sourceEventId: `m${i}` }));
-    }
-    expect(h.alarms.created).toHaveLength(1); // the single enter
+  it('6. duplicate events are not double-alarmed (idempotent event ids)', async () => {
+    const h = makeHarness([makeRule('geofence_enter', { geofenceId: GEOFENCE })]);
+    await h.service.processGeofence(geofenceSignal({ sourceEventId: 'm1' }));
+    // Kafka redelivery of the SAME event (deterministic eventId upstream):
+    await h.service.processGeofence(geofenceSignal({ sourceEventId: 'm1' }));
+    expect(h.alarms.created).toHaveLength(1); // one-open dedup holds
   });
 
-  it('7. exit fires on the inside→outside transition', async () => {
-    const h = makeHarness([makeRule('geofence_exit', { geofenceId: GEOFENCE })], [GEOFENCE]);
-    await h.service.processPosition(positionSignal({ sourceEventId: 'm0' })); // inside baseline
-    expect(h.alarms.created).toHaveLength(0);
-    h.geofenceQuery.inside = []; // left
-    await h.service.processPosition(positionSignal({ sourceEventId: 'm1' }));
+  it('7. exit alarm fires on a geofence.exited FleetEvent', async () => {
+    const h = makeHarness([makeRule('geofence_exit', { geofenceId: GEOFENCE })]);
+    await h.service.processGeofence(
+      geofenceSignal({ type: 'geofence.exited', dwellSec: 240, sourceEventId: 'm2' }),
+    );
     expect(h.alarms.created).toHaveLength(1);
     expect(h.alarms.created.at(0)?.type).toBe('geofence_exit');
+  });
+
+  it('7b. rule with a DIFFERENT geofenceId does not fire', async () => {
+    const other = '22222222-2222-2222-2222-222222222222';
+    const h = makeHarness([makeRule('geofence_enter', { geofenceId: other })]);
+    await h.service.processGeofence(geofenceSignal({ sourceEventId: 'm1' }));
+    expect(h.alarms.created).toHaveLength(0);
+  });
+
+  it('7c. geofence_dwell alarm fires when dwellSec ≥ rule threshold (Sprint I)', async () => {
+    const h = makeHarness([makeRule('geofence_dwell', { dwellSec: 300 })]);
+    await h.service.processGeofence(
+      geofenceSignal({ type: 'geofence.dwell', dwellSec: 240, sourceEventId: 'm3' }),
+    );
+    expect(h.alarms.created).toHaveLength(0); // 240 s < 300 s threshold
+    await h.service.processGeofence(
+      geofenceSignal({ type: 'geofence.dwell', dwellSec: 600, sourceEventId: 'm4' }),
+    );
+    expect(h.alarms.created).toHaveLength(1);
+    expect(h.alarms.created.at(0)?.type).toBe('geofence_dwell');
   });
 });
 

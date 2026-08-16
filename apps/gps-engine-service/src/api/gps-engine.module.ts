@@ -22,6 +22,7 @@ import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DeviceStatusPipeline } from '../application/device-status-pipeline.js';
+import { GeofenceEvaluator } from '../application/geofence-evaluator.js';
 import { PositionPipeline } from '../application/position-pipeline.js';
 import { SignalBus } from '../application/signal-bus.js';
 import { TripEngine } from '../application/trip-engine.js';
@@ -33,6 +34,8 @@ import { DlqProducer } from '../infrastructure/kafka/dlq-producer.js';
 import { GpsEngineKafkaConsumer } from '../infrastructure/kafka/kafka-consumer.js';
 import { TrackingEventProducer } from '../infrastructure/kafka/tracking-event-producer.js';
 import { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
+import { GeofenceDefinitionsRepository } from '../infrastructure/persistence/geofence-definitions.repository.js';
+import { GeofenceStateRepository } from '../infrastructure/persistence/geofence-state.repository.js';
 import { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import { TripRepository } from '../infrastructure/persistence/trip.repository.js';
 import { DeviceStaleSweeper } from '../infrastructure/scheduling/device-stale-sweeper.js';
@@ -46,6 +49,9 @@ import {
   DEVICE_STATUS_REPOSITORY,
   DLQ_PRODUCER,
   FSM_CACHE,
+  GEOFENCE_DEFINITIONS_REPOSITORY,
+  GEOFENCE_EVALUATOR,
+  GEOFENCE_STATE_REPOSITORY,
   GPS_ENGINE_CONFIG,
   KAFKA_CONSUMER,
   POSITION_CACHE,
@@ -95,6 +101,41 @@ export class GpsEngineModule {
           provide: TRIP_REPOSITORY,
           inject: [KNEX_TOKEN],
           useFactory: (knex: unknown) => new TripRepository(knex as never),
+        },
+        // Sprint I — geofence evaluation (definitions read-side + durable state).
+        {
+          provide: GEOFENCE_DEFINITIONS_REPOSITORY,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new GeofenceDefinitionsRepository(knex as never),
+        },
+        {
+          provide: GEOFENCE_STATE_REPOSITORY,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new GeofenceStateRepository(knex as never),
+        },
+        {
+          provide: GEOFENCE_EVALUATOR,
+          inject: [
+            GPS_ENGINE_CONFIG,
+            GEOFENCE_DEFINITIONS_REPOSITORY,
+            GEOFENCE_STATE_REPOSITORY,
+            SIGNAL_BUS,
+            METRICS_TOKEN,
+          ],
+          useFactory: (
+            cfg: GpsEngineConfig,
+            definitions: GeofenceDefinitionsRepository,
+            state: GeofenceStateRepository,
+            signalBus: SignalBus,
+            metrics: TelemetryMetrics,
+          ) =>
+            new GeofenceEvaluator({
+              config: cfg,
+              definitions,
+              state,
+              signalBus,
+              metrics,
+            }),
         },
         // Redis caches.
         {
@@ -152,6 +193,7 @@ export class GpsEngineModule {
             TRIP_ENGINE,
             DEVICE_STATUS_REPOSITORY,
             METRICS_TOKEN,
+            GEOFENCE_EVALUATOR,
           ],
           useFactory: (
             cfg: GpsEngineConfig,
@@ -161,6 +203,7 @@ export class GpsEngineModule {
             tripEngine: TripEngine,
             deviceStatus: DeviceStatusRepository,
             metrics: TelemetryMetrics,
+            geofenceEvaluator: GeofenceEvaluator,
           ) =>
             new PositionPipeline({
               config: cfg,
@@ -170,6 +213,7 @@ export class GpsEngineModule {
               tripEngine,
               deviceStatus,
               metrics,
+              geofenceEvaluator,
             }),
         },
         {

@@ -24,7 +24,7 @@ const CTX = "NULLIF(current_setting('app.current_tenant_id', true), '')::uuid";
 const SCOPED = `tenant_id = ${CTX}`;
 const SCOPED_OR_GLOBAL = `tenant_id IS NULL OR tenant_id = ${CTX}`;
 
-exports.up = async function up(knex) {
+export async function up(knex) {
   // geo.pois / geo.addresses: tenant-owned OR global (shared catalog).
   for (const table of ['pois', 'addresses']) {
     await knex.raw(`DROP POLICY IF EXISTS geo_${table}_tenant_isolation ON geo.${table}`);
@@ -32,12 +32,11 @@ exports.up = async function up(knex) {
       `CREATE POLICY geo_${table}_tenant_isolation ON geo.${table} USING (${SCOPED_OR_GLOBAL}) WITH CHECK (${SCOPED})`,
     );
   }
-  // geo.speed_limits: tenant-owned only (added in this sprint).
-  await knex.raw('ALTER TABLE geo.speed_limits ENABLE ROW LEVEL SECURITY');
-  await knex.raw('DROP POLICY IF EXISTS speed_limits_tenant_isolation ON geo.speed_limits');
-  await knex.raw(
-    `CREATE POLICY speed_limits_tenant_isolation ON geo.speed_limits USING (${SCOPED}) WITH CHECK (${SCOPED})`,
-  );
+  // geo.speed_limits: GLOBAL catalog (posted road limits) — the table has NO
+  // tenant_id column (see 20260806120000 DDL), so a tenant-scoped predicate is
+  // impossible. The original block referenced a nonexistent column and could
+  // never execute; it is intentionally dropped here (fix verified in the
+  // Sprint I docker verification — this migration had never applied cleanly).
   // tracking.geofences: tenant-owned only.
   await knex.raw('DROP POLICY IF EXISTS geofences_tenant_isolation ON tracking.geofences');
   await knex.raw(
@@ -45,15 +44,13 @@ exports.up = async function up(knex) {
   );
 };
 
-exports.down = async function down(knex) {
+export async function down(knex) {
   for (const table of ['pois', 'addresses']) {
     await knex.raw(`DROP POLICY IF EXISTS geo_${table}_tenant_isolation ON geo.${table}`);
     await knex.raw(
       `CREATE POLICY geo_${table}_tenant_isolation ON geo.${table} USING (true) WITH CHECK (true)`,
     );
   }
-  await knex.raw('DROP POLICY IF EXISTS speed_limits_tenant_isolation ON geo.speed_limits');
-  await knex.raw('ALTER TABLE geo.speed_limits DISABLE ROW LEVEL SECURITY');
   await knex.raw('DROP POLICY IF EXISTS geofences_tenant_isolation ON tracking.geofences');
   await knex.raw(
     'CREATE POLICY geofences_tenant_isolation ON tracking.geofences USING (true) WITH CHECK (true)',

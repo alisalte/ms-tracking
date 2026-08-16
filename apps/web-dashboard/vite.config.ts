@@ -70,6 +70,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/v1/, ''),
       },
+      '/api/v1/reports': {
+        target: process.env.VITE_REPORT_API_PROXY_TARGET ?? 'http://localhost:3011',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
+      },
+      '/api/v1/geofences': {
+        target: mapTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
+      },
       '/api/v1/location': {
         target: mapTarget,
         changeOrigin: true,

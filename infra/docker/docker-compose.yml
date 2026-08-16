@@ -198,6 +198,43 @@ services:
 
   # web-dashboard — Vite SPA served by nginx. Reverse-proxies /api →
   # identity-service so the browser's relative /api/v1 calls reach the backend.
+  reporting-service:
+    build:
+      context: ../..
+      dockerfile: apps/reporting-service/Dockerfile
+    container_name: fleetvision-reporting
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3011"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      # Read-only analytical layer over the domain schemas (tracking +
+      # notification + fleet) — the app role matches the house pattern.
+      DBURL: postgres://${POSTGRES_USER:-fleetvision}:${POSTGRES_PASSWORD:-fleetvision_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      REPORT_MAX_RANGE_DAYS: ${REPORT_MAX_RANGE_DAYS:-92}
+      REPORT_QUERY_TIMEOUT_MS: ${REPORT_QUERY_TIMEOUT_MS:-15000}
+      REPORT_CACHE_TTL_SECONDS: ${REPORT_CACHE_TTL_SECONDS:-30}
+      REPORT_EXPORT_RATE_LIMIT: ${REPORT_EXPORT_RATE_LIMIT:-30}
+    ports:
+      - "3011:3011"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3011/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   web-dashboard:
     build:
       context: ../..

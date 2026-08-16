@@ -36,7 +36,6 @@ import { AlarmKafkaConsumer } from '../infrastructure/kafka/alarm-kafka-consumer
 import { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
 import { FleetEventRepository } from '../infrastructure/persistence/fleet-event.repository.js';
-import { GeofenceQuery } from '../infrastructure/persistence/geofence-query.js';
 import { NotificationDeliveryRepository } from '../infrastructure/persistence/notification-delivery.repository.js';
 import { NotificationPreferenceRepository } from '../infrastructure/persistence/notification-preference.repository.js';
 import { NotificationRepository } from '../infrastructure/persistence/notification.repository.js';
@@ -105,11 +104,8 @@ export class NotificationModule {
           inject: [KNEX_TOKEN],
           useFactory: (knex: Knex) => new AlarmOccurrenceRepository(knex),
         },
-        {
-          provide: GeofenceQuery,
-          inject: [KNEX_TOKEN],
-          useFactory: (knex: Knex) => new GeofenceQuery(knex),
-        },
+        // Sprint I — GeofenceQuery removed: geofence detection moved to the
+        // gps-engine evaluator; alarm rules consume geofence.* FleetEvents.
         // Sprint G Part 35 — FleetEvent history persistence.
         {
           provide: FleetEventRepository,
@@ -271,7 +267,6 @@ export class NotificationModule {
             AlarmRuleRepository,
             AlarmOccurrenceRepository,
             AlarmStateCache,
-            GeofenceQuery,
             ALARM_REALTIME_GATEWAY,
             NotificationDispatcherService,
             METRICS_TOKEN,
@@ -280,7 +275,6 @@ export class NotificationModule {
             rules: AlarmRuleRepository,
             alarms: AlarmOccurrenceRepository,
             cache: AlarmStateCache,
-            geofenceQuery: GeofenceQuery,
             gateway: AlarmRealtimeGateway,
             dispatcher: NotificationDispatcherService,
             metrics: TelemetryMetrics,
@@ -289,7 +283,6 @@ export class NotificationModule {
               rules,
               alarms,
               stateCache: cache,
-              geofenceQuery,
               gateway,
               dispatcher,
               metrics,
