@@ -141,12 +141,26 @@ export class ReportRepository {
           [
             tenantId,
             ...vf.binds,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            win.to, win.from, tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            win.to,
+            win.from,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
           ],
         )
       ).rows as Record<string, unknown>[];
@@ -207,8 +221,13 @@ export class ReportRepository {
           ORDER BY d.day
           `,
           [
-            tenantId, win.from, win.to, ...vf.binds,
-            tenantId, win.from, win.to,
+            tenantId,
+            win.from,
+            win.to,
+            ...vf.binds,
+            tenantId,
+            win.from,
+            win.to,
             ...(filter.vehicleId ? [filter.vehicleId] : []),
           ],
         )
@@ -327,12 +346,24 @@ export class ReportRepository {
           LIMIT ? OFFSET ?
           `,
           [
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            win.to, win.from, tenantId, win.from, win.to,
-            tenantId, ...vf.binds,
-            limit, offset,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            win.to,
+            win.from,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            ...vf.binds,
+            limit,
+            offset,
           ],
         )
       ).rows as Array<Record<string, unknown>>;
@@ -402,10 +433,16 @@ export class ReportRepository {
           LIMIT ? OFFSET ?
           `,
           [
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, ...vf.binds,
-            limit, offset,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            ...vf.binds,
+            limit,
+            offset,
           ],
         )
       ).rows as Array<Record<string, unknown>>;
@@ -470,11 +507,22 @@ export class ReportRepository {
           `,
           [
             // idle subquery: LEAST bounds (2) + tenant + overlap bounds (2)
-            win.to, win.to, tenantId, win.to, win.to,
+            win.to,
+            win.to,
+            tenantId,
+            win.to,
+            win.to,
             // parking subquery: same shape
-            win.to, win.to, tenantId, win.to, win.to,
-            tenantId, ...vf.binds,
-            tenantId, win.from, win.to,
+            win.to,
+            win.to,
+            tenantId,
+            win.to,
+            win.to,
+            tenantId,
+            ...vf.binds,
+            tenantId,
+            win.from,
+            win.to,
             ...cursorBinds,
             limit + 1,
           ],
@@ -494,7 +542,7 @@ export class ReportRepository {
           distanceKm: Number(r.distance_km ?? 0),
           avgSpeedKph:
             Number(r.duration_s ?? 0) > 0
-              ? Number(((Number(r.distance_km) / (Number(r.duration_s) / 3600)).toFixed(2)))
+              ? Number((Number(r.distance_km) / (Number(r.duration_s) / 3600)).toFixed(2))
               : null,
           maxSpeedKph: Number(r.max_speed_kmh ?? 0),
           startLat: Number(r.start_lat),
@@ -560,10 +608,16 @@ export class ReportRepository {
           FROM agg ORDER BY max_speed DESC NULLS LAST, agg.vehicle_id LIMIT ? OFFSET ?
           `,
           [
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, ...vf.binds,
-            limit, offset,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            ...vf.binds,
+            limit,
+            offset,
           ],
         )
       ).rows as Array<Record<string, unknown>>;
@@ -573,8 +627,10 @@ export class ReportRepository {
         rows: rows.map((r) => ({
           vehicleId: String(r.vehicle_id),
           label: String(r.label ?? r.vehicle_id),
-          avgSpeedKph: r.avg_speed === null || r.avg_speed === undefined ? null : Number(r.avg_speed),
-          maxSpeedKph: r.max_speed === null || r.max_speed === undefined ? null : Number(r.max_speed),
+          avgSpeedKph:
+            r.avg_speed === null || r.avg_speed === undefined ? null : Number(r.avg_speed),
+          maxSpeedKph:
+            r.max_speed === null || r.max_speed === undefined ? null : Number(r.max_speed),
           speedingAlarms: Number(r.speeding ?? 0),
         })),
       };
@@ -900,12 +956,24 @@ export class ReportRepository {
           LIMIT ?
           `,
           [
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
-            tenantId, win.from, win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
             ...(opts.vehicleId ? [opts.vehicleId] : []),
             tenantId,
             ...cursorBinds,

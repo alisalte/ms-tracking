@@ -27,6 +27,11 @@ import { Reflector } from '@nestjs/core';
 // biome-ignore lint/style/useImportType: value import required — NestJS DI reads constructor param types via emitDecoratorMetadata; a type-only import erases JwtService to Function and breaks injection at boot (latent bug surfaced by the Sprint E E2E).
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+// VALUE imports (not `import type`): these classes are DI tokens for the
+// guard's constructor params — a type-only import is erased from
+// design:paramtypes, Nest then can't resolve the param, and @Optional()
+// silently injects undefined (API-key auth + revocation checks quietly OFF —
+// the exact defect class Sprint I fixed in notification-service).
 import type { ApiKeyVerifier, VerifiedApiKey } from './api-key-verifier.js';
 import type { AuthenticatedContext } from './authenticated-context.js';
 import { extractCredential } from './credentials.js';

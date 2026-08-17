@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * ReportService — Sprint J orchestration: window validation, caching,
  * bounded pagination, CSV assembly, audit + metrics wiring.
@@ -8,23 +9,22 @@
  * transaction wrapper).
  */
 import { Logger } from '@nestjs/common';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import type { ReportingConfig } from '../config/reporting.config.js';
-import { csvDocument, type CsvValue } from '../domain/csv.js';
+import { type CsvValue, csvDocument } from '../domain/csv.js';
 import {
-  parseReportWindow,
-  reportWindowErrorMessage,
-  type ReportWindowError,
-} from '../domain/report-window.js';
-import {
-  resolveSort,
+  type CursorPage,
   TRIP_SORT_FIELDS,
   UTILIZATION_SORT_FIELDS,
-  type CursorPage,
+  resolveSort,
 } from '../domain/report-types.js';
-import type { ReportRepository } from '../infrastructure/persistence/report.repository.js';
+import {
+  type ReportWindowError,
+  parseReportWindow,
+  reportWindowErrorMessage,
+} from '../domain/report-window.js';
 import { ReportCache } from '../infrastructure/cache/report-cache.js';
 import type { ExportRateLimiter } from '../infrastructure/cache/report-cache.js';
+import type { ReportRepository } from '../infrastructure/persistence/report.repository.js';
 
 export class ReportInputError extends Error {
   constructor(
@@ -134,7 +134,11 @@ export class ReportService {
   public async fleetOverview(tenantId: string, q: ReportQueryBase) {
     const win = this.window(q);
     const filter = { vehicleId: q.vehicleId, fleetId: q.fleetId };
-    const key = ReportCache.key('overview', tenantId, { ...filter, from: win.from.toISOString(), to: win.to.toISOString() });
+    const key = ReportCache.key('overview', tenantId, {
+      ...filter,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+    });
     if (this.deps.cache) {
       const hit = await this.deps.cache.get<unknown>(key);
       if (hit) {
@@ -160,7 +164,11 @@ export class ReportService {
   public async trend(tenantId: string, q: ReportQueryBase) {
     const win = this.window(q);
     const filter = { vehicleId: q.vehicleId, fleetId: q.fleetId };
-    const key = ReportCache.key('trend', tenantId, { ...filter, from: win.from.toISOString(), to: win.to.toISOString() });
+    const key = ReportCache.key('trend', tenantId, {
+      ...filter,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+    });
     if (this.deps.cache) {
       const hit = await this.deps.cache.get<unknown>(key);
       if (hit) {
@@ -194,16 +202,9 @@ export class ReportService {
     return payload;
   }
 
-  public async vehicleUtilization(
-    tenantId: string,
-    q: ReportQueryBase & { sort?: string },
-  ) {
+  public async vehicleUtilization(tenantId: string, q: ReportQueryBase & { sort?: string }) {
     const win = this.window(q);
-    const { field, direction } = resolveSort(
-      q.sort,
-      UTILIZATION_SORT_FIELDS,
-      'utilization',
-    );
+    const { field, direction } = resolveSort(q.sort, UTILIZATION_SORT_FIELDS, 'utilization');
     const { limit, offset } = this.page(50, '0');
     const { rows, total } = await this.timed('vehicle-utilization', () =>
       this.deps.repository.vehicleUtilization(
@@ -226,13 +227,30 @@ export class ReportService {
     };
   }
 
-  public async distance(tenantId: string, q: ReportQueryBase & { limit?: unknown; offset?: unknown }) {
+  public async distance(
+    tenantId: string,
+    q: ReportQueryBase & { limit?: unknown; offset?: unknown },
+  ) {
     const win = this.window(q);
     const { limit, offset } = this.page(q.limit, q.offset);
     const { rows, total } = await this.timed('distance', () =>
-      this.deps.repository.distance(tenantId, win, { vehicleId: q.vehicleId, fleetId: q.fleetId }, limit, offset),
+      this.deps.repository.distance(
+        tenantId,
+        win,
+        { vehicleId: q.vehicleId, fleetId: q.fleetId },
+        limit,
+        offset,
+      ),
     );
-    return { items: rows, total, limit, offset, from: win.from.toISOString(), to: win.to.toISOString(), freshness: 'AGGREGATED' as const };
+    return {
+      items: rows,
+      total,
+      limit,
+      offset,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
   }
 
   public async trips(
@@ -264,9 +282,23 @@ export class ReportService {
     const win = this.window(q);
     const { limit, offset } = this.page(q.limit, q.offset);
     const { rows, total } = await this.timed('speed', () =>
-      this.deps.repository.speed(tenantId, win, { vehicleId: q.vehicleId, fleetId: q.fleetId }, limit, offset),
+      this.deps.repository.speed(
+        tenantId,
+        win,
+        { vehicleId: q.vehicleId, fleetId: q.fleetId },
+        limit,
+        offset,
+      ),
     );
-    return { items: rows, total, limit, offset, from: win.from.toISOString(), to: win.to.toISOString(), freshness: 'AGGREGATED' as const };
+    return {
+      items: rows,
+      total,
+      limit,
+      offset,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
   }
 
   public async idleParking(
@@ -274,8 +306,7 @@ export class ReportService {
     q: ReportQueryBase & { kind?: string; limit?: unknown; cursor?: string },
   ) {
     const win = this.window(q);
-    const kind =
-      q.kind === 'IDLE' || q.kind === 'PARKING' ? q.kind : undefined;
+    const kind = q.kind === 'IDLE' || q.kind === 'PARKING' ? q.kind : undefined;
     if (q.kind !== undefined && kind === undefined) {
       throw new ReportInputError('kind must be IDLE or PARKING', 'INVALID_FILTER');
     }
@@ -312,15 +343,32 @@ export class ReportService {
         offset,
       ),
     );
-    return { items: rows, total, summary, limit, offset, from: win.from.toISOString(), to: win.to.toISOString(), freshness: 'AGGREGATED' as const };
+    return {
+      items: rows,
+      total,
+      summary,
+      limit,
+      offset,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
   }
 
   public async alarmTrend(tenantId: string, q: ReportQueryBase) {
     const win = this.window(q);
     const rows = await this.timed('alarm-trend', () =>
-      this.deps.repository.alarmTrend(tenantId, win, { vehicleId: q.vehicleId, fleetId: q.fleetId }),
+      this.deps.repository.alarmTrend(tenantId, win, {
+        vehicleId: q.vehicleId,
+        fleetId: q.fleetId,
+      }),
     );
-    return { points: rows, from: win.from.toISOString(), to: win.to.toISOString(), freshness: 'AGGREGATED' as const };
+    return {
+      points: rows,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
   }
 
   public async geofences(
@@ -338,7 +386,15 @@ export class ReportService {
         offset,
       ),
     );
-    return { items: rows, total, limit, offset, from: win.from.toISOString(), to: win.to.toISOString(), freshness: 'AGGREGATED' as const };
+    return {
+      items: rows,
+      total,
+      limit,
+      offset,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
   }
 
   public async activity(
@@ -370,7 +426,10 @@ export class ReportService {
       const allowed = await this.deps.exportLimiter.allow(tenantId, userId);
       if (!allowed) {
         this.metrics?.reportExports.inc({ result: 'rate_limited' });
-        throw new ReportInputError('Export rate limit exceeded — try again shortly', 'INVALID_FILTER');
+        throw new ReportInputError(
+          'Export rate limit exceeded — try again shortly',
+          'INVALID_FILTER',
+        );
       }
     }
     try {
@@ -402,14 +461,27 @@ export class ReportService {
         } while (cursor && collected.length < maxRows);
         rows = collected.slice(0, maxRows);
         header = [
-          'vehicle', 'started_at_utc', 'ended_at_utc', 'duration_s', 'distance_km',
-          'avg_speed_kph', 'max_speed_kph', 'idle_s', 'parking_s',
+          'vehicle',
+          'started_at_utc',
+          'ended_at_utc',
+          'duration_s',
+          'distance_km',
+          'avg_speed_kph',
+          'max_speed_kph',
+          'idle_s',
+          'parking_s',
         ];
       } else if (report === 'vehicle-utilization') {
         const page = await this.vehicleUtilization(tenantId, q);
         header = [
-          'vehicle', 'moving_s', 'idle_s', 'parking_s', 'observed_s',
-          'utilization_pct', 'distance_km', 'trips',
+          'vehicle',
+          'moving_s',
+          'idle_s',
+          'parking_s',
+          'observed_s',
+          'utilization_pct',
+          'distance_km',
+          'trips',
         ];
         rows = (page.items as unknown as Array<Record<string, unknown>>).map((r) => [
           String(r.label),
@@ -417,7 +489,9 @@ export class ReportService {
           Number(r.idleSec),
           Number(r.parkingSec),
           r.observedSec === null || r.observedSec === undefined ? '' : Number(r.observedSec),
-          r.utilizationPct === null || r.utilizationPct === undefined ? '' : Number(r.utilizationPct),
+          r.utilizationPct === null || r.utilizationPct === undefined
+            ? ''
+            : Number(r.utilizationPct),
           Number(r.distanceKm),
           Number(r.trips),
         ]);
@@ -449,7 +523,11 @@ export class ReportService {
         after: { rows: rows.length },
       });
       this.logger.log(`CSV export ${report} rows=${rows.length} tenant=${tenantId}`);
-      return { csv, filename: `${report}-${new Date().toISOString().slice(0, 10)}.csv`, rows: rows.length };
+      return {
+        csv,
+        filename: `${report}-${new Date().toISOString().slice(0, 10)}.csv`,
+        rows: rows.length,
+      };
     } catch (err) {
       if (err instanceof ReportInputError) throw err;
       this.metrics?.reportExports.inc({ result: 'error' });

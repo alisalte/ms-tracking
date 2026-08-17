@@ -71,9 +71,10 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/api\/v1/, ''),
       },
       '/api/v1/reports': {
+        // reporting-service controllers carry the FULL /api/v1 prefix
+        // (notification-style) — no rewrite, pass through.
         target: process.env.VITE_REPORT_API_PROXY_TARGET ?? 'http://localhost:3011',
         changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
       },
       '/api/v1/geofences': {
         target: mapTarget,

@@ -5,16 +5,12 @@
  */
 import { describe, expect, it } from '@jest/globals';
 import { csvCell, csvDocument } from '../domain/csv.js';
+import { TRIP_SORT_FIELDS, UTILIZATION_SORT_FIELDS, resolveSort } from '../domain/report-types.js';
 import {
   parseReportWindow,
   reportWindowErrorMessage,
   utcDayStart,
 } from '../domain/report-window.js';
-import {
-  resolveSort,
-  TRIP_SORT_FIELDS,
-  UTILIZATION_SORT_FIELDS,
-} from '../domain/report-types.js';
 import { ReportCache } from '../infrastructure/cache/report-cache.js';
 
 const NOW = new Date('2026-08-16T14:23:45Z');
@@ -41,7 +37,9 @@ describe('parseReportWindow (§16/§18)', () => {
   });
 
   it('8. rejects preset AND from/to (ambiguous)', () => {
-    expect(parseReportWindow({ preset: '7d', from: '2026-08-01T00:00:00Z', now: NOW }).error).toBe('AMBIGUOUS');
+    expect(parseReportWindow({ preset: '7d', from: '2026-08-01T00:00:00Z', now: NOW }).error).toBe(
+      'AMBIGUOUS',
+    );
   });
 
   it('rejects unknown presets', () => {
@@ -49,16 +47,20 @@ describe('parseReportWindow (§16/§18)', () => {
   });
 
   it('18. rejects invalid ISO / missing bounds', () => {
-    expect(parseReportWindow({ from: 'nope', to: '2026-08-16T00:00:00Z', now: NOW }).error).toBe('INVALID_ISO');
+    expect(parseReportWindow({ from: 'nope', to: '2026-08-16T00:00:00Z', now: NOW }).error).toBe(
+      'INVALID_ISO',
+    );
     expect(parseReportWindow({ from: '2026-08-15T00:00:00Z', now: NOW }).error).toBe('INVALID_ISO');
   });
 
   it('rejects from >= to', () => {
     expect(
-      parseReportWindow({ from: '2026-08-16T00:00:00Z', to: '2026-08-16T00:00:00Z', now: NOW }).error,
+      parseReportWindow({ from: '2026-08-16T00:00:00Z', to: '2026-08-16T00:00:00Z', now: NOW })
+        .error,
     ).toBe('REVERSED');
     expect(
-      parseReportWindow({ from: '2026-08-17T00:00:00Z', to: '2026-08-16T00:00:00Z', now: NOW }).error,
+      parseReportWindow({ from: '2026-08-17T00:00:00Z', to: '2026-08-16T00:00:00Z', now: NOW })
+        .error,
     ).toBe('REVERSED');
   });
 
@@ -140,7 +142,13 @@ describe('CSV escaping (§32)', () => {
   });
 
   it('document = BOM + header + CRLF rows', () => {
-    const doc = csvDocument(['a', 'b'], [[1, 'x'], [2, 'y,z']]);
+    const doc = csvDocument(
+      ['a', 'b'],
+      [
+        [1, 'x'],
+        [2, 'y,z'],
+      ],
+    );
     expect(doc.startsWith('\uFEFF')).toBe(true);
     expect(doc).toContain('a,b\r\n1,x\r\n2,"y,z"\r\n');
   });

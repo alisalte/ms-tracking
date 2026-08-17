@@ -15,11 +15,11 @@ import { ReportRepository } from '../infrastructure/persistence/report.repositor
 import { ReportsController } from './reports.controller.js';
 import {
   EXPORT_RATE_LIMITER,
+  REPORTING_CONFIG,
   REPORT_AUDIT_REPOSITORY,
   REPORT_CACHE,
   REPORT_REPOSITORY,
   REPORT_SERVICE,
-  REPORTING_CONFIG,
 } from './tokens.js';
 
 @Module({})
@@ -31,7 +31,10 @@ export class ReportingModule {
         provide: REPORT_REPOSITORY,
         inject: [KNEX_TOKEN],
         useFactory: (knex: unknown) =>
-          new ReportRepository({ knex: knex as never, queryTimeoutMs: config.REPORT_QUERY_TIMEOUT_MS }),
+          new ReportRepository({
+            knex: knex as never,
+            queryTimeoutMs: config.REPORT_QUERY_TIMEOUT_MS,
+          }),
       },
       {
         provide: REPORT_CACHE,

@@ -19,6 +19,7 @@
  * pagination §21, whitelisted sorting §22); errors are controlled 400s.
  */
 import { CurrentTenant, CurrentUser, RequirePermissions } from '@fleetvision/auth';
+import type { AuthenticatedContext } from '@fleetvision/auth';
 import {
   Controller,
   Get,
@@ -30,7 +31,6 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import type { AuthenticatedContext } from '@fleetvision/auth';
 import type { Response } from 'express';
 import { ReportInputError, type ReportService } from '../application/report.service.js';
 import { REPORT_SERVICE } from './tokens.js';
@@ -151,7 +151,16 @@ export class ReportsController {
     @Query('cursor') cursor?: string,
   ) {
     return this.guard(async () =>
-      this.reports.idleParking(tenantId, { preset, from, to, vehicleId, fleetId, kind, limit, cursor }),
+      this.reports.idleParking(tenantId, {
+        preset,
+        from,
+        to,
+        vehicleId,
+        fleetId,
+        kind,
+        limit,
+        cursor,
+      }),
     );
   }
 
@@ -170,7 +179,17 @@ export class ReportsController {
     @Query('offset') offset?: string,
   ) {
     return this.guard(async () =>
-      this.reports.alarms(tenantId, { preset, from, to, vehicleId, fleetId, type, severity, limit, offset }),
+      this.reports.alarms(tenantId, {
+        preset,
+        from,
+        to,
+        vehicleId,
+        fleetId,
+        type,
+        severity,
+        limit,
+        offset,
+      }),
     );
   }
 
@@ -258,10 +277,7 @@ export class ReportsController {
         severity,
       }),
     );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${result.filename}"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
     return result.csv;
   }
 
@@ -271,10 +287,7 @@ export class ReportsController {
       return await fn();
     } catch (err) {
       if (err instanceof ReportInputError) {
-        throw new HttpException(
-          { message: err.message, code: err.code },
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new HttpException({ message: err.message, code: err.code }, HttpStatus.BAD_REQUEST);
       }
       const msg = String((err as Error)?.message ?? '');
       if (/statement timeout|canceling statement/i.test(msg)) {

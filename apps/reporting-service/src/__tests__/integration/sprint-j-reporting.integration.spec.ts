@@ -5,9 +5,9 @@
  * CSV bytes, and EXPLAIN query-plan verification (§27/§72).
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { ReportRepository } from '../../infrastructure/persistence/report.repository.js';
 import { ReportService } from '../../application/report.service.js';
-import { bootstrap, dropTestDb, type IntegrationCtx } from './db.js';
+import { ReportRepository } from '../../infrastructure/persistence/report.repository.js';
+import { type IntegrationCtx, bootstrap, dropTestDb } from './db.js';
 
 const TENANT_A = 'aaaaaa91-0000-4000-8000-00000000000a';
 const TENANT_B = 'aaaaaa92-0000-4000-8000-00000000000b';
@@ -36,7 +36,7 @@ beforeAll(async () => {
   ];
   for (const [tid, fid] of fleets) {
     await k.raw(
-      `INSERT INTO fleet.fleets (id, tenant_id, name, code) VALUES (?::uuid, ?::uuid, ?, ?)`,
+      'INSERT INTO fleet.fleets (id, tenant_id, name, code) VALUES (?::uuid, ?::uuid, ?, ?)',
       [fid, tid, `Fleet ${fid.slice(0, 6)}`, `FL-${fid.slice(0, 4)}`],
     );
   }
@@ -65,7 +65,16 @@ beforeAll(async () => {
     await k.raw(
       `INSERT INTO tracking.trip_events (tenant_id, vehicle_id, status, started_at, ended_at, start_lat, start_lng, distance_km, duration_s, max_speed_kmh)
        VALUES (?::uuid, ?::uuid, ?, ?, ?, 35.7, 51.4, ?, ?, ?)`,
-      [tid, vid, status, startedAt.toISOString(), new Date(startedAt.getTime() + hours * 3_600_000).toISOString(), km, hours * 3600, maxKmh],
+      [
+        tid,
+        vid,
+        status,
+        startedAt.toISOString(),
+        new Date(startedAt.getTime() + hours * 3_600_000).toISOString(),
+        km,
+        hours * 3600,
+        maxKmh,
+      ],
     );
   };
   await trip(TENANT_A, VEHICLE_A, 'COMPLETED', new Date('2026-08-12T08:00:00Z'), 2, 90, 95);
@@ -99,7 +108,14 @@ beforeAll(async () => {
     [TENANT_B, VEHICLE_B],
   );
   // ── Alarms (A: overspeed×2 + geofence_enter; B: overspeed×1) ──
-  const alarm = async (tid: string, vid: string, type: string, severity: string, at: string, status: string) => {
+  const alarm = async (
+    tid: string,
+    vid: string,
+    type: string,
+    severity: string,
+    at: string,
+    status: string,
+  ) => {
     await k.raw(
       `INSERT INTO notification.alerts (tenant_id, rule_id, type, severity, status, vehicle_id, message, raised_at, resolved_at)
        VALUES (?::uuid, gen_random_uuid(), ?, ?, ?, ?::uuid, ?, ?, ?)`,
@@ -108,7 +124,14 @@ beforeAll(async () => {
   };
   await alarm(TENANT_A, VEHICLE_A, 'overspeed', 'HIGH', '2026-08-12T08:30:00Z', 'RESOLVED');
   await alarm(TENANT_A, VEHICLE_A, 'overspeed', 'HIGH', '2026-08-13T09:30:00Z', 'OPEN');
-  await alarm(TENANT_A, VEHICLE_A2, 'geofence_enter', 'MEDIUM', '2026-08-12T11:00:00Z', 'ACKNOWLEDGED');
+  await alarm(
+    TENANT_A,
+    VEHICLE_A2,
+    'geofence_enter',
+    'MEDIUM',
+    '2026-08-12T11:00:00Z',
+    'ACKNOWLEDGED',
+  );
   await alarm(TENANT_B, VEHICLE_B, 'overspeed', 'HIGH', '2026-08-12T08:40:00Z', 'OPEN');
   // ── Geofence + FleetEvents (A only: enter/exit/dwell with dwellSec) ──
   await k.raw(
@@ -122,7 +145,14 @@ beforeAll(async () => {
     await k.raw(
       `INSERT INTO notification.fleet_events (id, tenant_id, vehicle_id, event_type, occurred_at, metadata)
        VALUES (?, ?::uuid, ?::uuid, ?, ?, ?::jsonb)`,
-      [id, TENANT_A, VEHICLE_A, type, at, JSON.stringify({ geofenceId: FENCE_A, geofenceName: 'Depot A', dwellSec })],
+      [
+        id,
+        TENANT_A,
+        VEHICLE_A,
+        type,
+        at,
+        JSON.stringify({ geofenceId: FENCE_A, geofenceName: 'Depot A', dwellSec }),
+      ],
     );
   };
   await geoEvent('geofence.entered', '2026-08-12T08:10:00Z', null);
@@ -179,7 +209,14 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
 
   it('2. vehicle utilization — documented formula, null ≠ zero (§7/§60)', async () => {
     if (!repo) return;
-    const { rows } = await repo.vehicleUtilization(TENANT_A, WIN, {}, { expression: 'utilization_pct', direction: 'DESC' }, 50, 0);
+    const { rows } = await repo.vehicleUtilization(
+      TENANT_A,
+      WIN,
+      {},
+      { expression: 'utilization_pct', direction: 'DESC' },
+      50,
+      0,
+    );
     const a = rows.find((r) => r.vehicleId === VEHICLE_A);
     const a2 = rows.find((r) => r.vehicleId === VEHICLE_A2);
     expect(a?.movingSec).toBe(3 * 3600);
@@ -196,10 +233,24 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
 
   it('3. trip report — cursor pagination + per-trip idle/parking overlap (§9/§21)', async () => {
     if (!repo) return;
-    const page1 = await repo.trips(TENANT_A, WIN, {}, { expression: 't.started_at', direction: 'DESC' }, 2, null);
+    const page1 = await repo.trips(
+      TENANT_A,
+      WIN,
+      {},
+      { expression: 't.started_at', direction: 'DESC' },
+      2,
+      null,
+    );
     expect(page1.rows).toHaveLength(2);
     expect(page1.nextCursor).not.toBeNull();
-    const page2 = await repo.trips(TENANT_A, WIN, {}, { expression: 't.started_at', direction: 'DESC' }, 2, page1.nextCursor);
+    const page2 = await repo.trips(
+      TENANT_A,
+      WIN,
+      {},
+      { expression: 't.started_at', direction: 'DESC' },
+      2,
+      page1.nextCursor,
+    );
     expect(page2.rows).toHaveLength(1);
     // The 08-12 08:00 2h trip overlaps the 10:00-10:20 idle → 1200 idle sec.
     const first = page2.rows.find((r) => r.startedAt === '2026-08-12T08:00:00.000Z');
@@ -284,7 +335,9 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
     const times = rows.map((r) => Date.parse(r.at));
     expect([...times].sort((a, b) => b - a)).toEqual(times);
     // Sources are the authoritative domains.
-    expect(rows.every((r) => r.source.startsWith('gps-engine.') || r.source.startsWith('notification.'))).toBe(true);
+    expect(
+      rows.every((r) => r.source.startsWith('gps-engine.') || r.source.startsWith('notification.')),
+    ).toBe(true);
   });
 
   it('11. custom date range via the service layer (§16)', async () => {
@@ -301,7 +354,14 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
     // Overview/trips of A never contain B's vehicles…
     const o = await repo.fleetOverview(TENANT_A, WIN, {});
     expect(o.totalVehicles).toBe(2);
-    const t = await repo.trips(TENANT_A, WIN, { vehicleId: VEHICLE_B }, { expression: 't.started_at', direction: 'DESC' }, 50, null);
+    const t = await repo.trips(
+      TENANT_A,
+      WIN,
+      { vehicleId: VEHICLE_B },
+      { expression: 't.started_at', direction: 'DESC' },
+      50,
+      null,
+    );
     expect(t.rows).toHaveLength(0);
     // …and querying B explicitly returns ONLY B's data (never A's).
     const oB = await repo.fleetOverview(TENANT_B, WIN, {});
@@ -310,7 +370,9 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
     const aB = await repo.alarms(TENANT_B, WIN, { vehicleId: VEHICLE_A }, 50, 0);
     expect(aB.total).toBe(0);
     // Window validation + invalid filters are controlled errors.
-    await expect(service.trips(TENANT_A, { preset: '7d', from: '2026-08-01T00:00:00Z' })).rejects.toThrow(/not both/);
+    await expect(
+      service.trips(TENANT_A, { preset: '7d', from: '2026-08-01T00:00:00Z' }),
+    ).rejects.toThrow(/not both/);
     await expect(
       service.trips(TENANT_A, { from: '2026-08-01T00:00:00Z', to: '2026-05-01T00:00:00Z' }),
     ).rejects.toThrow(/before/);
@@ -337,14 +399,18 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
     const { csvCell } = await import('../../domain/csv.js');
     // Neutralized AND RFC-quoted (value contains quotes → outer quoting applies).
     const neutralized = csvCell('=HYPERLINK("x")');
-    expect(neutralized).toBe(String.fromCharCode(34,39,61) + 'HYPERLINK(' + String.fromCharCode(34,34) + 'x' + String.fromCharCode(34,34) + ')' + String.fromCharCode(34));
-    expect(csvCell('=1+1') === "'" + "=1+1").toBe(true);
+    expect(neutralized).toBe(
+      `${String.fromCharCode(34, 39, 61)}HYPERLINK(${String.fromCharCode(34, 34)}x${String.fromCharCode(34, 34)})${String.fromCharCode(34)}`,
+    );
+    expect(csvCell('=1+1') === "'" + '=1+1').toBe(true);
   });
 
   it('15. EXPLAIN — report queries use indexes, not seq scans (§27/§72)', async () => {
     if (!ctx || !repo) return;
     await seedBulkTrips(ctx.knex);
+    await seedBulkAlarms(ctx.knex);
     await ctx.knex.raw('ANALYZE tracking.trip_events');
+    await ctx.knex.raw('ANALYZE notification.alerts');
     const plan = await ctx.knex.raw(
       `EXPLAIN (COSTS OFF) SELECT time_bucket('1 day', t.started_at) AS day, SUM(t.distance_km)
        FROM tracking.trip_events t
@@ -354,7 +420,8 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
       [TENANT_B, FROM, TO],
     );
     const text = plan.rows.map((r: Record<string, unknown>) => Object.values(r)[0]).join('\n');
-    expect(text).toMatch(/Bitmap Index Scan|Index Scan/);
+    // Index Only Scan is an even better outcome (heap never touched).
+    expect(text).toMatch(/Bitmap Index Scan|Index (Only )?Scan/);
     expect(text).toMatch(/ix_trip_events_tenant_started/);
     expect(text).not.toMatch(/Seq Scan on tracking\.trip_events/);
     // Alarms trend rides the Sprint J alerts index.
@@ -366,20 +433,26 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
       [TENANT_A, FROM, TO],
     );
     const atext = aplan.rows.map((r: Record<string, unknown>) => Object.values(r)[0]).join('\n');
-    expect(atext).toMatch(/Bitmap Index Scan|Index Scan/);
+    expect(atext).toMatch(/Bitmap Index Scan|Index (Only )?Scan/);
     expect(atext).toMatch(/ix_alerts_tenant_raised/);
     expect(atext).not.toMatch(/Seq Scan on notification\.alerts/);
   });
 });
 
-/** Bulk seed so the planner genuinely prefers the time-leading index. */
+/**
+ * Bulk NOISE for the tenant the EXPLAIN does NOT query — selectivity is what
+ * makes the planner prefer the (tenant_id, started_at) index: the queried
+ * tenant must be a small minority of the table. (Seeding the queried tenant
+ * instead makes it ~100% of the table and a Seq Scan genuinely cheaper —
+ * the test would defeat itself.)
+ */
 async function seedBulkTrips(knex: IntegrationCtx['knex']): Promise<void> {
   const rows: Array<unknown[]> = [];
   const start = Date.parse('2026-08-10T00:00:00Z');
   for (let i = 0; i < 3000; i++) {
     rows.push([
-      TENANT_B,
-      VEHICLE_B,
+      TENANT_A,
+      VEHICLE_A,
       'COMPLETED',
       new Date(start + (i % 7) * 86_400_000 + (i % 24) * 3_600_000).toISOString(),
       10 + (i % 50),
@@ -388,12 +461,43 @@ async function seedBulkTrips(knex: IntegrationCtx['knex']): Promise<void> {
   for (let i = 0; i < rows.length; i += 200) {
     const chunk = rows.slice(i, i + 200);
     const values = chunk
-      .map(() => `(?::uuid, ?::uuid, 'COMPLETED', ?::timestamptz, ?::timestamptz, 35.7, 51.4, 10, 3600, 80)`)
+      .map(
+        () =>
+          `(?::uuid, ?::uuid, 'COMPLETED', ?::timestamptz, ?::timestamptz, 35.7, 51.4, 10, 3600, 80)`,
+      )
       .join(',');
     await knex.raw(
       `INSERT INTO tracking.trip_events (tenant_id, vehicle_id, status, started_at, ended_at, start_lat, start_lng, distance_km, duration_s, max_speed_kmh)
        VALUES ${values}`,
       chunk.flatMap((r) => [r[0], r[1], r[3], r[3]]),
+    );
+  }
+}
+
+/** Same noise strategy for the alarms EXPLAIN (bulk = TENANT_B noise; the
+ * EXPLAIN queries TENANT_A's 3 alarms → minority → index scan). */
+async function seedBulkAlarms(knex: IntegrationCtx['knex']): Promise<void> {
+  const rows: Array<unknown[]> = [];
+  const start = Date.parse('2026-08-10T00:00:00Z');
+  for (let i = 0; i < 3000; i++) {
+    rows.push([
+      TENANT_B,
+      VEHICLE_B,
+      new Date(start + (i % 7) * 86_400_000 + (i % 24) * 3_600_000).toISOString(),
+    ]);
+  }
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200);
+    const values = chunk
+      .map(
+        () =>
+          `(?::uuid, gen_random_uuid(), 'overspeed', 'HIGH', 'OPEN', ?::uuid, 'noise', ?::timestamptz, NULL)`,
+      )
+      .join(',');
+    await knex.raw(
+      `INSERT INTO notification.alerts (tenant_id, rule_id, type, severity, status, vehicle_id, message, raised_at, resolved_at)
+       VALUES ${values}`,
+      chunk.flatMap((r) => [r[0], r[1], r[2]]),
     );
   }
 }

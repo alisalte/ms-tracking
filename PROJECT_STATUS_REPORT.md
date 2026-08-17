@@ -254,6 +254,56 @@
 > map remains deferred (documented). Full report:
 > `docs/implementation/SPRINT-I-GEOFENCE-TRACKING.md`.
 
+---
+
+> **Update 2026-08-17 — Sprint J (Reporting & Fleet Analytics) COMPLETE.**
+> FleetVision can now answer the 16 fleet questions from real telemetry: a new
+> **`reporting-service`** (read-only analytical layer, port 3011, in docker-compose
+> with its own Dockerfile) serves 12 endpoints — fleet overview, trend, vehicle
+> utilization, distance, trips (cursor + whitelisted sorts), speed, idle/parking,
+> alarms + alarm-trend, geofence events, activity timeline, and **CSV export**
+> (rate-limited, audited `report.exported`, BOM + RFC-4180 + formula-injection
+> neutralizer). Every query is database-side (GROUP BY/CTE/`time_bucket`), tenant +
+> time constrained, parameter-bound, and runs in a READ-ONLY transaction with
+> `statement_timeout`; Redis caches overview/trend (bounded TTL, tenant+filter keys).
+> Time-leading indexes added through the domain services' migrations
+> (`trip_events`/`idle_periods`/`parking_periods (tenant_id, started_at DESC)` +
+> `alerts (tenant_id, raised_at DESC)`); EXPLAIN-verified (Bitmap / Index-Only scans,
+> no Seq Scans). Continuous aggregates **evaluated and consciously not adopted**
+> (index-served aggregates + cache already sub-second — documented). RBAC
+> `report.read`/`report.export` (identity backfill); tenant always from the JWT.
+> Frontend `/reports` is REAL-data only (six sections: Overview/Vehicles/Trips/
+> Alarms/Geofences/Activity; the mock report fixtures were deleted): KPI cards,
+> ECharts trend/distribution charts, paginated tables with loading/empty/error
+> states, UTC-labeled ranges (presets + custom local→UTC picker), View-on-Map deep
+> links into the existing history map, View-Alarm links, CSV downloads — full en/fa
+> i18n; `REPORTING-KPI-DEFINITIONS.md` documents every formula (missing telemetry is
+> **null, never zero**; offline duration is explicitly not reported rather than
+> approximated). **Provenance note:** the Sprint J implementation was committed under
+> the previous "sprint I" commit message; this session audited it, fixed real defects
+> (a vite proxy mis-route + a **missing nginx reports location** → production 404s,
+> and a self-defeating EXPLAIN test seed), added the missing test/docs layers, and —
+> while booting the live stack — fixed two **latent security-relevant `packages/auth`
+> defects**: the JwtModule `global:true` flag (documented but missing — gps/map
+> couldn't boot) and **`import type` DI tokens on `CompositeAuthGuard` that silently
+> disabled API-key authentication and token-revocation checks fleet-wide** (verified
+> live: valid API keys got 401 before, 200 after). The shared dev DB's per-service
+> migration ledgers were reconciled (mid-sprint renames had left Sprint G/H/I/J
+> migrations unapplied — `fleet_events`, Sprint H notification columns,
+> `geofence_state`, and the report indexes are now live). Tests (all executed):
+> reporting **36/36** (18 unit + 18 real-PG integration incl. cross-tenant with
+> explicit foreign ids + EXPLAIN + CSV bytes), web **192/192** (incl. 10 new
+> reports UI tests), **NEW reports browser E2E 5/5** (overview, trips
+> filter+custom range+View-on-Map, alarm severity filter, **CSV download verified by
+> reading the file bytes**, tenant isolation with a foreign vehicleId → 0 rows);
+> regressions map 74/74, notification 132/132, identity 42/42, auth pkg 38/38,
+> gps 188/189 (one pre-existing Sprint E WS-offline E2E failure, environment-bound
+> and documented — failing before this session via the now-fixed auth 401);
+> Sprint F/G/H/I browser E2E re-run green (geofences 3+1 conditional skip,
+> history-playback, geofence-alarm, notifications 2/2). Typecheck/build green;
+> Sprint J files lint-clean (73 legacy errors pre-existing). Full report:
+> `docs/implementation/SPRINT-J-REPORTING-ANALYTICS.md`.
+
 ## 0. TL;DR
 
 FleetVision is a **well-engineered monorepo with a strong foundation and one genuinely deep

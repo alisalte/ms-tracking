@@ -80,6 +80,7 @@ export class AuthModule {
           // injectable in modules that directly import AuthModule — feature
           // modules wiring it via DI (gps-engine's RealtimeGateway) crash at
           // bootstrap ("Nest can't resolve dependencies … JwtService").
+          global: true,
           secret: options.jwt.JWT_SECRET,
           verifyOptions: {
             algorithms: ['HS256'],

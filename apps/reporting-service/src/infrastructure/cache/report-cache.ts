@@ -18,11 +18,7 @@ export class ReportCache {
   ) {}
 
   /** Cache key: `report:<name>:<tenant>:<sha(filters+window)>` — tenant-bound. */
-  public static key(
-    report: string,
-    tenantId: string,
-    filters: Record<string, unknown>,
-  ): string {
+  public static key(report: string, tenantId: string, filters: Record<string, unknown>): string {
     const canonical = JSON.stringify(
       Object.keys(filters)
         .sort()
