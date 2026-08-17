@@ -215,6 +215,67 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
     }
   }
 
+  /**
+   * Publish a downstream-command lifecycle event on the command topic
+   * (command-dispatch feedback for the originating service):
+   *   - `telemetry.command.sent.v1`     — the frame was written to the socket;
+   *   - `telemetry.command.rejected.v1` — no dispatchable session (device
+   *     offline / not authenticated / write failed).
+   * Device acknowledgements ride the regular COMMAND_ACK message path instead.
+   */
+  public async publishCommandEvent(event: {
+    readonly commandId: string;
+    readonly deviceId: string;
+    readonly tenantId: string | null;
+    readonly protocolId: string;
+    readonly commandCode: string;
+    readonly result: 'SENT' | 'REJECTED';
+    readonly reason: string | null;
+  }): Promise<void> {
+    const producer = await this.connect();
+    try {
+      await producer.send({
+        topic: this.options.topics.commandAck,
+        messages: [
+          {
+            key: event.deviceId,
+            value: JSON.stringify({
+              specversion: '1.0',
+              type:
+                event.result === 'SENT'
+                  ? 'telemetry.command.sent.v1'
+                  : 'telemetry.command.rejected.v1',
+              time: new Date().toISOString(),
+              id: event.commandId,
+              correlationId: event.commandId,
+              commandId: event.commandId,
+              deviceId: event.deviceId,
+              tenantId: event.tenantId,
+              protocolId: event.protocolId,
+              commandCode: event.commandCode,
+              result: event.result,
+              reason: event.reason,
+            }),
+            headers: {
+              'event-type':
+                event.result === 'SENT'
+                  ? 'telemetry.command.sent.v1'
+                  : 'telemetry.command.rejected.v1',
+              'message-id': event.commandId,
+              'tenant-id': event.tenantId ?? '',
+              'protocol-id': event.protocolId,
+              'device-id': event.deviceId,
+            },
+          },
+        ],
+      });
+      this.metrics?.kafkaProduced.inc({ topic: 'commandAck', result: 'ok' });
+    } catch (err) {
+      this.metrics?.kafkaProduced.inc({ topic: 'commandAck', result: 'error' });
+      throw err;
+    }
+  }
+
   public async onApplicationShutdown(): Promise<void> {
     this.shutDown = true;
     if (this.producer && this.connected) {

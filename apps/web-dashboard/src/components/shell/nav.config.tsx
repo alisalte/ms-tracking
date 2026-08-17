@@ -76,7 +76,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: BellRing,
         permission: PERMISSIONS.notificationRead,
       },
-      { key: 'commands', path: '/commands', icon: TerminalSquare },
+      {
+        // Device commands over TCP (Meitrack MDVR catalog + history).
+        key: 'commands',
+        path: '/commands',
+        icon: TerminalSquare,
+        permission: PERMISSIONS.commandRead,
+      },
       {
         key: 'geofences',
         path: '/geofences',

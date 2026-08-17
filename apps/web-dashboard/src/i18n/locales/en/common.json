@@ -1110,7 +1110,65 @@
   },
   "commands": {
     "title": "Command Center",
-    "description": "Send commands to devices — request position, reboot, lock/unlock, engine cut, configuration, and OTA firmware updates."
+    "description": "Send commands to devices — request position, reboot, lock/unlock, engine cut, configuration, and OTA firmware updates.",
+    "subtitle": "Configure devices over TCP — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).",
+    "selectDevice": "Device (IMEI)",
+    "selectDeviceFirst": "Select a device to enable commands.",
+    "noMeitrackDevices": "No Meitrack devices registered",
+    "noModel": "No model",
+    "noSendPermission": "You lack permission to send commands (read-only).",
+    "search": "Search commands (code or name)…",
+    "noMatch": "No commands match.",
+    "readable": "readable",
+    "sent": "Command {{code}} queued",
+    "categories": {
+      "all": "All",
+      "tracking": "Tracking",
+      "network": "Network",
+      "phone": "Phone / SMS",
+      "alerts": "Alerts",
+      "geofence": "Geo-fence",
+      "device": "Device",
+      "outputs": "Outputs",
+      "rfid": "RFID",
+      "temperature": "Temperature",
+      "fuel": "Fuel",
+      "tpms": "Tire Pressure",
+      "media": "Media / Video",
+      "system": "System",
+      "custom": "Custom"
+    },
+    "status": {
+      "QUEUED": "Queued",
+      "SENT": "Sent",
+      "ACKED": "Acked",
+      "FAILED": "Failed",
+      "EXPIRED": "Expired"
+    },
+    "form": {
+      "send": "Send command",
+      "required": "Required",
+      "number": "Must be a number",
+      "integer": "Must be an integer",
+      "min": "Min: {{min}}",
+      "max": "Max: {{max}}",
+      "maxLength": "Max {{n}} characters",
+      "noParams": "This command takes no parameters — confirm to send."
+    },
+    "confirm": {
+      "title": "Send {{code}}?",
+      "message": "Send command {{code}} to device {{imei}}? This acts on the physical device immediately."
+    },
+    "history": {
+      "title": "Command history",
+      "time": "Time",
+      "command": "Command",
+      "payload": "Payload",
+      "status": "Status",
+      "response": "Response / Error",
+      "filterStatus": "Status",
+      "empty": "No commands sent to this device yet."
+    }
   },
   "maintenance": {
     "title": "Maintenance",

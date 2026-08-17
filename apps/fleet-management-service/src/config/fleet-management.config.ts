@@ -38,6 +38,19 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     FLEET_KAFKA_GROUP_ID: z.string().min(1).default('fleet-management-service'),
     /** Session-lifecycle topic produced by the device-gateway. */
     FLEET_KAFKA_SESSION_TOPIC: z.string().min(1).default('fleetvision.telemetry.session.lifecycle'),
+
+    // --- Device commands (downstream TCP configuration, 06 §11.3). ---
+    /** Command requests are produced here; the device-gateway consumes. */
+    FLEET_KAFKA_COMMAND_REQUEST_TOPIC: z
+      .string()
+      .min(1)
+      .default('fleetvision.telemetry.command.request'),
+    /** Gateway feedback (sent/rejected) + device acks (D82) land here. */
+    FLEET_KAFKA_COMMAND_ACK_TOPIC: z.string().min(1).default('fleetvision.telemetry.command.ack'),
+    /** Default device-command TTL (seconds) — unacked commands EXPIRE past it. */
+    FLEET_COMMAND_TTL_SECONDS: z.coerce.number().int().min(5).max(600).default(120),
+    /** TTL sweeper interval (seconds). */
+    FLEET_COMMAND_SWEEP_SECONDS: z.coerce.number().int().min(5).default(20),
   }),
 );
 

@@ -37,6 +37,12 @@ export const queryKeys = {
     list: () => [...queryKeys.alarms.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.alarms.all, 'detail', id] as const,
   },
+  commands: {
+    all: ['commands'] as const,
+    catalog: () => [...queryKeys.commands.all, 'catalog'] as const,
+    history: (deviceId: string | null) =>
+      [...queryKeys.commands.all, 'history', deviceId ?? 'all'] as const,
+  },
   assets: {
     all: ['assets'] as const,
     vehicles: () => [...queryKeys.assets.all, 'vehicles'] as const,

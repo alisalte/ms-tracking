@@ -1,57 +1,109 @@
 /**
- * Command Center domain types — typed contract.
+ * Command Center domain types — typed contract with fleet-management-service
+ * device-commands API (06 §11.3 SendDeviceCommand; Meitrack MDVR GPRS
+ * Protocol V2.0 command catalog).
  *
- * TODO: The device-gateway-service currently has no command-dispatch REST
- * endpoint (only an internal admin API). These types define the contract for
- * when the backend lands a `POST /devices/:id/commands` endpoint.
- *
- * Source: docs/specs/06_Device_Gateway.md §7 (DeviceCommand aggregate).
+ *   GET  /device-commands/catalog            → CommandDef[] (form source)
+ *   GET  /device-commands/:id                → DeviceCommandRecord
+ *   POST /devices/:id/commands               → DeviceCommandRecord (QUEUED)
+ *   GET  /devices/:id/commands               → Page<DeviceCommandRecord>
  */
 
-/** Command types supported by the JT808/GT06 protocol adapters. */
-export type CommandType =
-  | 'REQUEST_POSITION'
-  | 'REQUEST_STATUS'
-  | 'REBOOT'
-  | 'CONFIGURATION'
-  | 'LOCK'
-  | 'UNLOCK'
-  | 'ENGINE_CUT'
-  | 'ENGINE_RESTORE'
-  | 'SET_INTERVAL'
-  | 'SET_GEOFENCE'
-  | 'OTA_FIRMWARE';
+/** Command lifecycle (fleet.device_commands status check constraint). */
+export type CommandStatus = 'QUEUED' | 'SENT' | 'ACKED' | 'FAILED' | 'EXPIRED';
 
-/** Command lifecycle (DeviceCommand aggregate, 06 §7 DeviceCommandStatus). */
-export type CommandStatus =
-  | 'PENDING'
-  | 'SENT'
-  | 'ACKED'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'EXPIRED'
-  | 'CANCELLED';
+/** Catalog categories (mirrors fleet-management COMMAND_CATEGORIES). */
+export type CommandCategory =
+  | 'tracking'
+  | 'network'
+  | 'phone'
+  | 'alerts'
+  | 'geofence'
+  | 'device'
+  | 'outputs'
+  | 'rfid'
+  | 'temperature'
+  | 'fuel'
+  | 'tpms'
+  | 'media'
+  | 'system'
+  | 'custom';
 
-/** A device command (06 §7 DeviceCommand, UI subset). */
-export interface DeviceCommand {
-  id: string;
-  deviceId: string;
-  vehicleId: string;
-  vehicleLabel: string;
-  type: CommandType;
-  status: CommandStatus;
-  /** Command parameters (type-specific). */
-  params: Record<string, unknown>;
-  /** ISO timestamp the command was issued. */
-  issuedAt: string;
-  /** ISO timestamp the command was acknowledged (if ACKED/COMPLETED). */
-  ackedAt?: string;
-  /** ISO timestamp the command expired or failed. */
-  completedAt?: string;
-  /** TTL in seconds (commands expire if unacked). */
-  ttlSec: number;
-  /** Error message if FAILED. */
-  error?: string;
-  /** Who issued the command. */
-  issuedBy: string;
+/** Parameter primitives the dynamic form is rendered from. */
+export type CommandParamType = 'number' | 'string' | 'enum' | 'boolean';
+
+export interface CommandParamOption {
+  readonly value: string;
+  readonly label: string;
+  readonly labelFa: string;
 }
+
+export interface CommandParamDef {
+  readonly key: string;
+  readonly label: string;
+  readonly labelFa: string;
+  readonly type: CommandParamType;
+  readonly min?: number;
+  readonly max?: number;
+  readonly maxLength?: number;
+  readonly integer?: boolean;
+  readonly options?: readonly CommandParamOption[];
+  readonly unit?: string;
+  readonly required: boolean;
+  readonly defaultValue?: string | number | boolean;
+  readonly hint?: string;
+  readonly hintFa?: string;
+  readonly allowComma?: boolean;
+}
+
+/** One catalog command — code + names + category + parameter shape. */
+export interface CommandDef {
+  readonly code: string;
+  readonly name: string;
+  readonly nameFa: string;
+  readonly category: CommandCategory;
+  readonly description: string;
+  readonly descriptionFa: string;
+  readonly params: readonly CommandParamDef[];
+  readonly expectResponse: boolean;
+  readonly supportsReadback: boolean;
+}
+
+/** A persisted device-command record (camelCase, ISO date strings on the wire). */
+export interface DeviceCommandRecord {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly deviceId: string;
+  readonly commandCode: string;
+  readonly category: string;
+  readonly params: Record<string, unknown> | null;
+  readonly payloadText: string | null;
+  readonly payloadHex: string | null;
+  readonly status: CommandStatus;
+  readonly responseText: string | null;
+  readonly error: string | null;
+  readonly issuedBy: string | null;
+  readonly issuedAt: string;
+  readonly sentAt: string | null;
+  readonly ackedAt: string | null;
+  readonly expiresAt: string;
+  readonly version: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** POST /devices/:id/commands body. */
+export interface SendCommandPayload {
+  readonly commandCode: string;
+  readonly params?: Record<string, string | number | boolean>;
+  readonly ttlSec?: number;
+}
+
+/** Status → badge tone (single source for history table chips). */
+export const COMMAND_STATUS_TONE: Record<CommandStatus, string> = {
+  QUEUED: '#94622e',
+  SENT: '#2563eb',
+  ACKED: '#15803d',
+  FAILED: '#b91c1c',
+  EXPIRED: '#6b7280',
+};

@@ -11,23 +11,35 @@ import { REDIS_TOKEN } from '@fleetvision/cache-redis';
 import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { BindingService } from '../application/binding.service.js';
+import { DeviceCommandService } from '../application/device-command.service.js';
 import { DeviceService } from '../application/device.service.js';
 import { FleetService } from '../application/fleet.service.js';
 import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
 import type { FleetManagementConfig } from '../config/fleet-management.config.js';
 import { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
+import { CommandAckConsumer } from '../infrastructure/kafka/command-ack-consumer.js';
+import { CommandRequestProducer } from '../infrastructure/kafka/command-request-producer.js';
 import { SessionLifecycleConsumer } from '../infrastructure/kafka/session-lifecycle-consumer.js';
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { BindingRepository } from '../infrastructure/persistence/binding.repository.js';
+import { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
 import { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import { FleetRepository } from '../infrastructure/persistence/fleet.repository.js';
 import { VehicleRepository } from '../infrastructure/persistence/vehicle.repository.js';
+import {
+  DeviceCommandIssuesController,
+  DeviceCommandsController,
+} from './device-commands.controller.js';
 import { DevicesController } from './devices.controller.js';
 import { FleetsController } from './fleets.controller.js';
 import { SummaryController } from './summary.controller.js';
 import {
   BINDING_SERVICE,
+  COMMAND_ACK_CONSUMER,
+  COMMAND_REQUEST_PRODUCER,
+  DEVICE_COMMAND_REPOSITORY,
+  DEVICE_COMMAND_SERVICE,
   DEVICE_REPOSITORY,
   DEVICE_SERVICE,
   FLEET_MANAGEMENT_CONFIG,
@@ -154,8 +166,70 @@ export class FleetManagementModule {
           useFactory: (cfg: FleetManagementConfig, devices: DeviceRepository) =>
             new SessionLifecycleConsumer(cfg, devices),
         },
+        // --- Device commands (downstream TCP configuration, 06 §11.3) ---
+        {
+          provide: DEVICE_COMMAND_REPOSITORY,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new DeviceCommandRepository(knex as never),
+        },
+        {
+          provide: DeviceCommandRepository,
+          useExisting: DEVICE_COMMAND_REPOSITORY,
+        },
+        {
+          provide: COMMAND_REQUEST_PRODUCER,
+          inject: [FLEET_MANAGEMENT_CONFIG],
+          useFactory: (cfg: FleetManagementConfig) => new CommandRequestProducer(cfg),
+        },
+        {
+          provide: DEVICE_COMMAND_SERVICE,
+          inject: [
+            KNEX_TOKEN,
+            DEVICE_REPOSITORY,
+            DEVICE_COMMAND_REPOSITORY,
+            AuditRepository,
+            COMMAND_REQUEST_PRODUCER,
+            FLEET_MANAGEMENT_CONFIG,
+          ],
+          useFactory: (
+            knex: unknown,
+            devices: DeviceRepository,
+            commands: DeviceCommandRepository,
+            audit: AuditRepository,
+            producer: CommandRequestProducer,
+            cfg: FleetManagementConfig,
+          ) => {
+            const service = new DeviceCommandService(
+              knex as never,
+              devices,
+              commands,
+              audit,
+              producer,
+              {
+                defaultTtlSeconds: cfg.FLEET_COMMAND_TTL_SECONDS,
+                sweepIntervalSeconds: cfg.FLEET_COMMAND_SWEEP_SECONDS,
+              },
+            );
+            service.startSweeper();
+            return service;
+          },
+        },
+        // Command-ack consumer (non-fatal at boot).
+        {
+          provide: COMMAND_ACK_CONSUMER,
+          inject: [FLEET_MANAGEMENT_CONFIG, DEVICE_COMMAND_REPOSITORY],
+          useFactory: (cfg: FleetManagementConfig, commands: DeviceCommandRepository) =>
+            new CommandAckConsumer(cfg, commands),
+        },
       ],
-      controllers: [FleetsController, VehiclesController, DevicesController, SummaryController],
+      controllers: [
+        FleetsController,
+        VehiclesController,
+        DevicesController,
+        SummaryController,
+        DeviceCommandsController,
+        DeviceCommandIssuesController,
+      ],
     };
   }
 }

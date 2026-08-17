@@ -139,6 +139,29 @@ export const bindBodySchema = z.object({
 });
 export type BindDeviceInput = z.infer<typeof bindBodySchema>;
 
+// --- Device commands (06 §11.3 SendDeviceCommand) -----------------------------
+
+export const deviceCommandStatusSchema = z.enum(['QUEUED', 'SENT', 'ACKED', 'FAILED', 'EXPIRED']);
+
+/**
+ * Issue a device command. `params` is validated semantically against the
+ * command catalog (validateParams) — this envelope only bounds the shape.
+ */
+export const createDeviceCommandSchema = z.object({
+  commandCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{1,3}[0-9A-Za-z]{0,2}$/, 'Invalid command code format.'),
+  params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  ttlSec: z.coerce.number().int().min(5).max(600).optional(),
+});
+export type CreateDeviceCommandInput = z.infer<typeof createDeviceCommandSchema>;
+
+export const deviceCommandListQuerySchema = listQuerySchema.extend({
+  status: deviceCommandStatusSchema.optional(),
+  commandCode: z.string().trim().optional(),
+});
+
 // --- Helpers exposed to services/tests --------------------------------------
 
 export const PROTOCOL_VALUES = PROTOCOLS as readonly string[];

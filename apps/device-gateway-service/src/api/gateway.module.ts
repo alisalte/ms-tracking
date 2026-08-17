@@ -36,6 +36,7 @@ import {
 import { Module } from '@nestjs/common';
 import {
   AuthResolver,
+  CommandDispatcher,
   ConnectionPool,
   PacketDispatcher,
   SessionManager,
@@ -43,7 +44,10 @@ import {
 import { type DeviceGatewayConfig, parseListeners } from '../config/device-gateway.config.js';
 import { DeviceSession, RawPacket } from '../domain/index.js';
 import { BUILTIN_ADAPTERS } from '../infrastructure/adapters/index.js';
-import { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/index.js';
+import {
+  CommandRequestConsumer,
+  DeviceGatewayKafkaProducer,
+} from '../infrastructure/kafka/index.js';
 import {
   AdapterRegistry,
   PluginLoader,
@@ -65,6 +69,7 @@ import { AdminController } from './admin/admin.controller.js';
 import { GatewayAuditWriter } from './admin/gateway-audit-writer.js';
 import {
   ADAPTER_REGISTRY,
+  COMMAND_DISPATCHER,
   CONNECTION_POOL,
   DEVICE_REGISTRY,
   GATEWAY_CONFIG,
@@ -80,6 +85,7 @@ export {
   ADAPTER_REGISTRY,
   SESSION_MANAGER,
   PACKET_DISPATCHER,
+  COMMAND_DISPATCHER,
   CONNECTION_POOL,
   KAFKA_PRODUCER,
   DEVICE_REGISTRY,
@@ -221,6 +227,35 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
               rawStorage: raw,
             }),
         },
+        // Downstream command dispatcher (06 §11.3 SendDeviceCommand) — session
+        // lookup + adapter encode + socket write, with SENT/REJECTED feedback
+        // on the command topic.
+        {
+          provide: COMMAND_DISPATCHER,
+          inject: [SESSION_MANAGER, ADAPTER_REGISTRY, KAFKA_PRODUCER, 'GATEWAY_SESSION_REDIS'],
+          useFactory: (
+            sessions: SessionManager,
+            adapters: AdapterRegistry,
+            kafka: DeviceGatewayKafkaProducer,
+            redisStore: SessionRedisStore,
+          ) => new CommandDispatcher(sessions, adapters, kafka, redisStore),
+        },
+        // Kafka command.request consumer — broadcast to all instances; only
+        // the session owner writes (06 §6.2). Non-fatal at boot.
+        {
+          provide: 'GATEWAY_COMMAND_REQUEST_CONSUMER',
+          inject: [COMMAND_DISPATCHER, GATEWAY_CONFIG, INSTANCE_ID],
+          useFactory: (dispatcher: CommandDispatcher, config: DeviceGatewayConfig, pod: string) =>
+            new CommandRequestConsumer(
+              {
+                brokers: config.GATEWAY_KAFKA_BROKERS.split(','),
+                clientId: config.GATEWAY_KAFKA_CLIENT_ID,
+                instanceId: pod,
+                topic: config.GATEWAY_KAFKA_COMMAND_REQUEST_TOPIC,
+              },
+              dispatcher,
+            ),
+        },
         // Sprint D §35 — Kafka-producer readiness (checked in /health/ready).
         // Liveness never checks Kafka ("alive but not ready" stays expressible).
         {
@@ -285,10 +320,16 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
               host: this.config.GATEWAY_HOST,
               idleTimeoutMs: this.config.GATEWAY_TCP_IDLE_TIMEOUT_SECONDS * 1000,
               openSession: (init) => this.openSession(init),
-              onOpen: (ctx) =>
+              onOpen: (ctx) => {
                 this.sessions.registerTerminator(ctx.session.id as string, () =>
                   ctx.socket.destroy(),
-                ),
+                );
+                // Downstream command write path (06 §6.2) — expose a write hook
+                // for the CommandDispatcher on this session's socket.
+                this.sessions.registerWriter(ctx.session.id as string, (data) =>
+                  ctx.socket.write(data),
+                );
+              },
               onPacket: async (ctx, payload) => this.onPacket(ctx, adapter, payload),
               onClose: (ctx, reason) => this.onClose(ctx.session, reason),
             }),

@@ -194,7 +194,11 @@ export const router = createBrowserRouter([
           },
           {
             path: '/commands',
-            element: <CommandCenterPage />,
+            element: (
+              <RequirePermission permission={PERMISSIONS.commandRead}>
+                <CommandCenterPage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/maintenance',

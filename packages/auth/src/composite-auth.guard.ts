@@ -32,11 +32,13 @@ import type { Request } from 'express';
 // design:paramtypes, Nest then can't resolve the param, and @Optional()
 // silently injects undefined (API-key auth + revocation checks quietly OFF —
 // the exact defect class Sprint I fixed in notification-service).
-import type { ApiKeyVerifier, VerifiedApiKey } from './api-key-verifier.js';
+// ApiKeyVerifier + RevocationStore are tokens too (same rule applies).
+import { ApiKeyVerifier } from './api-key-verifier.js';
+import type { VerifiedApiKey } from './api-key-verifier.js';
 import type { AuthenticatedContext } from './authenticated-context.js';
 import { extractCredential } from './credentials.js';
 import { IS_PUBLIC_KEY } from './decorators.js';
-import type { RevocationStore } from './revocation-store.js';
+import { RevocationStore } from './revocation-store.js';
 import type { VerifiedAccessToken } from './token-claims.js';
 import { AUTH_OPTIONS_TOKEN, type AuthGuardOptions } from './tokens.js';
 

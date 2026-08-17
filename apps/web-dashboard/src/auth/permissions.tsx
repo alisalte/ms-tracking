@@ -43,6 +43,9 @@ export const PERMISSIONS = {
   notificationReadAll: 'notification.read.all',
   notificationPreferenceRead: 'notification.preference.read',
   notificationPreferenceWrite: 'notification.preference.write',
+  // Device commands (telemetry.command.* — 02 §6.1; fleet-management enforces).
+  commandRead: 'telemetry.command.read',
+  commandSend: 'telemetry.command.send',
 } as const;
 
 /** Does the granted set (incl. the `*` wildcard) satisfy one requirement? */

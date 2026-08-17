@@ -79,6 +79,13 @@ export interface SweepResult {
 /** Transport teardown hook — destroys the socket backing a session. */
 export type SessionTerminator = (reason: CloseReason) => void;
 
+/**
+ * Transport write hook — writes wire bytes to the socket backing a session.
+ * Returns true when the bytes were handed to the transport (downstream command
+ * dispatch path, 06 §6.2); false when the write failed / transport gone.
+ */
+export type SessionWriter = (data: Buffer) => boolean;
+
 export class SessionManager {
   private readonly logger = new Logger(SessionManager.name);
   /** Local index by device id (post-auth) — O(1) dispatch (06 §6.2). */
@@ -89,6 +96,8 @@ export class SessionManager {
   private readonly byUdpSource = new Map<string, DeviceSession>();
   /** Per-session transport terminators (socket destroy on manager-initiated close). */
   private readonly terminators = new Map<string, SessionTerminator>();
+  /** Per-session transport writers (socket write — downstream command dispatch). */
+  private readonly writers = new Map<string, SessionWriter>();
   /** Per-session established timestamp for last-write-wins comparison (06 §6.3). */
   private readonly establishedAt = new Map<string, number>();
   /** Last time each session was checked for cross-instance supersession. */
@@ -138,6 +147,22 @@ export class SessionManager {
    */
   public registerTerminator(sessionId: string, terminator: SessionTerminator): void {
     this.terminators.set(sessionId, terminator);
+  }
+
+  /**
+   * Register a transport writer so the downstream command-dispatch path can
+   * write wire bytes to the socket backing a session (06 §6.2). Mirrors
+   * `registerTerminator`; cleared on close.
+   */
+  public registerWriter(sessionId: string, writer: SessionWriter): void {
+    this.writers.set(sessionId, writer);
+  }
+
+  /** Look up the writer for a live session (command dispatch path). */
+  public writerFor(sessionId: string): SessionWriter | null {
+    const session = this.bySession.get(sessionId);
+    if (!session?.isLive) return null;
+    return this.writers.get(sessionId) ?? null;
   }
 
   /**
@@ -229,6 +254,7 @@ export class SessionManager {
     this.supersededCheckedAt.delete(id);
     const terminator = this.terminators.get(id);
     this.terminators.delete(id);
+    this.writers.delete(id);
     if (this.redisStore && session.tenantId && session.deviceId) {
       await this.redisStore.removeIfSession(session.tenantId, session.deviceId, id).catch(() => {
         /* best-effort */

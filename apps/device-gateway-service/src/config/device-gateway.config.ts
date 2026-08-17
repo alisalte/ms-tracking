@@ -81,6 +81,11 @@ export const deviceGatewayConfigSchema = baseConfigSchema.merge(authConfigSchema
       .string()
       .min(1)
       .default('fleetvision.telemetry.session.lifecycle'),
+    /** Downstream command requests consumed from this topic (06 §11.3 SendDeviceCommand). */
+    GATEWAY_KAFKA_COMMAND_REQUEST_TOPIC: z
+      .string()
+      .min(1)
+      .default('fleetvision.telemetry.command.request'),
     /** Kafka producer bounded retry attempts (Sprint D §13). */
     GATEWAY_KAFKA_RETRIES: z.coerce.number().int().min(0).default(8),
     /** Kafka producer initial retry backoff (ms) — Sprint D §13. */

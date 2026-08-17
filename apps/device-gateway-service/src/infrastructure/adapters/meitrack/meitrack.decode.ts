@@ -2,10 +2,10 @@
  * Meitrack decode — vendor frame → canonical DeviceMessage (06 §10.2 normalization).
  *
  * Handles the tracking-family packets needed to prove the pipeline end-to-end
- * (Meitrack GPRS Protocol v1.6):
+ * (Meitrack GPRS Protocol v1.6 + MDVR GPRS Protocol V2.0):
  *   - AAA tracking, event 0  → POSITION (lat/lng/speed/heading/time/sats + IO).
  *   - AAA tracking, event≠0  → ALARM (carries the same position + mapped alarm).
- *   - AAC / D82 / E##        → COMMAND_ACK (server-ack echo or device command result).
+ *   - AAC / D82 / any echoed command code (A11, B05, …) → COMMAND_ACK.
  *
  * Auth note: Meitrack sends NO dedicated login packet — the 15-digit IMEI is the
  * first field of *every* packet. Each decoded message therefore carries the IMEI
@@ -89,6 +89,12 @@ function message(
  * Decode a Meitrack RawPacket into one DeviceMessage. Throws ProtocolError on an
  * unsupported/undersized frame so the dispatcher's decode stage drops it and
  * bumps `decode.error` (06 §8).
+ *
+ * MDVR command responses (Meitrack MDVR GPRS Protocol V2.0 §3.x): a device
+ * replies to a downstream command by ECHOING its code — `$$S28,…,A11,OK` —
+ * not only via D82. Any well-formed 3-char command code other than AAA is
+ * therefore decoded as a COMMAND_ACK carrying `telemetry.command` (the echoed
+ * code) + `telemetry.response` (the result payload, e.g. 'OK').
  */
 export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
   const frame = parseFrame(raw.payload);
@@ -96,16 +102,20 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
   switch (frame.command) {
     case MEITRACK_COMMAND.TRACKING:
       return [decodeTracking(raw, frame.fields)];
-    case MEITRACK_COMMAND.ACK:
-    case MEITRACK_COMMAND.COMMAND_RESPONSE:
-      return [decodeCommandAck(raw, frame.fields)];
     default:
+      // Command-family code (AAC, D82, A##, B##, C##, D##, E##, F##) → ack.
+      if (MEITRACK_RESPONSE_CODE.test(frame.command)) {
+        return [decodeCommandAck(raw, frame.fields)];
+      }
       throw new ProtocolError(
         `Meitrack command '${frame.command}' not supported (decode).`,
         'meitrack',
       );
   }
 }
+
+/** 3-char command-family code (letter + 2 alphanumerics), excluding AAA. */
+const MEITRACK_RESPONSE_CODE = /^(?!AAA)[A-F][0-9A-Z]{2}$/;
 
 /** Decode an AAA tracking packet → POSITION (event 0) or ALARM (event≠0). */
 function decodeTracking(raw: RawPacket, fields: readonly string[]): DeviceMessage {

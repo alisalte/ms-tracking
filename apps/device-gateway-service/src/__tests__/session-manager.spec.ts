@@ -85,4 +85,28 @@ describe('SessionManager — local index + lifecycle (06 §6)', () => {
     manager.track(s);
     expect(manager.establishedAtFor(s.id as string)).toBe(NOW.getTime());
   });
+
+  // --- downstream command write path (06 §6.2) --------------------------------
+
+  it('writerFor returns the registered writer only while the session is live', async () => {
+    const s = newSession('dev-w');
+    manager.track(s);
+    const written: Buffer[] = [];
+    manager.registerWriter(s.id as string, (data) => {
+      written.push(data);
+      return true;
+    });
+    const writer = manager.writerFor(s.id as string);
+    expect(writer).not.toBeNull();
+    expect(writer?.(Buffer.from('@@A'))).toBe(true);
+    expect(written).toHaveLength(1);
+
+    await manager.close(s, 'IDLE_TIMEOUT');
+    // Closed sessions expose no writer (and the hook is cleared).
+    expect(manager.writerFor(s.id as string)).toBeNull();
+  });
+
+  it('writerFor returns null for an unknown session id', () => {
+    expect(manager.writerFor('nope')).toBeNull();
+  });
 });

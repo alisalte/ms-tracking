@@ -23,3 +23,8 @@ export {
   type PacketDispatcherDeps,
   type DispatchResult,
 } from './packet-dispatcher.js';
+export {
+  CommandDispatcher,
+  type DeviceCommandRequest,
+  type CommandDispatchResult,
+} from './command-dispatcher.js';

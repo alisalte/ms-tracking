@@ -14,6 +14,8 @@
  *   - LOGIN_ACK / HEARTBEAT_ACK / generic ACK → an AAC confirmation to the device.
  *   - TRACK_ON_DEMAND (A10), HEARTBEAT_INTERVAL (A11), REBOOT (F03), and a
  *     generic command passthrough for anything else in `payload.command`.
+ *   - payload.hex → a binary-bodied frame (MDVR media command structs,
+ *     Meitrack MDVR GPRS Protocol V2.0 §3.16–§3.31) via buildMeitrackBinaryFrame.
  */
 import type { DeviceCommand } from '../../protocol/protocol-adapter.js';
 import { MEITRACK_OUT_COMMAND } from './meitrack.codes.js';
@@ -42,6 +44,27 @@ export function buildMeitrackFrame(content: string): Buffer {
 }
 
 /**
+ * Binary-bodied variant for MDVR media commands (A9A/A9C/A9D/A9F/AB2/AB4/AB8…):
+ * `head` + `,` + `asciiPrefix` (e.g. `<imei>,A9A,`) + `body` raw struct bytes,
+ * then `*<checksum>\r\n`. The length counts from the comma through the tail and
+ * the checksum sums the raw bytes from `@@` through `*` — identical rule to the
+ * ASCII path, just byte-wise.
+ */
+export function buildMeitrackBinaryFrame(asciiPrefix: string, body: Buffer): Buffer {
+  const comma = Buffer.from(',', 'ascii');
+  const star = Buffer.from('*', 'ascii');
+  const tail = Buffer.from(TAIL, 'ascii');
+  const head = Buffer.from(OUT_FLAG + OUT_DATA_ID, 'ascii');
+  const bodyBytes = Buffer.concat([comma, Buffer.from(asciiPrefix, 'ascii'), body, star]);
+  // length = comma + prefix + body + '*' + checksum(2) + '\r\n'(2).
+  const length = bodyBytes.length + 2 + 2;
+  const lengthBytes = Buffer.from(String(length), 'ascii');
+  const checksumRegion = Buffer.concat([head, lengthBytes, bodyBytes]);
+  const checksum = meitrackChecksum(checksumRegion);
+  return Buffer.concat([checksumRegion, Buffer.from(checksum, 'ascii'), tail]);
+}
+
+/**
  * Encode a downstream DeviceCommand to a Meitrack server→device frame. Returns an
  * empty Buffer for unsupported commands (the dispatcher rejects writing those).
  */
@@ -60,13 +83,21 @@ export function encodeMeitrack(cmd: DeviceCommand): Buffer {
       return buildMeitrackFrame(`${imei},${MEITRACK_COMMAND.ACK}`);
 
     default:
-      // Any other type (TELEMETRY/PHOTO/etc.) is treated as a config command.
+      // Any other type (TELEMETRY/PHOTO/COMMAND/etc.) is treated as a config command.
       return encodeConfigCommand(cmd, imei);
   }
 }
 
 /** Encode a device-configuration / command-type DeviceCommand (06 §9.1). */
 function encodeConfigCommand(cmd: DeviceCommand, imei: string): Buffer {
+  // Binary body (MDVR media structs): payload.hex is the hex-encoded wire body
+  // after `<imei>,` (e.g. 'A9B' + ',' + struct bytes).
+  if (typeof cmd.payload.hex === 'string' && cmd.payload.hex.length > 0) {
+    const body = Buffer.from(cmd.payload.hex, 'hex');
+    if (body.length === 0) return Buffer.alloc(0);
+    return buildMeitrackBinaryFrame(`${imei},`, body);
+  }
+
   const command = String(cmd.payload.command ?? '');
   switch (command) {
     case MEITRACK_OUT_COMMAND.TRACK_ON_DEMAND: {
