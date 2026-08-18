@@ -1,28 +1,20 @@
 import { ChevronLeft, ChevronRight, Pause, Play, Square } from 'lucide-react';
 /**
- * PlaybackControls — the history-playback transport (Sprint I §32/§33).
+ * PlaybackControls — the history-playback transport (Sprint I §32/§33, TailAdmin).
  *
  * Play / Pause / Stop / Previous / Next, speeds 1×/2×/4×/8×, and a timeline
  * slider bound to the track's [start, end] window showing the CURRENT
  * timestamp. Seeking by timeline snaps to real GPS samples (gap-aware — see
  * useTrackPlayback). Pure presentational; the engine lives in the hook.
+ *
+ * Contract preserved from the MUI version: every data-testid (playback-*),
+ * the aria-labels, and the "{speed}×" button names used by the e2e suite.
  */
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  Box,
-  IconButton,
-  Slider,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material';
-import {
-  PLAYBACK_SPEEDS,
-  type PlaybackSpeed,
-  type UseTrackPlaybackResult,
-} from './useTrackPlayback';
+import { IconButton } from '@/components/tailwind-ui';
+import { PLAYBACK_SPEEDS, type UseTrackPlaybackResult } from './useTrackPlayback';
 
 function fmtTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], {
@@ -39,9 +31,9 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
   const { t } = useTranslation();
   const { startMs, endMs, cursorMs, isPlaying, speed } = playback;
 
-  const onSliderChange = useCallback(
-    (_: unknown, value: number | number[]) => {
-      if (typeof value === 'number') playback.seek(value);
+  const onRangeChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      playback.seek(Number(event.target.value));
     },
     [playback],
   );
@@ -49,109 +41,93 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
   if (startMs === null || endMs === null || endMs <= startMs) return null;
 
   return (
-    <Box
-      sx={{
-        position: 'absolute',
-        bottom: 8,
-        left: 8,
-        right: 8,
-        zIndex: 10,
-        backgroundColor: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(6px)',
-        borderRadius: 1.5,
-        px: 1.5,
-        py: 0.75,
-        boxShadow: '0px 1px 3px rgba(0,0,0,0.08)',
-      }}
+    <div
+      className="absolute bottom-2 left-2 right-2 z-10 rounded-xl bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md dark:bg-graydark-300/90"
       data-testid="playback-controls"
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap items-center gap-1.5">
         <IconButton
-          size="small"
+          size="sm"
           onClick={playback.prev}
           aria-label={t('map.playback.prev')}
           data-testid="playback-prev"
         >
-          <ChevronLeft size={18} />
+          <ChevronLeft size={17} />
         </IconButton>
         <IconButton
-          size="small"
+          size="sm"
           onClick={() => (isPlaying ? playback.pause() : playback.play())}
           aria-label={isPlaying ? t('map.playback.pause') : t('map.playback.play')}
           data-testid={isPlaying ? 'playback-pause' : 'playback-play'}
         >
-          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+          {isPlaying ? <Pause size={17} /> : <Play size={17} />}
         </IconButton>
         <IconButton
-          size="small"
+          size="sm"
           onClick={playback.stop}
           aria-label={t('map.playback.stop')}
           data-testid="playback-stop"
         >
-          <Square size={16} />
+          <Square size={15} />
         </IconButton>
         <IconButton
-          size="small"
+          size="sm"
           onClick={playback.next}
           aria-label={t('map.playback.next')}
           data-testid="playback-next"
         >
-          <ChevronRight size={18} />
+          <ChevronRight size={17} />
         </IconButton>
 
-        <Slider
+        <input
+          type="range"
           min={startMs}
           max={endMs}
-          value={cursorMs}
-          onChange={onSliderChange}
-          size="small"
-          sx={{ flex: 1, minWidth: 160, mx: 1 }}
+          value={cursorMs ?? startMs}
+          onChange={onRangeChange}
           aria-label={t('map.playback.timeline')}
           data-testid="playback-timeline"
+          className="mx-2 h-1.5 min-w-40 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-brand-500 dark:bg-white/10"
         />
 
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={speed}
-          onChange={(_, v: PlaybackSpeed | null) => {
-            if (v !== null) playback.setSpeed(v);
-          }}
+        <div
+          role="group"
           aria-label={t('map.playback.speed')}
+          className="flex items-center overflow-hidden rounded-lg border border-gray-300 dark:border-white/10"
         >
           {PLAYBACK_SPEEDS.map((s) => (
-            <ToggleButton key={s} value={s} sx={{ py: 0.25, px: 1 }}>
+            <button
+              key={s}
+              type="button"
+              onClick={() => playback.setSpeed(s)}
+              aria-pressed={speed === s}
+              className={`cursor-pointer border-none px-2 py-1 text-xs font-semibold transition-colors ${
+                speed === s
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5'
+              }`}
+            >
               {s}×
-            </ToggleButton>
+            </button>
           ))}
-        </ToggleButtonGroup>
-      </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
+        </div>
+      </div>
+      <div className="mt-0.5 flex items-center justify-between">
+        <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
           {fmtTime(startMs)}
-        </Typography>
-        <Typography
-          variant="caption"
-          fontWeight={600}
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
+        </span>
+        <span
+          className="text-xs font-semibold tabular-nums text-gray-800 dark:text-graydark-800"
           aria-live="polite"
           data-testid="playback-current"
-          title={fmtFull(cursorMs)}
+          title={fmtFull(cursorMs ?? startMs)}
         >
-          {fmtFull(cursorMs)}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
+          {fmtFull(cursorMs ?? startMs)}
+        </span>
+        <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
           {fmtTime(endMs)}
-        </Typography>
-      </Box>
-    </Box>
+        </span>
+      </div>
+    </div>
   );
 }

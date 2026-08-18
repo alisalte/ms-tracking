@@ -1,16 +1,30 @@
+/**
+ * Phase 4 — Fleet Dashboard tests (TailAdmin rebuild).
+ *
+ * Covers: full rendering with real query shapes, KPI values (summary stats,
+ * movement counts derived from the map join, active alarms/devices), loading
+ * skeletons, empty states, per-section error states with retry, the map
+ * preview (marker creation + legend + error), fleet-health metrics, activity
+ * chart wiring, and permission behavior (the dashboard is ungated — must
+ * render identically regardless of the principal's permissions).
+ *
+ * API modules and maplibre are mocked — no backend required.
+ */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DashboardGrid } from '@/components/dashboard/DashboardGrid';
+import { useAuthStore } from '@/auth/auth.store';
+import { FleetDashboard } from '@/components/dashboard/FleetDashboard';
 import type { FleetAlert, FleetStats, MapVehicle } from '@/types/fleet.types';
 
 import { i18n } from '@/i18n';
 
-// ── REAL Sprint E shapes (fleet.types.ts) — no deltas/sparklines to fake. ────
+// ── Fixtures (REAL Sprint E shapes) ─────────────────────────────────────────
+
 const statsFixture: FleetStats = {
   totalVehicles: 312,
   online: 184,
@@ -28,7 +42,7 @@ const alertsFixture: FleetAlert[] = [
     severity: 'critical',
     vehicleLabel: 'Truck-42',
     detail: '128 km/h',
-    occurredAt: '2026-08-07T14:31:00Z',
+    occurredAt: new Date(Date.now() - 5 * 60_000).toISOString(),
   },
   {
     id: 'a2',
@@ -36,7 +50,15 @@ const alertsFixture: FleetAlert[] = [
     severity: 'warning',
     vehicleLabel: 'Truck-19',
     detail: 'Exited Depot-N',
-    occurredAt: '2026-08-07T13:52:00Z',
+    occurredAt: new Date(Date.now() - 90 * 60_000).toISOString(),
+  },
+  {
+    id: 'a3',
+    type: 'idle',
+    severity: 'info',
+    vehicleLabel: 'Van-7',
+    detail: 'Idling 22 min',
+    occurredAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
   },
 ];
 
@@ -52,221 +74,335 @@ const mapVehiclesFixture: MapVehicle[] = [
     deviceId: 'dev-1',
     presence: 'ONLINE',
     lastSeenAt: '2026-08-07T14:30:00Z',
+    updatedAt: '2026-08-07T14:30:00Z',
   },
   {
     id: 'mv2',
     label: 'VAN-101',
-    state: 'offline',
+    state: 'idle',
     lat: 35.71,
     lng: 51.33,
     heading: 0,
     speed: 0,
     deviceId: 'dev-2',
+    presence: 'ONLINE',
+    lastSeenAt: '2026-08-07T14:29:00Z',
+    updatedAt: '2026-08-07T14:29:00Z',
+  },
+  {
+    id: 'mv3',
+    label: 'BUS-200',
+    state: 'stopped',
+    lat: 35.7,
+    lng: 51.35,
+    heading: 0,
+    speed: 0,
+    deviceId: 'dev-3',
+    presence: 'ONLINE',
+    lastSeenAt: '2026-08-07T14:25:00Z',
+    updatedAt: '2026-08-07T14:25:00Z',
+  },
+  {
+    id: 'mv4',
+    label: 'TRK-999',
+    state: 'offline',
+    lat: 35.69,
+    lng: 51.32,
+    heading: 0,
+    speed: 0,
+    deviceId: 'dev-4',
     presence: 'OFFLINE',
-    lastSeenAt: '2026-08-07T08:00:00Z',
+    lastSeenAt: '2026-08-06T09:00:00Z',
+    // no updatedAt — never reported → excluded from the GPS-reporting meter
   },
 ];
 
-// ── Mock the API layer: the grid is a pure consumer of these hooks. ─────────
-const mockUseFleetStats = vi.fn();
-const mockUseActiveAlarms = vi.fn();
-const mockUseMapVehicles = vi.fn();
-vi.mock('@/api/fleet.api', () => ({
-  useFleetStats: () => mockUseFleetStats(),
-  useActiveAlarms: () => mockUseActiveAlarms(),
-  useMapVehicles: () => mockUseMapVehicles(),
+const deviceStatusesFixture = [
+  { deviceId: 'dev-1', state: 'ONLINE' as const, lastSeenAt: '2026-08-07T14:30:00Z' },
+  { deviceId: 'dev-2', state: 'ONLINE' as const, lastSeenAt: '2026-08-07T14:29:00Z' },
+  { deviceId: 'dev-3', state: 'ONLINE' as const, lastSeenAt: '2026-08-07T14:25:00Z' },
+  { deviceId: 'dev-4', state: 'OFFLINE' as const, lastSeenAt: '2026-08-06T09:00:00Z' },
+  { deviceId: 'dev-5', state: 'STALE' as const, lastSeenAt: '2026-08-06T20:00:00Z' },
+];
+
+// ── Mocks ───────────────────────────────────────────────────────────────────
+
+const fleetApi = vi.hoisted(() => ({
+  useFleetStats: vi.fn(),
+  useMapVehicles: vi.fn(),
+  useActiveAlarms: vi.fn(),
+  useDeviceStatuses: vi.fn(),
 }));
 
-// maplibre-gl needs WebGL which jsdom cannot provide — stub it out so the
-// FleetMapPreview widget mounts without crashing.
+vi.mock('@/api/fleet.api', () => fleetApi);
+
+const maplibre = vi.hoisted(() => ({ Marker: vi.fn() }));
+
 vi.mock('maplibre-gl', () => {
+  maplibre.Marker = vi.fn().mockImplementation(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    setPopup: vi.fn().mockReturnThis(),
+    addTo: vi.fn(),
+    remove: vi.fn(),
+  }));
   return {
-    Map: class {
-      on() {}
-      once() {}
-      loaded() {
-        return true;
-      }
-      addControl() {}
-      remove() {}
-      getCanvas() {
-        return document.createElement('canvas');
-      }
-    },
-    Marker: class {
-      setLngLat() {
-        return this;
-      }
-      setPopup() {
-        return this;
-      }
-      addTo() {
-        return this;
-      }
-      remove() {}
-    },
-    Popup: class {
-      setHTML() {
-        return this;
-      }
-    },
+    Map: vi.fn().mockImplementation(() => ({
+      loaded: () => true,
+      once: (_e: string, cb: () => void) => cb(),
+      on: vi.fn(),
+      remove: vi.fn(),
+    })),
+    Marker: maplibre.Marker,
+    Popup: vi.fn().mockImplementation(() => ({ setHTML: vi.fn().mockReturnThis() })),
   };
 });
 
-// echarts renders to canvas — stub the widget so jsdom doesn't choke.
+// ECharts renders SVG — stub the wrapper (its theming has its own coverage).
 vi.mock('@/components/dashboard/EChart', () => ({
-  EChart: () => createElement('div', { 'data-testid': 'echart-stub' }),
+  EChart: (props: { option: unknown; height: number }) =>
+    createElement('div', { 'data-testid': 'echart', 'data-height': props.height }),
 }));
 
-/**
- * Build a fresh QueryClient per test so caches don't leak between cases.
- * `retry: false` so a rejected query never muddies the assertions.
- */
 function makeClient() {
-  return new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
+}
+
+function setQueryResults() {
+  fleetApi.useFleetStats.mockReturnValue({
+    data: statsFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  fleetApi.useMapVehicles.mockReturnValue({
+    data: mapVehiclesFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  fleetApi.useActiveAlarms.mockReturnValue({
+    data: alertsFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  fleetApi.useDeviceStatuses.mockReturnValue({
+    data: deviceStatusesFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
   });
 }
 
-/** Render the grid wrapped in the providers it needs (router + i18n + query). */
 function renderDashboard() {
-  const client = makeClient();
   return render(
     createElement(
       QueryClientProvider,
-      { client },
+      { client: makeClient() },
       createElement(
         I18nextProvider,
         { i18n },
-        createElement(
-          MemoryRouter,
-          { initialEntries: ['/dashboard'] },
-          createElement(DashboardGrid),
-        ),
+        createElement(MemoryRouter, {}, createElement(FleetDashboard)),
       ),
     ),
   );
 }
 
-describe('DashboardGrid', () => {
-  beforeEach(async () => {
-    // Ensure a deterministic language for the assertions.
-    await i18n.changeLanguage('en');
-    mockUseFleetStats.mockReturnValue({ data: statsFixture, isLoading: false });
-    mockUseActiveAlarms.mockReturnValue({
-      data: alertsFixture,
+beforeEach(() => {
+  vi.clearAllMocks();
+  setQueryResults();
+  useAuthStore.setState({
+    user: {
+      id: 'u1',
+      email: 'op@fleet.test',
+      tenantId: 't1',
+      roles: ['operator'],
+      permissions: [],
+    },
+  });
+});
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+describe('FleetDashboard — rendering + KPIs', () => {
+  it('renders the title, subtitle, and live badges', () => {
+    renderDashboard();
+    expect(screen.getByText('Fleet Dashboard')).toBeTruthy();
+    expect(screen.getByText('Live operational overview')).toBeTruthy();
+    // Header + Recent Events both carry a live badge.
+    expect(screen.getAllByText('Live').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('renders KPI values from the real query shapes', () => {
+    renderDashboard();
+    // KPI labels are the only <p> elements with these texts.
+    expect(
+      screen.getByText('Total Vehicles', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('312');
+    expect(screen.getByText('Moving', { selector: 'p' }).parentElement?.textContent).toContain('1');
+    expect(screen.getByText('Idle', { selector: 'p' }).parentElement?.textContent).toContain('1');
+    expect(screen.getByText('Parked', { selector: 'p' }).parentElement?.textContent).toContain('1');
+    expect(screen.getByText('Offline', { selector: 'p' }).parentElement?.textContent).toContain(
+      '87',
+    );
+    expect(
+      screen.getByText('Active Alarms', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('3');
+    expect(
+      screen.getByText('Active Devices', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('3');
+  });
+
+  it('shows skeletons instead of values while the summary is loading', () => {
+    fleetApi.useFleetStats.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderDashboard();
+    expect(screen.getByText('Total Vehicles')).toBeTruthy();
+    expect(screen.queryByText('312')).toBeNull();
+  });
+
+  it('shows an error state with retry when the summary query fails', () => {
+    const refetch = vi.fn();
+    fleetApi.useFleetStats.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: Object.assign(new Error('summary down'), { status: 500 }),
+      refetch,
+    });
+    renderDashboard();
+    expect(screen.getByText('Something went wrong')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('FleetDashboard — activity + fleet health', () => {
+  it('renders the activity donut and health meters from the map join', () => {
+    renderDashboard();
+    // Two ECharts panels (activity donut + alert-type rose).
+    expect(screen.getAllByTestId('echart').length).toBeGreaterThanOrEqual(2);
+    // Health meters: connectivity 3/5 devices online; GPS 3/4 vehicles reporting.
+    expect(screen.getByText('Device connectivity').closest('div')?.textContent).toContain('3');
+    expect(screen.getByText('GPS reporting').closest('div')?.textContent).toContain('3');
+    const staleBox = screen.getByText('Stale positions').parentElement?.parentElement;
+    expect(staleBox?.querySelector('p')?.textContent).toBe('23');
+    const offlineBox = screen.getByText('Offline devices').parentElement?.parentElement;
+    expect(offlineBox?.querySelector('p')?.textContent).toBe('1');
+  });
+
+  it('renders honest error states when the map join fails (activity, health, map)', () => {
+    fleetApi.useMapVehicles.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: Object.assign(new Error('gps down'), { status: 0, name: 'NetworkError' }),
+      refetch: vi.fn(),
+    });
+    renderDashboard();
+    expect(screen.getAllByText('Connection error').length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('FleetDashboard — recent events + alarm summary', () => {
+  it('renders severity-sorted events with vehicle labels and summary chips', () => {
+    renderDashboard();
+    expect(screen.getByText('Recent Events')).toBeTruthy();
+    // The three fixture vehicles all appear in the feed (sorted critical-first).
+    expect(screen.getByText(/Truck-42/)).toBeTruthy();
+    expect(screen.getByText(/Truck-19/)).toBeTruthy();
+    // Severity summary chips (counts per severity).
+    expect(screen.getByText(/Critical: 1/i)).toBeTruthy();
+    expect(screen.getByText(/Warning: 1/i)).toBeTruthy();
+  });
+
+  it('links View all to alarm management (/alarms)', () => {
+    renderDashboard();
+    expect(
+      screen
+        .getByText(/View all/i)
+        .closest('a')
+        ?.getAttribute('href'),
+    ).toBe('/alarms');
+  });
+
+  it('shows the empty state when there are no alarms', () => {
+    fleetApi.useActiveAlarms.mockReturnValue({
+      data: [],
       isLoading: false,
       isError: false,
-    });
-    mockUseMapVehicles.mockReturnValue({ data: mapVehiclesFixture, isLoading: false });
-  });
-
-  it('renders the header (title, subtitle, live badge, export)', async () => {
-    renderDashboard();
-
-    expect(await screen.findByText('Fleet Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Live operational overview')).toBeInTheDocument();
-    // "Live" appears on the header badge and on the real-time widgets.
-    expect(screen.getAllByText('Live').length).toBeGreaterThan(0);
-    expect(screen.getByText('Export')).toBeInTheDocument();
-  });
-
-  it('renders the §21 stat-card values (real FleetStats shape) + registry extras', async () => {
-    renderDashboard();
-
-    await waitFor(() => {
-      expect(screen.getByText('312')).toBeInTheDocument(); // totalVehicles
-      expect(screen.getByText('184')).toBeInTheDocument(); // online
-      expect(screen.getByText('87')).toBeInTheDocument(); // offline
-      expect(screen.getByText('23')).toBeInTheDocument(); // stale
-      expect(screen.getByText('18')).toBeInTheDocument(); // unknown
-    });
-    // Secondary registry cards from the same /summary payload.
-    expect(screen.getByText('Total Vehicles')).toBeInTheDocument();
-    expect(screen.getAllByText('Online').length).toBeGreaterThan(0); // stat card + map legend
-    expect(screen.getAllByText('Stale').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Unknown').length).toBeGreaterThan(0);
-    expect(screen.getByText('Fleets')).toBeInTheDocument();
-    expect(screen.getByText('6')).toBeInTheDocument(); // totalFleets
-    expect(screen.getByText('Devices')).toBeInTheDocument();
-    expect(screen.getByText('298')).toBeInTheDocument(); // totalDevices
-  });
-
-  it('renders the remaining widget titles (activity/utilization/weather removed)', async () => {
-    renderDashboard();
-    const titles = ['Active Alerts', 'Alert Types', 'Fleet Map'];
-    for (const title of titles) {
-      await waitFor(() => {
-        expect(screen.getAllByText(title).length).toBeGreaterThan(0);
-      });
-    }
-    // Backend-less widgets were removed — their titles must NOT render.
-    expect(screen.queryByText('Fleet Activity (24h)')).not.toBeInTheDocument();
-    expect(screen.queryByText('Fleet Utilization')).not.toBeInTheDocument();
-    expect(screen.queryByText('Weather')).not.toBeInTheDocument();
-    expect(screen.queryByText('Vehicles Needing Attention')).not.toBeInTheDocument();
-    expect(screen.queryByText('Top Vehicles by Distance')).not.toBeInTheDocument();
-  });
-
-  it('renders alert rows from the real active-alarms feed', async () => {
-    renderDashboard();
-    await waitFor(() => {
-      // Rows render "type · vehicleLabel" — match the vehicle within the row.
-      expect(screen.getByText(/Truck-42/)).toBeInTheDocument();
-      expect(screen.getByText(/Truck-19/)).toBeInTheDocument();
-    });
-  });
-
-  it('shows the map-preview presence legend (§18)', async () => {
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('Active Alerts')).toBeInTheDocument();
-    });
-    expect(screen.getAllByText('Stale').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Online').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Offline').length).toBeGreaterThan(0);
-  });
-
-  it('shows stat skeletons while the stats query loads', () => {
-    mockUseFleetStats.mockReturnValue({ data: undefined, isLoading: true });
-    renderDashboard();
-    expect(mockUseFleetStats).toHaveBeenCalled();
-    // No values rendered while loading.
-    expect(screen.queryByText('312')).not.toBeInTheDocument();
-  });
-
-  it('shows an error state with retry when the stats query fails', async () => {
-    mockUseFleetStats.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      isError: true,
-      error: new Error('summary unreachable'),
+      error: null,
       refetch: vi.fn(),
     });
     renderDashboard();
-    expect(await screen.findByText('Retry')).toBeInTheDocument();
-    expect(screen.queryByText('312')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/No active alerts/i).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('shows an honest error state when the alarm service is unreachable (§22)', async () => {
-    mockUseActiveAlarms.mockReturnValue({
+  it('shows error states when the alarm feed fails', () => {
+    fleetApi.useActiveAlarms.mockReturnValue({
       data: undefined,
       isLoading: false,
       isError: true,
-      error: new Error('notification-service unreachable'),
+      error: Object.assign(new Error('forbidden'), { status: 403 }),
       refetch: vi.fn(),
     });
     renderDashboard();
-    // Both alert widgets fall back to the error state — no fabricated rows.
-    expect((await screen.findAllByText('Retry')).length).toBe(2);
-    expect(screen.queryByText(/Truck-42/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Access denied').length).toBeGreaterThanOrEqual(2);
   });
+});
 
-  it('shows the empty state when there are no active alarms', async () => {
-    mockUseActiveAlarms.mockReturnValue({ data: [], isLoading: false, isError: false });
+describe('FleetDashboard — map preview', () => {
+  it('creates a marker per vehicle and renders the presence legend', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getAllByText('No active alerts — fleet is quiet.').length).toBe(2);
+      expect(maplibre.Marker).toHaveBeenCalledTimes(mapVehiclesFixture.length);
     });
+    // Legend pairs presence colors with labels (never color alone).
+    expect(screen.getByText('Stale', { selector: 'span' })).toBeTruthy();
+    expect(screen.getByText('Online', { selector: 'span' })).toBeTruthy();
+  });
+
+  it('renders empty states when the fleet has no vehicles', () => {
+    fleetApi.useMapVehicles.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderDashboard();
+    // Map preview + activity donut both show the honest empty placeholder.
+    expect(screen.getAllByText(/No active alerts/i).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('FleetDashboard — permission behavior', () => {
+  it('renders identically for an empty-permission principal and the wildcard admin', () => {
+    const { unmount } = renderDashboard();
+    expect(screen.getByText('Total Vehicles')).toBeTruthy();
+    unmount();
+
+    // The dashboard is deliberately ungated (Phase 1 R9): sections never hide
+    // behind permissions — the backend authorizes each query independently.
+    useAuthStore.setState({
+      user: {
+        id: 'u2',
+        email: 'admin@fleet.test',
+        tenantId: 't1',
+        roles: ['admin'],
+        permissions: ['*'],
+      },
+    });
+    renderDashboard();
+    expect(screen.getByText('Total Vehicles')).toBeTruthy();
   });
 });

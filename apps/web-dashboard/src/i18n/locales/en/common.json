@@ -43,7 +43,15 @@
       "invalidCredentials": "Invalid email or password",
       "networkError": "Unable to connect to server"
     },
-    "tenantIdHelp": "Your organization name (e.g. FleetVision)"
+    "tenantIdHelp": "Your organization name (e.g. FleetVision)",
+    "brandHeadline": "Enterprise Fleet Intelligence",
+    "brandSubline": "Real-time tracking, video telematics, maintenance, and compliance — unified in one calm, fast, secure dashboard.",
+    "brandPill": {
+      "fleet": "Fleet Tracking",
+      "map": "Live Map",
+      "video": "Video Wall",
+      "alerts": "Real-time Alerts"
+    }
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -61,7 +69,8 @@
     "admin": "Admin",
     "geofences": "Geofences",
     "commands": "Commands",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "events": "Events"
   },
   "common": {
     "search": "Search...",
@@ -81,6 +90,9 @@
     "close": "Close",
     "upcoming": "Coming soon",
     "searchPlanned": "Global search — coming soon",
+    "theme": "Theme",
+    "systemMode": "System",
+    "navigation": "Navigation",
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome back"
@@ -154,7 +166,11 @@
       "stale": "Stale",
       "unknown": "Unknown",
       "fleets": "Fleets",
-      "devices": "Devices"
+      "devices": "Devices",
+      "moving": "Moving",
+      "parked": "Parked",
+      "activeDevices": "Active Devices",
+      "activeAlarms": "Active Alarms"
     },
     "states": {
       "driving": "Driving",
@@ -241,6 +257,23 @@
       "totalDistance": "Distance Today",
       "fuelConsumed": "Fuel Consumed",
       "onlineDevices": "Online Devices"
+    },
+    "sections": {
+      "activity": "Vehicle Activity",
+      "health": "Fleet Health",
+      "events": "Recent Events"
+    },
+    "health": {
+      "connectivity": "Device connectivity",
+      "gpsReporting": "GPS reporting",
+      "gpsValue": "{{reported}} of {{total}} vehicles reporting",
+      "stalePositions": "Stale positions",
+      "offlineDevices": "Offline devices"
+    },
+    "severities": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "Info"
     }
   },
   "map": {
@@ -464,7 +497,8 @@
       "fullscreenWall": "Fullscreen wall",
       "simulateAlert": "Simulate alert",
       "loadWall": "Load wall…",
-      "saveWall": "Save wall"
+      "saveWall": "Save wall",
+      "divisions": "Grid layout"
     },
     "dock": {
       "title": "Cameras",
@@ -497,6 +531,40 @@
     "snapshot": {
       "saved": "Snapshot saved",
       "failed": "Snapshot failed — try again"
+    },
+    "tabs": {
+      "wall": "Wall",
+      "cameras": "Cameras",
+      "playback": "Playback"
+    },
+    "keyboardHint": "F: fullscreen · 1-6: layout",
+    "cameras": {
+      "title": "Cameras",
+      "empty": "No cameras found",
+      "emptyHelp": "Channels appear here as devices register with the media service.",
+      "camera": "Camera",
+      "channel": "Channel",
+      "vehicle": "Vehicle / Site",
+      "status": "Status",
+      "stream": "Stream",
+      "online": "Online",
+      "offline": "Offline",
+      "noConsent": "No consent",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "addToWall": "Add to wall"
+    },
+    "playback": {
+      "unavailableTitle": "Playback backend pending",
+      "unavailableBody": "The media service does not expose recording playback yet — the transport below is ready, and the stream area will light up when the endpoint ships. No simulated footage is ever rendered.",
+      "channel": "Camera / channel",
+      "load": "Load",
+      "noRecording": "No recording available for this window yet",
+      "selectFirst": "Select a camera and time window, then Load",
+      "timeline": "Playback timeline",
+      "playing": "Playing",
+      "rewind": "Back to start",
+      "window": "{{min}} min window"
     }
   },
   "notifications": {
@@ -1250,5 +1318,12 @@
     "maintenance": "Maintenance",
     "administration": "Administration",
     "main": "Main"
+  },
+  "events": {
+    "title": "Event Center",
+    "subtitle": "Fleet event timeline — what happened, when, and to which vehicle",
+    "search": "Search events…",
+    "empty": "No events yet",
+    "emptyHelp": "Fleet events will appear here as they happen."
   }
 }

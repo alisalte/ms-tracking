@@ -1,5 +1,5 @@
 /**
- * WallToolbar — the top control bar of the video wall.
+ * WallToolbar — the TailAdmin top control bar of the video wall (Phase 7).
  *
  * Renders the 6 HikCentral-style division presets (1/4/9/16/36/64), plus the
  * spotlight toggle, whole-wall fullscreen, round-robin rotation toggle, the
@@ -9,21 +9,9 @@
 import { AlertTriangle, LayoutGrid, Maximize, Pause, Pin, Play, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { IconButton, Tooltip } from '@/components/tailwind-ui';
 import type { VideoWall, WallDivision } from '@/types/video.types';
 import { WALL_DIVISIONS } from '@/types/video.types';
-import {
-  Box,
-  Button,
-  ButtonGroup,
-  Chip,
-  CircularProgress,
-  Divider,
-  IconButton,
-  MenuItem,
-  Select,
-  Tooltip,
-  Typography,
-} from '@mui/material';
 
 interface WallToolbarProps {
   /** Active division. */
@@ -78,127 +66,131 @@ export function WallToolbar({
   const { t } = useTranslation();
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        flexWrap: 'wrap',
-        px: 1.5,
-        py: 1,
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        backgroundColor: 'background.paper',
-      }}
-    >
-      <Typography variant="h6" sx={{ fontSize: '1rem', mr: 1 }}>
-        {t('video.title')}
-      </Typography>
+    <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-graydark-300">
+      <h1 className="me-1 text-base font-bold text-gray-900 dark:text-white">{t('video.title')}</h1>
 
       {/* Division presets */}
-      <ButtonGroup size="small" variant="outlined">
+      <fieldset
+        aria-label={t('video.toolbar.divisions', { defaultValue: 'Grid layout' })}
+        className="flex items-center overflow-hidden rounded-lg border border-gray-300 dark:border-white/10"
+      >
         {WALL_DIVISIONS.map((d) => (
-          <Button
+          <button
             key={d}
+            type="button"
             onClick={() => onDivisionChange(d)}
-            variant={division === d ? 'contained' : 'outlined'}
-            sx={{ minWidth: 44, fontWeight: 600 }}
+            aria-pressed={division === d}
+            className={`min-w-11 cursor-pointer border-none px-2 py-1.5 text-sm font-semibold transition-colors ${
+              division === d
+                ? 'bg-brand-500 text-white'
+                : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5'
+            }`}
           >
             {d}
-          </Button>
+          </button>
         ))}
-      </ButtonGroup>
+      </fieldset>
 
-      <Chip
-        size="small"
-        icon={<LayoutGrid size={14} />}
-        label={`${liveCount} / ${assignedCount} ${t('video.toolbar.live')}`}
-        variant="outlined"
-        sx={{ height: 24 }}
-      />
+      {/* Live-cap indicator */}
+      <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-gray-300 px-2.5 text-xs font-semibold text-gray-600 dark:border-white/10 dark:text-graydark-700">
+        <LayoutGrid size={13} aria-hidden />
+        {liveCount} / {assignedCount} {t('video.toolbar.live')}
+      </span>
       {assignedCount > maxLive && (
-        <Tooltip title={`${t('video.toolbar.capHelp')} ${maxLive}`}>
-          <Chip
-            size="small"
-            label={`${maxLive} ${t('video.toolbar.cap')}`}
-            color="warning"
-            variant="outlined"
-            sx={{ height: 24 }}
-          />
+        <Tooltip label={`${t('video.toolbar.capHelp')} ${maxLive}`}>
+          <span className="inline-flex h-6 items-center rounded-full border border-warning-200 bg-warning-50 px-2.5 text-xs font-semibold text-warning-700 dark:border-warning-500/20 dark:bg-warning-500/10 dark:text-warning-400">
+            {maxLive} {t('video.toolbar.cap')}
+          </span>
         </Tooltip>
       )}
 
-      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+      <div className="mx-0.5 h-6 w-px bg-gray-200 dark:bg-white/10" />
 
       {/* Spotlight */}
-      <Tooltip title={t('video.toolbar.spotlight')}>
+      <Tooltip label={t('video.toolbar.spotlight')}>
         <IconButton
-          size="small"
-          color={spotlightSlot !== null ? 'primary' : 'default'}
+          size="sm"
+          variant={spotlightSlot !== null ? 'solid' : 'ghost'}
+          aria-label={t('video.toolbar.spotlight')}
+          aria-pressed={spotlightSlot !== null}
           onClick={onToggleSpotlight}
         >
-          <Pin size={18} fill={spotlightSlot !== null ? 'currentColor' : 'none'} />
+          <Pin size={17} fill={spotlightSlot !== null ? 'currentColor' : 'none'} />
         </IconButton>
       </Tooltip>
 
       {/* Rotation toggle */}
       <Tooltip
-        title={rotationOn ? t('video.toolbar.pauseRotation') : t('video.toolbar.resumeRotation')}
+        label={rotationOn ? t('video.toolbar.pauseRotation') : t('video.toolbar.resumeRotation')}
       >
         <IconButton
-          size="small"
+          size="sm"
+          variant={rotationOn ? 'solid' : 'ghost'}
+          aria-label={
+            rotationOn ? t('video.toolbar.pauseRotation') : t('video.toolbar.resumeRotation')
+          }
+          aria-pressed={rotationOn}
           onClick={onToggleRotation}
-          color={rotationOn ? 'primary' : 'default'}
         >
-          {rotationOn ? <Pause size={18} /> : <Play size={18} />}
+          {rotationOn ? <Pause size={17} /> : <Play size={17} />}
         </IconButton>
       </Tooltip>
 
       {/* Fullscreen wall */}
-      <Tooltip title={t('video.toolbar.fullscreenWall')}>
-        <IconButton size="small" onClick={onFullscreenWall}>
-          <Maximize size={18} />
+      <Tooltip label={t('video.toolbar.fullscreenWall')}>
+        <IconButton
+          size="sm"
+          aria-label={t('video.toolbar.fullscreenWall')}
+          onClick={onFullscreenWall}
+        >
+          <Maximize size={17} />
         </IconButton>
       </Tooltip>
 
       {/* Simulate alert (demo) */}
-      <Tooltip title={t('video.toolbar.simulateAlert')}>
-        <IconButton size="small" color="warning" onClick={onSimulateAlert}>
-          <AlertTriangle size={18} />
+      <Tooltip label={t('video.toolbar.simulateAlert')}>
+        <IconButton
+          size="sm"
+          aria-label={t('video.toolbar.simulateAlert')}
+          onClick={onSimulateAlert}
+          className="text-warning-600 hover:bg-warning-50 dark:text-warning-400 dark:hover:bg-warning-500/10"
+        >
+          <AlertTriangle size={17} />
         </IconButton>
       </Tooltip>
 
-      <Box sx={{ flex: 1 }} />
+      <div className="min-w-0 flex-1" />
 
       {/* Saved walls */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <div className="flex items-center gap-1.5">
         {wallsLoading ? (
-          <CircularProgress size={16} />
+          <span className="text-xs text-gray-400 dark:text-graydark-600">
+            {t('common.loading')}
+          </span>
         ) : (
-          <Select
-            size="small"
+          <select
             value=""
-            displayEmpty
             onChange={(e) => {
               const w = walls?.find((x) => x.id === e.target.value);
               if (w) onLoadWall(w);
             }}
-            sx={{ height: 30, fontSize: '0.8rem', minWidth: 150 }}
-            renderValue={() => t('video.toolbar.loadWall')}
+            aria-label={t('video.toolbar.loadWall')}
+            className="h-8 cursor-pointer rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
           >
+            <option value="">{t('video.toolbar.loadWall')}</option>
             {(walls ?? []).map((w) => (
-              <MenuItem key={w.id} value={w.id}>
+              <option key={w.id} value={w.id}>
                 {w.name} ({w.division})
-              </MenuItem>
+              </option>
             ))}
-          </Select>
+          </select>
         )}
-        <Tooltip title={t('video.toolbar.saveWall')}>
-          <IconButton size="small" onClick={onSaveWall}>
+        <Tooltip label={t('video.toolbar.saveWall')}>
+          <IconButton size="sm" aria-label={t('video.toolbar.saveWall')} onClick={onSaveWall}>
             <Save size={16} />
           </IconButton>
         </Tooltip>
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

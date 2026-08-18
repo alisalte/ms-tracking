@@ -122,11 +122,10 @@ describe('AlarmCenterPage', () => {
     renderAlarms();
     await waitFor(() => expect(screen.getByText(mockAlarms[0].vehicleLabel)).toBeInTheDocument());
 
-    // Open the first filter dropdown (Type) and select "SOS / Panic".
+    // The Type filter is the first combobox (a native select since the
+    // Phase 6 TailAdmin port) — change by value.
     const typeSelect = screen.getAllByRole('combobox')[0];
-    fireEvent.mouseDown(typeSelect);
-    const sosOption = await screen.findByRole('option', { name: 'SOS / Panic' });
-    fireEvent.click(sosOption);
+    fireEvent.change(typeSelect, { target: { value: 'sos' } });
 
     // After filtering, only SOS alarms remain. A non-SOS alarm's vehicle
     // label disappears (the SOS dedup guarantees distinct labels for the test).
@@ -142,11 +141,8 @@ describe('AlarmCenterPage', () => {
     renderAlarms();
     await screen.findByText('Alarm Center');
 
-    // Click the timeline toggle (the Activity icon button).
-    const timelineBtn = screen
-      .getAllByRole('button')
-      .find((b) => b.getAttribute('value') === 'timeline');
-    if (timelineBtn) fireEvent.click(timelineBtn);
+    // Click the timeline view button (aria-label from alarms.views.timeline).
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
 
     // The timeline renders hour labels (HH:00). At least one is present.
     await waitFor(() => {
@@ -159,8 +155,7 @@ describe('AlarmCenterPage', () => {
     renderAlarms();
     await screen.findByText('Alarm Center');
 
-    const mapBtn = screen.getAllByRole('button').find((b) => b.getAttribute('value') === 'map');
-    if (mapBtn) fireEvent.click(mapBtn);
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
 
     // The map view is active: the list table header (column "Severity") is
     // gone, confirming we switched away from the list without crashing.

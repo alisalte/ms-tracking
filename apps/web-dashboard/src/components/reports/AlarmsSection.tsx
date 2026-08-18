@@ -1,18 +1,20 @@
 /**
- * AlarmsSection — the alarm report (Sprint J §12/§13): summary chips by
- * severity/status, severity filter, per-vehicle/type breakdown table with a
- * View Alarm link into the existing alarms page (§39), CSV export. Alarm
- * counts come from the alarm engine's records only (§63).
+ * AlarmsSection — the TailAdmin alarm report (Sprint J §12/§13, Phase 8
+ * port): summary chips by severity/status, severity filter, per-vehicle/type
+ * breakdown table with a View Alarm link into the existing alarms page (§39),
+ * CSV export (backend blob, gated on report.export). Alarm counts come from
+ * the alarm engine's records only (§63).
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { exportReportCsv, useAlarmReport, type ReportRange } from '@/api/report.api';
 import { getApiErrorMessage } from '@/api/errors';
+import { type ReportRange, exportReportCsv, useAlarmReport } from '@/api/report.api';
+import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { DataTable, StatusBadge, type Column } from '@/components/ui';
-import { Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { Badge, Button } from '@/components/tailwind-ui';
 import { Bell, Download } from 'lucide-react';
 
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
@@ -31,16 +33,17 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
       id: 'severity',
       headerKey: 'reports.cols.severity',
       render: (r) => (
-        <StatusBadge
-          label={r.severity}
-          tone={
+        <Badge
+          color={
             r.severity === 'CRITICAL' || r.severity === 'HIGH'
               ? 'danger'
               : r.severity === 'MEDIUM'
                 ? 'warning'
-                : 'neutral'
+                : 'gray'
           }
-        />
+        >
+          {r.severity}
+        </Badge>
       ),
     },
     { id: 'total', headerKey: 'reports.cols.total', render: (r) => String(r.total) },
@@ -51,19 +54,14 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
       id: 'actions',
       header: '',
       render: () => (
-        <Button
-          size="small"
-          startIcon={<Bell size={13} />}
-          component="a"
+        <a
           href="/alarms"
-          onClick={(e) => {
-            e.preventDefault();
-            window.location.href = '/alarms';
-          }}
           data-testid="report-alarm-view"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 text-xs font-medium text-gray-700 no-underline transition-colors hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5"
         >
+          <Bell size={13} aria-hidden />
           {t('reports.viewAlarm')}
-        </Button>
+        </a>
       ),
     },
   ];
@@ -81,53 +79,53 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
   };
 
   return (
-    <Stack gap={1}>
-      <Stack direction="row" gap={0.5} flexWrap="wrap" alignItems="center">
-        <Chip size="small" label={`${t('reports.kpi.alarms')}: ${q.data?.summary.total ?? 0}`} />
-        <Chip size="small" color="error" label={`${t('reports.kpi.open')}: ${q.data?.summary.open ?? 0}`} />
+    <div className="flex flex-col gap-2">
+      {/* Summary chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge color="gray">{`${t('reports.kpi.alarms')}: ${q.data?.summary.total ?? 0}`}</Badge>
+        <Badge color="danger">{`${t('reports.kpi.open')}: ${q.data?.summary.open ?? 0}`}</Badge>
         {SEVERITIES.map((s) => (
-          <Chip
-            key={s}
-            size="small"
-            variant="outlined"
-            label={`${s}: ${(q.data?.summary as unknown as Record<string, number>)?.[s.toLowerCase()] ?? 0}`}
-          />
+          <Badge key={s} color="gray">
+            {`${s}: ${(q.data?.summary as unknown as Record<string, number>)?.[s.toLowerCase()] ?? 0}`}
+          </Badge>
         ))}
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} justifyContent="space-between" alignItems={{ sm: 'center' }}>
-        <TextField
-          size="small"
-          select
-          label={t('reports.filters.severity')}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <select
           value={severity}
           onChange={(e) => setSeverity(e.target.value)}
-          sx={{ minWidth: 160 }}
-          slotProps={{ htmlInput: { 'aria-label': t('reports.filters.severity') } }}
+          aria-label={t('reports.filters.severity')}
           data-testid="report-severity-filter"
+          className="h-9 min-w-40 cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
         >
-          <MenuItem value="">{t('reports.filters.allSeverities')}</MenuItem>
+          <option value="">{t('reports.filters.allSeverities')}</option>
           {SEVERITIES.map((s) => (
-            <MenuItem key={s} value={s}>
+            <option key={s} value={s}>
               {s}
-            </MenuItem>
+            </option>
           ))}
-        </TextField>
-        <Button
-          size="small"
-          startIcon={<Download size={14} />}
-          onClick={doExport}
-          disabled={exporting || q.isLoading}
-          data-testid="report-export-alarms"
-        >
-          {exporting ? t('reports.export.exporting') : t('reports.export.csv')}
-        </Button>
-      </Stack>
+        </select>
+        <PermissionGate requires={PERMISSIONS.reportExport}>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Download size={14} />}
+            onClick={doExport}
+            disabled={exporting || q.isLoading}
+            data-testid="report-export-alarms"
+          >
+            {exporting ? t('reports.export.exporting') : t('reports.export.csv')}
+          </Button>
+        </PermissionGate>
+      </div>
       {q.isLoading ? (
-        <Typography color="text.secondary">{t('common.loading')}</Typography>
+        <div className="py-2 text-sm text-gray-500 dark:text-graydark-600">
+          {t('common.loading')}
+        </div>
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <DataTable
+        <ReportsTable
           columns={columns}
           rows={q.data?.items ?? []}
           rowKey={(r) => `${r.vehicleId ?? 'none'}-${r.type}-${r.severity}`}
@@ -135,6 +133,6 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
           dense
         />
       )}
-    </Stack>
+    </div>
   );
 }

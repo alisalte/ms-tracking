@@ -10,21 +10,32 @@ import { getRtlCache } from './rtl';
 import { fontStackFor, lightTheme } from './theme';
 
 type ColorMode = 'light' | 'dark';
+/** What the user chose — 'system' resolves against the OS preference. */
+type ThemePreference = ColorMode | 'system';
 
 interface ThemeContextValue {
+  /** RESOLVED color mode ('light' | 'dark') — never 'system'. */
   mode: ColorMode;
+  /** The stored user preference (may be 'system'). */
+  preference: ThemePreference;
   toggleColorMode: () => void;
   setColorMode: (mode: ColorMode) => void;
+  /** Set the preference explicitly ('light' | 'dark' | 'system'). */
+  setPreference: (pref: ThemePreference) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
   mode: 'light',
+  preference: 'light',
   toggleColorMode: () => {},
   setColorMode: () => {},
+  setPreference: () => {},
 });
 
 /**
  * Hook to access the theme context — allows toggling between light/dark mode.
+ * `mode` is the resolved mode (system included); `preference` is what the user
+ * picked in the theme switcher.
  */
 export function useThemeContext(): ThemeContextValue {
   return useContext(ThemeContext);
@@ -34,16 +45,25 @@ export function useThemeContext(): ThemeContextValue {
 const THEME_STORAGE_KEY = 'fleetvision_theme_mode';
 
 /**
- * Detect the initial color mode:
- * 1. User's persisted preference (localStorage)
- * 2. Fallback to "light" — the Limitless Layout 1 reference is a light UI
- *    (light navbar, #f5f5f5 content, white cards). Dark mode remains fully
- *    supported via the toggle. (v3 redesign.)
+ * Detect the initial preference:
+ * 1. User's persisted preference (localStorage) — 'light' | 'dark' | 'system'
+ * 2. Fallback to "light" — the reference UI is a light dashboard; dark mode
+ *    remains fully supported via the switcher.
  */
-function getInitialMode(): ColorMode {
+function getInitialPreference(): ThemePreference {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === 'dark' || stored === 'light') return stored;
+  if (stored === 'dark' || stored === 'light' || stored === 'system') return stored;
   return 'light';
+}
+
+/** Does the OS prefer dark? Safe in non-DOM/test environments (defaults light). */
+function systemPrefersDark(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch {
+    return false;
+  }
 }
 
 interface ThemeRegistryProps {
@@ -62,10 +82,29 @@ interface ThemeRegistryProps {
  * `<html dir>` attribute.
  */
 export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
-  const [mode, setMode] = useState<ColorMode>(defaultMode ?? getInitialMode);
+  const [preference, setPreferenceState] = useState<ThemePreference>(
+    defaultMode ?? getInitialPreference,
+  );
+  const [systemDark, setSystemDark] = useState<boolean>(systemPrefersDark);
   const { i18n } = useTranslation();
   const language = i18n.language;
   const direction = isRTL(language) ? 'rtl' : 'ltr';
+
+  // Follow the OS color scheme while the preference is 'system' (Phase 2:
+  // light / dark / system with persistence). Safe no-op where matchMedia is
+  // unavailable (jsdom without a mock, SSR).
+  useEffect(() => {
+    if (preference !== 'system' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemDark(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    query.addEventListener?.('change', onChange);
+    return () => query.removeEventListener?.('change', onChange);
+  }, [preference]);
+
+  // Resolve the effective color mode: the explicit preference, or the OS
+  // scheme when the user chose 'system'.
+  const mode: ColorMode = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
 
   // Keep <html lang> and <html dir> in sync with the active language so the
   // browser, screen readers, and any non-MUI markup honor the text direction.
@@ -100,19 +139,24 @@ export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
   const themeContextValue = useMemo(
     (): ThemeContextValue => ({
       mode,
+      preference,
       toggleColorMode: () => {
-        setMode((prev) => {
-          const next = prev === 'light' ? 'dark' : 'light';
-          localStorage.setItem(THEME_STORAGE_KEY, next);
-          return next;
-        });
+        // Toggling pins the theme to the explicit opposite of the RESOLVED
+        // mode (so toggling out of "system: dark" lands on explicit light).
+        const next: ColorMode = mode === 'light' ? 'dark' : 'light';
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+        setPreferenceState(next);
       },
       setColorMode: (newMode: ColorMode) => {
         localStorage.setItem(THEME_STORAGE_KEY, newMode);
-        setMode(newMode);
+        setPreferenceState(newMode);
+      },
+      setPreference: (pref: ThemePreference) => {
+        localStorage.setItem(THEME_STORAGE_KEY, pref);
+        setPreferenceState(pref);
       },
     }),
-    [mode],
+    [mode, preference],
   );
 
   return (

@@ -1,166 +1,79 @@
-import { Box, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { Activity, Camera, MapPin, ShieldCheck, Truck } from 'lucide-react';
+import { Activity, Camera, MapPin, Truck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
 
+import { Brand } from '@/components/branding/Brand';
+
 /**
- * AuthLayout — branded split-panel shell for unauthenticated pages.
+ * AuthLayout — TailAdmin split-panel shell for unauthenticated pages.
  *
- * v3 (Limitless-inspired): keeps the FleetVision branded side panel (navy
- * gradient + feature pills) but the form panel now reads as Limitless — clean
- * light surface, 3px cards. On mobile it collapses to a centered card. RTL-safe.
+ * Left: branded dark panel (brand gradient, headline, feature pills) — hidden
+ * below `md`. Right: centered form column (max 420px) hosting the public auth
+ * routes. RTL-safe via logical utilities. The form pages themselves (register,
+ * forgot/reset, MFA) still use MUI internally during the gradual migration —
+ * they render unchanged inside this Tailwind chrome.
  */
 export function AuthLayout() {
-  const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const { t } = useTranslation();
 
-  if (!isDesktop) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          backgroundColor: 'background.default',
-          p: 2,
-        }}
-      >
-        <Outlet />
-      </Box>
-    );
-  }
+  const features = [
+    { icon: Truck, key: 'fleet' },
+    { icon: MapPin, key: 'map' },
+    { icon: Camera, key: 'video' },
+    { icon: Activity, key: 'alerts' },
+  ] as const;
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* ── Branded panel ── */}
-      <Box
-        sx={{
-          flex: 1.1,
-          display: { xs: 'none', md: 'flex' },
-          flexDirection: 'column',
-          justifyContent: 'center',
-          p: 8,
-          position: 'relative',
-          overflow: 'hidden',
-          background: 'linear-gradient(160deg, #1A2733 0%, #263238 45%, #37474F 100%)',
-        }}
-      >
-        {/* Decorative radial glow */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: '-12%',
-            insetInlineEnd: '-8%',
-            width: 420,
-            height: 420,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(33,150,243,0.22) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }}
+    <div className="flex min-h-screen bg-gray-50 dark:bg-graydark-200">
+      {/* ── Branded panel (desktop) ── */}
+      <div className="relative hidden flex-1 items-center overflow-hidden bg-gradient-to-br from-[#1A2733] via-[#263238] to-[#37474F] p-10 md:flex lg:p-14">
+        {/* Decorative glows */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-[12%] -end-[8%] size-[420px] rounded-full bg-[radial-gradient(circle,rgba(70,95,251,0.22)_0%,transparent_70%)]"
         />
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: '-12%',
-            insetInlineStart: '-8%',
-            width: 360,
-            height: 360,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(63,81,181,0.18) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-[12%] -start-[8%] size-[360px] rounded-full bg-[radial-gradient(circle,rgba(129,153,253,0.18)_0%,transparent_70%)]"
         />
 
-        <Stack spacing={4} sx={{ maxWidth: 440, position: 'relative', zIndex: 1 }}>
-          {/* Logo */}
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 44,
-                height: 44,
-                borderRadius: 1,
-                background: 'linear-gradient(135deg, #2196F3 0%, #3F51B5 100%)',
-                boxShadow: '0 8px 24px rgba(33,150,243,0.4)',
-              }}
-            >
-              <ShieldCheck size={24} color="#fff" />
-            </Box>
-            <Typography variant="h4" fontWeight={700} sx={{ color: '#FFFFFF' }}>
-              FleetVision
-            </Typography>
-          </Stack>
+        <div className="relative z-10 max-w-md">
+          <Brand size="lg" className="mb-8" />
 
-          {/* Headline */}
-          <Box>
-            <Typography
-              sx={{
-                color: '#FFFFFF',
-                lineHeight: 1.2,
-                fontSize: '1.75rem',
-                fontWeight: 700,
-                mb: 1.5,
-              }}
-            >
-              Enterprise Fleet Intelligence
-            </Typography>
-            <Typography
-              sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', lineHeight: 1.7 }}
-            >
-              Real-time tracking, video telematics, maintenance, and compliance — unified in one
-              calm, fast, secure dashboard.
-            </Typography>
-          </Box>
+          <h1 className="text-3xl leading-tight font-bold text-white">
+            {t('auth.brandHeadline', 'Enterprise Fleet Intelligence')}
+          </h1>
+          <p className="mt-3 text-[0.95rem] leading-7 text-white/70">
+            {t(
+              'auth.brandSubline',
+              'Real-time tracking, video telematics, maintenance, and compliance — unified in one calm, fast, secure dashboard.',
+            )}
+          </p>
 
-          {/* Feature pills */}
-          <Stack direction="row" gap={1.5} sx={{ flexWrap: 'wrap', mt: 2 }}>
-            {[
-              { icon: Truck, label: 'Fleet Tracking' },
-              { icon: MapPin, label: 'Live Map' },
-              { icon: Camera, label: 'Video Wall' },
-              { icon: Activity, label: 'Real-time Alerts' },
-            ].map(({ icon: Icon, label }) => (
-              <Stack
-                key={label}
-                direction="row"
-                alignItems="center"
-                gap={0.75}
-                sx={{
-                  px: 1.5,
-                  py: 1,
-                  borderRadius: 99,
-                  backgroundColor: 'rgba(33,150,243,0.14)',
-                  border: '1px solid rgba(33,150,243,0.28)',
-                }}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {features.map(({ icon: Icon, key }) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-500/15 px-3 py-1.5 text-xs font-medium text-gray-100"
               >
-                <Icon size={15} color="#64B5F6" />
-                <Typography variant="caption" sx={{ color: '#ECEFF1', fontWeight: 500 }}>
-                  {label}
-                </Typography>
-              </Stack>
+                <Icon size={14} className="text-brand-300" aria-hidden />
+                {t(`auth.brandPill.${key}`)}
+              </span>
             ))}
-          </Stack>
-        </Stack>
-      </Box>
+          </div>
+        </div>
+      </div>
 
       {/* ── Form panel ── */}
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          p: 4,
-          backgroundColor: 'background.default',
-        }}
-      >
-        <Box sx={{ animation: 'fv-fade-in 0.4s ease', width: '100%', maxWidth: 420 }}>
+      <div className="flex flex-1 items-center justify-center p-4 sm:p-8">
+        <div className="w-full max-w-[420px] animate-[fv-fade-in_0.4s_ease]">
+          {/* Mobile brand (panel hidden below md) */}
+          <div className="mb-6 flex justify-center md:hidden">
+            <Brand size="md" onDark={false} />
+          </div>
           <Outlet />
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 }

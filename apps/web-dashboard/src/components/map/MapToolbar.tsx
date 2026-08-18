@@ -1,20 +1,11 @@
-import {
-  Box,
-  Button,
-  IconButton,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { MenuItem, Select } from '@mui/material';
 import { Clock, Map as MapIcon, Pause, Play, Route, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { HISTORY_PRESETS, type HistoryPresetId } from '@/api/map.api';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
+import { Button, IconButton, Tooltip } from '@/components/tailwind-ui';
 
 /** Custom [from, to] ISO window (Sprint I §29 — date/time range). */
 export interface CustomRange {
@@ -62,15 +53,17 @@ function localInputToIso(value: string): string | null {
 }
 
 /**
- * MapToolbar — top overlay strip over the map.
+ * MapToolbar — TailAdmin top overlay strip over the map (Phase 5).
  *
  * Page title + live freshness badge + visible-of-total vehicle count + a
  * "pause live" toggle that freezes the map for inspection (§2.7). Sprint F
- * §20: a LIVE/HISTORY mode switch (history renders the selected vehicle's
- * real track for a bounded preset window) and a route-planner entry point.
- * Sprint I §29: history windows can be a CUSTOM from/to date-time range
- * (validated from < to, bounded by the backend's max range). Sprint I §38:
- * a map-matching toggle for history tracks (falls back to raw GPS + a chip).
+ * §20: a LIVE/HISTORY mode switch; Sprint I §29: custom from/to date-time
+ * range; Sprint I §38: map-matching toggle with graceful fallback.
+ *
+ * The history-preset selector deliberately stays an MUI `<Select>` — the e2e
+ * suite opens it with a real click and picks `role="option"` entries, a
+ * gesture native selects don't support in a real browser. Everything else is
+ * Tailwind.
  */
 export function MapToolbar({
   visibleCount,
@@ -115,72 +108,45 @@ export function MapToolbar({
   };
 
   return (
-    <Stack
-      direction="row"
-      alignItems="center"
-      justifyContent="space-between"
-      gap={1}
-      sx={{
-        position: 'absolute',
-        top: 8,
-        start: 8,
-        end: 8,
-        zIndex: 1,
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        backdropFilter: 'blur(6px)',
-        borderRadius: 1.5,
-        px: 1.5,
-        py: 0.75,
-        pointerEvents: 'auto',
-        boxShadow: '0px 1px 3px rgba(0,0,0,0.08)',
-        flexWrap: 'wrap',
-      }}
-    >
-      <Stack direction="row" alignItems="center" gap={1}>
-        <Typography variant="subtitle1" fontWeight={700}>
-          {t('map.title')}
-        </Typography>
+    <div className="pointer-events-auto absolute top-2 start-2 end-2 z-[1] flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-md dark:bg-graydark-300/90">
+      <div className="flex items-center gap-2">
+        <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('map.title')}</h1>
         {mode === 'live' && paused ? (
-          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          <span className="text-xs font-semibold text-gray-500 dark:text-graydark-600">
             {t('map.paused')}
-          </Typography>
+          </span>
         ) : mode === 'live' ? (
           <LiveBadge />
         ) : (
-          <Typography
-            variant="caption"
-            fontWeight={600}
-            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-          >
-            <Clock size={13} />
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-graydark-700">
+            <Clock size={13} aria-hidden />
             {t('map.history.mode')}
-          </Typography>
+          </span>
         )}
-      </Stack>
+      </div>
 
-      <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
+      <div className="flex flex-wrap items-center gap-2">
         {/* §20 LIVE/HISTORY mode switch. */}
-        <Stack direction="row" alignItems="center" gap={0.5}>
+        <div className="flex items-center gap-1">
           <IconButton
-            size="small"
+            size="sm"
+            variant="outline"
             onClick={() => onModeChange('live')}
             aria-label={t('map.history.liveMode')}
             aria-pressed={mode === 'live'}
-            sx={{ border: 1, borderColor: 'divider' }}
           >
-            <Box component={MapIcon} size={16} />
+            <MapIcon size={15} />
           </IconButton>
           <IconButton
-            size="small"
+            size="sm"
+            variant="outline"
             onClick={() => onModeChange('history')}
             aria-label={t('map.history.historyMode')}
             aria-pressed={mode === 'history'}
-            disabled={false}
-            sx={{ border: 1, borderColor: 'divider' }}
           >
-            <Box component={Clock} size={16} />
+            <Clock size={15} />
           </IconButton>
-        </Stack>
+        </div>
 
         {/* History window: presets OR custom from/to (Sprint I §29). */}
         {mode === 'history' && (
@@ -201,89 +167,79 @@ export function MapToolbar({
           </Select>
         )}
         {mode === 'history' && historyPreset === 'custom' && (
-          <Stack direction="row" alignItems="center" gap={0.5}>
-            <TextField
+          <div className="flex items-center gap-1.5">
+            <input
               type="datetime-local"
-              size="small"
               value={fromInput}
               onChange={(e) => setFromInput(e.target.value)}
               aria-label={t('map.history.from')}
-              slotProps={{ htmlInput: { 'aria-label': t('map.history.from') } }}
-              sx={{ width: 205, '& input': { py: 0.5, fontSize: 13 } }}
+              className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
             />
-            <Typography variant="caption">→</Typography>
-            <TextField
+            <span className="text-xs text-gray-400">→</span>
+            <input
               type="datetime-local"
-              size="small"
               value={toInput}
               onChange={(e) => setToInput(e.target.value)}
               aria-label={t('map.history.to')}
-              slotProps={{ htmlInput: { 'aria-label': t('map.history.to') } }}
-              sx={{ width: 205, '& input': { py: 0.5, fontSize: 13 } }}
+              className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
             />
             <Button
-              size="small"
-              variant="contained"
+              size="sm"
               onClick={applyCustomRange}
               data-testid="history-load"
               aria-label={t('map.history.load')}
             >
               {t('map.history.load')}
             </Button>
-          </Stack>
+          </div>
         )}
         {mode === 'history' && !hasSelection && (
-          <Typography variant="caption" color="warning.main">
+          <span className="text-xs font-medium text-warning-600 dark:text-warning-400">
             {t('map.history.selectVehicle')}
-          </Typography>
+          </span>
         )}
 
         {/* Sprint I §38 — map-matching toggle (graceful fallback to raw). */}
         {mode === 'history' && (
-          <Tooltip title={t('map.matching.tooltip')}>
+          <Tooltip label={t('map.matching.tooltip')}>
             <Button
-              size="small"
-              variant={mapMatching ? 'contained' : 'outlined'}
+              size="sm"
+              variant={mapMatching ? 'primary' : 'outline'}
               onClick={() => onMapMatchingChange(!mapMatching)}
               aria-pressed={mapMatching}
               data-testid="map-matching-toggle"
-              sx={{ textTransform: 'none' }}
             >
               {t('map.matching.toggle')}
             </Button>
           </Tooltip>
         )}
 
-        <Stack direction="row" alignItems="center" gap={0.5}>
-          <Users size={15} color="var(--mui-palette-text-secondary)" />
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontVariantNumeric: 'tabular-nums' }}
-          >
+        <div className="flex items-center gap-1.5">
+          <Users size={15} aria-hidden className="text-gray-400 dark:text-graydark-600" />
+          <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
             {t('map.fleet', { shown: visibleCount, total })}
-          </Typography>
-        </Stack>
+          </span>
+        </div>
 
-        <Tooltip title={t('map.route.planner')}>
-          <IconButton size="small" onClick={onOpenRoutePlanner} aria-label={t('map.route.planner')}>
-            <Box component={Route} size={18} />
+        <Tooltip label={t('map.route.planner')}>
+          <IconButton size="sm" onClick={onOpenRoutePlanner} aria-label={t('map.route.planner')}>
+            <Route size={17} />
           </IconButton>
         </Tooltip>
 
         {mode === 'live' && (
-          <Tooltip title={paused ? t('map.resumeLive') : t('map.pauseLive')}>
+          <Tooltip label={paused ? t('map.resumeLive') : t('map.pauseLive')}>
             <IconButton
-              size="small"
+              size="sm"
               onClick={onTogglePause}
               aria-label={paused ? t('map.resumeLive') : t('map.pauseLive')}
               aria-pressed={paused}
             >
-              <Box component={paused ? Play : Pause} size={18} />
+              {paused ? <Play size={17} /> : <Pause size={17} />}
             </IconButton>
           </Tooltip>
         )}
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

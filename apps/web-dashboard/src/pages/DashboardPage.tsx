@@ -1,14 +1,14 @@
-import { DashboardGrid } from '@/components/dashboard/DashboardGrid';
+import { FleetDashboard } from '@/components/dashboard/FleetDashboard';
 
 /**
- * DashboardPage — the Fleet Dashboard home screen.
+ * DashboardPage — the Fleet Dashboard home screen (Phase 4, TailAdmin).
  *
- * Renders the widget grid (UI_UX_Design.md §1): the real stat-card row
- * (fleet-management /summary × gps-engine device statuses), active alerts
- * (notification-service), and a live map preview (latest positions).
- * All data comes from real APIs via TanStack Query hooks (`api/fleet.api.ts`);
- * the deterministic fixture dataset stands in only in explicit mock mode.
+ * Renders the FleetDashboard composition: KPI row (fleet summary + live map
+ * join + alarm feed), vehicle-activity donut, fleet-health meters, recent
+ * events, alert-type breakdown, and the live map preview. All data comes from
+ * real APIs via TanStack Query hooks (`api/fleet.api.ts`); the deterministic
+ * fixture dataset stands in only in explicit mock mode.
  */
 export function DashboardPage() {
-  return <DashboardGrid />;
+  return <FleetDashboard />;
 }

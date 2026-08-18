@@ -95,8 +95,9 @@ describe('VideoWallPage', () => {
   it('renders the channel dock from mock data', async () => {
     renderWall();
     await waitFor(() => {
-      // The dock header.
-      expect(screen.getByText('Cameras')).toBeInTheDocument();
+      // The dock header (video.dock.title) — the Phase 7 "Cameras" view tab
+      // carries the same label, so at least two elements match.
+      expect(screen.getAllByText('Cameras').length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -173,5 +174,84 @@ describe('VideoWallPage', () => {
     expect(mockChannels.some((c) => c.sourceType === 'site')).toBe(true);
     // Vehicle channels carry the cabin-cam flag on the driver facing.
     expect(mockChannels.some((c) => c.cabinCam && c.facing === 'driver')).toBe(true);
+  });
+});
+
+// ── Phase 7 — cameras management + playback shell + view tabs ───────────────
+
+describe('VideoWallPage — view tabs', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  /** Wait until the channels query resolved (dock/table populated). */
+  async function waitForChannelsShort() {
+    await waitFor(() => {
+      expect(screen.getByText('Main Gate')).toBeInTheDocument();
+    });
+  }
+
+  it('switches to the Cameras table and lists channels with availability', async () => {
+    renderWall();
+    await waitForChannelsShort();
+    fireEvent.click(screen.getByRole('tab', { name: /cameras/i }));
+
+    // Channel rows render with status + stream-availability badges.
+    await waitFor(() => {
+      expect(screen.getAllByText(/available/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByRole('button', { name: /add to wall/i }).length).toBeGreaterThan(0);
+  });
+
+  it('switches to Playback and shows the honest pending-backend notice', async () => {
+    renderWall();
+    fireEvent.click(screen.getByRole('tab', { name: /playback/i }));
+
+    expect(screen.getByText(/playback backend pending/i)).toBeTruthy();
+    // Transport present but disabled until a window is loaded.
+    expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).not.toBeNull();
+  });
+
+  it('loads a playback window and drives the transport locally', async () => {
+    renderWall();
+    await waitForChannelsShort();
+    fireEvent.click(screen.getByRole('tab', { name: /playback/i }));
+
+    // Pick the first available channel + Load — the transport enables.
+    const channelSelect = screen.getByRole('combobox');
+    const firstOption = channelSelect.querySelectorAll('option')[1];
+    fireEvent.change(channelSelect, { target: { value: firstOption?.value ?? '' } });
+    fireEvent.click(screen.getByTestId('playback-load'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).toBeNull();
+    });
+    // Play → pause toggles playback state.
+    fireEvent.click(screen.getByTestId('video-playback-play'));
+    expect(screen.getByTestId('video-playback-pause')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('video-playback-pause'));
+    expect(screen.getByTestId('video-playback-play')).toBeTruthy();
+    // Stop resets the playhead (transport disabled again).
+    fireEvent.click(screen.getByTestId('video-playback-stop'));
+    await waitFor(() => {
+      expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).not.toBeNull();
+    });
+  });
+
+  it('keeps the honest no-recording state in the video area (never a fake stream)', async () => {
+    renderWall();
+    await waitForChannelsShort();
+    fireEvent.click(screen.getByRole('tab', { name: /playback/i }));
+
+    const channelSelect = screen.getByRole('combobox');
+    const firstOption = channelSelect.querySelectorAll('option')[1];
+    fireEvent.change(channelSelect, { target: { value: firstOption?.value ?? '' } });
+    fireEvent.click(screen.getByTestId('playback-load'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('playback-video-area').textContent).toContain(
+        'No recording available',
+      );
+    });
   });
 });

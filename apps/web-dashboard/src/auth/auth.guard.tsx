@@ -1,5 +1,6 @@
-import { Box, CircularProgress } from '@mui/material';
 import { Navigate, Outlet, useLocation } from 'react-router';
+
+import { Spinner } from '@/components/tailwind-ui';
 
 import { useAuthStore } from './auth.store';
 
@@ -19,16 +20,9 @@ export function ProtectedRoute() {
   // Show loading while hydrating from localStorage
   if (isLoading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <div className="flex h-screen items-center justify-center">
+        <Spinner size="lg" label="Loading session" />
+      </div>
     );
   }
 

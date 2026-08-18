@@ -1,4 +1,5 @@
 import {
+  Activity,
   BarChart3,
   Bell,
   BellRing,
@@ -69,6 +70,13 @@ export const NAV_GROUPS: NavGroup[] = [
     groupKey: 'operations',
     items: [
       { key: 'alarms', path: '/alarms', icon: Bell },
+      {
+        // Phase 6 — Event Center (fleet event timeline).
+        key: 'events',
+        path: '/events',
+        icon: Activity,
+        permission: PERMISSIONS.notificationRead,
+      },
       {
         // Sprint H — Notification Center (bell history + preferences).
         key: 'notifications',

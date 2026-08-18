@@ -1,11 +1,12 @@
 /**
- * AlarmDetailDrawer — the right slide-over showing the full alarm entity
- * (12_Alarm_Engine.md §6.1), the operator actions (§5.3 ack/resolve/contest),
- * and the linked artifacts (§5.4 — source events, position, driver/vehicle,
- * clip/trip links).
+ * AlarmDetailDrawer — the TailAdmin right slide-over showing the full alarm
+ * entity (12_Alarm_Engine.md §6.1), the operator actions (§5.3
+ * ack/resolve/contest), and the linked artifacts (§5.4 — source events,
+ * position, driver/vehicle, clip/trip links). Phase 6 port.
  *
  * Follows the UI_UX §0.6 "selection → detail" pattern (row/marker → right
- * Drawer, never navigate away); Esc or backdrop closes.
+ * slide-over, never navigate away); Esc or backdrop closes. The overlay keeps
+ * `role="presentation"` (test contract from the MUI Drawer).
  */
 import {
   Car,
@@ -16,7 +17,9 @@ import {
   ShieldQuestion,
   Truck,
   Video,
+  X,
 } from 'lucide-react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
@@ -24,20 +27,10 @@ import { useAlarmDetail, useTransitionAlarm } from '@/api/alarm.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 import { alarmTypeIcon, severityColor } from '@/components/alarms/AlarmTypeIcon';
+import { Button, IconButton, Spinner } from '@/components/tailwind-ui';
 import type { Alarm } from '@/types/alarm.types';
-import {
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Divider,
-  Drawer,
-  IconButton,
-  Stack,
-  Typography,
-} from '@mui/material';
 
-/** Drawer width — slide-over (UI_UX §0.5 Drawer). */
+/** Drawer width — slide-over (UI_UX §0.5). */
 const DRAWER_WIDTH = 420;
 
 interface AlarmDetailDrawerProps {
@@ -52,31 +45,51 @@ export function AlarmDetailDrawer({ alarmId, onClose }: AlarmDetailDrawerProps) 
   const { data: alarm, isLoading } = useAlarmDetail(alarmId);
   const transition = useTransitionAlarm();
 
+  // Esc closes (parity with the MUI Drawer).
+  useEffect(() => {
+    if (!alarmId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [alarmId, onClose]);
+
+  if (!alarmId) return null;
+
   return (
-    <Drawer
-      anchor="right"
-      open={Boolean(alarmId)}
-      onClose={onClose}
-      variant="temporary"
-      sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, maxWidth: '100vw' } }}
-    >
-      {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : alarm ? (
-        <AlarmDetailContent
-          alarm={alarm}
-          onClose={onClose}
-          onAction={(status) => transition.mutate({ id: alarm.id, status })}
-          acting={transition.isPending}
-        />
-      ) : (
-        <Box sx={{ p: 4 }}>
-          <Typography color="text.secondary">{t('alarms.detail.notFound')}</Typography>
-        </Box>
-      )}
-    </Drawer>
+    <div role="presentation" className="fixed inset-0 z-50">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={t('common.close')}
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-gray-900/40"
+      />
+      <aside
+        className="absolute inset-y-0 end-0 flex w-full flex-col bg-white shadow-2xl dark:bg-graydark-300"
+        style={{ maxWidth: DRAWER_WIDTH }}
+      >
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Spinner size="lg" label={t('common.loading')} />
+          </div>
+        ) : alarm ? (
+          <AlarmDetailContent
+            alarm={alarm}
+            onClose={onClose}
+            onAction={(status) => transition.mutate({ id: alarm.id, status })}
+            acting={transition.isPending}
+          />
+        ) : (
+          <div className="p-8">
+            <p className="text-sm text-gray-500 dark:text-graydark-600">
+              {t('alarms.detail.notFound')}
+            </p>
+          </div>
+        )}
+      </aside>
+    </div>
   );
 }
 
@@ -98,51 +111,32 @@ function AlarmDetailContent({
   const isResolved = alarm.status === 'resolved';
 
   return (
-    <Stack sx={{ height: '100%', overflowY: 'auto' }}>
+    <div className="fv-scroll relative flex-1 overflow-y-auto">
       {/* Header */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        gap={1.5}
-        sx={{
-          p: 2,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          position: 'sticky',
-          top: 0,
-          bgcolor: 'background.paper',
-          zIndex: 1,
-        }}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 40,
-            height: 40,
-            borderRadius: 2,
-            bgcolor: sevColor,
-            color: '#fff',
-            flexShrink: 0,
-          }}
+      <div className="sticky top-0 z-[1] flex items-center gap-3 border-b border-gray-200 bg-white p-4 dark:border-white/5 dark:bg-graydark-300">
+        <span
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-white"
+          style={{ backgroundColor: sevColor }}
         >
-          <Icon size={20} />
-        </Box>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+          <Icon size={20} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-gray-900 dark:text-white">
             {alarm.message}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>
+          </p>
+          <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
             {alarm.vehicleLabel} · {t(`alarms.severity.${alarm.severity}`)}
-          </Typography>
-        </Box>
+          </p>
+        </div>
         <AlarmStatusBadge status={alarm.status} label={t(`alarms.status.${alarm.status}`)} />
-      </Stack>
+        <IconButton size="sm" onClick={onClose} aria-label={t('common.close')}>
+          <X size={17} />
+        </IconButton>
+      </div>
 
-      <Stack gap={2.5} sx={{ p: 2 }}>
+      <div className="flex flex-col gap-5 p-4">
         {/* Meta grid */}
-        <Stack gap={1}>
+        <div className="flex flex-col gap-2">
           <DetailRow
             icon={<Truck size={16} />}
             label={t('alarms.detail.vehicle')}
@@ -186,101 +180,62 @@ function AlarmDetailContent({
               value={t('alarms.detail.escalationStep', { step: alarm.escalationStep })}
             />
           )}
-        </Stack>
+        </div>
 
         {/* Detail / description */}
         {alarm.detail && (
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
-            >
-              {t('alarms.detail.description')}
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5 }}>
-              {alarm.detail}
-            </Typography>
-          </Box>
+          <div>
+            <SectionLabel>{t('alarms.detail.description')}</SectionLabel>
+            <p className="mt-1 text-sm text-gray-700 dark:text-graydark-700">{alarm.detail}</p>
+          </div>
         )}
 
         {/* Source events */}
-        <Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
-          >
-            {t('alarms.detail.sourceEvents')}
-          </Typography>
-          <Stack gap={0.5} sx={{ mt: 0.5 }}>
+        <div>
+          <SectionLabel>{t('alarms.detail.sourceEvents')}</SectionLabel>
+          <div className="mt-1.5 flex flex-col gap-1">
             {alarm.sourceEvents.map((e) => (
-              <Box
+              <div
                 key={e.id}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  fontSize: '0.8rem',
-                  color: 'text.secondary',
-                }}
+                className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600"
               >
-                <Chip
-                  size="small"
-                  label={e.type}
-                  sx={{ height: 18, fontSize: '0.6rem', fontFamily: 'monospace' }}
-                />
-                <span>{e.detail}</span>
-              </Box>
+                <span className="inline-flex h-[18px] items-center rounded-full bg-gray-100 px-1.5 font-mono text-[0.6rem] dark:bg-white/5">
+                  {e.type}
+                </span>
+                <span className="min-w-0 truncate">{e.detail}</span>
+              </div>
             ))}
-          </Stack>
-        </Box>
+          </div>
+        </div>
 
         {/* Linked artifacts */}
         {(alarm.linkedClipId || alarm.linkedTripId) && (
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
-            >
-              {t('alarms.detail.linked')}
-            </Typography>
-            <Stack direction="row" gap={1} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+          <div>
+            <SectionLabel>{t('alarms.detail.linked')}</SectionLabel>
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {alarm.linkedClipId && (
-                <Button size="small" startIcon={<Video size={14} />} component={Link} to="/video">
-                  {t('alarms.detail.viewClip')}
+                <Button size="sm" variant="outline" leftIcon={<Video size={14} />}>
+                  <Link to="/video">{t('alarms.detail.viewClip')}</Link>
                 </Button>
               )}
               {alarm.linkedTripId && (
-                <Button
-                  size="small"
-                  startIcon={<MapPin size={14} />}
-                  component={Link}
-                  to={`/trips/${alarm.linkedTripId}`}
-                >
-                  {t('alarms.detail.viewTrip')}
+                <Button size="sm" variant="outline" leftIcon={<MapPin size={14} />}>
+                  <Link to={`/trips/${alarm.linkedTripId}`}>{t('alarms.detail.viewTrip')}</Link>
                 </Button>
               )}
-            </Stack>
-          </Box>
+            </div>
+          </div>
         )}
 
-        <Divider />
+        <div className="border-t border-gray-200 dark:border-white/5" />
 
         {/* Operator actions (§5.3) — gated by the real backend permissions
             (notification.alert.ack / notification.alert.resolve). UX-only; the
             backend re-checks on every call (Sprint G Part 44). */}
-        <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap' }}>
+        <div className="flex flex-wrap gap-2">
           {!isResolved && alarm.status !== 'acked' && (
             <PermissionGate requires={PERMISSIONS.alertAck}>
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                disabled={acting}
-                onClick={() => onAction('acked')}
-              >
+              <Button size="sm" disabled={acting} onClick={() => onAction('acked')}>
                 {t('alarms.actions.ack')}
               </Button>
             </PermissionGate>
@@ -288,8 +243,8 @@ function AlarmDetailContent({
           {!isResolved && (
             <PermissionGate requires={PERMISSIONS.alertResolve}>
               <Button
-                size="small"
-                variant="outlined"
+                size="sm"
+                variant="outline"
                 disabled={acting}
                 onClick={() => onAction('resolved')}
               >
@@ -297,16 +252,17 @@ function AlarmDetailContent({
               </Button>
             </PermissionGate>
           )}
-        </Stack>
-      </Stack>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* Close affordance (Esc also works via the Drawer). */}
-      <IconButton
-        onClick={onClose}
-        aria-label={t('common.close')}
-        sx={{ position: 'absolute', top: 8, right: 8 }}
-      />
-    </Stack>
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-graydark-600">
+      {children}
+    </p>
   );
 }
 
@@ -317,15 +273,13 @@ function DetailRow({
   value,
 }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <Box sx={{ color: 'text.secondary', display: 'flex' }}>{icon}</Box>
-      <Typography variant="body2" sx={{ minWidth: 90, color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ flex: 1 }} noWrap>
+    <div className="flex items-center gap-2.5">
+      <span className="flex shrink-0 text-gray-400 dark:text-graydark-600">{icon}</span>
+      <span className="min-w-[90px] text-sm text-gray-500 dark:text-graydark-600">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
         {value}
-      </Typography>
-    </Box>
+      </span>
+    </div>
   );
 }
 

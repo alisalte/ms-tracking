@@ -16,12 +16,18 @@ import { PermissionDeniedState, usePermissions } from '@/auth/permissions';
 
 interface RequirePermissionProps {
   /** Single required permission string (PERMISSIONS.*). */
-  permission: string;
+  permission?: string;
+  /** ANY-of alternative — route unlocks when at least ONE is granted (mirrors
+   *  the nav model's `anyOf`, e.g. /assets = vehicle.read OR fleet.read). */
+  anyOf?: readonly string[];
   children: ReactNode;
 }
 
-export function RequirePermission({ permission, children }: RequirePermissionProps) {
-  const { can } = usePermissions();
-  if (!can(permission)) return <PermissionDeniedState />;
+export function RequirePermission({ permission, anyOf, children }: RequirePermissionProps) {
+  const { can, canAny } = usePermissions();
+
+  const allowed = anyOf ? canAny(anyOf) : permission ? can(permission) : true; // no requirement declared — render (backend still enforces)
+
+  if (!allowed) return <PermissionDeniedState />;
   return <>{children}</>;
 }

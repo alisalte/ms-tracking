@@ -1,9 +1,11 @@
 /**
- * NotificationBell — the notification center dropdown in the Topbar.
+ * NotificationBell — the TailAdmin notification dropdown in the header
+ * (Phase 6 port of the MUI Popover bell).
  *
- * Renders a bell icon with a live unread-count badge. Clicking opens a Popover
- * with the latest notifications, each with a mark-as-read action. Includes a
- * "mark all as read" button. Real-time updates arrive via the WS hook.
+ * Renders a bell icon with a live unread-count badge. Clicking opens a
+ * dropdown with the latest notifications, each with a mark-as-read action,
+ * plus "mark all as read" and "view all". Real-time updates arrive via the WS
+ * hook (shared query cache with the Notification Center).
  */
 import { Bell, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
@@ -16,26 +18,13 @@ import {
   useNotifications,
   useUnreadCount,
 } from '@/api/notification.api';
+import { Button, Spinner } from '@/components/tailwind-ui';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
-import {
-  Badge,
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  Popover,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material';
 
 export function NotificationBell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
 
   // Realtime: new notifications arrive over WebSocket and update the caches
   // incrementally; the 30s unread-count polling stays as a fallback.
@@ -50,111 +39,120 @@ export function NotificationBell() {
   const items = notifications ?? [];
 
   return (
-    <>
-      <Tooltip title={t('common.alerts', { defaultValue: 'Notifications' })}>
-        <IconButton
-          size="small"
-          aria-label="notifications"
-          onClick={(e) => setAnchorEl(e.currentTarget)}
-        >
-          <Badge badgeContent={unread > 0 ? unread : undefined} color="error">
-            <Bell size={19} />
-          </Badge>
-        </IconButton>
-      </Tooltip>
-
-      <Popover
-        open={Boolean(anchorEl)}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { width: 360, maxHeight: 480 } }}
+    <div className="relative">
+      <button
+        type="button"
+        aria-label="notifications"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="relative inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-graydark-600 dark:hover:bg-white/5 dark:hover:text-white"
       >
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 1.5 }}>
-          <Typography variant="subtitle2" fontWeight={700}>
-            {t('notifications.title', { defaultValue: 'Notifications' })}
-            {unread > 0 && <Badge badgeContent={unread} color="error" sx={{ ml: 1 }} />}
-          </Typography>
-          {unread > 0 && (
-            <Button
-              size="small"
-              startIcon={<CheckCheck size={14} />}
-              onClick={() => markAllAsRead.mutate()}
-              disabled={markAllAsRead.isPending}
-            >
-              {t('notifications.markAllRead', { defaultValue: 'Mark all read' })}
-            </Button>
-          )}
-        </Stack>
+        <Bell size={19} aria-hidden />
+        {unread > 0 && (
+          <span
+            data-testid="bell-unread-count"
+            className="absolute -top-0.5 -end-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-500 px-1 text-[0.65rem] font-bold text-white"
+          >
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+      </button>
 
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress size={24} />
-          </Box>
-        ) : items.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-            {t('notifications.empty', { defaultValue: 'No notifications' })}
-          </Typography>
-        ) : (
-          <List dense sx={{ maxHeight: 360, overflowY: 'auto' }}>
-            {items.slice(0, 10).map((n) => (
-              <ListItem
-                key={n.id}
-                sx={{
-                  bgcolor: n.read ? 'transparent' : 'action.hover',
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: 'action.selected' },
-                }}
+      {open && (
+        <>
+          {/* Outside-press closes */}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute end-0 z-50 mt-1.5 w-90 max-w-[92vw] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-graydark-300">
+            <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+              <p className="text-sm font-bold text-gray-800 dark:text-white">
+                {t('notifications.title', { defaultValue: 'Notifications' })}
+                {unread > 0 && <span className="ms-1.5 text-xs text-danger-500">({unread})</span>}
+              </p>
+              {unread > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  leftIcon={<CheckCheck size={14} />}
+                  onClick={() => markAllAsRead.mutate()}
+                  disabled={markAllAsRead.isPending}
+                >
+                  {t('notifications.markAllRead', { defaultValue: 'Mark all read' })}
+                </Button>
+              )}
+            </div>
+
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <Spinner size="sm" label={t('common.loading')} />
+              </div>
+            ) : items.length === 0 ? (
+              <p className="px-3.5 py-6 text-center text-sm text-gray-500 dark:text-graydark-600">
+                {t('notifications.empty', { defaultValue: 'No notifications' })}
+              </p>
+            ) : (
+              <ul className="fv-scroll m-0 max-h-90 list-none overflow-y-auto p-0">
+                {items.slice(0, 10).map((n) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!n.read) markAsRead.mutate(n.id);
+                        setOpen(false);
+                        if (n.link) navigate(n.link);
+                      }}
+                      className={`flex w-full cursor-pointer flex-col gap-0.5 border-none px-3.5 py-2.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                        n.read ? 'bg-transparent' : 'bg-gray-50 dark:bg-white/5'
+                      }`}
+                    >
+                      <span className="flex w-full items-center gap-1.5">
+                        {!n.read && (
+                          <span
+                            aria-hidden
+                            className={`size-1.5 shrink-0 rounded-full ${
+                              n.severity === 'critical' ? 'bg-danger-500' : 'bg-brand-500'
+                            }`}
+                          />
+                        )}
+                        <span
+                          className={`min-w-0 flex-1 truncate text-sm ${
+                            n.read
+                              ? 'font-normal text-gray-700 dark:text-graydark-700'
+                              : 'font-semibold text-gray-900 dark:text-white'
+                          }`}
+                        >
+                          {n.title}
+                        </span>
+                      </span>
+                      <span className="w-full truncate text-xs text-gray-500 dark:text-graydark-600">
+                        {n.body}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border-t border-gray-200 p-2 dark:border-white/5">
+              <Button
+                fullWidth
+                variant="secondary"
+                size="sm"
                 onClick={() => {
-                  if (!n.read) markAsRead.mutate(n.id);
-                  if (n.link) navigate(n.link);
-                  setAnchorEl(null);
+                  setOpen(false);
+                  navigate('/notifications');
                 }}
               >
-                <ListItemText
-                  primary={
-                    <Stack direction="row" alignItems="center" gap={0.5}>
-                      {!n.read && (
-                        <Box
-                          component="span"
-                          sx={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            bgcolor: n.severity === 'critical' ? 'error.main' : 'primary.main',
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <Typography variant="body2" fontWeight={n.read ? 400 : 600} noWrap>
-                        {n.title}
-                      </Typography>
-                    </Stack>
-                  }
-                  secondary={
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {n.body}
-                    </Typography>
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-        <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider' }}>
-          <Button
-            fullWidth
-            size="small"
-            onClick={() => {
-              setAnchorEl(null);
-              navigate('/notifications');
-            }}
-          >
-            {t('notifications.viewAll', { defaultValue: 'View all notifications' })}
-          </Button>
-        </Box>
-      </Popover>
-    </>
+                {t('notifications.viewAll', { defaultValue: 'View all notifications' })}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

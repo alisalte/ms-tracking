@@ -1,14 +1,15 @@
 /**
- * ReportRangePicker — the shared time-range control for every report
- * (Sprint J §16): Today | Yesterday | Last 7 Days | Last 30 Days | Custom
- * (datetime-local from/to, converted to UTC ISO before sending — the
- * documented UTC strategy). Accessible: labeled inputs + aria-pressed chips.
+ * ReportRangePicker — the TailAdmin shared time-range control for every
+ * report (Sprint J §16, Phase 8 port): Today | Yesterday | Last 7 Days |
+ * Last 30 Days | Custom (datetime-local from/to, converted to UTC ISO before
+ * sending — the documented UTC strategy). Accessible: labeled inputs +
+ * aria-pressed chips.
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ReportRange } from '@/api/report.api';
-import { Box, Button, Chip, Stack, TextField } from '@mui/material';
+import { Button } from '@/components/tailwind-ui';
 
 const PRESETS: Array<{ id: 'today' | 'yesterday' | '7d' | '30d' }> = [
   { id: 'today' },
@@ -48,23 +49,29 @@ export function ReportRangePicker({
     onChange({ from: from.toISOString(), to: to.toISOString() });
   };
 
+  const chip = (active: boolean) =>
+    `h-7 cursor-pointer rounded-full border px-3 text-xs font-semibold transition-colors ${
+      active
+        ? 'border-brand-500 bg-brand-500 text-white'
+        : 'border-gray-300 bg-transparent text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5'
+    }`;
+
   return (
-    <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+    <div className="flex flex-wrap items-center gap-2">
       {PRESETS.map((p) => (
-        <Chip
+        <button
           key={p.id}
-          label={t(`reports.range.${p.id}`)}
-          color={range.preset === p.id ? 'primary' : 'default'}
-          variant={range.preset === p.id ? 'filled' : 'outlined'}
+          type="button"
+          className={chip(range.preset === p.id)}
           onClick={() => onChange({ preset: p.id })}
           aria-pressed={range.preset === p.id}
-          size="small"
-        />
+        >
+          {t(`reports.range.${p.id}`)}
+        </button>
       ))}
-      <Chip
-        label={t('reports.range.custom')}
-        color={isCustom ? 'primary' : 'default'}
-        variant={isCustom ? 'filled' : 'outlined'}
+      <button
+        type="button"
+        className={chip(isCustom)}
         onClick={() =>
           onChange(
             isCustom
@@ -76,37 +83,32 @@ export function ReportRangePicker({
           )
         }
         aria-pressed={isCustom}
-        size="small"
         data-testid="report-range-custom"
-      />
+      >
+        {t('reports.range.custom')}
+      </button>
       {isCustom && (
-        <Stack direction="row" alignItems="center" gap={0.5}>
-          <TextField
+        <div className="flex items-center gap-1.5">
+          <input
             type="datetime-local"
-            size="small"
             value={fromInput}
             onChange={(e) => setFromInput(e.target.value)}
             aria-label={t('reports.range.from')}
-            slotProps={{ htmlInput: { 'aria-label': t('reports.range.from') } }}
-            sx={{ width: 205, '& input': { py: 0.5, fontSize: 13 } }}
+            className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
           />
-          <Box component="span" sx={{ color: 'text.secondary' }}>
-            →
-          </Box>
-          <TextField
+          <span className="text-gray-400">→</span>
+          <input
             type="datetime-local"
-            size="small"
             value={toInput}
             onChange={(e) => setToInput(e.target.value)}
             aria-label={t('reports.range.to')}
-            slotProps={{ htmlInput: { 'aria-label': t('reports.range.to') } }}
-            sx={{ width: 205, '& input': { py: 0.5, fontSize: 13 } }}
+            className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
           />
-          <Button size="small" variant="contained" onClick={applyCustom} data-testid="report-range-apply">
+          <Button size="sm" onClick={applyCustom} data-testid="report-range-apply">
             {t('reports.range.apply')}
           </Button>
-        </Stack>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

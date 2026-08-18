@@ -167,8 +167,9 @@ describe('NotificationBell', () => {
     renderBell();
     const bellButton = screen.getByRole('button', { name: 'notifications' });
     expect(bellButton).toBeDefined();
-    // The badge carries the numeric unread count (3).
-    expect(document.querySelector('.MuiBadge-badge')?.textContent).toContain('3');
+    // The badge carries the numeric unread count (3). (Phase 6: the Tailwind
+    // bell exposes the count via data-testid instead of the MUI badge class.)
+    expect(screen.getByTestId('bell-unread-count')?.textContent).toContain('3');
   });
 
   it('opens the dropdown, lists notifications, and marks all read', async () => {

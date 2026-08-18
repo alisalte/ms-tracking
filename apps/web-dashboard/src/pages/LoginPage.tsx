@@ -1,36 +1,24 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Checkbox,
-  FormControlLabel,
-  Link,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
-import { FormAlert } from '@/components/form/FormAlert';
-import { PasswordTextField } from '@/components/form/PasswordTextField';
+import { Alert, Button, Card, Input } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 import { emailSchema } from '@/lib/validation';
 
 /**
- * LoginPage — email + password + tenant ID authentication.
+ * LoginPage — TailAdmin sign-in (Phase 3).
  *
- * The login wireframe (`Authentication.md` §9.2): email, password (with a
- * show/hide toggle), and — because the backend requires an `X-Tenant-Id`
- * header and no public tenant resolver exists yet — a tenant field (documented
- * divergence from AUTH-BR-12, to be replaced by subdomain resolution).
- *
- * Validation runs through react-hook-form + zod (UI_UX_Design.md appendix).
- * On success it navigates to the `?redirect` path (default `/dashboard`).
+ * Same authentication contract as the MUI version: email + password + tenant
+ * field (the backend requires an `X-Tenant-Id` header and no public tenant
+ * resolver exists yet — documented divergence from AUTH-BR-12), validated by
+ * the identical react-hook-form + zod schema, calling the same auth store
+ * action. On success it navigates to the `?redirect` path (default
+ * `/dashboard`); server errors surface in a TailAdmin Alert.
  */
 const loginSchema = z.object({
   tenantId: z.string().trim().min(1, { message: 'validation.tenantId.required' }),
@@ -44,6 +32,7 @@ export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [showPassword, setShowPassword] = useState(false);
 
   const { login, isLoading, error, clearError } = useAuth();
   const redirectPath = searchParams.get('redirect') ?? '/dashboard';
@@ -67,117 +56,129 @@ export function LoginPage() {
   };
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 420 }}>
-      <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-        {/* Branding */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.02em' }}>
-            {t('auth.login')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {t('auth.signInSubtitle')}
-          </Typography>
-        </Box>
+    <Card className="w-full p-6 sm:p-8">
+      {/* Heading */}
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+          {t('auth.login')}
+        </h1>
+        <p className="mt-1.5 text-sm text-gray-500 dark:text-graydark-600">
+          {t('auth.signInSubtitle')}
+        </p>
+      </div>
 
-        {/* Server / auth-store error (e.g. invalid credentials, lockout) */}
-        <FormAlert severity="error" message={error} />
+      {/* Server / auth-store error (invalid credentials, lockout, network) */}
+      {error && (
+        <Alert variant="danger" className="mb-4">
+          {error}
+        </Alert>
+      )}
 
-        <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <Controller
-            name="tenantId"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                id="tenantId"
-                label={t('auth.tenantId')}
-                margin="normal"
-                autoComplete="organization"
-                autoFocus
-                disabled={isLoading}
-                error={Boolean(errors.tenantId)}
-                helperText={
-                  errors.tenantId ? t(errors.tenantId?.message ?? '') : t('auth.tenantIdHelp')
-                }
-              />
-            )}
-          />
-
-          <Controller
-            name="email"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                id="email"
-                label={t('auth.email')}
-                margin="normal"
-                type="email"
-                autoComplete="email"
-                disabled={isLoading}
-                error={Boolean(errors.email)}
-                helperText={errors.email ? t(errors.email?.message ?? '') : ' '}
-              />
-            )}
-          />
-
-          <Controller
-            name="password"
-            control={control}
-            render={({ field }) => (
-              <PasswordTextField
-                {...field}
-                fullWidth
-                id="password"
-                label={t('auth.password')}
-                margin="normal"
-                autoCompleteValue="current-password"
-                disabled={isLoading}
-                error={Boolean(errors.password)}
-                helperText={errors.password ? t(errors.password?.message ?? '') : ' '}
-              />
-            )}
-          />
-
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ my: 1 }}>
-            <Controller
-              name="rememberDevice"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={<Checkbox {...field} checked={field.value} size="small" />}
-                  label={<Typography variant="body2">{t('auth.rememberDevice')}</Typography>}
-                />
-              )}
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+        <Controller
+          name="tenantId"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ''}
+              id="tenantId"
+              label={t('auth.tenantId')}
+              autoComplete="organization"
+              autoFocus
+              disabled={isLoading}
+              error={errors.tenantId ? t(errors.tenantId.message ?? '') : null}
+              hint={errors.tenantId ? null : t('auth.tenantIdHelp')}
             />
-            <Link component={RouterLink} to="/forgot-password" variant="body2" underline="hover">
-              {t('auth.forgotPassword')}
-            </Link>
-          </Stack>
+          )}
+        />
 
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            size="large"
-            disabled={isLoading}
-            sx={{ mt: 3, mb: 2, py: 1.5, fontSize: '0.95rem' }}
+        <Controller
+          name="email"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ''}
+              id="email"
+              type="email"
+              label={t('auth.email')}
+              autoComplete="email"
+              disabled={isLoading}
+              error={errors.email ? t(errors.email.message ?? '') : null}
+            />
+          )}
+        />
+
+        <Controller
+          name="password"
+          control={control}
+          render={({ field }) => (
+            <div className="relative">
+              <Input
+                {...field}
+                value={field.value ?? ''}
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                label={t('auth.password')}
+                autoComplete="current-password"
+                disabled={isLoading}
+                error={errors.password ? t(errors.password.message ?? '') : null}
+                className="pe-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
+                className="absolute end-2 top-[30px] inline-flex size-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:text-graydark-700"
+              >
+                {showPassword ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+              </button>
+            </div>
+          )}
+        />
+
+        <div className="flex items-center justify-between gap-2">
+          <Controller
+            name="rememberDevice"
+            control={control}
+            render={({ field }) => (
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-graydark-700">
+                <input
+                  type="checkbox"
+                  checked={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  disabled={isLoading}
+                  className="size-4 rounded border-gray-300 accent-brand-500"
+                />
+                {t('auth.rememberDevice')}
+              </label>
+            )}
+          />
+          <RouterLink
+            to="/forgot-password"
+            className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            {isLoading ? t('auth.loggingIn') : t('auth.login')}
-          </Button>
+            {t('auth.forgotPassword')}
+          </RouterLink>
+        </div>
 
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary" component="span">
-              {t('auth.noAccount')}{' '}
-            </Typography>
-            <Link component={RouterLink} to="/register" variant="body2" underline="hover">
-              {t('auth.signUp')}
-            </Link>
-          </Box>
-        </Box>
-      </CardContent>
+        <Button type="submit" size="lg" fullWidth disabled={isLoading} loading={isLoading}>
+          {isLoading ? t('auth.loggingIn') : t('auth.login')}
+        </Button>
+
+        <p className="text-center text-sm text-gray-500 dark:text-graydark-600">
+          {t('auth.noAccount')}{' '}
+          <RouterLink
+            to="/register"
+            className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {t('auth.signUp')}
+          </RouterLink>
+        </p>
+      </form>
     </Card>
   );
 }

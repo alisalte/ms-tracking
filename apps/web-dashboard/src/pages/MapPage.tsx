@@ -5,42 +5,81 @@ import { useSearchParams } from 'react-router';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
 import { useMapVehicles } from '@/api/fleet.api';
-import {
-  type HistoryPresetId,
-  fetchMapMatch,
-  presetRange,
-  useVehicleTrack,
-} from '@/api/map.api';
+import { type HistoryPresetId, fetchMapMatch, presetRange, useVehicleTrack } from '@/api/map.api';
 import { useAuthStore } from '@/auth/auth.store';
 import { ErrorState } from '@/components/common/ErrorState';
 import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
 import { FleetMap, type HistoryTrack } from '@/components/map/FleetMap';
-import { MapToolbar, type CustomRange } from '@/components/map/MapToolbar';
+import { type CustomRange, MapToolbar } from '@/components/map/MapToolbar';
 import { PlaybackControls } from '@/components/map/PlaybackControls';
-import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { RoutePlannerDialog } from '@/components/map/RoutePlannerDialog';
 import { type PresenceFilter, presenceOf } from '@/components/map/types';
+import { useTrackPlayback } from '@/components/map/useTrackPlayback';
+import { EmptyState, Spinner } from '@/components/tailwind-ui';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
-import { Box, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
 function wsChip(connectionState: string): {
   labelKey: string;
-  color: 'success' | 'warning' | 'default';
-  variant: 'filled' | 'outlined';
+  tone: 'success' | 'warning' | 'gray';
 } {
   switch (connectionState) {
     case 'connected':
-      return { labelKey: 'map.ws.connected', color: 'success', variant: 'filled' };
+      return { labelKey: 'map.ws.connected', tone: 'success' };
     case 'connecting':
-      return { labelKey: 'map.ws.connecting', color: 'default', variant: 'outlined' };
+      return { labelKey: 'map.ws.connecting', tone: 'gray' };
     case 'error':
-      return { labelKey: 'map.ws.reconnecting', color: 'warning', variant: 'outlined' };
+      return { labelKey: 'map.ws.reconnecting', tone: 'warning' };
     default:
-      return { labelKey: 'map.ws.disconnected', color: 'default', variant: 'outlined' };
+      return { labelKey: 'map.ws.disconnected', tone: 'gray' };
   }
+}
+
+/** Small floating status pill over the map (history status + WS state). */
+function MapChip({
+  children,
+  tone = 'gray',
+  onClick,
+  testid,
+  style,
+}: {
+  children: React.ReactNode;
+  tone?: 'success' | 'warning' | 'danger' | 'gray';
+  onClick?: () => void;
+  testid?: string;
+  style?: React.CSSProperties;
+}) {
+  const tones = {
+    success:
+      'bg-success-50 text-success-700 border-success-200 dark:bg-success-500/10 dark:text-success-400 dark:border-success-500/20',
+    warning:
+      'bg-warning-50 text-warning-700 border-warning-200 dark:bg-warning-500/10 dark:text-warning-400 dark:border-warning-500/20',
+    danger:
+      'bg-danger-50 text-danger-700 border-danger-200 dark:bg-danger-500/10 dark:text-danger-400 dark:border-danger-500/20',
+    gray: 'bg-white/90 text-gray-600 border-gray-200 dark:bg-graydark-300/90 dark:text-graydark-700 dark:border-white/10',
+  } as const;
+  const cls = `absolute end-2 z-10 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-sm backdrop-blur-sm ${tones[tone]}`;
+  // Interactive chips (retry-on-error) render as buttons for keyboard a11y.
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        data-testid={testid}
+        style={style}
+        className={`${cls} cursor-pointer`}
+      >
+        {children}
+      </button>
+    );
+  }
+  return (
+    <span data-testid={testid} style={style} className={cls}>
+      {children}
+    </span>
+  );
 }
 
 /**
@@ -104,7 +143,9 @@ export function MapPage() {
   // bypassed. Deep link (?vehicle&from&to) preselects history (§37 trip→map).
   const [mode, setMode] = useState<'live' | 'history'>(() => {
     const vehicleParam = searchParams.get('vehicle');
-    return vehicleParam && (searchParams.get('from') || searchParams.get('to')) ? 'history' : 'live';
+    return vehicleParam && (searchParams.get('from') || searchParams.get('to'))
+      ? 'history'
+      : 'live';
   });
   const [historyPreset, setHistoryPreset] = useState<HistoryPresetId | 'custom'>('24h');
   const [customRange, setCustomRange] = useState<CustomRange | null>(null);
@@ -147,11 +188,14 @@ export function MapPage() {
 
   // ── Sprint I §38/§39: map matching (best-effort, explicit fallback) ──
   const [mapMatching, setMapMatching] = useState(false);
-  const [matchedPoints, setMatchedPoints] = useState<readonly {
-    latitude: number;
-    longitude: number;
-    confidence: number;
-  }[] | null>(null);
+  const [matchedPoints, setMatchedPoints] = useState<
+    | readonly {
+        latitude: number;
+        longitude: number;
+        confidence: number;
+      }[]
+    | null
+  >(null);
   const [matchingUnavailable, setMatchingUnavailable] = useState(false);
 
   useEffect(() => {
@@ -159,9 +203,7 @@ export function MapPage() {
     setMatchingUnavailable(false);
     if (!mapMatching || !trackQuery.data || trackQuery.data.length < 2) return;
     let cancelled = false;
-    void fetchMapMatch(
-      trackQuery.data.map((p) => ({ lat: p.latitude, lng: p.longitude })),
-    )
+    void fetchMapMatch(trackQuery.data.map((p) => ({ lat: p.latitude, lng: p.longitude })))
       .then((snapped) => {
         if (!cancelled) setMatchedPoints(snapped);
       })
@@ -185,9 +227,7 @@ export function MapPage() {
     if (!matchedPoints || matchedPoints.length !== raw.length) return raw;
     return raw.map((p, i) => {
       const snapped = matchedPoints[i];
-      return snapped
-        ? { ...p, latitude: snapped.latitude, longitude: snapped.longitude }
-        : p;
+      return snapped ? { ...p, latitude: snapped.latitude, longitude: snapped.longitude } : p;
     });
   }, [trackQuery.data, matchedPoints]);
 
@@ -250,9 +290,9 @@ export function MapPage() {
   // ── Loading state ──
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex h-[50vh] items-center justify-center">
+        <Spinner size="lg" label={t('common.loading')} />
+      </div>
     );
   }
 
@@ -264,38 +304,26 @@ export function MapPage() {
   // ── Empty state ──
   if (vehicles.length === 0) {
     return (
-      <Stack alignItems="center" justifyContent="center" gap={2} sx={{ py: 8 }}>
-        <MapIcon size={48} color="#64748B" />
-        <Typography variant="h6">{t('map.emptyTitle')}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t('map.emptyHelp')}
-        </Typography>
-      </Stack>
+      <EmptyState
+        icon={<MapIcon />}
+        title={t('map.emptyTitle')}
+        description={t('map.emptyHelp')}
+        className="py-16"
+      />
     );
   }
 
   const chip = wsChip(connectionState);
 
   return (
-    <Box
-      sx={{
-        // Full-bleed: break out of <main>'s padding by going absolute.
-        // The AppLayout <main> is position:relative, so inset:0 covers the
-        // padding box edge-to-edge regardless of box-sizing quirks.
-        position: 'absolute',
-        inset: 0,
-        display: 'flex',
-        overflow: 'hidden',
-      }}
+    <div
+      // Full-bleed: break out of <main>'s padding by going absolute.
+      // The AppLayout <main> is position:relative, so inset:0 covers the
+      // padding box edge-to-edge regardless of box-sizing quirks.
+      className="absolute inset-0 flex overflow-hidden"
     >
       {/* ── Left: device list panel ── */}
-      <Stack
-        sx={{
-          width: 300,
-          flexShrink: 0,
-          display: { xs: 'none', md: 'flex' },
-        }}
-      >
+      <div className="hidden w-[300px] shrink-0 md:flex">
         <DeviceListPanel
           vehicles={filtered}
           total={vehicles.length}
@@ -310,10 +338,10 @@ export function MapPage() {
           onFleetChange={setFleetId}
           onSelect={selectFromList}
         />
-      </Stack>
+      </div>
 
       {/* ── Center: map + toolbar overlay ── */}
-      <Box sx={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <div className="relative min-w-0 flex-1">
         <MapToolbar
           visibleCount={filtered.length}
           total={vehicles.length}
@@ -332,49 +360,30 @@ export function MapPage() {
         />
         {/* History mode states (§22/§24): loading / error / no data. */}
         {mode === 'history' && selectedId && trackQuery.isLoading && (
-          <Chip
-            size="small"
-            label={t('map.history.loading')}
-            sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
-          />
+          <MapChip style={{ top: 92 }}>{t('map.history.loading')}</MapChip>
         )}
         {mode === 'history' && selectedId && trackQuery.isError && (
-          <Chip
-            size="small"
-            color="error"
-            label={t('map.history.error')}
-            onClick={() => trackQuery.refetch()}
-            sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
-          />
+          <MapChip tone="danger" onClick={() => trackQuery.refetch()} style={{ top: 92 }}>
+            {t('map.history.error')}
+          </MapChip>
         )}
         {mode === 'history' && selectedId && !trackQuery.isLoading && !trackQuery.isError && (
-          <Chip
-            size="small"
-            label={t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
-            sx={{ position: 'absolute', top: 92, right: 8, zIndex: 10 }}
-          />
+          <MapChip style={{ top: 92 }}>
+            {t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
+          </MapChip>
         )}
         {/* Sprint I §39 — explicit fallback indicator; the raw track is NOT
             presented as map-matched. */}
         {mode === 'history' && mapMatching && matchingUnavailable && (
-          <Chip
-            size="small"
-            color="warning"
-            label={t('map.matching.unavailable')}
-            sx={{ position: 'absolute', top: 120, right: 8, zIndex: 10 }}
-            data-testid="map-matching-unavailable"
-          />
+          <MapChip tone="warning" testid="map-matching-unavailable" style={{ top: 120 }}>
+            {t('map.matching.unavailable')}
+          </MapChip>
         )}
         {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
-        <Chip
-          size="small"
-          label={t(chip.labelKey)}
-          color={chip.color}
-          variant={chip.variant}
-          aria-label={t('map.ws.ariaLabel')}
-          sx={{ position: 'absolute', top: 60, right: 8, zIndex: 10 }}
-        />
-        <Box sx={{ position: 'absolute', inset: 0 }}>
+        <MapChip tone={chip.tone} style={{ top: 60 }} onClick={undefined}>
+          {t(chip.labelKey)}
+        </MapChip>
+        <div className="absolute inset-0">
           <FleetMap
             vehicles={filtered}
             selectedId={selectedId}
@@ -399,12 +408,12 @@ export function MapPage() {
             }
             playbackHead={playbackHead}
           />
-        </Box>
+        </div>
         {/* Sprint I §32/§33 — playback transport + timeline (history mode only). */}
         {mode === 'history' && displayPoints && displayPoints.length >= 2 && (
           <PlaybackControls playback={playback} />
         )}
-      </Box>
+      </div>
 
       {/* ── Route planner (Sprint F §12) ── */}
       <RoutePlannerDialog
@@ -419,6 +428,6 @@ export function MapPage() {
         onClose={() => setPopupOpen(false)}
         onShowHistory={() => setMode('history')}
       />
-    </Box>
+    </div>
   );
 }

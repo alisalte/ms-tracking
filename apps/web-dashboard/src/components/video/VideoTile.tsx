@@ -1,11 +1,13 @@
 /**
- * VideoTile — the atomic unit of the Video Wall (10 §2.2, UI_UX §0.5).
+ * VideoTile — the TailAdmin atomic unit of the Video Wall (Phase 7 port;
+ * 10 §2.2, UI_UX §0.5).
  *
  * Wraps a `LiveVideoPlayer` with the documented overlays (latency badge, REC
  * dot, signal indicator, channel label, cabin-cam badge, alert border) and the
  * control bar (snapshot, fullscreen, mute, quality menu, spotlight, remove).
  * Drives a `useStreamSession` for its channel and forwards the `<video>` ref so
- * snapshot/fullscreen operate on real pixels.
+ * snapshot/fullscreen operate on real pixels. Every control is a real button
+ * with an aria-label (keyboard-friendly).
  *
  * States:
  * - empty slot → placeholder prompt to add a channel.
@@ -13,6 +15,9 @@
  * - connecting → skeleton + spinner.
  * - active → live video + overlays + controls.
  * - queued (wall overflow) → placeholder frame + "queued" badge.
+ *
+ * Performance contract: non-live (queued) tiles pass `null` to the session
+ * hook, tearing the stream down — no hidden background streams.
  */
 import {
   Camera,
@@ -25,25 +30,16 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSnapshot } from '@/api/video.api';
+import { Dropdown, DropdownItem, Spinner, Tooltip } from '@/components/tailwind-ui';
 import { LiveVideoPlayer } from '@/components/video/LiveVideoPlayer';
 import { useStreamSession } from '@/components/video/useStreamSession';
 import { toggleFullscreen } from '@/lib/video-stream';
 import type { CameraChannel, StreamQuality } from '@/types/video.types';
-import {
-  Box,
-  Chip,
-  CircularProgress,
-  IconButton,
-  Menu,
-  MenuItem,
-  Tooltip,
-  Typography,
-} from '@mui/material';
 
 /** Quality menu options (10 §2.3 table). */
 const QUALITIES: StreamQuality[] = ['auto', 'high', 'medium', 'low', 'audio-only'];
@@ -91,7 +87,6 @@ export function VideoTile({
   const snapshot = useSnapshot();
 
   const [muted, setMuted] = useState(true);
-  const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
   const [quality, setQuality] = useState<StreamQuality>('auto');
 
   // The session hook stays mounted; for non-live/queued tiles we pass null so
@@ -107,25 +102,11 @@ export function VideoTile({
   // Empty slot.
   if (!channel) {
     return (
-      <Box
-        sx={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          minHeight: 0,
-          backgroundColor: 'action.hover',
-          border: '2px dashed',
-          borderColor: 'divider',
-          borderRadius: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Typography variant="caption" color="text.disabled">
+      <div className="relative flex h-full min-h-0 w-full items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-100 dark:border-white/10 dark:bg-white/5">
+        <span className="text-xs text-gray-400 dark:text-graydark-600">
           {t('video.tile.empty')}
-        </Typography>
-      </Box>
+        </span>
+      </div>
     );
   }
 
@@ -133,23 +114,12 @@ export function VideoTile({
   if (!channel.online || !channel.consentGiven) {
     return (
       <TileFrame label={channel.label} alert={false}>
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 1,
-            backgroundColor: '#0b1220',
-          }}
-        >
-          <Camera size={compact ? 16 : 28} color="#475569" />
-          <Typography variant="caption" color="text.disabled" sx={{ px: 1, textAlign: 'center' }}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0b1220]">
+          <Camera size={compact ? 16 : 28} color="#475569" aria-hidden />
+          <p className="px-3 text-center text-xs text-gray-500">
             {t(channel.consentGiven ? 'video.tile.offline' : 'video.tile.noConsent')}
-          </Typography>
-        </Box>
+          </p>
+        </div>
         <TileLabel label={channel.label} compact={compact} />
       </TileFrame>
     );
@@ -159,33 +129,18 @@ export function VideoTile({
   if (!live) {
     return (
       <TileFrame label={channel.label} alert={false}>
-        <Box
+        <button
+          type="button"
           onClick={onPromote}
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 1,
-            backgroundColor: '#0b1220',
-            cursor: onPromote ? 'pointer' : 'default',
-            '&:hover': onPromote ? { backgroundColor: '#111c30' } : {},
-          }}
+          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-2 border-none bg-[#0b1220] transition-colors hover:bg-[#111c30]"
         >
-          <Chip
-            size="small"
-            label={t('video.tile.queued')}
-            sx={{ fontSize: '0.65rem', height: 18, color: '#facc15', borderColor: '#facc15' }}
-            variant="outlined"
-          />
+          <span className="inline-flex h-5 items-center rounded-full border border-warning-400 px-2 text-[0.65rem] font-semibold text-warning-400">
+            {t('video.tile.queued')}
+          </span>
           {!compact && (
-            <Typography variant="caption" color="text.disabled">
-              {t('video.tile.clickToPromote')}
-            </Typography>
+            <span className="text-xs text-gray-500">{t('video.tile.clickToPromote')}</span>
           )}
-        </Box>
+        </button>
         <TileLabel label={channel.label} compact={compact} />
       </TileFrame>
     );
@@ -195,117 +150,53 @@ export function VideoTile({
   const connecting = !stream || session?.state === 'connecting';
   return (
     <TileFrame label={channel.label} alert={alert}>
-      <Box ref={containerRef} sx={{ position: 'absolute', inset: 0, backgroundColor: '#000' }}>
+      <div ref={containerRef} className="absolute inset-0 bg-black">
         <LiveVideoPlayer ref={videoRef} stream={stream} muted={muted} active />
 
         {/* Connecting overlay */}
         {connecting && (
-          <Box
-            sx={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(0,0,0,0.5)',
-            }}
-          >
-            <CircularProgress size={compact ? 18 : 28} />
-          </Box>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <Spinner size={compact ? 'sm' : 'lg'} label={t('common.loading')} />
+          </div>
         )}
 
-        {/* Top-left overlays: latency + REC + signal */}
+        {/* Top-left overlays: latency + stream-kind + REC + signal */}
         {!compact && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 6,
-              left: 6,
-              display: 'flex',
-              gap: 0.5,
-              alignItems: 'center',
-            }}
-          >
+          <div className="absolute top-1.5 start-1.5 flex items-center gap-1.5">
             {session?.state === 'active' && (
-              <Chip
-                size="small"
-                label={`${session.latencyMs}ms`}
-                sx={{
-                  height: 18,
-                  fontSize: '0.6rem',
-                  bgcolor: 'rgba(0,0,0,0.6)',
-                  color: '#e5e7eb',
-                }}
-              />
+              <span className="inline-flex h-[18px] items-center rounded-full bg-black/60 px-1.5 text-[0.6rem] tabular-nums text-gray-200">
+                {session.latencyMs}ms
+              </span>
             )}
-            {/* Honest stream-kind badge (Sprint 3): never present a stub as real. */}
+            {/* Honest stream-kind badge: never present a stub as real. */}
             {streamKind !== 'real' && (
-              <Chip
-                size="small"
-                label={streamKind === 'stub' ? 'DEMO' : 'OFFLINE'}
-                sx={{
-                  height: 18,
-                  fontSize: '0.55rem',
-                  fontWeight: 700,
-                  bgcolor: streamKind === 'stub' ? 'rgba(245,158,11,0.85)' : 'rgba(220,38,38,0.85)',
-                  color: '#fff',
-                }}
-              />
+              <span
+                className={`inline-flex h-[18px] items-center rounded-full px-1.5 text-[0.55rem] font-bold text-white ${
+                  streamKind === 'stub' ? 'bg-warning-500/85' : 'bg-danger-600/85'
+                }`}
+              >
+                {streamKind === 'stub' ? 'DEMO' : 'OFFLINE'}
+              </span>
             )}
             {channel.recordingActive && (
-              <Chip
-                size="small"
-                icon={
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      background: '#fb7185',
-                      display: 'inline-block',
-                    }}
-                  />
-                }
-                label="REC"
-                sx={{
-                  height: 18,
-                  fontSize: '0.6rem',
-                  bgcolor: 'rgba(0,0,0,0.6)',
-                  color: '#fb7185',
-                }}
-              />
+              <span className="inline-flex h-[18px] items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.6rem] font-semibold text-rose-400">
+                <span aria-hidden className="size-1.5 rounded-full bg-rose-400" />
+                REC
+              </span>
             )}
-            <Tooltip title={t(`video.tile.signal.${session?.signal ?? 'good'}`)}>
+            <Tooltip label={t(`video.tile.signal.${session?.signal ?? 'good'}`)}>
               <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: signalColor(session?.signal),
-                  display: 'inline-block',
-                  boxShadow: '0 0 0 2px rgba(0,0,0,0.6)',
-                }}
+                aria-hidden
+                className="size-2 rounded-full shadow-[0_0_0_2px_rgba(0,0,0,0.6)]"
+                style={{ background: signalColor(session?.signal) }}
               />
             </Tooltip>
-          </Box>
+          </div>
         )}
 
         {/* Bottom control bar */}
         {!compact && (
-          <Box
-            sx={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              px: 0.5,
-              py: 0.25,
-              background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)',
-            }}
-          >
+          <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-1.5 py-1">
             <TileControl
               title={t('video.tile.snapshot')}
               onClick={handleSnapshot}
@@ -319,12 +210,24 @@ export function VideoTile({
             >
               {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
             </TileControl>
-            <TileControl
-              title={t('video.tile.quality')}
-              onClick={(e) => setQualityAnchor(e.currentTarget)}
+            {/* Quality menu */}
+            <Dropdown
+              aria-label={t('video.tile.quality')}
+              trigger={<Settings2 size={15} aria-hidden />}
+              triggerClassName="inline-flex size-[26px] items-center justify-center rounded-md bg-black/40 text-gray-200 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 cursor-pointer border-none"
             >
-              <Settings2 size={15} />
-            </TileControl>
+              {QUALITIES.map((q) => (
+                <DropdownItem
+                  key={q}
+                  onClick={() => {
+                    setQuality(q);
+                    changeQuality(q);
+                  }}
+                >
+                  {t(`video.quality.${q}`)}
+                </DropdownItem>
+              ))}
+            </Dropdown>
             {onTogglePin && (
               <TileControl title={t('video.tile.spotlight')} onClick={onTogglePin} active={pinned}>
                 <Pin size={15} fill={pinned ? 'currentColor' : 'none'} />
@@ -338,30 +241,9 @@ export function VideoTile({
                 <X size={15} />
               </TileControl>
             )}
-          </Box>
+          </div>
         )}
-
-        {/* Quality menu */}
-        <Menu
-          anchorEl={qualityAnchor}
-          open={Boolean(qualityAnchor)}
-          onClose={() => setQualityAnchor(null)}
-        >
-          {QUALITIES.map((q) => (
-            <MenuItem
-              key={q}
-              selected={q === quality}
-              onClick={() => {
-                setQuality(q);
-                changeQuality(q);
-                setQualityAnchor(null);
-              }}
-            >
-              {t(`video.quality.${q}`)}
-            </MenuItem>
-          ))}
-        </Menu>
-      </Box>
+      </div>
       <TileLabel label={channel.label} compact={compact} />
     </TileFrame>
   );
@@ -387,66 +269,46 @@ function TileFrame({
   children: ReactNode;
 }) {
   return (
-    <Box
+    <div
       data-tile={label}
-      sx={{
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        minHeight: 0,
-        minWidth: 0,
-        overflow: 'hidden',
-        borderRadius: 1,
-        backgroundColor: '#000',
-        border: alert ? 2 : 1,
-        borderColor: alert ? '#DC2626' : 'divider',
-        boxShadow: alert ? '0 0 0 1px #DC2626, 0 0 12px rgba(220,38,38,0.5)' : 'none',
-      }}
+      className={`relative min-h-0 min-w-0 overflow-hidden rounded-lg bg-black ${
+        alert
+          ? 'border-2 border-danger-600 shadow-[0_0_0_1px_#DC2626,0_0_12px_rgba(220,38,38,0.5)]'
+          : 'border border-gray-700'
+      }`}
+      style={{ width: '100%', height: '100%' }}
     >
       {children}
-    </Box>
+    </div>
   );
 }
 
-/** Channel label overlay (bottom-right) + cabin-cam badge. */
+/** Channel label overlay (bottom-end) + cabin-cam badge. */
 function TileLabel({ label, compact }: { label: string; compact: boolean }) {
   const { t } = useTranslation();
   const cabin = label.toLowerCase().includes('driver');
   return (
-    <Box
-      sx={{
-        position: 'absolute',
-        bottom: compact ? 4 : 28,
-        right: 4,
-        display: 'flex',
-        gap: 0.5,
-        alignItems: 'center',
-        pointerEvents: 'none',
-      }}
+    <div
+      className="pointer-events-none absolute end-1.5 flex items-center gap-1.5"
+      style={{ bottom: compact ? 4 : 28 }}
     >
       {cabin && (
-        <Chip
-          size="small"
-          icon={<Sparkles size={10} />}
-          label={t('video.tile.cabinCam')}
-          sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(0,0,0,0.6)', color: '#facc15' }}
-        />
+        <span className="inline-flex h-4 items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
+          <Sparkles size={10} aria-hidden />
+          {t('video.tile.cabinCam')}
+        </span>
       )}
-      <Chip
-        label={label}
-        sx={{
-          height: 18,
-          fontSize: compact ? '0.55rem' : '0.65rem',
-          maxWidth: compact ? 90 : 180,
-          bgcolor: 'rgba(0,0,0,0.6)',
-          color: '#e5e7eb',
-        }}
-      />
-    </Box>
+      <span
+        className="inline-flex h-[18px] max-w-[180px] items-center truncate rounded-full bg-black/60 px-1.5 text-[0.65rem] text-gray-200"
+        style={{ maxWidth: compact ? 90 : 180, fontSize: compact ? '0.55rem' : '0.65rem' }}
+      >
+        {label}
+      </span>
+    </div>
   );
 }
 
-/** Small icon-button in the control bar. */
+/** Small icon-button in the control bar — real button + aria-label. */
 function TileControl({
   title,
   onClick,
@@ -455,29 +317,24 @@ function TileControl({
   active,
 }: {
   title: string;
-  onClick: (e: ReactMouseEvent<HTMLElement>) => void;
+  onClick: () => void;
   children: ReactNode;
   disabled?: boolean;
   active?: boolean;
 }) {
   return (
-    <Tooltip title={title}>
-      <span>
-        <IconButton
-          size="small"
-          disabled={disabled}
-          onClick={onClick}
-          sx={{
-            color: active ? 'primary.main' : '#e5e7eb',
-            bgcolor: 'rgba(0,0,0,0.4)',
-            '&:hover': { bgcolor: 'rgba(0,0,0,0.6)' },
-            width: 26,
-            height: 26,
-          }}
-        >
-          {children}
-        </IconButton>
-      </span>
+    <Tooltip label={title}>
+      <button
+        type="button"
+        aria-label={title}
+        disabled={disabled}
+        onClick={onClick}
+        className={`inline-flex size-[26px] cursor-pointer items-center justify-center rounded-md border-none bg-black/40 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+          active ? 'text-brand-400' : 'text-gray-200'
+        }`}
+      >
+        {children}
+      </button>
     </Tooltip>
   );
 }

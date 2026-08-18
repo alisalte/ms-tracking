@@ -1,27 +1,16 @@
-import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 /**
- * AlarmList — the table view of the Alarm Center.
+ * AlarmList — the TailAdmin table view of the Alarm Center (Phase 6).
  *
- * Renders a sortable list of alarms with the type icon, vehicle, headline,
- * severity, status badge, and relative time. Row click opens the detail drawer
- * (selection → detail pattern, UI_UX §0.6). Sorting is newest-first by default
- * (matches the mock ordering + §5 "newest-first" triage flow).
+ * Renders a list of alarms with the type icon, vehicle, headline, severity,
+ * status badge, and relative time. Row click opens the detail drawer
+ * (selection → detail pattern, UI_UX §0.6). Newest-first triage flow.
  */
-import { alarmTypeIcon, severityColor } from '@/components/alarms/AlarmTypeIcon';
-import type { Alarm } from '@/types/alarm.types';
-import {
-  Box,
-  Chip,
-  Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from '@mui/material';
 import { useTranslation } from 'react-i18next';
+
+import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
+import { alarmTypeIcon, severityColor } from '@/components/alarms/AlarmTypeIcon';
+import { Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
+import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmListProps {
   /** The (already-filtered) alarms to render. */
@@ -48,113 +37,100 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
   const { t } = useTranslation();
 
   if (loading) {
-    // Fixed skeleton rows — stable keys (not array indices).
     const skelKeys = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e', 'sk-f', 'sk-g', 'sk-h'];
     return (
-      <TableContainer>
-        <Table size="small">
-          <TableBody>
-            {skelKeys.map((k) => (
-              <TableRow key={k}>
-                <TableCell colSpan={5}>
-                  <Skeleton height={28} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <div className="flex flex-col gap-2 p-4" aria-hidden>
+        {skelKeys.map((k) => (
+          <Skeleton key={k} className="h-9 w-full" />
+        ))}
+      </div>
     );
   }
 
   if (alarms.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-        <Typography color="text.secondary">{t('alarms.empty')}</Typography>
-      </Box>
+      <div className="flex justify-center py-10">
+        <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
+      </div>
     );
   }
 
   return (
-    <TableContainer sx={{ maxHeight: 'calc(100vh - 220px)' }}>
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('alarms.list.colType')}</TableCell>
-            <TableCell>{t('alarms.list.colVehicle')}</TableCell>
-            <TableCell>{t('alarms.list.colSeverity')}</TableCell>
-            <TableCell>{t('alarms.list.colStatus')}</TableCell>
-            <TableCell align="right">{t('alarms.list.colTime')}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
+    <div className="fv-scroll max-h-[calc(100vh-220px)] overflow-auto">
+      <Table>
+        <THead>
+          <tr>
+            <TH>{t('alarms.list.colType')}</TH>
+            <TH>{t('alarms.list.colVehicle')}</TH>
+            <TH>{t('alarms.list.colSeverity')}</TH>
+            <TH>{t('alarms.list.colStatus')}</TH>
+            <TH align="end">{t('alarms.list.colTime')}</TH>
+          </tr>
+        </THead>
+        <TBody>
           {alarms.map((a) => {
             const Icon = alarmTypeIcon(a.type);
             const isSel = a.id === selectedId;
             return (
-              <TableRow
+              <tr
                 key={a.id}
-                hover
-                selected={isSel}
+                tabIndex={0}
                 onClick={() => onSelect(a.id)}
-                sx={{ cursor: 'pointer' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') onSelect(a.id);
+                }}
+                className={`cursor-pointer transition-colors ${
+                  isSel
+                    ? 'bg-brand-50 dark:bg-brand-500/10'
+                    : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                }`}
               >
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        color: severityColor(a.severity),
-                      }}
-                    >
-                      <Icon size={16} />
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                <TD>
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex shrink-0" style={{ color: severityColor(a.severity) }}>
+                      <Icon size={16} aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-800 dark:text-graydark-800">
                         {a.message}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      </p>
+                      <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
                         {t(`alarms.type.${a.type}`)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" noWrap>
+                      </p>
+                    </div>
+                  </div>
+                </TD>
+                <TD>
+                  <p className="truncate text-sm text-gray-800 dark:text-graydark-800">
                     {a.vehicleLabel}
-                  </Typography>
+                  </p>
                   {a.driver && (
-                    <Typography variant="caption" color="text.secondary" noWrap>
+                    <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
                       {a.driver}
-                    </Typography>
+                    </p>
                   )}
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    size="small"
-                    label={t(`alarms.severity.${a.severity}`)}
-                    sx={{
-                      height: 20,
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      color: '#fff',
-                      bgcolor: severityColor(a.severity),
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
+                </TD>
+                <TD>
+                  <span
+                    className="inline-flex h-5 items-center rounded-full px-2 text-[0.7rem] font-semibold text-white"
+                    style={{ backgroundColor: severityColor(a.severity) }}
+                  >
+                    {t(`alarms.severity.${a.severity}`)}
+                  </span>
+                </TD>
+                <TD>
                   <AlarmStatusBadge status={a.status} label={t(`alarms.status.${a.status}`)} />
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="caption" color="text.secondary" noWrap>
+                </TD>
+                <TD align="end">
+                  <span className="whitespace-nowrap text-xs tabular-nums text-gray-500 dark:text-graydark-600">
                     {relative(a.raisedAt, t)}
-                  </Typography>
-                </TableCell>
-              </TableRow>
+                  </span>
+                </TD>
+              </tr>
             );
           })}
-        </TableBody>
+        </TBody>
       </Table>
-    </TableContainer>
+    </div>
   );
 }

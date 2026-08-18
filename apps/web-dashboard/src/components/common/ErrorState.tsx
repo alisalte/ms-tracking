@@ -2,14 +2,16 @@
  * ErrorState — reusable error display for failed API queries.
  *
  * Renders a centered icon + message + retry button. Used by every page's
- * `isError` branch so a failed fetch never renders a blank screen.
+ * `isError` branch so a failed fetch never renders a blank screen. Classifies
+ * the typed API error into: 401 (session expired), 403 (forbidden), network
+ * failure, or generic — Phase 3 error states.
  */
 import { AlertTriangle, Lock, ShieldOff, WifiOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { ApiClientError } from '@/api/errors';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Button } from '@/components/tailwind-ui';
 
 interface ErrorStateProps {
   /** The error from React Query (isError → error). */
@@ -42,41 +44,24 @@ export function ErrorState({ error, onRetry }: ErrorStateProps) {
   const detail = e?.message;
 
   return (
-    <Stack
-      alignItems="center"
-      justifyContent="center"
-      gap={2}
-      sx={{
-        py: 8,
-        textAlign: 'center',
-      }}
+    <div
+      role="alert"
+      className="flex flex-col items-center justify-center gap-4 px-6 py-12 text-center"
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 64,
-          height: 64,
-          borderRadius: '50%',
-          bgcolor: 'action.hover',
-        }}
-      >
-        <Icon size={28} color="#EF4444" />
-      </Box>
-      <Box>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          {t(titleKey)}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 360 }}>
+      <span className="inline-flex size-16 items-center justify-center rounded-full bg-danger-50 text-danger-500 dark:bg-danger-500/10 [&_svg]:size-7">
+        <Icon aria-hidden />
+      </span>
+      <div>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white">{t(titleKey)}</h2>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500 dark:text-graydark-600">
           {detail ?? t(descKey)}
-        </Typography>
-      </Box>
+        </p>
+      </div>
       {onRetry && (
-        <Button variant="outlined" size="small" onClick={onRetry}>
+        <Button variant="secondary" size="sm" onClick={onRetry}>
           {t('errors.retry')}
         </Button>
       )}
-    </Stack>
+    </div>
   );
 }

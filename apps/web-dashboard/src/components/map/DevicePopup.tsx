@@ -1,15 +1,4 @@
 import {
-  Box,
-  Button,
-  Chip,
-  Divider,
-  Drawer,
-  IconButton,
-  Skeleton,
-  Stack,
-  Typography,
-} from '@mui/material';
-import {
   Gauge,
   History,
   type LucideIcon,
@@ -21,16 +10,17 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVehicleDetail } from '@/api/fleet.api';
 import { useReverseGeocode } from '@/api/map.api';
 import { ErrorState } from '@/components/common/ErrorState';
+import { LiveBadge } from '@/components/dashboard/LiveBadge';
+import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
 import { lastSeenLabel } from '@/lib/relative-time';
 import { status } from '@/theme/palette';
 import type { AlertSeverity } from '@/types/fleet.types';
-
-import { LiveBadge } from '@/components/dashboard/LiveBadge';
 
 const DRAWER_WIDTH = 360;
 
@@ -50,11 +40,15 @@ interface DevicePopupProps {
 }
 
 /**
- * DevicePopup — right slide-over drawer (UI_UX_Design.md §2.5).
+ * DevicePopup — TailAdmin right slide-over drawer (Phase 5).
  *
  * The control center for one vehicle: status header + live dot, quick facts
  * (speed/heading/odometer/ignition/driver/address/age), recent events, and
  * quick actions. Never a page navigation. Backed by `useVehicleDetail`.
+ *
+ * Contract preserved from the MUI Drawer: the overlay wrapper keeps
+ * `role="presentation"` (referenced by tests) and closes on backdrop press,
+ * ESC, and the header X.
  */
 export function DevicePopup({ vehicleId, onClose, onShowHistory }: DevicePopupProps) {
   const { t } = useTranslation();
@@ -65,80 +59,70 @@ export function DevicePopup({ vehicleId, onClose, onShowHistory }: DevicePopupPr
   const hasFix = data !== undefined && (data.lat !== 0 || data.lng !== 0);
   const reverse = useReverseGeocode(hasFix ? data.lat : null, hasFix ? data.lng : null);
 
+  // ESC closes the drawer.
+  useEffect(() => {
+    if (!vehicleId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [vehicleId, onClose]);
+
+  if (!vehicleId) return null;
+
   return (
-    <Drawer
-      anchor="right"
-      open={Boolean(vehicleId)}
-      onClose={onClose}
-      variant="temporary"
-      ModalProps={{ keepMounted: true }}
-      sx={{
-        '& .MuiDrawer-paper': { width: { xs: '100%', sm: DRAWER_WIDTH }, maxWidth: '100%' },
-      }}
-    >
-      <Stack sx={{ height: '100%' }}>
+    <div role="presentation" className="absolute inset-0 z-40" data-testid="device-popup-overlay">
+      {/* Backdrop — click closes without clearing the selection (§31). */}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={t('map.popup.close')}
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-gray-900/25"
+      />
+      <aside
+        className="absolute inset-y-0 end-0 flex w-full flex-col bg-white shadow-xl sm:w-[var(--drawer-w)] dark:bg-graydark-300"
+        style={{ ['--drawer-w' as string]: `${DRAWER_WIDTH}px` }}
+      >
         {/* ── Header ── */}
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
-        >
-          <Stack direction="row" alignItems="center" gap={1}>
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2.5 dark:border-white/5">
+          <div className="flex min-w-0 items-center gap-2">
             {isLoading || !data ? (
-              <Skeleton variant="text" width={120} />
+              <Skeleton className="h-6 w-28" />
             ) : (
               <>
-                <Typography variant="h6" fontWeight={700}>
+                <h2 className="truncate text-lg font-bold text-gray-900 dark:text-white">
                   {data.label}
-                </Typography>
+                </h2>
                 {data.state === 'driving' && <LiveBadge />}
               </>
             )}
-          </Stack>
-          <IconButton size="small" onClick={onClose} aria-label={t('map.popup.close')}>
-            <X size={18} />
+          </div>
+          <IconButton size="sm" onClick={onClose} aria-label={t('map.popup.close')}>
+            <X size={17} />
           </IconButton>
-        </Stack>
+        </div>
 
         {isError ? (
           // §22: the real backend is unreachable — honest error, never fake data.
           <ErrorState error={error} onRetry={() => void refetch()} />
         ) : isLoading || !data ? (
-          <Box sx={{ p: 2 }}>
-            <Skeleton variant="rounded" height={120} />
-            <Skeleton variant="text" sx={{ mt: 2 }} />
-            <Skeleton variant="text" />
-          </Box>
+          <div className="flex flex-col gap-3 p-4">
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
         ) : (
-          <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+          <div className="fv-scroll min-h-0 flex-1 overflow-y-auto p-4">
             {/* Status + presence pills (§18) */}
-            <Stack direction="row" gap={0.75} sx={{ mb: 2, flexWrap: 'wrap' }}>
-              <Chip
-                size="small"
-                label={t(`map.states.${data.state}`)}
-                sx={{
-                  fontWeight: 600,
-                  backgroundColor: `${SEVERITY_COLOR.warning}1A`,
-                  color: data.state === 'overspeed' ? status.red : 'text.primary',
-                }}
-              />
-              <Chip
-                size="small"
-                label={t(`map.presence.${data.presence ?? 'UNKNOWN'}`)}
-                sx={{ fontWeight: 600 }}
-              />
-            </Stack>
+            <div className="mb-4 flex flex-wrap gap-1.5">
+              <Badge color="warning">{t(`map.states.${data.state}`)}</Badge>
+              <Badge color="gray">{t(`map.presence.${data.presence ?? 'UNKNOWN'}`)}</Badge>
+            </div>
 
             {/* ── Quick facts grid ── */}
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 1.5,
-                mb: 2,
-              }}
-            >
+            <div className="mb-4 grid grid-cols-2 gap-3">
               <Fact icon={Gauge} label={t('map.popup.speed')} value={`${data.speed} km/h`} />
               <Fact icon={Navigation} label={t('map.popup.heading')} value={`${data.heading}°`} />
               <Fact
@@ -158,7 +142,7 @@ export function DevicePopup({ vehicleId, onClose, onShowHistory }: DevicePopupPr
                 label={t('map.lastSeen.label')}
                 value={lastSeenLabel(data.lastSeenAt, t)}
               />
-            </Box>
+            </div>
 
             <Fact
               icon={MapPin}
@@ -176,56 +160,51 @@ export function DevicePopup({ vehicleId, onClose, onShowHistory }: DevicePopupPr
             />
 
             {/* ── Quick actions ── */}
-            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+            <p className="mt-4 mb-2 text-sm font-semibold text-gray-800 dark:text-white">
               {t('map.popup.actions')}
-            </Typography>
-            <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap', mb: 2 }}>
+            </p>
+            <div className="mb-4 flex flex-wrap gap-1.5">
               <ActionButton icon={Navigation} label={t('map.popup.follow')} primary />
               <ActionButton icon={Video} label={t('map.popup.liveVideo')} />
               <ActionButton icon={History} label={t('map.popup.tripTimeline')} />
               <ActionButton icon={Send} label={t('map.popup.sendMessage')} />
               <ActionButton icon={History} label={t('map.popup.history')} onClick={onShowHistory} />
-            </Stack>
+            </div>
 
-            <Divider sx={{ my: 1 }} />
+            <div className="my-2 border-t border-gray-200 dark:border-white/5" />
 
             {/* ── Recent events ── */}
-            <Typography variant="subtitle2" sx={{ mt: 1, mb: 1 }}>
+            <p className="mt-2 mb-2 text-sm font-semibold text-gray-800 dark:text-white">
               {t('map.popup.recentEvents')}
-            </Typography>
+            </p>
             {data.events.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
+              <p className="text-sm text-gray-500 dark:text-graydark-600">
                 {t('map.popup.noEvents')}
-              </Typography>
+              </p>
             ) : (
-              <Stack gap={0.5}>
+              <div className="flex flex-col gap-1.5">
                 {data.events.map((e) => (
-                  <Stack key={e.id} direction="row" alignItems="center" gap={1}>
-                    <Box
-                      component="span"
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        backgroundColor: SEVERITY_COLOR[e.severity],
-                        flexShrink: 0,
-                      }}
+                  <div key={e.id} className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: SEVERITY_COLOR[e.severity] }}
                     />
-                    <Typography variant="body2" sx={{ flex: 1 }}>
+                    <p className="min-w-0 flex-1 text-sm text-gray-800 dark:text-graydark-800">
                       {t(`dashboard.alerts.${e.type}`)}
-                      <Typography component="span" variant="caption" color="text.secondary">
+                      <span className="text-xs text-gray-500 dark:text-graydark-600">
                         {' · '}
                         {e.detail}
-                      </Typography>
-                    </Typography>
-                  </Stack>
+                      </span>
+                    </p>
+                  </div>
                 ))}
-              </Stack>
+              </div>
             )}
-          </Box>
+          </div>
         )}
-      </Stack>
-    </Drawer>
+      </aside>
+    </div>
   );
 }
 
@@ -242,27 +221,15 @@ function Fact({
   fullWidth?: boolean;
 }) {
   return (
-    <Stack
-      direction="row"
-      alignItems="center"
-      gap={1}
-      sx={{ gridColumn: fullWidth ? '1 / -1' : undefined, minWidth: 0 }}
-    >
-      <Icon size={15} color="var(--mui-palette-text-secondary)" />
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="caption" color="text.secondary" component="div">
-          {label}
-        </Typography>
-        <Typography
-          variant="body2"
-          fontWeight={500}
-          noWrap
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
+    <div className={`flex min-w-0 items-center gap-2 ${fullWidth ? 'col-span-2' : ''}`}>
+      <Icon size={15} aria-hidden className="shrink-0 text-gray-400 dark:text-graydark-600" />
+      <div className="min-w-0">
+        <p className="text-xs text-gray-500 dark:text-graydark-600">{label}</p>
+        <p className="truncate text-sm font-medium tabular-nums text-gray-800 dark:text-graydark-800">
           {value}
-        </Typography>
-      </Box>
-    </Stack>
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -279,19 +246,23 @@ function ActionButton({
   onClick?: () => void;
 }) {
   return (
-    <Button
-      size="small"
-      variant={primary ? 'contained' : 'outlined'}
-      startIcon={<Icon size={15} />}
-      sx={{ textTransform: 'none' }}
+    <button
+      type="button"
       onClick={onClick}
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+        primary
+          ? 'border-brand-500 bg-brand-500 text-white hover:bg-brand-600'
+          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-transparent dark:text-graydark-700 dark:hover:bg-white/5'
+      }`}
     >
+      <Icon size={14} aria-hidden />
       {label}
-    </Button>
+    </button>
   );
 }
 
-/** Format kilometers with thousands separators. */
-function fmtKm(km: number): string {
-  return `${km.toLocaleString('en-US')} km`;
+/** Kilometer formatting (backend reports meters when available; 0 = unknown). */
+function fmtKm(m: number): string {
+  if (!m) return '—';
+  return `${(m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
 }

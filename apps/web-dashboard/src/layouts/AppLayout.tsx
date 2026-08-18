@@ -1,25 +1,27 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router';
 
 import { useSilentRefresh } from '@/auth/useSilentRefresh';
-import { Sidebar } from '@/components/shell/Sidebar';
-import { Topbar } from '@/components/shell/Topbar';
+import { Header } from '@/components/layout/Header';
+import { MainContent } from '@/components/layout/MainContent';
+import { Sidebar } from '@/components/layout/Sidebar';
 
-/** Content-area padding exposed for full-bleed pages (Tailwind value, px). */
-export const PAGE_PADDING = 20;
+// Re-exported for backwards compatibility (full-bleed pages reference it).
+export { PAGE_PADDING } from '@/components/layout/MainContent';
 
 /**
  * AppLayout — the authenticated TailAdmin application shell.
  *
- * Composition (TailAdmin two-pane layout):
- * - `Sidebar` (dark graydark, permanent 270/72 + mobile off-canvas)
- * - `Topbar` (sticky 64px header: search + notifications + theme + user)
- * - content area (`<main>`) — a scroll column; the active page renders inside.
+ * Composition (TailAdmin layout):
+ * - `Sidebar` (dark graydark rail: permanent 270/64px desktop + off-canvas
+ *   mobile), permission-aware via `nav.config`.
+ * - `Header` (sticky 64px: breadcrumb + search + notifications + theme +
+ *   language + user).
+ * - `MainContent` (`<main>`) — the scroll column; the active page renders via
+ *   the layout `<Outlet/>` inside the standard `PAGE_PADDING`. Full-bleed
+ *   pages (Map, Video Wall) cover exactly this area with `inset:0`.
  *
- * `<main>` carries the standard page padding. Full-bleed pages (Map, Video
- * Wall) render their own internal chrome within this padded area, same as the
- * previous MUI shell. State (mobile drawer open + desktop collapse) lives here
- * so the Topbar's hamburger and the Sidebar's collapse toggle stay in sync.
+ * Shell state (mobile drawer open + desktop collapse) lives here so the
+ * header's hamburger and the sidebar's collapse toggle stay in sync.
  *
  * Sprint E §5: `useSilentRefresh` is mounted exactly once here — it proactively
  * rotates the access token ~60s before expiry for every authenticated screen.
@@ -40,15 +42,8 @@ export function AppLayout() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar onMobileMenu={() => setMobileOpen(true)} />
-
-        <main
-          id="fv-main-content"
-          className="relative flex-1 min-h-0 overflow-auto bg-gray-50 dark:bg-graydark-200"
-          style={{ padding: PAGE_PADDING }}
-        >
-          <Outlet />
-        </main>
+        <Header onMobileMenu={() => setMobileOpen(true)} />
+        <MainContent />
       </div>
     </div>
   );

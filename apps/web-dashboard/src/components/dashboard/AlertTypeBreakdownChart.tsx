@@ -1,16 +1,14 @@
-import { Box, Skeleton } from '@mui/material';
 import type { EChartsOption } from 'echarts';
 import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveAlarms } from '@/api/fleet.api';
-import { ErrorState } from '@/components/common/ErrorState';
 import { status } from '@/theme/palette';
 import type { AlertType } from '@/types/fleet.types';
 
+import { DashboardCard } from './DashboardCard';
 import { EChart } from './EChart';
-import { WidgetCard } from './WidgetCard';
 
 /** Alert type → semantic color (§0.2). */
 const TYPE_COLOR: Record<AlertType, string> = {
@@ -80,22 +78,19 @@ export function AlertTypeBreakdownChart() {
   }, [alerts, t]);
 
   return (
-    <WidgetCard
+    <DashboardCard
       titleKey="dashboard.widgets.alertTypes"
       icon={PieChartIcon}
       loading={isLoading && !isError}
       empty={alerts.length === 0 && !isLoading && !isError}
       emptyKey="dashboard.empty.alerts"
+      error={isError ? error : undefined}
+      onRetry={() => void refetch()}
+      flush
     >
-      <Box sx={{ width: '100%', height: 220 }}>
-        {isError ? (
-          <ErrorState error={error} onRetry={() => void refetch()} />
-        ) : isLoading ? (
-          <Skeleton variant="rounded" sx={{ width: '100%', height: '100%' }} />
-        ) : (
-          <EChart option={option} height={220} />
-        )}
-      </Box>
-    </WidgetCard>
+      <div className="w-full px-4 pb-3">
+        <EChart option={option} height={220} />
+      </div>
+    </DashboardCard>
   );
 }

@@ -277,9 +277,9 @@ describe('MapPage (Live Tracking)', () => {
     renderMap();
     await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
 
-    // Open the fleet selector (the only combobox on the page) and pick Fleet A.
-    fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(await screen.findByRole('option', { name: 'Fleet A' }));
+    // The fleet selector is a native <select> (combobox) — change by value.
+    // (Phase 5: the panel moved from MUI Select to a native select.)
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'fleet-a' } });
 
     await waitFor(() => {
       expect(screen.getByText(`2 of ${vehiclesFixture.length}`)).toBeInTheDocument();

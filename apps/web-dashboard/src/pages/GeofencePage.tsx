@@ -1,10 +1,13 @@
 /**
- * GeofencePage — geofence management (`/geofences`) — Sprint I §45–§47.
+ * GeofencePage — TailAdmin geofence management (`/geofences`) — Sprint I
+ * §45–§47, Phase 6 port.
  *
  * Paginated, filterable list (type / status / search) over GET /geofences,
- * a detail dialog with map preview + lifecycle actions (edit geometry,
+ * a detail modal with map preview + lifecycle actions (edit geometry,
  * activate/deactivate, archive), and the create/edit form whose PRIMARY
  * interface is the map drawing surface. Mutations are gated on `maps.write`.
+ * Geometry follows the backend exactly: CIRCLE (center+radius) and POLYGON —
+ * nothing else.
  */
 import { Archive, Circle as CircleIcon, Hexagon, Pencil, Plus, Power } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -24,25 +27,20 @@ import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { GeofenceFormDialog } from '@/components/geofences/GeofenceFormDialog';
 import { GeofencePreviewMap } from '@/components/geofences/GeofencePreviewMap';
-import { type Column, DataTable, PageHeader, StatusBadge } from '@/components/ui';
-import type { Geofence, GeofenceStatus, GeofenceType } from '@/types/geofence.types';
 import {
-  Box,
+  Badge,
   Button,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
+  Modal,
+  Spinner,
+  TBody,
+  TD,
+  TH,
+  THead,
+  Table,
   Tooltip,
-  Typography,
-} from '@mui/material';
+} from '@/components/tailwind-ui';
+import type { Geofence, GeofenceStatus, GeofenceType } from '@/types/geofence.types';
 
 const TYPE_FILTERS: Array<{ value: '' | GeofenceType; labelKey: string }> = [
   { value: '', labelKey: 'geofences.filters.allTypes' },
@@ -83,122 +81,54 @@ export function GeofencePage() {
   const page = useGeofencesPage(filters);
   const { data: overlays } = useGeofences();
 
-  const columns: Column<Geofence>[] = useMemo(
-    () => [
-      {
-        id: 'name',
-        headerKey: 'geofences.cols.name',
-        render: (g) => (
-          <Stack direction="row" alignItems="center" gap={1} minWidth={0}>
-            {g.type === 'CIRCLE' ? (
-              <CircleIcon size={16} color="#465FFB" />
-            ) : (
-              <Hexagon size={16} color="#465FFB" />
-            )}
-            <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-              {g.name || t('geofences.untitled')}
-            </Typography>
-          </Stack>
-        ),
-      },
-      {
-        id: 'type',
-        headerKey: 'geofences.cols.type',
-        render: (g) =>
-          g.type === 'CIRCLE'
-            ? t('geofences.circle')
-            : g.type === 'POLYGON'
-              ? t('geofences.polygon')
-              : g.type,
-      },
-      {
-        id: 'status',
-        headerKey: 'geofences.cols.status',
-        render: (g) => (
-          <StatusBadge
-            label={t(`geofences.status.${g.status}`)}
-            tone={
-              g.status === 'ACTIVE' ? 'success' : g.status === 'INACTIVE' ? 'warning' : 'neutral'
-            }
-          />
-        ),
-      },
-      {
-        id: 'vehicles',
-        headerKey: 'geofences.cols.vehicles',
-        render: (g) =>
-          g.assignedVehicleIds.length === 0 ? (
-            <Chip size="small" label={t('geofences.allVehicles')} variant="outlined" />
-          ) : (
-            <Chip
-              size="small"
-              label={t('geofences.nVehicles', { count: g.assignedVehicleIds.length })}
-            />
-          ),
-      },
-      {
-        id: 'alerts',
-        headerKey: 'geofences.cols.alerts',
-        render: (g) => g.alertOn.join(' · '),
-      },
-      {
-        id: 'createdAt',
-        headerKey: 'geofences.cols.createdAt',
-        render: (g) => (g.createdAt ? new Date(g.createdAt).toLocaleDateString() : '—'),
-      },
-    ],
-    [t],
-  );
-
   return (
-    <Stack gap={2}>
-      <PageHeader
-        title={t('geofences.title')}
-        subtitle={t('geofences.subtitle')}
-        actions={
-          <PermissionGate requires="maps.write">
-            <Button
-              variant="contained"
-              startIcon={<Plus size={16} />}
-              onClick={() => setShowCreate(true)}
-              data-testid="geofence-create"
-            >
-              {t('geofences.create')}
-            </Button>
-          </PermissionGate>
-        }
-      />
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {t('geofences.title')}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('geofences.subtitle')}</p>
+        </div>
+        <PermissionGate requires="maps.write">
+          <Button
+            leftIcon={<Plus size={16} />}
+            onClick={() => setShowCreate(true)}
+            data-testid="geofence-create"
+          >
+            {t('geofences.create')}
+          </Button>
+        </PermissionGate>
+      </div>
 
-      {/* Filters (Sprint I §46) */}
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ sm: 'center' }}>
-        <Select
-          size="small"
+      {/* Filters (Sprint I §46) — native selects */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as '' | GeofenceType)}
-          sx={{ minWidth: 140 }}
           aria-label={t('geofences.filters.type')}
+          className="h-9 cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
         >
           {TYPE_FILTERS.map((f) => (
-            <MenuItem key={f.value} value={f.value}>
+            <option key={f.value} value={f.value}>
               {t(f.labelKey)}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-        <Select
-          size="small"
+        </select>
+        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as '' | GeofenceStatus | 'ARCHIVED')}
-          sx={{ minWidth: 140 }}
           aria-label={t('geofences.filters.status')}
+          className="h-9 cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
         >
           {STATUS_FILTERS.map((f) => (
-            <MenuItem key={f.value} value={f.value}>
+            <option key={f.value} value={f.value}>
               {t(f.labelKey)}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-        <TextField
-          size="small"
+        </select>
+        <input
           placeholder={t('geofences.filters.search')}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -206,37 +136,109 @@ export function GeofencePage() {
             if (e.key === 'Enter') setSearch(searchInput.trim());
           }}
           onBlur={() => setSearch(searchInput.trim())}
-          sx={{ minWidth: 220 }}
-          slotProps={{ htmlInput: { 'aria-label': t('geofences.filters.search') } }}
+          aria-label={t('geofences.filters.search')}
+          className="h-9 min-w-56 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800 dark:placeholder:text-graydark-600"
         />
-      </Stack>
+      </div>
 
       {page.isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
-        </Box>
+        <div className="flex justify-center py-12">
+          <Spinner size="lg" label={t('common.loading')} />
+        </div>
       ) : page.isError ? (
         <ErrorState error={page.error} onRetry={() => page.refetch()} />
       ) : (
         <>
-          <DataTable
-            columns={columns}
-            rows={page.items}
-            rowKey={(g) => g.id}
-            onRowClick={(g) => setDetailTarget(g)}
-            emptyKey="geofences.empty"
-            dense
-          />
+          <Table caption={t('geofences.title')}>
+            <THead>
+              <tr>
+                <TH>{t('geofences.cols.name')}</TH>
+                <TH>{t('geofences.cols.type')}</TH>
+                <TH>{t('geofences.cols.status')}</TH>
+                <TH>{t('geofences.cols.vehicles')}</TH>
+                <TH>{t('geofences.cols.alerts')}</TH>
+                <TH>{t('geofences.cols.createdAt')}</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {page.items.length === 0 ? (
+                <tr>
+                  <TD colSpan={6}>
+                    <p className="py-8 text-center text-sm text-gray-500 dark:text-graydark-600">
+                      {t('geofences.empty')}
+                    </p>
+                  </TD>
+                </tr>
+              ) : (
+                page.items.map((g) => (
+                  <tr
+                    key={g.id}
+                    tabIndex={0}
+                    onClick={() => setDetailTarget(g)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setDetailTarget(g);
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+                  >
+                    <TD>
+                      <span className="flex min-w-0 items-center gap-2">
+                        {g.type === 'CIRCLE' ? (
+                          <CircleIcon size={16} aria-hidden className="shrink-0 text-brand-500" />
+                        ) : (
+                          <Hexagon size={16} aria-hidden className="shrink-0 text-brand-500" />
+                        )}
+                        <span className="truncate font-semibold text-gray-800 dark:text-graydark-800">
+                          {g.name || t('geofences.untitled')}
+                        </span>
+                      </span>
+                    </TD>
+                    <TD>
+                      {g.type === 'CIRCLE'
+                        ? t('geofences.circle')
+                        : g.type === 'POLYGON'
+                          ? t('geofences.polygon')
+                          : g.type}
+                    </TD>
+                    <TD>
+                      <Badge
+                        color={
+                          g.status === 'ACTIVE'
+                            ? 'success'
+                            : g.status === 'INACTIVE'
+                              ? 'warning'
+                              : 'gray'
+                        }
+                      >
+                        {t(`geofences.status.${g.status}`)}
+                      </Badge>
+                    </TD>
+                    <TD>
+                      {g.assignedVehicleIds.length === 0 ? (
+                        <Badge color="gray">{t('geofences.allVehicles')}</Badge>
+                      ) : (
+                        <Badge color="brand">
+                          {t('geofences.nVehicles', { count: g.assignedVehicleIds.length })}
+                        </Badge>
+                      )}
+                    </TD>
+                    <TD>{g.alertOn.join(' · ')}</TD>
+                    <TD>{g.createdAt ? new Date(g.createdAt).toLocaleDateString() : '—'}</TD>
+                  </tr>
+                ))
+              )}
+            </TBody>
+          </Table>
           {page.hasNextPage && (
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <div className="flex justify-center">
               <Button
+                variant="secondary"
                 onClick={() => page.fetchNextPage()}
                 disabled={page.isFetchingNextPage}
                 data-testid="geofence-load-more"
               >
                 {page.isFetchingNextPage ? t('common.loading') : t('common.loadMore')}
               </Button>
-            </Box>
+            </div>
           )}
         </>
       )}
@@ -282,11 +284,11 @@ export function GeofencePage() {
       />
       {/* Overlay source consumed by the form's existing-fence rendering. */}
       <span hidden>{overlays?.length ?? 0}</span>
-    </Stack>
+    </div>
   );
 }
 
-/** Detail dialog — map preview + metadata + lifecycle actions (§47). */
+/** Detail modal — map preview + metadata + lifecycle actions (§47). */
 function GeofenceDetailDialog({
   geofence,
   onClose,
@@ -334,97 +336,103 @@ function GeofenceDetailDialog({
   };
 
   return (
-    <Dialog open={geofence !== null} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{geofence.name || t('geofences.untitled')}</DialogTitle>
-      <DialogContent>
-        <Stack gap={2} sx={{ mt: 1 }}>
-          <GeofencePreviewMap geofence={geofence} height={320} />
-          <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center">
-            <Chip
-              size="small"
-              label={
-                geofence.type === 'CIRCLE'
-                  ? t('geofences.circle')
-                  : geofence.type === 'POLYGON'
-                    ? t('geofences.polygon')
-                    : geofence.type
-              }
-            />
-            <Chip
-              size="small"
-              label={t(`geofences.status.${geofence.status}`)}
-              color={geofence.status === 'ACTIVE' ? 'success' : 'default'}
-            />
-            {geofence.type === 'CIRCLE' && geofence.radiusM !== null && (
-              <Chip
-                size="small"
-                label={t('geofences.radiusM', { m: Math.round(geofence.radiusM) })}
-              />
-            )}
-            {geofence.dwellSec !== null && (
-              <Chip size="small" label={t('geofences.dwellBadge', { sec: geofence.dwellSec })} />
-            )}
-          </Stack>
-          {geofence.description && (
-            <Typography variant="body2" color="text.secondary">
-              {geofence.description}
-            </Typography>
+    <Modal
+      open={geofence !== null}
+      onClose={onClose}
+      size="lg"
+      title={geofence.name || t('geofences.untitled')}
+      footer={
+        <>
+          <PermissionGate requires="maps.write">
+            <Tooltip label={t('geofences.toggleStatus')}>
+              <IconButton
+                aria-label={t('geofences.toggleStatus')}
+                onClick={toggleStatus}
+                disabled={setStatus.isPending}
+                data-testid="geofence-toggle-status"
+              >
+                <Power
+                  size={18}
+                  color={geofence.status === 'ACTIVE' ? '#12B76A' : '#98A2B3'}
+                  aria-hidden
+                />
+              </IconButton>
+            </Tooltip>
+            <Tooltip label={t('geofences.edit')}>
+              <IconButton
+                aria-label={t('geofences.edit')}
+                onClick={() => onEdit(geofence)}
+                data-testid="geofence-edit"
+              >
+                <Pencil size={18} aria-hidden />
+              </IconButton>
+            </Tooltip>
+            <Tooltip label={t('geofences.archive')}>
+              <IconButton
+                aria-label={t('geofences.archive')}
+                onClick={() => onArchive(geofence)}
+                data-testid="geofence-archive"
+              >
+                <Archive size={18} aria-hidden />
+              </IconButton>
+            </Tooltip>
+          </PermissionGate>
+          <Button variant="secondary" onClick={onClose}>
+            {t('common.close')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <GeofencePreviewMap geofence={geofence} height={320} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge color="brand">
+            {geofence.type === 'CIRCLE'
+              ? t('geofences.circle')
+              : geofence.type === 'POLYGON'
+                ? t('geofences.polygon')
+                : geofence.type}
+          </Badge>
+          <Badge color={geofence.status === 'ACTIVE' ? 'success' : 'gray'}>
+            {t(`geofences.status.${geofence.status}`)}
+          </Badge>
+          {geofence.type === 'CIRCLE' && geofence.radiusM !== null && (
+            <Badge color="gray">
+              {t('geofences.radiusM', { m: Math.round(geofence.radiusM) })}
+            </Badge>
           )}
-          <Box>
-            <Typography variant="caption" color="text.secondary">
-              {t('geofences.assignedTo')}
-            </Typography>
-            {geofence.assignedVehicleIds.length === 0 ? (
-              <Typography variant="body2">{t('geofences.allVehicles')}</Typography>
-            ) : (
-              <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                {geofence.assignedVehicleIds.map((id) => (
-                  <Chip key={id} size="small" label={vehicleLabels.get(id) ?? id.slice(0, 8)} />
-                ))}
-              </Stack>
-            )}
-          </Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('geofences.createdAt')}{' '}
-            {geofence.createdAt ? new Date(geofence.createdAt).toLocaleString() : '—'} ·{' '}
-            {t('geofences.updatedAt')}{' '}
-            {geofence.updatedAt ? new Date(geofence.updatedAt).toLocaleString() : '—'}
-          </Typography>
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <PermissionGate requires="maps.write">
-          <Tooltip title={t('geofences.toggleStatus')}>
-            <IconButton
-              aria-label={t('geofences.toggleStatus')}
-              onClick={toggleStatus}
-              disabled={setStatus.isPending}
-              data-testid="geofence-toggle-status"
-            >
-              <Power size={18} color={geofence.status === 'ACTIVE' ? '#12B76A' : '#98A2B3'} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('geofences.edit')}>
-            <IconButton
-              aria-label={t('geofences.edit')}
-              onClick={() => onEdit(geofence)}
-              data-testid="geofence-edit"
-            >
-              <Pencil size={18} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('geofences.archive')}>
-            <IconButton
-              aria-label={t('geofences.archive')}
-              onClick={() => onArchive(geofence)}
-              data-testid="geofence-archive"
-            >
-              <Archive size={18} />
-            </IconButton>
-          </Tooltip>
-        </PermissionGate>
-        <Button onClick={onClose}>{t('common.close')}</Button>
-      </DialogActions>
-    </Dialog>
+          {geofence.dwellSec !== null && (
+            <Badge color="gray">{t('geofences.dwellBadge', { sec: geofence.dwellSec })}</Badge>
+          )}
+        </div>
+        {geofence.description && (
+          <p className="text-sm text-gray-500 dark:text-graydark-600">{geofence.description}</p>
+        )}
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-graydark-600">
+            {t('geofences.assignedTo')}
+          </p>
+          {geofence.assignedVehicleIds.length === 0 ? (
+            <p className="mt-1 text-sm text-gray-700 dark:text-graydark-700">
+              {t('geofences.allVehicles')}
+            </p>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {geofence.assignedVehicleIds.map((id) => (
+                <Badge key={id} color="gray">
+                  {vehicleLabels.get(id) ?? id.slice(0, 8)}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 dark:text-graydark-600">
+          {t('geofences.createdAt')}{' '}
+          {geofence.createdAt ? new Date(geofence.createdAt).toLocaleString() : '—'} ·{' '}
+          {t('geofences.updatedAt')}{' '}
+          {geofence.updatedAt ? new Date(geofence.updatedAt).toLocaleString() : '—'}
+        </p>
+      </div>
+    </Modal>
   );
 }

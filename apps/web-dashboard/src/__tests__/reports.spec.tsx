@@ -23,6 +23,7 @@ import {
   useFleetOverview,
   useTrips,
 } from '@/api/report.api';
+import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
@@ -59,6 +60,17 @@ function makeWrapper() {
 }
 
 beforeEach(() => {
+  // Phase 8: CSV export buttons are gated on report.export — grant it for the
+  // section renders (the gate itself is asserted in its own test below).
+  useAuthStore.setState({
+    user: {
+      id: 'u1',
+      email: 'op@fleet.test',
+      tenantId: 't1',
+      roles: ['analyst'],
+      permissions: ['report.read', 'report.export'],
+    },
+  });
   vi.clearAllMocks();
   window.localStorage.setItem('fleetvision_use_mock', 'false');
 });
@@ -242,7 +254,9 @@ describe('TripsSection (§9 + §38 view-on-map)', () => {
     apiGetRaw.mockResolvedValue({ items: [tripRow], nextCursor: null });
     render(<TripsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
 
-    await waitFor(() => expect(screen.getByText('11-B-22')).toBeInTheDocument());
+    // The native vehicle select also lists the label as an <option> (Phase 8
+    // port) — the table cell + the option both match.
+    await waitFor(() => expect(screen.getAllByText('11-B-22').length).toBeGreaterThan(0));
     expect(screen.getByText('92.4 km')).toBeInTheDocument();
     expect(screen.getByText('61.6 km/h')).toBeInTheDocument();
 
@@ -265,5 +279,64 @@ describe('TripsSection (§9 + §38 view-on-map)', () => {
       expect(apiGetBlob).toHaveBeenCalledWith('/reports/export/trips', { preset: '7d' }),
     );
     expect(downloadBlob).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Phase 8 — TailAdmin table sorting + export permission gate ──────────────
+
+describe('Phase 8 — sorting + permissions', () => {
+  it('sorts report rows client-side by clicking a column header', async () => {
+    apiGetRaw.mockResolvedValue({
+      items: [
+        { ...tripRow, id: 't-2', vehicleId: 'v-2', label: 'BB-2', distanceKm: 10 },
+        { ...tripRow, id: 't-1', vehicleId: 'v-1', label: 'AA-1', distanceKm: 90 },
+      ],
+      nextCursor: null,
+    });
+    render(<TripsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getAllByText('AA-1').length).toBeGreaterThan(0));
+
+    // DOM order starts as returned (BB-2 first).
+    const orderBefore = document.querySelectorAll('tbody tr td:nth-child(1)');
+    expect(orderBefore[0]?.textContent).toContain('BB-2');
+
+    // Click the Vehicle header → ascending.
+    fireEvent.click(screen.getByRole('button', { name: /vehicle — sort/i }));
+    const orderAfter = document.querySelectorAll('tbody tr td:nth-child(1)');
+    expect(orderAfter[0]?.textContent).toContain('AA-1');
+    expect(orderAfter[1]?.textContent).toContain('BB-2');
+
+    // Click again → descending.
+    fireEvent.click(screen.getByRole('button', { name: /vehicle — ascending/i }));
+    const orderDesc = document.querySelectorAll('tbody tr td:nth-child(1)');
+    expect(orderDesc[0]?.textContent).toContain('BB-2');
+  });
+
+  it('hides the CSV export button without report.export (backend authority respected)', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u2',
+        email: 'viewer@fleet.test',
+        tenantId: 't1',
+        roles: ['viewer'],
+        permissions: ['report.read'],
+      },
+    });
+    apiGetRaw.mockResolvedValue({ items: [tripRow], nextCursor: null });
+    render(<TripsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getAllByText('11-B-22').length).toBeGreaterThan(0));
+    expect(screen.queryByTestId('report-export-trips')).toBeNull();
+
+    // Granting the permission reveals it (the backend re-checks on the call).
+    useAuthStore.setState({
+      user: {
+        id: 'u2',
+        email: 'viewer@fleet.test',
+        tenantId: 't1',
+        roles: ['viewer'],
+        permissions: ['report.read', 'report.export'],
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId('report-export-trips')).not.toBeNull());
   });
 });

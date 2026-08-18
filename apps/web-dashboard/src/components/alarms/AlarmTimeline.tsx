@@ -1,5 +1,5 @@
 /**
- * AlarmTimeline — the chronological view of the Alarm Center.
+ * AlarmTimeline — the TailAdmin chronological view of the Alarm Center (Phase 6).
  *
  * Buckets alarms by hour over the last 24h and lays them out as severity-
  * colored event blocks. Each block is clickable → opens the detail drawer.
@@ -10,8 +10,8 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { severityColor } from '@/components/alarms/AlarmTypeIcon';
+import { Skeleton, Tooltip } from '@/components/tailwind-ui';
 import type { Alarm } from '@/types/alarm.types';
-import { Box, Chip, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 
 interface AlarmTimelineProps {
   alarms: Alarm[];
@@ -43,19 +43,19 @@ export function AlarmTimeline({
   if (loading) {
     const skelKeys = ['tsk-a', 'tsk-b', 'tsk-c', 'tsk-d', 'tsk-e', 'tsk-f', 'tsk-g', 'tsk-h'];
     return (
-      <Stack gap={1} sx={{ p: 2 }}>
+      <div className="flex flex-col gap-2 p-4" aria-hidden>
         {skelKeys.map((k) => (
-          <Skeleton key={k} height={36} />
+          <Skeleton key={k} className="h-9 w-full" />
         ))}
-      </Stack>
+      </div>
     );
   }
 
   if (alarms.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-        <Typography color="text.secondary">{t('alarms.empty')}</Typography>
-      </Box>
+      <div className="flex justify-center py-10">
+        <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
+      </div>
     );
   }
 
@@ -63,49 +63,44 @@ export function AlarmTimeline({
   const hours = Array.from({ length: 24 }, (_, i) => 23 - i);
 
   return (
-    <Box sx={{ p: 2, overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' }}>
-      <Stack gap={1}>
+    <div className="fv-scroll max-h-[calc(100vh-220px)] overflow-y-auto p-4">
+      <div className="flex flex-col gap-2">
         {hours.map((h) => {
           const bucket = buckets.get(h) ?? [];
           if (bucket.length === 0) return null;
           return (
-            <Box
-              key={h}
-              sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, minHeight: 32 }}
-            >
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ width: 44, flexShrink: 0, pt: 0.5, fontFamily: 'monospace' }}
-              >
+            <div key={h} className="flex min-h-8 items-start gap-3">
+              <span className="w-11 shrink-0 pt-1 font-mono text-xs text-gray-400 dark:text-graydark-600">
                 {String(h).padStart(2, '0')}:00
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1 }}>
-                {bucket.map((a) => (
-                  <Tooltip key={a.id} title={`${a.vehicleLabel} · ${a.message}`}>
-                    <Chip
-                      size="small"
-                      label={a.message}
-                      onClick={() => onSelect(a.id)}
-                      variant={a.id === selectedId ? 'filled' : 'outlined'}
-                      sx={{
-                        height: 24,
-                        fontSize: '0.7rem',
-                        bgcolor: a.id === selectedId ? severityColor(a.severity) : 'transparent',
-                        color: a.id === selectedId ? '#fff' : severityColor(a.severity),
-                        borderColor: severityColor(a.severity),
-                        maxWidth: 200,
-                        cursor: 'pointer',
-                        '& .MuiChip-label': { px: 1, overflow: 'hidden', textOverflow: 'ellipsis' },
-                      }}
-                    />
-                  </Tooltip>
-                ))}
-              </Box>
-            </Box>
+              </span>
+              <div className="flex flex-1 flex-wrap gap-1.5">
+                {bucket.map((a) => {
+                  const isSel = a.id === selectedId;
+                  const color = severityColor(a.severity);
+                  return (
+                    <Tooltip key={a.id} label={`${a.vehicleLabel} · ${a.message}`}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(a.id)}
+                        className={`h-6 max-w-50 cursor-pointer truncate rounded-full border px-2.5 text-xs font-semibold transition-colors ${
+                          isSel ? 'text-white' : ''
+                        }`}
+                        style={
+                          isSel
+                            ? { backgroundColor: color, borderColor: color }
+                            : { color, borderColor: color, backgroundColor: 'transparent' }
+                        }
+                      >
+                        {a.message}
+                      </button>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 }

@@ -1,3 +1,4 @@
+import { ShieldAlert } from 'lucide-react';
 /**
  * Permission-aware UI (Sprint E §23/§24).
  *
@@ -13,8 +14,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '@/auth/auth.store';
-import { EmptyState } from '@/components/ui';
-import { ShieldAlert } from 'lucide-react';
+import { EmptyState } from '@/components/tailwind-ui';
 
 /** The permission strings the UI gates on (must match the backend catalog). */
 export const PERMISSIONS = {
@@ -76,6 +76,8 @@ export function usePermissions() {
     permissions,
     can: (required: string) => permissionSatisfies(permissions, required),
     canAll: (required: readonly string[]) => permissionsSatisfy(permissions, required),
+    canAny: (required: readonly string[]) =>
+      required.some((p) => permissionSatisfies(permissions, p)),
   };
 }
 
@@ -108,7 +110,7 @@ export function PermissionDeniedState({ hint }: { hint?: string }) {
   const { t } = useTranslation();
   return (
     <EmptyState
-      icon={ShieldAlert}
+      icon={<ShieldAlert />}
       title={t('errors.permissionDeniedTitle', 'Permission denied')}
       description={hint ?? t('errors.permissionDeniedBody', 'You do not have access to this area.')}
     />

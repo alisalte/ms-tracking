@@ -23,7 +23,7 @@ import {
   useFleets,
   useVehicles,
 } from '@/api/asset.api';
-import { PermissionGate, PERMISSIONS } from '@/auth/permissions';
+import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
 import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
 import { DevicesTab } from '@/components/assets/DevicesTab';
@@ -33,12 +33,7 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { PageHeader } from '@/components/ui';
-import type {
-  DeviceProtocol,
-  DeviceStatus,
-  FleetStatus,
-  VehicleStatus,
-} from '@/types/asset.types';
+import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
 import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { Plus } from 'lucide-react';
 
@@ -141,7 +136,8 @@ export function AssetManagementPage() {
     }
   };
 
-  const listQuery = tab === 'fleets' ? fleetsQuery : tab === 'vehicles' ? vehiclesQuery : devicesQuery;
+  const listQuery =
+    tab === 'fleets' ? fleetsQuery : tab === 'vehicles' ? vehiclesQuery : devicesQuery;
 
   return (
     <Stack sx={{ height: '100%' }}>
@@ -152,7 +148,12 @@ export function AssetManagementPage() {
         subtitle={t('assets.subtitle')}
         actions={
           <PermissionGate requires={WRITE_PERMISSION[tab]}>
-            <Button variant="contained" size="small" startIcon={<Plus size={16} />} onClick={openCreate}>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<Plus size={16} />}
+              onClick={openCreate}
+            >
               {t('common.add')} {t(`assets.tabs.${tab}`)}
             </Button>
           </PermissionGate>

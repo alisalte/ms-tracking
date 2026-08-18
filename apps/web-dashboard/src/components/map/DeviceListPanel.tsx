@@ -1,4 +1,3 @@
-import { Box, Chip, InputBase, MenuItem, Select, Stack, Typography } from '@mui/material';
 import { Search, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,13 +31,14 @@ interface DeviceListPanelProps {
 }
 
 /**
- * DeviceListPanel — left side panel: search + fleet/presence filters + the
- * scrollable device roster.
+ * DeviceListPanel — TailAdmin left panel (Phase 5): search + fleet/presence
+ * filters + the scrollable device roster.
  *
  * UI_UX_Design.md §2.2 + Sprint E §18–§20: rows carry the REAL connection
  * presence (ONLINE/OFFLINE/STALE/UNKNOWN) and the backend last-seen time
  * ("never" when there is no status record). Clicking a device selects it on
  * the map and opens the detail drawer; the selected row scrolls into view.
+ * The fleet selector is a native `<select>` (combobox + option roles).
  */
 export function DeviceListPanel({
   vehicles,
@@ -66,112 +66,82 @@ export function DeviceListPanel({
   }, [selectedId]);
 
   return (
-    <Stack
-      sx={{
-        height: '100%',
-        backgroundColor: 'background.paper',
-        borderInlineEnd: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
+    <div className="flex h-full flex-col border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
       {/* ── Search ── */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          m: 1.5,
-          px: 1.25,
-          py: 0.75,
-          borderRadius: 1.5,
-          backgroundColor: 'action.hover',
-        }}
-      >
-        <Search size={16} color="var(--mui-palette-text-secondary)" />
-        <InputBase
+      <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg bg-gray-100 px-2.5 py-1.5 transition-colors focus-within:bg-white focus-within:ring-2 focus-within:ring-brand-500/30 dark:bg-white/5 dark:focus-within:bg-graydark-300">
+        <Search size={15} aria-hidden className="shrink-0 text-gray-400 dark:text-graydark-600" />
+        <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder={t('map.searchPlaceholder')}
-          inputProps={{ 'aria-label': t('map.search') }}
-          sx={{ flex: 1, fontSize: '0.875rem' }}
+          aria-label={t('map.search')}
+          className="h-6 w-full min-w-0 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none dark:text-graydark-800 dark:placeholder:text-graydark-600"
         />
         {query && (
           <button
             type="button"
             onClick={() => onQueryChange('')}
             aria-label={t('map.clearSearch')}
-            style={{
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              padding: 0,
-            }}
+            className="flex shrink-0 cursor-pointer border-none bg-transparent p-0 text-gray-400 hover:text-gray-600 dark:hover:text-graydark-700"
           >
-            <X size={15} color="var(--mui-palette-text-secondary)" />
+            <X size={15} />
           </button>
         )}
-      </Box>
+      </div>
 
       {/* ── Fleet filter (§20) — registry fleets; authorization is server-side ── */}
       {fleets.length > 0 && (
-        <Select
-          size="small"
+        <select
           value={fleetId}
           onChange={(e) => onFleetChange(e.target.value)}
           aria-label={t('map.filters.fleet')}
-          sx={{ mx: 1.5, mb: 1, fontSize: '0.8rem', '& .MuiSelect-select': { py: 0.625 } }}
+          className="mx-2.5 mt-2 mb-1 h-8 cursor-pointer rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-700 focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
         >
-          <MenuItem value="all" sx={{ fontSize: '0.8rem' }}>
-            {t('map.filters.allFleets')}
-          </MenuItem>
+          <option value="all">{t('map.filters.allFleets')}</option>
           {fleets.map((f) => (
-            <MenuItem key={f.id} value={f.id} sx={{ fontSize: '0.8rem' }}>
+            <option key={f.id} value={f.id}>
               {f.name}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
+        </select>
       )}
 
       {/* ── Presence filter chips (§18) ── */}
-      <Stack direction="row" gap={0.75} sx={{ px: 1.5, pb: 1, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap gap-1.5 px-2.5 pb-2">
         {PRESENCE_FILTERS.map((s) => {
           const active = presence === s;
           return (
-            <Chip
+            <button
               key={s}
-              size="small"
-              label={
-                s === 'all'
-                  ? t(presenceLabelKey(s))
-                  : `${t(presenceLabelKey(s))} · ${counts[s] ?? 0}`
-              }
+              type="button"
               onClick={() => onPresenceChange(s)}
-              variant={active ? 'filled' : 'outlined'}
-              color={active ? 'primary' : 'default'}
-              sx={{
-                height: 24,
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                textTransform: 'none',
-              }}
-            />
+              aria-pressed={active}
+              className={`h-6 cursor-pointer rounded-full border px-2.5 text-xs font-semibold transition-colors ${
+                active
+                  ? 'border-brand-500 bg-brand-500 text-white'
+                  : 'border-gray-300 bg-transparent text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5'
+              }`}
+            >
+              {s === 'all'
+                ? t(presenceLabelKey(s))
+                : `${t(presenceLabelKey(s))} · ${counts[s] ?? 0}`}
+            </button>
           );
         })}
-      </Stack>
+      </div>
 
-      <Typography variant="caption" color="text.secondary" sx={{ px: 2, pb: 0.5 }}>
+      <p className="px-4 pb-1 text-xs text-gray-500 dark:text-graydark-600">
         {t('map.list.count', { shown: vehicles.length, total })}
-      </Typography>
+      </p>
 
       {/* ── Scrollable device list ── */}
-      <Box ref={listRef} sx={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={listRef} className="fv-scroll min-h-0 flex-1 overflow-y-auto">
         {vehicles.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+          <p className="p-4 text-center text-sm text-gray-500 dark:text-graydark-600">
             {t('map.noResults')}
-          </Typography>
+          </p>
         ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          <ul className="m-0 list-none p-0">
             {vehicles.map((v) => {
               const selected = v.id === selectedId;
               const p = presenceOf(v);
@@ -181,79 +151,59 @@ export function DeviceListPanel({
                     type="button"
                     onClick={() => onSelect(v.id)}
                     aria-pressed={selected}
+                    className={`flex w-full cursor-pointer items-center gap-2.5 border-none bg-transparent p-0 text-start transition-colors ${
+                      selected
+                        ? 'border-s-4 border-s-brand-500 bg-brand-50 dark:bg-brand-500/10'
+                        : 'border-s-4 border-s-transparent hover:bg-gray-50 dark:hover:bg-white/5'
+                    }`}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      width: '100%',
-                      textAlign: 'start',
-                      padding: '8px 16px',
-                      background: selected ? 'var(--mui-palette-action-selected)' : 'transparent',
-                      border: 'none',
-                      borderInlineStart: selected
-                        ? '3px solid var(--mui-palette-primary-main)'
-                        : '3px solid transparent',
-                      cursor: 'pointer',
+                      paddingBlock: 8,
+                      paddingInline: selected ? 11 : 15,
+                      borderInlineStartWidth: 4,
+                      borderInlineStartStyle: 'solid',
+                      borderInlineStartColor: selected ? 'var(--color-brand-500)' : 'transparent',
                     }}
                   >
-                    <Box
-                      component="span"
+                    <span
                       title={t(`map.presence.${p}`)}
-                      sx={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: '50%',
-                        backgroundColor: PRESENCE_COLORS[p],
-                        flexShrink: 0,
-                        flex: '0 0 auto',
-                      }}
+                      aria-hidden
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: PRESENCE_COLORS[p] }}
                     />
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        noWrap
-                        sx={{ color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}
-                      >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold tabular-nums text-gray-800 dark:text-graydark-800">
                         {v.label}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap component="span">
+                      </span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
                         {t('map.lastSeen.label')}: {lastSeenLabel(v.lastSeenAt, t)}
-                      </Typography>
-                    </Box>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontVariantNumeric: 'tabular-nums' }}
-                    >
+                      </span>
+                    </span>
+                    <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
                       {v.speed} km/h
-                    </Typography>
+                    </span>
                   </button>
                 </li>
               );
             })}
           </ul>
         )}
-      </Box>
+      </div>
 
       {/* Legend footnote (§18) — color always paired with a text label (§0.7). */}
-      <Stack
-        direction="row"
-        gap={1.25}
-        sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider', flexWrap: 'wrap' }}
-      >
+      <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-gray-200 px-2.5 py-2 dark:border-white/5">
         {PRESENCE_FILTERS.filter((s) => s !== 'all').map((s) => (
-          <Stack key={s} direction="row" alignItems="center" gap={0.25}>
-            <Box
-              component="span"
-              sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: PRESENCE_COLORS[s] }}
+          <span key={s} className="flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="size-2 rounded-full"
+              style={{ backgroundColor: PRESENCE_COLORS[s] }}
             />
-            <Typography variant="caption" color="text.secondary">
+            <span className="text-xs text-gray-500 dark:text-graydark-600">
               {t(presenceLabelKey(s))}
-            </Typography>
-          </Stack>
+            </span>
+          </span>
         ))}
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

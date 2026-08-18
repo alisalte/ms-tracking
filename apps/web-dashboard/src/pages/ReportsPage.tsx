@@ -1,10 +1,10 @@
 /**
- * ReportsPage — Reporting & Fleet Analytics (`/reports`) — Sprint J.
+ * ReportsPage — TailAdmin Reporting & Fleet Analytics (`/reports`) — Sprint J,
+ * Phase 8 port.
  *
  * REAL data only (reporting-service). Sections (§33): Overview, Vehicles,
  * Trips, Alarms, Geofences, Activity — synced to `?section=`. Every number is
- * a documented backend KPI; the page formats and displays only (§66). No mock
- * analytics remain.
+ * a documented backend KPI; the page formats and displays only (§66).
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,8 +18,6 @@ import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { VehiclesSection } from '@/components/reports/VehiclesSection';
-import { PageHeader } from '@/components/ui';
-import { Stack, Tab, Tabs } from '@mui/material';
 
 const SECTIONS = ['overview', 'vehicles', 'trips', 'alarms', 'geofences', 'activity'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -47,31 +45,46 @@ export function ReportsPage() {
   };
 
   return (
-    <Stack gap={2}>
-      <PageHeader title={t('reports.title')} subtitle={t('reports.subtitle')} />
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+          {t('reports.title')}
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-graydark-600">{t('reports.subtitle')}</p>
+      </div>
       <ReportRangePicker range={range} onChange={setRange} />
-      <Tabs
-        value={section}
-        onChange={(_, v: Section) => setSection(v)}
-        variant="scrollable"
-        allowScrollButtonsMobile
+
+      {/* Section tabs */}
+      <div
+        role="tablist"
         aria-label={t('reports.title')}
+        className="fv-scroll flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1 dark:bg-white/5"
       >
         {SECTIONS.map((s) => (
-          <Tab
+          <button
             key={s}
-            value={s}
-            label={t(`reports.sections.${s}`)}
+            type="button"
+            role="tab"
+            aria-selected={section === s}
+            onClick={() => setSection(s)}
             data-testid={`report-section-${s}`}
-          />
+            className={`cursor-pointer whitespace-nowrap rounded-lg border-none px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+              section === s
+                ? 'bg-white text-gray-900 shadow-sm dark:bg-graydark-300 dark:text-white'
+                : 'bg-transparent text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-white'
+            }`}
+          >
+            {t(`reports.sections.${s}`)}
+          </button>
         ))}
-      </Tabs>
+      </div>
+
       {section === 'overview' && <ReportsOverviewSection range={range} />}
       {section === 'vehicles' && <VehiclesSection range={range} />}
       {section === 'trips' && <TripsSection range={range} />}
       {section === 'alarms' && <AlarmsSection range={range} />}
       {section === 'geofences' && <GeofencesSection range={range} />}
       {section === 'activity' && <ActivitySection range={range} />}
-    </Stack>
+    </div>
   );
 }

@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 import { severityColor } from '@/components/alarms/AlarmTypeIcon';
 import { markerDataUrl, selectedMarkerDataUrl } from '@/lib/map-markers';
 import type { Alarm } from '@/types/alarm.types';
-import { Box, Typography } from '@mui/material';
 
 interface AlarmMapProps {
   /** The (already-filtered) alarms to render. */
@@ -98,11 +97,11 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
 
   if (alarms.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <Typography color="text.secondary">{t('alarms.empty')}</Typography>
-      </Box>
+      <div className="flex h-full items-center justify-center">
+        <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
+      </div>
     );
   }
 
-  return <Box ref={containerRef} sx={{ width: '100%', height: '100%', minHeight: 400 }} />;
+  return <div ref={containerRef} className="h-full min-h-[400px] w-full" />;
 }

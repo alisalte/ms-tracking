@@ -1,27 +1,35 @@
 /**
- * VideoWallPage — the HikCentral-style operations video wall (`/video`).
+ * VideoWallPage — the TailAdmin operations video hub (`/video`, Phase 7).
  *
- * Layout: WallToolbar (top) + ChannelDock (left) + WallGrid (fill). Owns the
- * wall state (division, tile assignments, spotlight, rotation, alerts) and
- * syncs shareable bits to the URL (`?d=16`, `?spotlight=1`) per 10 §7.4.
+ * Three views over the same channel catalog:
+ * - WALL: the HikCentral-style video wall (toolbar + dock + grid). Owns the
+ *   wall state (division, tile assignments, spotlight, rotation, alerts) and
+ *   syncs shareable bits to the URL (`?d=16`, `?spotlight=1`) per 10 §7.4.
+ *   The wall's cap+rotate bandwidth model lives in `useWallRotation`; tiles
+ *   within the live budget stream, the rest rotate on a 30s cadence.
+ * - CAMERAS: the camera/channel management table (status + availability).
+ * - PLAYBACK: the recorded-playback shell (honest pending-backend state).
  *
- * The wall's cap+rotate bandwidth model lives in `useWallRotation`; tiles
- * within the live budget stream, the rest rotate on a 30s cadence.
+ * Keyboard: `f` toggles whole-wall fullscreen; `1..6` pick the division
+ * presets (wall view only). Shortcuts are ignored while typing in inputs.
  */
-import { LayoutGrid } from 'lucide-react';
+import { Camera, History, LayoutGrid } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useChannels, useSaveWall, useVideoWalls } from '@/api/video.api';
+import { CamerasPanel } from '@/components/video/CamerasPanel';
 import { ChannelDock } from '@/components/video/ChannelDock';
+import { PlaybackPanel } from '@/components/video/PlaybackPanel';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
 import { toggleFullscreen } from '@/lib/video-stream';
 import { emptyTiles } from '@/mock/video-data';
-import { MAX_LIVE_TILES } from '@/types/video.types';
+import { MAX_LIVE_TILES, WALL_DIVISIONS } from '@/types/video.types';
 import type { CameraChannel, VideoWall, WallDivision, WallTile } from '@/types/video.types';
-import { Box, Stack, Typography } from '@mui/material';
+
+type ViewTab = 'wall' | 'cameras' | 'playback';
 
 /** Parse + clamp the division from URL search params. */
 function readDivision(params: URLSearchParams): WallDivision {
@@ -35,13 +43,17 @@ export function VideoWallPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
 
-  const { data: channelsData } = useChannels();
+  const { data: channelsData, isLoading: channelsLoading } = useChannels();
   const { data: wallsData, isLoading: wallsLoading } = useVideoWalls();
   const saveWall = useSaveWall();
   const channels = channelsData ?? [];
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
+  const [tab, setTab] = useState<ViewTab>(() => {
+    const v = params.get('view');
+    return v === 'cameras' || v === 'playback' ? v : 'wall';
+  });
   const [division, setDivision] = useState<WallDivision>(() => readDivision(params));
   const [tiles, setTiles] = useState<WallTile[]>(() => emptyTiles(readDivision(params)));
   const [spotlightSlot, setSpotlightSlot] = useState<number | null>(null);
@@ -49,12 +61,11 @@ export function VideoWallPage() {
   const [alertSlot, setAlertSlot] = useState<number | null>(null);
 
   // Keep the URL in sync with the division + spotlight (shareable deep links).
-  // Uses the functional updater so the effect doesn't depend on `params`
-  // (which would loop, since setParams changes params).
   useEffect(() => {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
+        next.set('view', tab);
         next.set('d', String(division));
         if (spotlightSlot !== null) next.set('spotlight', String(spotlightSlot));
         else next.delete('spotlight');
@@ -62,7 +73,7 @@ export function VideoWallPage() {
       },
       { replace: true },
     );
-  }, [division, spotlightSlot, setParams]);
+  }, [tab, division, spotlightSlot, setParams]);
 
   // Resize the tile set when the division changes (preserve assignments where possible).
   const changeDivision = useCallback(
@@ -84,10 +95,11 @@ export function VideoWallPage() {
     [spotlightSlot],
   );
 
-  // Assign a channel to the first empty slot (click-to-add from the dock).
+  // Assign a channel to the first empty slot (click-to-add from dock/table).
   const pickChannel = useCallback((channel: CameraChannel) => {
+    setTab('wall');
     setTiles((prev) => {
-      const idx = prev.findIndex((t) => t.channelId === null);
+      const idx = prev.findIndex((tile) => tile.channelId === null);
       if (idx === -1) return prev; // wall full
       const next = prev.slice();
       next[idx] = { ...next[idx], channelId: channel.id };
@@ -142,6 +154,7 @@ export function VideoWallPage() {
   }, []);
 
   const loadWall = useCallback((wall: VideoWall) => {
+    setTab('wall');
     setDivision(wall.division);
     setTiles(wall.tiles);
     setSpotlightSlot(null);
@@ -169,6 +182,26 @@ export function VideoWallPage() {
     setTimeout(() => setAlertSlot(null), 6000);
   }, [tiles]);
 
+  // Keyboard shortcuts: f = fullscreen, 1..6 = division presets (wall view).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+      if (event.key === 'f' || event.key === 'F') {
+        void fullscreenWall();
+        return;
+      }
+      if (tab === 'wall') {
+        const idx = Number.parseInt(event.key, 10);
+        if (idx >= 1 && idx <= WALL_DIVISIONS.length) {
+          changeDivision(WALL_DIVISIONS[idx - 1] as WallDivision);
+        }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [tab, fullscreenWall, changeDivision]);
+
   // Derived counts for the toolbar indicator.
   const assignedCount = useMemo(() => tiles.filter((t) => t.channelId !== null).length, [tiles]);
   const liveCount = useMemo(() => {
@@ -180,58 +213,108 @@ export function VideoWallPage() {
 
   const empty = assignedCount === 0;
 
-  return (
-    <Stack
-      sx={{
-        // Full-bleed: break out of <main>'s padding by going absolute.
-        position: 'absolute',
-        inset: 0,
-        backgroundColor: 'background.default',
-      }}
-    >
-      <WallToolbar
-        division={division}
-        onDivisionChange={changeDivision}
-        spotlightSlot={spotlightSlot}
-        onToggleSpotlight={toggleSpotlight}
-        onFullscreenWall={fullscreenWall}
-        rotationOn={rotationOn}
-        onToggleRotation={() => setRotationOn((v) => !v)}
-        liveCount={liveCount}
-        assignedCount={assignedCount}
-        maxLive={MAX_LIVE_TILES}
-        walls={wallsData}
-        wallsLoading={wallsLoading}
-        onLoadWall={loadWall}
-        onSaveWall={saveCurrentWall}
-        onSimulateAlert={simulateAlert}
-      />
+  const tabs = [
+    {
+      id: 'wall' as const,
+      label: t('video.tabs.wall', { defaultValue: 'Wall' }),
+      icon: <LayoutGrid size={15} />,
+    },
+    {
+      id: 'cameras' as const,
+      label: t('video.tabs.cameras', { defaultValue: 'Cameras' }),
+      icon: <Camera size={15} />,
+    },
+    {
+      id: 'playback' as const,
+      label: t('video.tabs.playback', { defaultValue: 'Playback' }),
+      icon: <History size={15} />,
+    },
+  ];
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <ChannelDock channels={channels} onPick={pickChannel} onAutoFill={autoFill} />
-        <Box ref={viewportRef} sx={{ flex: 1, minWidth: 0, minHeight: 0, p: 1 }}>
-          {empty ? (
-            <Stack alignItems="center" justifyContent="center" sx={{ height: '100%', gap: 2 }}>
-              <LayoutGrid size={48} color="#475569" />
-              <Typography color="text.disabled">{t('video.empty')}</Typography>
-              <Typography variant="caption" color="text.disabled">
-                {t('video.emptyHelp')}
-              </Typography>
-            </Stack>
-          ) : (
-            <WallGrid
-              division={division}
-              tiles={tiles}
-              channels={channels}
-              spotlightSlot={spotlightSlot}
-              alertSlot={alertSlot}
-              rotationOn={rotationOn}
-              onTogglePin={togglePin}
-              onRemove={removeTile}
-            />
-          )}
-        </Box>
-      </Box>
-    </Stack>
+  return (
+    <div className="absolute inset-0 flex flex-col bg-gray-50 dark:bg-graydark-200">
+      {/* View tabs */}
+      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-graydark-300">
+        <div
+          role="tablist"
+          aria-label={t('video.title')}
+          className="flex items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-white/5"
+        >
+          {tabs.map(({ id, label, icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-none px-3 py-1.5 text-sm font-semibold transition-colors ${
+                tab === id
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-graydark-300 dark:text-white'
+                  : 'bg-transparent text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-white'
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="hidden text-xs text-gray-400 sm:inline dark:text-graydark-600">
+          {t('video.keyboardHint', { defaultValue: 'F: fullscreen · 1-6: layout' })}
+        </span>
+      </div>
+
+      {tab === 'wall' && (
+        <>
+          <WallToolbar
+            division={division}
+            onDivisionChange={changeDivision}
+            spotlightSlot={spotlightSlot}
+            onToggleSpotlight={toggleSpotlight}
+            onFullscreenWall={fullscreenWall}
+            rotationOn={rotationOn}
+            onToggleRotation={() => setRotationOn((v) => !v)}
+            liveCount={liveCount}
+            assignedCount={assignedCount}
+            maxLive={MAX_LIVE_TILES}
+            walls={wallsData}
+            wallsLoading={wallsLoading}
+            onLoadWall={loadWall}
+            onSaveWall={saveCurrentWall}
+            onSimulateAlert={simulateAlert}
+          />
+          <div className="flex min-h-0 flex-1">
+            <ChannelDock channels={channels} onPick={pickChannel} onAutoFill={autoFill} />
+            <div ref={viewportRef} className="min-h-0 min-w-0 flex-1 p-2">
+              {empty ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2">
+                  <LayoutGrid size={48} className="text-gray-600" aria-hidden />
+                  <p className="text-sm text-gray-500 dark:text-graydark-600">{t('video.empty')}</p>
+                  <p className="text-xs text-gray-400 dark:text-graydark-600">
+                    {t('video.emptyHelp')}
+                  </p>
+                </div>
+              ) : (
+                <WallGrid
+                  division={division}
+                  tiles={tiles}
+                  channels={channels}
+                  spotlightSlot={spotlightSlot}
+                  alertSlot={alertSlot}
+                  rotationOn={rotationOn}
+                  onTogglePin={togglePin}
+                  onRemove={removeTile}
+                />
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === 'cameras' && (
+        <CamerasPanel channels={channels} loading={channelsLoading} onAddToWall={pickChannel} />
+      )}
+
+      {tab === 'playback' && <PlaybackPanel channels={channels} />}
+    </div>
   );
 }

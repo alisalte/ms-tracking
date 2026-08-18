@@ -12,6 +12,7 @@ import { AlarmCenterPage } from '@/pages/AlarmCenterPage';
 import { AssetManagementPage } from '@/pages/AssetManagementPage';
 import { CommandCenterPage } from '@/pages/CommandCenterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { EventCenterPage } from '@/pages/EventCenterPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { GeofencePage } from '@/pages/GeofencePage';
 import { LoginPage } from '@/pages/LoginPage';
@@ -125,12 +126,22 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            // Phase 3 — route-level gate matching the nav item's declared
+            // permission (hiding the menu item alone was insufficient).
             path: '/trips',
-            element: <TripsPage />,
+            element: (
+              <RequirePermission permission={PERMISSIONS.trackingRead}>
+                <TripsPage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/trips/:id',
-            element: <TripDetailPage />,
+            element: (
+              <RequirePermission permission={PERMISSIONS.trackingRead}>
+                <TripDetailPage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/video',
@@ -139,6 +150,15 @@ export const router = createBrowserRouter([
           {
             path: '/alarms',
             element: <AlarmCenterPage />,
+          },
+          {
+            // Phase 6 — Event Center (notification event-stream timeline).
+            path: '/events',
+            element: (
+              <RequirePermission permission={PERMISSIONS.notificationRead}>
+                <EventCenterPage />
+              </RequirePermission>
+            ),
           },
           {
             // Sprint H — Notification Center (history + preferences).
@@ -152,7 +172,9 @@ export const router = createBrowserRouter([
           {
             path: '/assets',
             element: (
-              <RequirePermission permission={PERMISSIONS.vehicleRead}>
+              // Phase 3 — ANY-of gate mirrors the nav item's visibility rule
+              // (vehicle.read OR fleet.read); the backend enforces per-entity.
+              <RequirePermission anyOf={[PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead]}>
                 <AssetManagementPage />
               </RequirePermission>
             ),

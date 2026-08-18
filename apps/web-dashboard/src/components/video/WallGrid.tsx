@@ -14,7 +14,6 @@ import { useMemo } from 'react';
 import { VideoTile } from '@/components/video/VideoTile';
 import { useWallRotation } from '@/components/video/useWallRotation';
 import type { CameraChannel, WallDivision, WallTile } from '@/types/video.types';
-import { Box } from '@mui/material';
 
 interface WallGridProps {
   /** The active grid division (1/4/9/16/36/64). */
@@ -68,8 +67,8 @@ export function WallGrid({
     const bigSlot = spotlightSlot;
     const thumbs = tiles.filter((t) => t.slot !== bigSlot);
     return (
-      <Box sx={{ display: 'flex', height: '100%', width: '100%', gap: 0.5 }}>
-        <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+      <div className="flex h-full w-full gap-2">
+        <div className="min-h-0 min-w-0 flex-1">
           <TileForSlot
             tile={tiles.find((t) => t.slot === bigSlot) ?? tiles[0]}
             channelById={channelById}
@@ -79,19 +78,10 @@ export function WallGrid({
             onTogglePin={onTogglePin}
             onRemove={onRemove}
           />
-        </Box>
-        <Box
-          sx={{
-            width: 200,
-            minWidth: 200,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.5,
-            overflowY: 'auto',
-          }}
-        >
+        </div>
+        <div className="fv-scroll flex w-[200px] min-w-[200px] flex-col gap-2 overflow-y-auto">
           {thumbs.map((t) => (
-            <Box key={t.slot} sx={{ flex: '0 0 auto', aspectRatio: '16 / 9', width: '100%' }}>
+            <div key={t.slot} className="aspect-video w-full shrink-0">
               <TileForSlot
                 tile={t}
                 channelById={channelById}
@@ -102,30 +92,25 @@ export function WallGrid({
                 onTogglePin={onTogglePin}
                 onRemove={onRemove}
               />
-            </Box>
+            </div>
           ))}
-        </Box>
-      </Box>
+        </div>
+      </div>
     );
   }
 
   // Standard square grid.
   return (
-    <Box
+    <div
       data-testid="wall-grid"
-      sx={{
-        display: 'grid',
+      className="grid h-full min-h-0 min-w-0 w-full gap-2"
+      style={{
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
         gridTemplateRows: `repeat(${cols}, 1fr)`,
-        gap: 0.5,
-        width: '100%',
-        height: '100%',
-        minHeight: 0,
-        minWidth: 0,
       }}
     >
       {tiles.map((t) => (
-        <Box key={t.slot} sx={{ minWidth: 0, minHeight: 0 }}>
+        <div key={t.slot} className="min-h-0 min-w-0">
           <TileForSlot
             tile={t}
             channelById={channelById}
@@ -135,9 +120,9 @@ export function WallGrid({
             onTogglePin={onTogglePin}
             onRemove={onRemove}
           />
-        </Box>
+        </div>
       ))}
-    </Box>
+    </div>
   );
 }
 

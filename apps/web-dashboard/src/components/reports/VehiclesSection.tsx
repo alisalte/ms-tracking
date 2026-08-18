@@ -1,39 +1,28 @@
 /**
- * VehiclesSection — utilization / distance / speed / idle-parking tables
- * (Sprint J §7/§8/§10/§11) + the vehicle report detail drawer (§37) + CSV
- * export for utilization. All numbers are backend KPIs; null utilization
- * renders "—" with the no-data note (never a fake zero).
+ * VehiclesSection — TailAdmin utilization / distance / speed / idle-parking
+ * tables (Sprint J §7/§8/§10/§11, Phase 8 port) + the vehicle report detail
+ * modal (§37) + CSV export for utilization. All numbers are backend KPIs;
+ * null utilization renders "—" with the no-data note (never a fake zero).
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
 
+import { getApiErrorMessage } from '@/api/errors';
 import {
+  type ReportRange,
+  type UtilizationRowWire,
   exportReportCsv,
   useDistance,
   useIdleParking,
   useSpeed,
   useUtilization,
-  type ReportRange,
-  type UtilizationRowWire,
 } from '@/api/report.api';
+import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { DataTable, StatusBadge, type Column } from '@/components/ui';
-import { getApiErrorMessage } from '@/api/errors';
-import {
-  Box,
-  Button,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Tab,
-  Tabs,
-  Typography,
-} from '@mui/material';
+import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { Badge, Button, Modal } from '@/components/tailwind-ui';
 import { Download, Map as MapIcon } from 'lucide-react';
 
 function fmtSec(s: number | null): string {
@@ -43,22 +32,53 @@ function fmtSec(s: number | null): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function LoadingLine() {
+  return <div className="py-2 text-sm text-gray-500 dark:text-graydark-600">Loading…</div>;
+}
+
 export function VehiclesSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState(0);
+  const tabs: Array<{ id: string; label: string; testid?: string }> = [
+    {
+      id: 'utilization',
+      label: t('reports.vehicles.utilization'),
+      testid: 'report-tab-utilization',
+    },
+    { id: 'distance', label: t('reports.distance.title') },
+    { id: 'speed', label: t('reports.speed.title') },
+    { id: 'idle-parking', label: t('reports.idleParking.title') },
+  ];
   return (
-    <Stack gap={2}>
-      <Tabs value={tab} onChange={(_, v: number) => setTab(v)} aria-label={t('reports.vehicles.tabs')}>
-        <Tab label={t('reports.vehicles.utilization')} data-testid="report-tab-utilization" />
-        <Tab label={t('reports.distance.title')} />
-        <Tab label={t('reports.speed.title')} />
-        <Tab label={t('reports.idleParking.title')} />
-      </Tabs>
+    <div className="flex flex-col gap-3">
+      <div
+        role="tablist"
+        aria-label={t('reports.vehicles.tabs')}
+        className="flex w-fit items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-white/5"
+      >
+        {tabs.map((tb, i) => (
+          <button
+            key={tb.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === i}
+            data-testid={tb.testid}
+            onClick={() => setTab(i)}
+            className={`cursor-pointer rounded-lg border-none px-3 py-1.5 text-sm font-semibold transition-colors ${
+              tab === i
+                ? 'bg-white text-gray-900 shadow-sm dark:bg-graydark-300 dark:text-white'
+                : 'bg-transparent text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-white'
+            }`}
+          >
+            {tb.label}
+          </button>
+        ))}
+      </div>
       {tab === 0 && <UtilizationTable range={range} />}
       {tab === 1 && <DistanceTable range={range} />}
       {tab === 2 && <SpeedTable range={range} />}
       {tab === 3 && <IdleParkingTable range={range} />}
-    </Stack>
+    </div>
   );
 }
 
@@ -74,18 +94,17 @@ function UtilizationTable({ range }: { range: ReportRange }) {
     { id: 'moving', headerKey: 'reports.cols.moving', render: (r) => fmtSec(r.movingSec) },
     { id: 'idle', headerKey: 'reports.cols.idle', render: (r) => fmtSec(r.idleSec) },
     { id: 'parking', headerKey: 'reports.cols.parking', render: (r) => fmtSec(r.parkingSec) },
-    {
-      id: 'observed',
-      headerKey: 'reports.cols.observed',
-      render: (r) => fmtSec(r.observedSec),
-    },
+    { id: 'observed', headerKey: 'reports.cols.observed', render: (r) => fmtSec(r.observedSec) },
     {
       id: 'utilization',
       headerKey: 'reports.cols.utilization',
-      render: (r) =>
-        r.utilizationPct === null ? '—' : `${r.utilizationPct.toFixed(1)}%`,
+      render: (r) => (r.utilizationPct === null ? '—' : `${r.utilizationPct.toFixed(1)}%`),
     },
-    { id: 'distance', headerKey: 'reports.cols.distance', render: (r) => `${r.distanceKm.toFixed(1)} km` },
+    {
+      id: 'distance',
+      headerKey: 'reports.cols.distance',
+      render: (r) => `${r.distanceKm.toFixed(1)} km`,
+    },
     { id: 'trips', headerKey: 'reports.cols.trips', render: (r) => String(r.trips) },
   ];
 
@@ -102,25 +121,29 @@ function UtilizationTable({ range }: { range: ReportRange }) {
   };
 
   return (
-    <Stack gap={1}>
-      <Stack direction="row" justifyContent="flex-end">
-        <Button
-          size="small"
-          startIcon={<Download size={14} />}
-          onClick={doExport}
-          disabled={exporting || q.isLoading}
-          data-testid="report-export-utilization"
-        >
-          {exporting ? t('reports.export.exporting') : t('reports.export.csv')}
-        </Button>
-      </Stack>
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-end">
+        {/* Export uses the backend CSV endpoint — gated on report.export. */}
+        <PermissionGate requires={PERMISSIONS.reportExport}>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Download size={14} />}
+            onClick={doExport}
+            disabled={exporting || q.isLoading}
+            data-testid="report-export-utilization"
+          >
+            {exporting ? t('reports.export.exporting') : t('reports.export.csv')}
+          </Button>
+        </PermissionGate>
+      </div>
       {q.isLoading ? (
-        <Typography color="text.secondary">{t('common.loading')}</Typography>
+        <LoadingLine />
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <>
-          <DataTable
+          <ReportsTable
             columns={columns}
             rows={q.data?.items ?? []}
             rowKey={(r) => r.vehicleId}
@@ -128,81 +151,97 @@ function UtilizationTable({ range }: { range: ReportRange }) {
             emptyKey="reports.empty"
             dense
           />
-          <Typography variant="caption" color="text.secondary">
+          <p className="text-xs text-gray-500 dark:text-graydark-600">
             {t('reports.utilization.note')}
-          </Typography>
+          </p>
         </>
       )}
-      <VehicleDetailDialog row={detail} onClose={() => setDetail(null)} />
-    </Stack>
+      <VehicleDetailModal row={detail} onClose={() => setDetail(null)} />
+    </div>
   );
 }
 
-function VehicleDetailDialog({ row, onClose }: { row: UtilizationRowWire | null; onClose: () => void }) {
+function VehicleDetailModal({
+  row,
+  onClose,
+}: {
+  row: UtilizationRowWire | null;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   if (!row) return null;
   return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{row.label}</DialogTitle>
-      <DialogContent>
-        <Stack gap={1} sx={{ mt: 1 }}>
-          <Row label={t('reports.cols.moving')} value={fmtSec(row.movingSec)} />
-          <Row label={t('reports.cols.idle')} value={fmtSec(row.idleSec)} />
-          <Row label={t('reports.cols.parking')} value={fmtSec(row.parkingSec)} />
-          <Row label={t('reports.cols.observed')} value={fmtSec(row.observedSec)} />
-          <Row
-            label={t('reports.cols.utilization')}
-            value={row.utilizationPct === null ? `— (${t('reports.noData')})` : `${row.utilizationPct.toFixed(1)}%`}
-          />
-          <Row label={t('reports.cols.distance')} value={`${row.distanceKm.toFixed(1)} km`} />
-          <Row label={t('reports.cols.trips')} value={String(row.trips)} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button
-          component={RouterLink}
+    <Modal open onClose={onClose} size="sm" title={row.label}>
+      <div className="flex flex-col gap-2">
+        <Row label={t('reports.cols.moving')} value={fmtSec(row.movingSec)} />
+        <Row label={t('reports.cols.idle')} value={fmtSec(row.idleSec)} />
+        <Row label={t('reports.cols.parking')} value={fmtSec(row.parkingSec)} />
+        <Row label={t('reports.cols.observed')} value={fmtSec(row.observedSec)} />
+        <Row
+          label={t('reports.cols.utilization')}
+          value={
+            row.utilizationPct === null
+              ? `— (${t('reports.noData')})`
+              : `${row.utilizationPct.toFixed(1)}%`
+          }
+        />
+        <Row label={t('reports.cols.distance')} value={`${row.distanceKm.toFixed(1)} km`} />
+        <Row label={t('reports.cols.trips')} value={String(row.trips)} />
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <RouterLink
           to={`/map?vehicle=${encodeURIComponent(row.vehicleId)}&from=${encodeURIComponent(
             new Date(Date.now() - 7 * 86_400_000).toISOString(),
           )}&to=${encodeURIComponent(new Date().toISOString())}`}
-          startIcon={<MapIcon size={14} />}
-          size="small"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 no-underline transition-colors hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5"
         >
+          <MapIcon size={14} aria-hidden />
           {t('reports.viewOnMap')}
-        </Button>
-        <Button onClick={onClose}>{t('common.close')}</Button>
-      </DialogActions>
-    </Dialog>
+        </RouterLink>
+      </div>
+    </Modal>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <Stack direction="row" justifyContent="space-between">
-      <Typography variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography variant="body2" fontWeight={600}>
-        {value}
-      </Typography>
-    </Stack>
+    <div className="flex justify-between">
+      <span className="text-sm text-gray-500 dark:text-graydark-600">{label}</span>
+      <span className="text-sm font-semibold text-gray-800 dark:text-graydark-800">{value}</span>
+    </div>
   );
 }
 
 function DistanceTable({ range }: { range: ReportRange }) {
-  const { t } = useTranslation();
   const q = useDistance(range);
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    { id: 'distance', headerKey: 'reports.cols.distance', render: (r) => `${r.distanceKm.toFixed(1)} km` },
+    {
+      id: 'distance',
+      headerKey: 'reports.cols.distance',
+      render: (r) => `${r.distanceKm.toFixed(1)} km`,
+    },
     { id: 'trips', headerKey: 'reports.cols.trips', render: (r) => String(r.trips) },
-    { id: 'avg', headerKey: 'reports.cols.avgTrip', render: (r) => (r.avgTripKm === null ? '—' : `${r.avgTripKm.toFixed(1)} km`) },
-    { id: 'max', headerKey: 'reports.cols.maxTrip', render: (r) => (r.maxTripKm === null ? '—' : `${r.maxTripKm.toFixed(1)} km`) },
-    { id: 'discarded', headerKey: 'reports.cols.discarded', render: (r) => String(r.discardedTrips) },
+    {
+      id: 'avg',
+      headerKey: 'reports.cols.avgTrip',
+      render: (r) => (r.avgTripKm === null ? '—' : `${r.avgTripKm.toFixed(1)} km`),
+    },
+    {
+      id: 'max',
+      headerKey: 'reports.cols.maxTrip',
+      render: (r) => (r.maxTripKm === null ? '—' : `${r.maxTripKm.toFixed(1)} km`),
+    },
+    {
+      id: 'discarded',
+      headerKey: 'reports.cols.discarded',
+      render: (r) => String(r.discardedTrips),
+    },
   ];
-  if (q.isLoading) return <Typography color="text.secondary">{t('common.loading')}</Typography>;
+  if (q.isLoading) return <LoadingLine />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   return (
-    <DataTable
+    <ReportsTable
       columns={columns}
       rows={q.data?.items ?? []}
       rowKey={(r) => r.vehicleId}
@@ -213,18 +252,29 @@ function DistanceTable({ range }: { range: ReportRange }) {
 }
 
 function SpeedTable({ range }: { range: ReportRange }) {
-  const { t } = useTranslation();
   const q = useSpeed(range);
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    { id: 'avg', headerKey: 'reports.cols.avgSpeed', render: (r) => (r.avgSpeedKph === null ? '—' : `${r.avgSpeedKph.toFixed(1)} km/h`) },
-    { id: 'max', headerKey: 'reports.cols.maxSpeed', render: (r) => (r.maxSpeedKph === null ? '—' : `${r.maxSpeedKph.toFixed(0)} km/h`) },
-    { id: 'speeding', headerKey: 'reports.cols.speeding', render: (r) => String(r.speedingAlarms) },
+    {
+      id: 'avg',
+      headerKey: 'reports.cols.avgSpeed',
+      render: (r) => (r.avgSpeedKph === null ? '—' : `${r.avgSpeedKph.toFixed(1)} km/h`),
+    },
+    {
+      id: 'max',
+      headerKey: 'reports.cols.maxSpeed',
+      render: (r) => (r.maxSpeedKph === null ? '—' : `${r.maxSpeedKph.toFixed(0)} km/h`),
+    },
+    {
+      id: 'speeding',
+      headerKey: 'reports.cols.speeding',
+      render: (r) => String(r.speedingAlarms),
+    },
   ];
-  if (q.isLoading) return <Typography color="text.secondary">{t('common.loading')}</Typography>;
+  if (q.isLoading) return <LoadingLine />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   return (
-    <DataTable
+    <ReportsTable
       columns={columns}
       rows={q.data?.items ?? []}
       rowKey={(r) => r.vehicleId}
@@ -241,29 +291,63 @@ function IdleParkingTable({ range }: { range: ReportRange }) {
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'kind', headerKey: 'reports.cols.kind', render: (r) => r.kind },
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    { id: 'start', headerKey: 'reports.cols.start', render: (r) => new Date(r.startedAt).toLocaleString() },
-    { id: 'end', headerKey: 'reports.cols.end', render: (r) => (r.endedAt ? new Date(r.endedAt).toLocaleString() : '—') },
+    {
+      id: 'start',
+      headerKey: 'reports.cols.start',
+      render: (r) => new Date(r.startedAt).toLocaleString(),
+    },
+    {
+      id: 'end',
+      headerKey: 'reports.cols.end',
+      render: (r) => (r.endedAt ? new Date(r.endedAt).toLocaleString() : '—'),
+    },
     { id: 'duration', headerKey: 'reports.cols.duration', render: (r) => fmtSec(r.durationSec) },
     {
       id: 'status',
       headerKey: 'reports.cols.status',
       render: (r) =>
-        r.status ? <StatusBadge label={r.status} tone={r.status === 'TAMPER' ? 'danger' : 'neutral'} /> : '—',
+        r.status ? (
+          <Badge color={r.status === 'TAMPER' ? 'danger' : 'gray'}>{r.status}</Badge>
+        ) : (
+          '—'
+        ),
     },
   ];
+
+  const chip = (active: boolean) =>
+    `h-7 cursor-pointer rounded-full border px-3 text-xs font-semibold transition-colors ${
+      active
+        ? 'border-brand-500 bg-brand-500 text-white'
+        : 'border-gray-300 bg-transparent text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5'
+    }`;
+
   return (
-    <Stack gap={1}>
-      <Stack direction="row" gap={1}>
-        <Chip label={t('reports.idleParking.all')} onClick={() => setKind(undefined)} color={kind === undefined ? 'primary' : 'default'} size="small" />
-        <Chip label={t('reports.idleParking.idle')} onClick={() => setKind('IDLE')} color={kind === 'IDLE' ? 'primary' : 'default'} size="small" />
-        <Chip label={t('reports.idleParking.parking')} onClick={() => setKind('PARKING')} color={kind === 'PARKING' ? 'primary' : 'default'} size="small" />
-      </Stack>
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          className={chip(kind === undefined)}
+          onClick={() => setKind(undefined)}
+        >
+          {t('reports.idleParking.all')}
+        </button>
+        <button type="button" className={chip(kind === 'IDLE')} onClick={() => setKind('IDLE')}>
+          {t('reports.idleParking.idle')}
+        </button>
+        <button
+          type="button"
+          className={chip(kind === 'PARKING')}
+          onClick={() => setKind('PARKING')}
+        >
+          {t('reports.idleParking.parking')}
+        </button>
+      </div>
       {q.isLoading ? (
-        <Typography color="text.secondary">{t('common.loading')}</Typography>
+        <LoadingLine />
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <DataTable
+        <ReportsTable
           columns={columns}
           rows={q.data?.items ?? []}
           rowKey={(r) => r.id}
@@ -271,8 +355,6 @@ function IdleParkingTable({ range }: { range: ReportRange }) {
           dense
         />
       )}
-    </Stack>
+    </div>
   );
 }
-
-export { Box };

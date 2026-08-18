@@ -1,5 +1,6 @@
 /**
- * AlarmCenterPage — the operator triage surface for live alarms (`/alarms`).
+ * AlarmCenterPage — the TailAdmin operator triage surface for live alarms
+ * (`/alarms`, Phase 6 port).
  *
  * Three views over the same filtered alarm set — list (per-alarm), timeline
  * (chronological), map (spatial) — plus a right slide-over detail drawer
@@ -7,7 +8,7 @@
  * shared filter state (type/severity/status/vehicle) drives all three views;
  * the active view + filters sync to the URL for shareable deep links.
  */
-import { Activity, LayoutList, Map as MapIcon } from 'lucide-react';
+import { Activity, LayoutList, Map as MapIcon, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -19,20 +20,8 @@ import { AlarmLiveIndicator } from '@/components/alarms/AlarmLiveIndicator';
 import { AlarmMap } from '@/components/alarms/AlarmMap';
 import { AlarmTimeline } from '@/components/alarms/AlarmTimeline';
 import { ErrorState } from '@/components/common/ErrorState';
-import { PageHeader } from '@/components/ui';
+import { Tooltip } from '@/components/tailwind-ui';
 import type { AlarmFilters, AlarmSeverity, AlarmStatus, AlarmType } from '@/types/alarm.types';
-import {
-  Box,
-  Chip,
-  IconButton,
-  InputBase,
-  MenuItem,
-  Select,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
-  Tooltip,
-} from '@mui/material';
 
 type ViewMode = 'list' | 'timeline' | 'map';
 
@@ -110,32 +99,19 @@ export function AlarmCenterPage() {
 
   if (isError) {
     return (
-      <Stack sx={{ height: '100%' }}>
-        <PageHeader title={t('alarms.title')} subtitle={t('alarms.subtitle')} />
+      <div className="flex h-full flex-col gap-4">
+        <Header t={t} stats={stats} />
         <ErrorState error={error} onRetry={() => refetch()} />
-      </Stack>
+      </div>
     );
   }
 
   return (
-    <Stack sx={{ height: '100%' }}>
-      {/* Header: title + live stats */}
-      <PageHeader
-        compact
-        title={t('alarms.title')}
-        subtitle={t('alarms.subtitle')}
-        live={<AlarmLiveIndicator />}
-        actions={
-          <>
-            <StatChip label={t('alarms.stats.active')} value={stats.active} color="primary" />
-            <StatChip label={t('alarms.stats.unacked')} value={stats.unacked} color="warning" />
-            <StatChip label={t('alarms.stats.escalated')} value={stats.escalated} color="error" />
-          </>
-        }
-      />
+    <div className="flex h-full flex-col">
+      <Header t={t} stats={stats} />
 
       {/* Filter bar */}
-      <Stack direction="row" alignItems="center" gap={1} sx={{ pb: 1.5, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap items-center gap-2 pb-3">
         <FilterSelect
           label={t('alarms.filters.type')}
           value={filters.type}
@@ -157,71 +133,62 @@ export function AlarmCenterPage() {
           translate={(v) => (v === 'all' ? t('alarms.filters.all') : t(`alarms.status.${v}`))}
           onChange={(v) => setFilter('status', v)}
         />
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            px: 1,
-            py: 0.5,
-            borderRadius: 1,
-            backgroundColor: 'action.hover',
-            minWidth: 200,
-          }}
-        >
-          <InputBase
+        <div className="flex h-8 min-w-52 items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 dark:bg-white/5">
+          <Search size={14} aria-hidden className="shrink-0 text-gray-400 dark:text-graydark-600" />
+          <input
             placeholder={t('alarms.filters.search')}
             value={filters.query}
             onChange={(e) => setFilter('query', e.target.value)}
-            sx={{ flex: 1, fontSize: '0.85rem' }}
-            inputProps={{ 'aria-label': 'alarm search' }}
+            aria-label="alarm search"
+            className="h-full w-full min-w-0 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none dark:text-graydark-800 dark:placeholder:text-graydark-600"
           />
           {filters.query && (
-            <IconButton
-              size="small"
+            <button
+              type="button"
               onClick={() => setFilter('query', '')}
               aria-label="clear search"
+              className="flex shrink-0 cursor-pointer border-none bg-transparent p-0 text-gray-400 hover:text-gray-600 dark:hover:text-graydark-700"
             >
-              <span style={{ fontSize: 14 }}>×</span>
-            </IconButton>
+              <X size={14} />
+            </button>
           )}
-        </Box>
-        <Box sx={{ flex: 1 }} />
-        <ToggleButtonGroup
-          value={view}
-          exclusive
-          size="small"
-          onChange={(_, v) => v && setView(v as ViewMode)}
+        </div>
+        <div className="min-w-0 flex-1" />
+        {/* View switcher */}
+        <div
+          // biome-ignore lint/a11y/useSemanticElements: no native <group> element exists; the ARIA role is the correct pattern
+          role="group"
+          aria-label={t('alarms.views.list')}
+          className="flex items-center overflow-hidden rounded-lg border border-gray-300 dark:border-white/10"
         >
-          <ToggleButton value="list">
-            <Tooltip title={t('alarms.views.list')} placement="top">
-              <LayoutList size={16} />
+          {(
+            [
+              { v: 'list', icon: <LayoutList size={15} />, label: t('alarms.views.list') },
+              { v: 'timeline', icon: <Activity size={15} />, label: t('alarms.views.timeline') },
+              { v: 'map', icon: <MapIcon size={15} />, label: t('alarms.views.map') },
+            ] as const
+          ).map(({ v, icon, label }) => (
+            <Tooltip key={v} label={label}>
+              <button
+                type="button"
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                aria-label={label}
+                className={`inline-flex size-8 cursor-pointer items-center justify-center border-none transition-colors ${
+                  view === v
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-transparent text-gray-500 hover:bg-gray-100 dark:text-graydark-600 dark:hover:bg-white/5'
+                }`}
+              >
+                {icon}
+              </button>
             </Tooltip>
-          </ToggleButton>
-          <ToggleButton value="timeline">
-            <Tooltip title={t('alarms.views.timeline')} placement="top">
-              <Activity size={16} />
-            </Tooltip>
-          </ToggleButton>
-          <ToggleButton value="map">
-            <Tooltip title={t('alarms.views.map')} placement="top">
-              <MapIcon size={16} />
-            </Tooltip>
-          </ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
+          ))}
+        </div>
+      </div>
 
       {/* Active view */}
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          overflow: 'hidden',
-        }}
-      >
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-gray-200 dark:border-white/5">
         {view === 'list' && (
           <AlarmList
             alarms={filtered}
@@ -241,11 +208,39 @@ export function AlarmCenterPage() {
         {view === 'map' && (
           <AlarmMap alarms={filtered} selectedId={selectedId} onSelect={setSelectedId} />
         )}
-      </Box>
+      </div>
 
       {/* Detail drawer */}
       <AlarmDetailDrawer alarmId={selectedId} onClose={() => setSelectedId(null)} />
-    </Stack>
+    </div>
+  );
+}
+
+/** Page header: title + subtitle + live indicator + headline stats. */
+function Header({
+  t,
+  stats,
+}: {
+  t: (k: string) => string;
+  stats: { active: number; unacked: number; escalated: number };
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {t('alarms.title')}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.subtitle')}</p>
+        </div>
+        <AlarmLiveIndicator />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <StatChip label={t('alarms.stats.active')} value={stats.active} tone="brand" />
+        <StatChip label={t('alarms.stats.unacked')} value={stats.unacked} tone="warning" />
+        <StatChip label={t('alarms.stats.escalated')} value={stats.escalated} tone="danger" />
+      </div>
+    </div>
   );
 }
 
@@ -253,19 +248,30 @@ export function AlarmCenterPage() {
 function StatChip({
   label,
   value,
-  color,
-}: { label: string; value: number; color: 'primary' | 'warning' | 'error' }) {
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'brand' | 'warning' | 'danger';
+}) {
+  const tones = {
+    brand:
+      'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-300',
+    warning:
+      'border-warning-200 bg-warning-50 text-warning-700 dark:border-warning-500/20 dark:bg-warning-500/10 dark:text-warning-400',
+    danger:
+      'border-danger-200 bg-danger-50 text-danger-700 dark:border-danger-500/20 dark:bg-danger-500/10 dark:text-danger-400',
+  } as const;
   return (
-    <Chip
-      label={`${value} ${label}`}
-      color={color}
-      variant="outlined"
-      sx={{ height: 28, fontWeight: 600 }}
-    />
+    <span
+      className={`inline-flex h-7 items-center rounded-full border px-3 text-xs font-semibold ${tones[tone]}`}
+    >
+      {value} {label}
+    </span>
   );
 }
 
-/** A labeled filter dropdown. */
+/** A labeled filter dropdown (native select — combobox + option roles). */
 function FilterSelect<T extends string>({
   label,
   value,
@@ -280,18 +286,17 @@ function FilterSelect<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <Select
-      size="small"
+    <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
-      renderValue={() => `${label}: ${translate(value)}`}
+      aria-label={label}
+      className="h-8 cursor-pointer rounded-lg border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
     >
       {options.map((o) => (
-        <MenuItem key={o} value={o}>
+        <option key={o} value={o}>
           {translate(o)}
-        </MenuItem>
+        </option>
       ))}
-    </Select>
+    </select>
   );
 }

@@ -1,31 +1,18 @@
 /**
- * ChannelDock — the collapsible left panel that lists all assignable channels.
+ * ChannelDock — the TailAdmin collapsible left panel listing all assignable
+ * channels (Phase 7 port).
  *
  * Groups channels by source (sites → site cameras, vehicles → 4 cameras each).
  * Clicking a channel assigns it to the next free wall slot. Includes a search
  * box, an online-only filter, and an auto-fill action that populates every
  * empty slot. Mirrors the channel-picker contract in `10_Live_Vide.md` §7.3.
  */
-import { Building2, Camera, Search, Wand2, X } from 'lucide-react';
+import { Building2, Camera, ChevronRight, Search, Wand2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/components/tailwind-ui';
 import type { CameraChannel, CameraFacing } from '@/types/video.types';
-import {
-  Box,
-  Button,
-  Chip,
-  Collapse,
-  IconButton,
-  InputBase,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material';
 
 /** Facing → i18n key. */
 const FACING_KEY: Record<CameraFacing, string> = {
@@ -85,139 +72,124 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
   };
 
   return (
-    <Stack
-      sx={{
-        width: 260,
-        minWidth: 260,
-        height: '100%',
-        borderRight: '1px solid',
-        borderColor: 'divider',
-        backgroundColor: 'background.paper',
-        overflow: 'hidden',
-      }}
-    >
+    <div className="flex h-full w-[260px] min-w-[260px] flex-col overflow-hidden border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
       {/* Header: search + actions */}
-      <Stack gap={1} sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="subtitle2" sx={{ flex: 1 }}>
+      <div className="flex flex-col gap-2 border-b border-gray-200 p-2.5 dark:border-white/5">
+        <div className="flex items-center gap-2">
+          <p className="flex-1 text-sm font-semibold text-gray-800 dark:text-white">
             {t('video.dock.title')}
-          </Typography>
-          <Tooltip title={t('video.dock.onlineOnly')}>
-            <Chip
-              size="small"
-              label={t('video.dock.online')}
-              color={onlineOnly ? 'primary' : 'default'}
-              variant={onlineOnly ? 'filled' : 'outlined'}
-              onClick={() => setOnlineOnly((v) => !v)}
-              sx={{ height: 22, fontSize: '0.7rem' }}
-            />
-          </Tooltip>
-        </Box>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            px: 1,
-            py: 0.5,
-            borderRadius: 1,
-            backgroundColor: 'action.hover',
-          }}
-        >
-          <Search size={16} style={{ color: 'text.secondary' }} />
-          <InputBase
+          </p>
+          <button
+            type="button"
+            onClick={() => setOnlineOnly((v) => !v)}
+            aria-pressed={onlineOnly}
+            title={t('video.dock.onlineOnly')}
+            className={`h-6 cursor-pointer rounded-full border px-2.5 text-xs font-semibold transition-colors ${
+              onlineOnly
+                ? 'border-brand-500 bg-brand-500 text-white'
+                : 'border-gray-300 bg-transparent text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5'
+            }`}
+          >
+            {t('video.dock.online')}
+          </button>
+        </div>
+        <div className="flex h-8 items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 dark:bg-white/5">
+          <Search size={15} aria-hidden className="shrink-0 text-gray-400 dark:text-graydark-600" />
+          <input
             placeholder={t('video.dock.search')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            sx={{ flex: 1, fontSize: '0.85rem' }}
-            inputProps={{ 'aria-label': 'channel search' }}
+            aria-label="channel search"
+            className="h-full w-full min-w-0 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none dark:text-graydark-800 dark:placeholder:text-graydark-600"
           />
           {query && (
-            <IconButton size="small" onClick={() => setQuery('')} aria-label="clear search">
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="clear search"
+              className="flex shrink-0 cursor-pointer border-none bg-transparent p-0 text-gray-400 hover:text-gray-600 dark:hover:text-graydark-700"
+            >
               <X size={14} />
-            </IconButton>
+            </button>
           )}
-        </Box>
-        <Button
-          size="small"
-          startIcon={<Wand2 size={16} />}
-          onClick={onAutoFill}
-          variant="outlined"
-        >
+        </div>
+        <Button size="sm" variant="outline" leftIcon={<Wand2 size={15} />} onClick={onAutoFill}>
           {t('video.dock.autoFill')}
         </Button>
-      </Stack>
+      </div>
 
       {/* Channel list grouped by source */}
-      <Box sx={{ flex: 1, overflowY: 'auto' }}>
+      <div className="fv-scroll min-h-0 flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
-          <Typography variant="caption" color="text.disabled" sx={{ p: 2, display: 'block' }}>
+          <p className="p-4 text-xs text-gray-400 dark:text-graydark-600">
             {t('video.dock.noResults')}
-          </Typography>
+          </p>
         ) : (
-          <List dense disablePadding>
-            {grouped.map(([sourceLabel, cams]) => {
-              const isCollapsed = collapsed.has(sourceLabel);
-              return (
-                <Box key={sourceLabel}>
-                  <ListItemButton onClick={() => toggleGroup(sourceLabel)} sx={{ py: 0.5 }}>
-                    <ListItemIcon sx={{ minWidth: 28 }}>
-                      {cams[0]?.sourceType === 'site' ? (
-                        <Building2 size={16} />
-                      ) : (
-                        <Camera size={16} />
+          grouped.map(([sourceLabel, cams]) => {
+            const isCollapsed = collapsed.has(sourceLabel);
+            return (
+              <div key={sourceLabel}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(sourceLabel)}
+                  aria-expanded={!isCollapsed}
+                  className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+                >
+                  {cams[0]?.sourceType === 'site' ? (
+                    <Building2
+                      size={15}
+                      aria-hidden
+                      className="shrink-0 text-gray-500 dark:text-graydark-600"
+                    />
+                  ) : (
+                    <Camera
+                      size={15}
+                      aria-hidden
+                      className="shrink-0 text-gray-500 dark:text-graydark-600"
+                    />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-graydark-800">
+                    {sourceLabel}
+                  </span>
+                  <span className="inline-flex h-4 items-center rounded-full bg-gray-100 px-1.5 text-[0.6rem] font-semibold text-gray-500 dark:bg-white/5 dark:text-graydark-600">
+                    {cams.length}
+                  </span>
+                  <ChevronRight
+                    size={14}
+                    aria-hidden
+                    className={`shrink-0 text-gray-400 transition-transform rtl:rotate-180 ${isCollapsed ? '' : 'rotate-90'}`}
+                  />
+                </button>
+                {!isCollapsed &&
+                  cams.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onPick(c)}
+                      className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                        c.online && c.consentGiven ? 'opacity-100' : 'opacity-50'
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className="me-1 size-1.5 shrink-0 rounded-full"
+                        style={{ background: c.online && c.consentGiven ? '#22d3ee' : '#64748b' }}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-graydark-700">
+                        {t(FACING_KEY[c.facing])}
+                      </span>
+                      {c.cabinCam && (
+                        <span className="inline-flex h-3.5 items-center rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
+                          {t('video.tile.cabinCam')}
+                        </span>
                       )}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={sourceLabel}
-                      primaryTypographyProps={{ variant: 'body2', fontWeight: 500, noWrap: true }}
-                    />
-                    <Chip
-                      label={cams.length}
-                      size="small"
-                      sx={{ height: 16, fontSize: '0.6rem' }}
-                    />
-                  </ListItemButton>
-                  <Collapse in={!isCollapsed} timeout="auto" unmountOnExit>
-                    <List dense disablePadding>
-                      {cams.map((c) => (
-                        <ListItemButton
-                          key={c.id}
-                          onClick={() => onPick(c)}
-                          sx={{ pl: 4, py: 0.25, opacity: c.online && c.consentGiven ? 1 : 0.5 }}
-                        >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: c.online && c.consentGiven ? '#22d3ee' : '#64748b',
-                              display: 'inline-block',
-                              marginRight: 8,
-                              flexShrink: 0,
-                            }}
-                          />
-                          <ListItemText
-                            primary={t(FACING_KEY[c.facing])}
-                            primaryTypographyProps={{ variant: 'body2', noWrap: true }}
-                          />
-                          {c.cabinCam && (
-                            <Chip
-                              label={t('video.tile.cabinCam')}
-                              size="small"
-                              sx={{ height: 14, fontSize: '0.55rem' }}
-                            />
-                          )}
-                        </ListItemButton>
-                      ))}
-                    </List>
-                  </Collapse>
-                </Box>
-              );
-            })}
-          </List>
+                    </button>
+                  ))}
+              </div>
+            );
+          })
         )}
-      </Box>
-    </Stack>
+      </div>
+    </div>
   );
 }
