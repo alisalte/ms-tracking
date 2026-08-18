@@ -121,19 +121,19 @@ test.describe('Sprint I — geofence management', () => {
     await expect(page.getByText(newName).first()).toBeVisible({ timeout: 20_000 });
   });
 
-  test('TEST 5: tenant isolation — geofences of another tenant are invisible', async ({
-    page,
-    request,
-  }) => {
+  test('TEST 5: tenant isolation — geofences of another tenant are invisible', async ({ page }) => {
     await login(page);
     await page.goto('/geofences');
-    const listResponse = await page.waitForResponse(GEO_LIST, { timeout: 15_000 }).catch(() => null);
+    const listResponse = await page
+      .waitForResponse(GEO_LIST, { timeout: 15_000 })
+      .catch(() => null);
     await page.waitForLoadState('networkidle');
 
     // API layer with the UI's own token (localStorage) — same identity the
     // browser uses, so this verifies exactly what the UI can see.
     const api = await page.evaluate(async () => {
-      const token = JSON.parse(localStorage.getItem('fleetvision_tokens') ?? '{}')?.accessToken ?? null;
+      const token =
+        JSON.parse(localStorage.getItem('fleetvision_tokens') ?? '{}')?.accessToken ?? null;
       const tenantId = localStorage.getItem('fleetvision_tenant_id');
       const res = await fetch('/api/v1/geofences?limit=100', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

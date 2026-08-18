@@ -84,10 +84,7 @@ describe('OsrmProvider.matchRoute (Sprint I §38)', () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
         code: 'Ok',
-        tracepoints: [
-          { location: [51.3, 35.7] },
-          { location: [51.31, 35.71] },
-        ],
+        tracepoints: [{ location: [51.3, 35.7] }, { location: [51.31, 35.71] }],
       }),
     );
     const provider = new OsrmProvider({ baseUrl: 'http://osrm:5000', cache: fakeCache() });

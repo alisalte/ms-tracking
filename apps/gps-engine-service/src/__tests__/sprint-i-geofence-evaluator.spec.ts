@@ -1,3 +1,4 @@
+import type { TelemetryMetrics } from '@fleetvision/observability';
 /**
  * GeofenceEvaluator unit tests (Sprint I §61 EVENTS 11–18).
  *
@@ -7,16 +8,15 @@
  * simultaneous geofences, restart-safety, and alert_on filtering.
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import type { TelemetryMetrics } from '@fleetvision/observability';
 import { GeofenceEvaluator } from '../application/geofence-evaluator.js';
+import type { GeofenceSignal, SignalBus } from '../application/signal-bus.js';
+import type { PositionEvent } from '../domain/position-event.js';
 import type { GeofenceCandidate } from '../infrastructure/persistence/geofence-definitions.repository.js';
 import type {
   GeofenceStatePatch,
   GeofenceStateRepository,
   GeofenceStateRow,
 } from '../infrastructure/persistence/geofence-state.repository.js';
-import type { GeofenceSignal, SignalBus } from '../application/signal-bus.js';
-import type { PositionEvent } from '../domain/position-event.js';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const VEHICLE = '22222222-2222-4222-8222-222222222222';
@@ -27,7 +27,10 @@ const FENCE_B = '33333333-3333-4333-8333-333333333332';
 class FakeStateRepo {
   public store = new Map<string, GeofenceStatePatch>();
   public loadCalls = 0;
-  async loadForVehicle(tenantId: string, vehicleId: string): Promise<Map<string, GeofenceStateRow>> {
+  async loadForVehicle(
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<Map<string, GeofenceStateRow>> {
     this.loadCalls += 1;
     const out = new Map<string, GeofenceStateRow>();
     for (const [key, patch] of this.store) {
@@ -90,7 +93,9 @@ class FakeBus {
   }
 }
 
-function makeEvent(overrides: Partial<{ lat: number; lng: number; at: Date; messageId: string }> = {}) {
+function makeEvent(
+  overrides: Partial<{ lat: number; lng: number; at: Date; messageId: string }> = {},
+) {
   return {
     tenantId: TENANT,
     vehicleId: VEHICLE,

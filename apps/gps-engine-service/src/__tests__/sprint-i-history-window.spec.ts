@@ -25,9 +25,17 @@ describe('parseHistoryWindow', () => {
   });
 
   it('23. rejects from >= to', () => {
-    const r = parseHistoryWindow({ from: '2026-08-15T18:00:00Z', to: '2026-08-01T08:00:00Z', now: NOW });
+    const r = parseHistoryWindow({
+      from: '2026-08-15T18:00:00Z',
+      to: '2026-08-01T08:00:00Z',
+      now: NOW,
+    });
     expect(r.error).toBe('REVERSED');
-    const same = parseHistoryWindow({ from: '2026-08-15T18:00:00Z', to: '2026-08-15T18:00:00Z', now: NOW });
+    const same = parseHistoryWindow({
+      from: '2026-08-15T18:00:00Z',
+      to: '2026-08-15T18:00:00Z',
+      now: NOW,
+    });
     expect(same.error).toBe('REVERSED');
   });
 

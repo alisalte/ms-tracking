@@ -11,15 +11,7 @@
  * unbind — all gated by `device.write`; a 409 from a double-bind surfaces
  * visibly. The active drawer is selected by the current tab + selected id.
  */
-import {
-  Calendar,
-  CircleSlash,
-  Cpu,
-  Link2,
-  Link2Off,
-  Smartphone,
-  Truck,
-} from 'lucide-react';
+import { Calendar, CircleSlash, Cpu, Link2, Link2Off, Smartphone, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -92,11 +84,7 @@ export function AssetDetailDrawers({
   return (
     <>
       {tab === 'fleets' && (
-        <FleetDetailDrawer
-          fleetId={selectedId}
-          onClose={onClose}
-          vehicles={vehicles}
-        />
+        <FleetDetailDrawer fleetId={selectedId} onClose={onClose} vehicles={vehicles} />
       )}
       {tab === 'vehicles' && (
         <VehicleDetailDrawer
@@ -289,7 +277,11 @@ function FleetDetailDrawer({
         {fleet && (
           <Stack gap={2} sx={{ p: 2 }}>
             <Box>
-              <MetaRow icon={<Truck size={16} />} label={t('assets.fleet.code')} value={fleet.code} />
+              <MetaRow
+                icon={<Truck size={16} />}
+                label={t('assets.fleet.code')}
+                value={fleet.code}
+              />
               <MetaRow
                 icon={<Truck size={16} />}
                 label={t('assets.fleet.colVehicles')}
@@ -506,7 +498,9 @@ function VehicleDetailDrawer({
                     ) : (
                       <Stack direction="row" gap={1} sx={{ alignItems: 'flex-start' }}>
                         <FormControl size="small" sx={{ flex: 2, minWidth: 0 }}>
-                          <InputLabel id="assign-device-label">{t('assets.device.imei')}</InputLabel>
+                          <InputLabel id="assign-device-label">
+                            {t('assets.device.imei')}
+                          </InputLabel>
                           <Select
                             labelId="assign-device-label"
                             label={t('assets.device.imei')}
@@ -632,9 +626,7 @@ function DeviceDetailDrawer({
               <MetaRow
                 icon={<Smartphone size={16} />}
                 label={t('assets.device.imei')}
-                value={
-                  <span style={{ fontFamily: 'monospace' }}>{device.imei}</span>
-                }
+                value={<span style={{ fontFamily: 'monospace' }}>{device.imei}</span>}
               />
               <MetaRow
                 icon={<Cpu size={16} />}

@@ -12,9 +12,9 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { deviceProtocolColor, deviceStatusColor } from '@/components/assets/asset-meta';
 import { PermissionGate } from '@/auth/permissions';
-import { DataTable, EmptyState, StatusBadge, Toolbar, type Column } from '@/components/ui';
+import { deviceProtocolColor, deviceStatusColor } from '@/components/assets/asset-meta';
+import { type Column, DataTable, EmptyState, StatusBadge, Toolbar } from '@/components/ui';
 import type { Device, DeviceProtocol, DeviceStatus, Vehicle } from '@/types/asset.types';
 import { Box, IconButton, ListItemIcon, Menu, MenuItem, Select, Typography } from '@mui/material';
 import { CircleSlash, Eye, MoreVertical, Pencil } from 'lucide-react';
@@ -76,7 +76,8 @@ export function DevicesTab({
 
   const vehicleName = useMemo(() => {
     const byId = new Map(vehicles.map((v) => [v.id, v] as const));
-    return (vehicleId: string | null): string => (vehicleId ? byId.get(vehicleId)?.name ?? '—' : '—');
+    return (vehicleId: string | null): string =>
+      vehicleId ? (byId.get(vehicleId)?.name ?? '—') : '—';
   }, [vehicles]);
 
   const filtered = useMemo(() => {
@@ -166,7 +167,12 @@ export function DevicesTab({
       id: 'lastSeen',
       headerKey: 'assets.device.colLastSeen',
       render: (d) => (
-        <Typography variant="caption" color="text.secondary" noWrap title={d.lastSeenAt ?? undefined}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          noWrap
+          title={d.lastSeenAt ?? undefined}
+        >
           {d.lastSeenAt ? relTime(d.lastSeenAt) : t('assets.device.never')}
         </Typography>
       ),
@@ -207,7 +213,9 @@ export function DevicesTab({
             >
               {STATUSES.map((s) => (
                 <MenuItem key={s} value={s}>
-                  {s === 'all' ? t('assets.filters.allStatus') : t(`assets.device.statusValues.${s}`)}
+                  {s === 'all'
+                    ? t('assets.filters.allStatus')
+                    : t(`assets.device.statusValues.${s}`)}
                 </MenuItem>
               ))}
             </Select>
@@ -219,7 +227,9 @@ export function DevicesTab({
             >
               {PROTOCOLS.map((p) => (
                 <MenuItem key={p} value={p}>
-                  {p === 'all' ? t('assets.filters.allProtocols') : t(`assets.device.protocols.${p}`)}
+                  {p === 'all'
+                    ? t('assets.filters.allProtocols')
+                    : t(`assets.device.protocols.${p}`)}
                 </MenuItem>
               ))}
             </Select>

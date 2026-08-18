@@ -160,10 +160,7 @@ export class LocationController {
       // Sprint I: the service now validates (PostGIS-authoritative); map the
       // controlled domain error to 400 instead of leaking a 500.
       if (err instanceof GeofenceValidationError) {
-        throw new HttpException(
-          { message: err.message, code: err.code },
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new HttpException({ message: err.message, code: err.code }, HttpStatus.BAD_REQUEST);
       }
       throw err;
     }

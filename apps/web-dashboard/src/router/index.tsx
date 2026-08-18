@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material';
 import { Navigate, createBrowserRouter } from 'react-router';
+import { Suspense, lazy } from 'react';
 
 import { ProtectedRoute } from '@/auth/auth.guard';
 import { PERMISSIONS } from '@/auth/permissions';
@@ -14,19 +15,28 @@ import { CommandCenterPage } from '@/pages/CommandCenterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { EventCenterPage } from '@/pages/EventCenterPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
-import { GeofencePage } from '@/pages/GeofencePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MaintenancePage } from '@/pages/MaintenancePage';
-import { MapPage } from '@/pages/MapPage';
 import { MfaVerifyPage } from '@/pages/MfaVerifyPage';
 import { NotificationCenterPage } from '@/pages/NotificationCenterPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
-import { ReportsPage } from '@/pages/ReportsPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TripDetailPage } from '@/pages/TripDetailPage';
 import { TripsPage } from '@/pages/TripsPage';
-import { VideoWallPage } from '@/pages/VideoWallPage';
+
+const GeofencePage = lazy(() => import('@/pages/GeofencePage').then((m) => ({ default: m.GeofencePage })));
+const MapPage = lazy(() => import('@/pages/MapPage').then((m) => ({ default: m.MapPage })));
+const ReportsPage = lazy(() => import('@/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const VideoWallPage = lazy(() => import('@/pages/VideoWallPage').then((m) => ({ default: m.VideoWallPage })));
+
+function LazyWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center" />}>
+      {children}
+    </Suspense>
+  );
+}
 
 /**
  * Not-found page rendered inside the authenticated AppLayout shell.
@@ -120,9 +130,11 @@ export const router = createBrowserRouter([
           {
             path: '/map',
             element: (
-              <RequirePermission permission={PERMISSIONS.trackingRead}>
-                <MapPage />
-              </RequirePermission>
+              <LazyWrapper>
+                <RequirePermission permission={PERMISSIONS.trackingRead}>
+                  <MapPage />
+                </RequirePermission>
+              </LazyWrapper>
             ),
           },
           {
@@ -145,7 +157,11 @@ export const router = createBrowserRouter([
           },
           {
             path: '/video',
-            element: <VideoWallPage />,
+            element: (
+              <LazyWrapper>
+                <VideoWallPage />
+              </LazyWrapper>
+            ),
           },
           {
             path: '/alarms',
@@ -196,9 +212,11 @@ export const router = createBrowserRouter([
             path: '/reports',
             // Sprint J: reporting surface is permission-gated.
             element: (
-              <RequirePermission permission={PERMISSIONS.reportRead}>
-                <ReportsPage />
-              </RequirePermission>
+              <LazyWrapper>
+                <RequirePermission permission={PERMISSIONS.reportRead}>
+                  <ReportsPage />
+                </RequirePermission>
+              </LazyWrapper>
             ),
           },
           {
@@ -209,9 +227,11 @@ export const router = createBrowserRouter([
             path: '/geofences',
             // Sprint I: geofence surface is permission-gated like /map.
             element: (
-              <RequirePermission permission={PERMISSIONS.mapsRead}>
-                <GeofencePage />
-              </RequirePermission>
+              <LazyWrapper>
+                <RequirePermission permission={PERMISSIONS.mapsRead}>
+                  <GeofencePage />
+                </RequirePermission>
+              </LazyWrapper>
             ),
           },
           {

@@ -223,7 +223,8 @@ export class TrackingEventProducer implements OnApplicationShutdown {
       vehicleId: s.vehicleId,
       deviceId: null,
       occurredAt: s.occurredAt,
-      severity: s.type === 'geofence.exited' ? 'LOW' : s.type === 'geofence.dwell' ? 'MEDIUM' : 'INFO',
+      severity:
+        s.type === 'geofence.exited' ? 'LOW' : s.type === 'geofence.dwell' ? 'MEDIUM' : 'INFO',
       metadata: {
         sourceEventId: s.sourceEventId,
         geofenceId: s.geofenceId,

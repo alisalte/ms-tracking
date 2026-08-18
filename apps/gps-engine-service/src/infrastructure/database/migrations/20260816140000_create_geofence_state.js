@@ -33,7 +33,7 @@ export async function up(knex) {
     t.primary(['tenant_id', 'vehicle_id', 'geofence_id']);
   });
   await knex.raw(
-    "ALTER TABLE tracking.geofence_state DROP CONSTRAINT IF EXISTS geofence_state_state_check",
+    'ALTER TABLE tracking.geofence_state DROP CONSTRAINT IF EXISTS geofence_state_state_check',
   );
   await knex.raw(
     "ALTER TABLE tracking.geofence_state ADD CONSTRAINT geofence_state_state_check CHECK (state IN ('OUTSIDE','CANDIDATE_IN','INSIDE','CANDIDATE_OUT'))",
@@ -52,6 +52,8 @@ export async function up(knex) {
 
 /** @param {import("knex").Knex} knex */
 export async function down(knex) {
-  await knex.raw('DROP POLICY IF EXISTS geofence_state_tenant_isolation ON tracking.geofence_state');
+  await knex.raw(
+    'DROP POLICY IF EXISTS geofence_state_tenant_isolation ON tracking.geofence_state',
+  );
   await knex.schema.withSchema('tracking').dropTableIfExists('geofence_state');
 }

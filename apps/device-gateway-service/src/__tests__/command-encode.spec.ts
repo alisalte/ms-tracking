@@ -1,13 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
+import type { RawPacket } from '../domain/index.js';
+import { MeitrackAdapter } from '../infrastructure/adapters/meitrack/meitrack.adapter.js';
 import {
   buildMeitrackBinaryFrame,
   buildMeitrackFrame,
   encodeMeitrack,
 } from '../infrastructure/adapters/meitrack/meitrack.encode.js';
 import { meitrackChecksum } from '../infrastructure/adapters/meitrack/meitrack.frames.js';
-import { MeitrackAdapter } from '../infrastructure/adapters/meitrack/meitrack.adapter.js';
 import { ByteReader, NEED_MORE } from '../infrastructure/transport/byte-reader.js';
-import { RawPacket } from '../domain/index.js';
 
 const IMEI = '866854036516451';
 const adapter = new MeitrackAdapter();

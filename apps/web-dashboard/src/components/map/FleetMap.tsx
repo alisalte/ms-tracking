@@ -362,7 +362,7 @@ export function FleetMap({
       playbackMarkerRef.current?.remove();
       playbackMarkerRef.current = null;
     };
-  }, [playbackHead, track]);
+  }, [playbackHead]);
 
   // §17 selection sync: a list-row selection flies the camera to the vehicle.
   // Depends only on the focus token so live position deltas never re-trigger it.

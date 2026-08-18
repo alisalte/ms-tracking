@@ -97,8 +97,7 @@ export function useCreateGeofence() {
 export function useUpdateGeofence() {
   const qc = useQueryClient();
   return useMutation<Geofence, Error, { id: string; payload: UpdateGeofencePayload }>({
-    mutationFn: async ({ id, payload }) =>
-      apiPutRaw<Geofence>(`/geofences/${id}`, payload),
+    mutationFn: async ({ id, payload }) => apiPutRaw<Geofence>(`/geofences/${id}`, payload),
     onSuccess: (_data, { id }) => {
       void id;
       qc.invalidateQueries({ queryKey: geofenceKeys.all });

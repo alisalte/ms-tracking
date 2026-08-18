@@ -9,9 +9,9 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { vehicleStatusColor } from '@/components/assets/asset-meta';
 import { PermissionGate } from '@/auth/permissions';
-import { DataTable, EmptyState, StatusBadge, Toolbar, type Column } from '@/components/ui';
+import { vehicleStatusColor } from '@/components/assets/asset-meta';
+import { type Column, DataTable, EmptyState, StatusBadge, Toolbar } from '@/components/ui';
 import type { Fleet, Vehicle, VehicleStatus } from '@/types/asset.types';
 import { Box, IconButton, ListItemIcon, Menu, MenuItem, Select, Typography } from '@mui/material';
 import { Archive, Eye, MoreVertical, Pencil, Truck } from 'lucide-react';
@@ -226,7 +226,11 @@ export function VehiclesTab({
         onRowClick={(v) => onSelect(v.id)}
         maxHeight="calc(100vh - 320px)"
         emptyState={
-          <EmptyState icon={Truck} title={t('assets.empty')} description={t('assets.vehicle.search')} />
+          <EmptyState
+            icon={Truck}
+            title={t('assets.empty')}
+            description={t('assets.vehicle.search')}
+          />
         }
       />
 

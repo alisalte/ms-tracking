@@ -214,11 +214,17 @@ export function useUtilization(
   });
 }
 
-export function useTrips(range: ReportRange, filters: { vehicleId?: string; fleetId?: string } = {}) {
+export function useTrips(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
   return useQuery({
     queryKey: ['reports', 'trips', range, filters],
     queryFn: () =>
-      apiGetRaw<{ items: TripRowWire[]; nextCursor: string | null }>('/reports/trips', rangeParams(range, { ...filters, limit: 50 })),
+      apiGetRaw<{ items: TripRowWire[]; nextCursor: string | null }>(
+        '/reports/trips',
+        rangeParams(range, { ...filters, limit: 50 }),
+      ),
   });
 }
 

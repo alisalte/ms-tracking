@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { DeviceStatusController } from '../api/device-status.controller.js';
-import { DeviceStatusRecord } from '../domain/device-status.js';
 import { PositionsController } from '../api/positions.controller.js';
+import { DeviceStatusRecord } from '../domain/device-status.js';
 
 /**
  * Sprint E live-map bootstrap endpoints:
@@ -61,7 +61,15 @@ function makePositionsController() {
     },
   };
   const cache = { getLatest: async () => null };
-  return { controller: new PositionsController(cache as never, repo as never, { HISTORY_MAX_RANGE_DAYS: 31 } as never, null as never), calls };
+  return {
+    controller: new PositionsController(
+      cache as never,
+      repo as never,
+      { HISTORY_MAX_RANGE_DAYS: 31 } as never,
+      null as never,
+    ),
+    calls,
+  };
 }
 
 describe('GET /devices/status (Sprint E device-status bootstrap)', () => {
@@ -113,10 +121,7 @@ describe('Sprint E route ordering (static segments before params)', () => {
   });
 
   it('declares /devices/status before /devices/:deviceId/status', () => {
-    const src = readFileSync(
-      resolve(process.cwd(), 'src/api/device-status.controller.ts'),
-      'utf8',
-    );
+    const src = readFileSync(resolve(process.cwd(), 'src/api/device-status.controller.ts'), 'utf8');
     const listRoute = src.indexOf("@Get('status')");
     const paramRoute = src.indexOf("@Get(':deviceId/status')");
     expect(listRoute).toBeGreaterThan(-1);

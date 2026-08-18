@@ -33,10 +33,17 @@ async function apiLogin(request: import('@playwright/test').APIRequestContext) {
   };
   const token = body.data?.access_token;
   if (!token) return null;
-  return { token, userId: body.data?.user?.id ?? null, tenantId: body.data?.user?.tenantId ?? null };
+  return {
+    token,
+    userId: body.data?.user?.id ?? null,
+    tenantId: body.data?.user?.tenantId ?? null,
+  };
 }
 
-test('TEST 4: geofence ENTER FleetEvent → alarm → notification → bell', async ({ page, request }) => {
+test('TEST 4: geofence ENTER FleetEvent → alarm → notification → bell', async ({
+  page,
+  request,
+}) => {
   const auth = await apiLogin(request);
   test.skip(!auth, 'identity unreachable — cannot authenticate');
   const headers = { Authorization: `Bearer ${auth!.token}` };
@@ -73,7 +80,10 @@ test('TEST 4: geofence ENTER FleetEvent → alarm → notification → bell', as
   });
 
   // 3. Publish the geofence.entered FleetEvent (the evaluator's envelope).
-  const kafka = new Kafka({ brokers: [process.env.E2E_KAFKA ?? 'localhost:9092'], clientId: 'e2e-sprint-i' });
+  const kafka = new Kafka({
+    brokers: [process.env.E2E_KAFKA ?? 'localhost:9092'],
+    clientId: 'e2e-sprint-i',
+  });
   const producer = kafka.producer({ allowAutoTopicCreation: true });
   try {
     await producer.connect();

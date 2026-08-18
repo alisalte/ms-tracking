@@ -65,7 +65,6 @@ interface GeofenceRow {
   center_lng?: string | number | null;
 }
 
-
 export class GeofenceRepository {
   constructor(private readonly knex: Knex) {}
 
@@ -74,9 +73,10 @@ export class GeofenceRepository {
    * parsed GeoJSON catches self-intersections and malformed rings before any
    * persist. Throws GeofenceValidationError with the ST_IsValidReason detail.
    */
-  public async assertValidGeometry(
-    boundaryGeoJson: { type: 'Polygon'; coordinates: number[][][] },
-  ): Promise<void> {
+  public async assertValidGeometry(boundaryGeoJson: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  }): Promise<void> {
     const rows = await this.knex.raw(
       'SELECT ST_IsValid(ST_GeomFromGeoJSON(?)) AS valid, ST_IsValidReason(ST_GeomFromGeoJSON(?)) AS reason',
       [JSON.stringify(boundaryGeoJson), JSON.stringify(boundaryGeoJson)],
@@ -187,9 +187,22 @@ export class GeofenceRepository {
     const q = this.selectBase(tenantId);
     q.where((builder) => {
       const status = filters.status ?? 'ACTIVE,INACTIVE';
-      builder.whereIn('status', status.split(',').map((s) => s.trim()).filter(Boolean));
+      builder.whereIn(
+        'status',
+        status
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
     });
-    if (filters.type) q.whereIn('geofence_type', filters.type.split(',').map((s) => s.trim()).filter(Boolean));
+    if (filters.type)
+      q.whereIn(
+        'geofence_type',
+        filters.type
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
     if (filters.search) q.whereILike('name', `%${filters.search}%`);
     if (filters.vehicleId) {
       if (!UUID_RE.test(filters.vehicleId)) {
@@ -212,7 +225,9 @@ export class GeofenceRepository {
         );
       }
     }
-    q.orderBy('created_at', 'desc').orderBy('id', 'desc').limit(limit + 1);
+    q.orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit + 1);
     const rows = (await q) as GeofenceRow[];
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -362,11 +377,7 @@ export class GeofenceRepository {
 
   /** Hard delete (legacy Sprint F/G behavior, kept for the legacy endpoint). */
   public async delete(id: string, tenantId: string): Promise<boolean> {
-    await this.knex
-      .withSchema(SCHEMA)
-      .from(ASSIGNS)
-      .whereRaw('geofence_id = ?::uuid', [id])
-      .del();
+    await this.knex.withSchema(SCHEMA).from(ASSIGNS).whereRaw('geofence_id = ?::uuid', [id]).del();
     const deleted = await this.knex
       .withSchema(SCHEMA)
       .from(TABLE)
@@ -463,7 +474,10 @@ export class GeofenceRepository {
     assignedBy?: string,
   ): Promise<void> {
     await this.knex.transaction(async (trx) => {
-      await trx.withSchema(SCHEMA).from(ASSIGNS).whereRaw('geofence_id = ?::uuid', [geofenceId])
+      await trx
+        .withSchema(SCHEMA)
+        .from(ASSIGNS)
+        .whereRaw('geofence_id = ?::uuid', [geofenceId])
         .whereRaw('tenant_id = ?::uuid', [tenantId])
         .del();
       for (const vid of vehicleIds) {

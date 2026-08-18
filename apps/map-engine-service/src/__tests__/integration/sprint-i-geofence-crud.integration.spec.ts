@@ -6,9 +6,9 @@
  * sequential scan.
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { GeofenceRepository } from '../../infrastructure/persistence/geofence.repository.js';
 import { GeofenceValidationError } from '../../domain/geofence-validation.js';
-import { bootstrap, dropTestDb, type IntegrationCtx } from './db.js';
+import { GeofenceRepository } from '../../infrastructure/persistence/geofence.repository.js';
+import { type IntegrationCtx, bootstrap, dropTestDb } from './db.js';
 
 const TENANT_A = 'aaaaaaaa-0000-4000-8000-000000000001';
 const TENANT_B = 'aaaaaaaa-0000-4000-8000-000000000002';
@@ -290,7 +290,11 @@ describe('Sprint I — geofence CRUD on real PostGIS', () => {
 });
 
 /** Circle → 48-gon ring helper (same math the frontend drawing uses). */
-function circleRing(lat: number, lng: number, radiusM: number): {
+function circleRing(
+  lat: number,
+  lng: number,
+  radiusM: number,
+): {
   type: 'Polygon';
   coordinates: number[][][];
 } {

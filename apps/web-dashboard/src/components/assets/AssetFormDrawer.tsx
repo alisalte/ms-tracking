@@ -15,7 +15,6 @@
  *   getApiErrorMessage. Shown inline via `<FormAlert>` + toasted.
  */
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import {
   Box,
   Button,
@@ -30,6 +29,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 
 import {
   useCreateDevice,
@@ -300,7 +300,8 @@ export function AssetFormDrawer({
     } catch (err) {
       // 409 → friendly conflict copy (code clash / duplicate IMEI); other
       // backend validation errors surface verbatim via getApiErrorMessage.
-      const msg = err instanceof ConflictError ? t('assets.crud.conflict') : getApiErrorMessage(err);
+      const msg =
+        err instanceof ConflictError ? t('assets.crud.conflict') : getApiErrorMessage(err);
       setServerError(msg);
       toast.error(msg);
     }
@@ -443,7 +444,9 @@ function FleetFields({ control, errors, t }: FieldProps) {
 function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fleet[] }) {
   // Active fleets first; keep the currently-archived ones selectable so edits
   // of vehicles in archived fleets don't silently change the assignment.
-  const options = [...fleets].sort((a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE'));
+  const options = [...fleets].sort(
+    (a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE'),
+  );
   return (
     <>
       <FieldSelect
@@ -452,7 +455,8 @@ function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fl
         label={`${t('assets.vehicle.fleet')} *`}
         options={options.map((f) => ({
           value: f.id,
-          label: f.status === 'ACTIVE' ? f.name : `${f.name} (${t('assets.fleet.status.ARCHIVED')})`,
+          label:
+            f.status === 'ACTIVE' ? f.name : `${f.name} (${t('assets.fleet.status.ARCHIVED')})`,
         }))}
         error={errors.fleetId as FieldError | undefined}
         t={t}
@@ -704,7 +708,6 @@ function buildDefaults(
   }
   // Create defaults.
   if (entity === 'fleets') return { name: '', code: '', description: '' };
-  if (entity === 'vehicles')
-    return { fleetId: '', name: '', code: '', plate: '', vin: '' };
+  if (entity === 'vehicles') return { fleetId: '', name: '', code: '', plate: '', vin: '' };
   return { imei: '', serialNumber: '', manufacturer: '', model: '', protocol: 'gt06' };
 }

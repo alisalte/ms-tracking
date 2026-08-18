@@ -243,7 +243,12 @@ async function sendSession(state: string, tenantId = TENANT_A, deviceId = DEVICE
 async function sendGeofenceEvent(
   messageType: 'geofence.entered' | 'geofence.exited' | 'geofence.dwell',
   geofenceId: string,
-  opts: { dwellSec?: number | null; eventIdSuffix?: string; tenantId?: string; vehicleId?: string } = {},
+  opts: {
+    dwellSec?: number | null;
+    eventIdSuffix?: string;
+    tenantId?: string;
+    vehicleId?: string;
+  } = {},
 ) {
   const sourceEventId = `${RUN}:${messageType}:${geofenceId}:${opts.eventIdSuffix ?? '1'}`;
   const eventId = `${sourceEventId}:${messageType}:${geofenceId}`;

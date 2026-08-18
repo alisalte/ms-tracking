@@ -18,10 +18,7 @@ import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability
  * HISTORY_MAX_RANGE_DAYS (default 31 — the documented Sprint F bound).
  */
 import { Controller, Get, HttpException, HttpStatus, Inject, Param, Query } from '@nestjs/common';
-import {
-  historyWindowErrorMessage,
-  parseHistoryWindow,
-} from '../application/history-window.js';
+import { historyWindowErrorMessage, parseHistoryWindow } from '../application/history-window.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
 import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';

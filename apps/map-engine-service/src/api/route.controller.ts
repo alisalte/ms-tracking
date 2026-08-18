@@ -67,7 +67,10 @@ export class RouteController {
   public async match(@CurrentTenant() tenantId: string, @Body() body: Record<string, unknown>) {
     const raw = (body.points as { lat?: unknown; lng?: unknown }[]) ?? [];
     if (!Array.isArray(raw) || raw.length < 2) {
-      throw new HttpException('points array with at least 2 entries required', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'points array with at least 2 entries required',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     if (raw.length > MAX_MATCH_POINTS) {
       throw new HttpException(
@@ -79,8 +82,16 @@ export class RouteController {
     for (const p of raw) {
       const lat = Number(p?.lat);
       const lng = Number(p?.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-        throw new HttpException('each point needs finite lat [-90,90] / lng [-180,180]', HttpStatus.BAD_REQUEST);
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        Math.abs(lat) > 90 ||
+        Math.abs(lng) > 180
+      ) {
+        throw new HttpException(
+          'each point needs finite lat [-90,90] / lng [-180,180]',
+          HttpStatus.BAD_REQUEST,
+        );
       }
       points.push({ lat, lng });
     }

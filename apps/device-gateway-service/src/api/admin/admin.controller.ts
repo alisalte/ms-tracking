@@ -25,7 +25,7 @@ import { ADAPTER_REGISTRY, CONNECTION_POOL, SESSION_MANAGER } from '../tokens.js
 // biome-ignore lint/style/useImportType: NestJS DI needs the class VALUE at runtime for
 // reflect-metadata (a type-only import is elided by tsc and the compiled build then
 // fails to resolve the 4th constructor param — design:paramtypes degrades to Function).
-import { GatewayAuditWriter } from './gateway-audit-writer.js';
+import type { GatewayAuditWriter } from './gateway-audit-writer.js';
 
 @Controller('admin')
 @RequirePermissions('telemetry.gateway.manage')

@@ -463,7 +463,7 @@ export function GeofenceDrawMap({
     if (map.isStyleLoaded()) redraw();
     else map.once('load', redraw);
     // mapRef is a stable ref; listed for the exhaustive-deps contract.
-}, [mode, polygonVertices, circleCenter, circleRadiusM]);
+  }, [mode, polygonVertices, circleCenter, circleRadiusM]);
 
   // Render existing geofences as static outlines.
   useEffect(() => {

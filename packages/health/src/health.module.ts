@@ -16,9 +16,9 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
 import { HealthController } from './health.controller.js';
+import { EXTRA_READINESS_INDICATORS, type ReadinessIndicator } from './health.tokens.js';
 import { KnexPingIndicator } from './knex-ping.indicator.js';
 import { RedisPingIndicator } from './redis-ping.indicator.js';
-import { EXTRA_READINESS_INDICATORS, type ReadinessIndicator } from './health.tokens.js';
 
 export { EXTRA_READINESS_INDICATORS };
 export type { ReadinessIndicator };

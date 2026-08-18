@@ -276,9 +276,7 @@ describe('Sprint G — overspeed detection + dedup + recovery', () => {
 
 // ── 5-7: geofence (Sprint I — event-driven; detection lives in gps-engine) ──
 
-function geofenceSignal(
-  overrides: Partial<Extract<InputSignal, { kind: 'geofence' }>> = {},
-) {
+function geofenceSignal(overrides: Partial<Extract<InputSignal, { kind: 'geofence' }>> = {}) {
   return {
     kind: 'geofence',
     tenantId: TENANT,

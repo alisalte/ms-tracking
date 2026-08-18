@@ -74,9 +74,7 @@ describe('parseTrackingEventEnvelope — geofence events', () => {
       EventEnvelopeValidationError,
     );
     expect(() =>
-      parseTrackingEventEnvelope(
-        Buffer.from(JSON.stringify({ eventType: 'geofence.entered' })),
-      ),
+      parseTrackingEventEnvelope(Buffer.from(JSON.stringify({ eventType: 'geofence.entered' }))),
     ).toThrow(EventEnvelopeValidationError);
   });
 

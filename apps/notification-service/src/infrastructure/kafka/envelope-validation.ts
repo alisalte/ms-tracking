@@ -234,7 +234,8 @@ export function parseTrackingEventEnvelope(raw: Buffer): InputSignal | null {
       type: eventType as 'geofence.entered' | 'geofence.exited' | 'geofence.dwell',
       geofenceId,
       geofenceName: typeof metadata.geofenceName === 'string' ? metadata.geofenceName : null,
-      dwellSec: metadata.dwellSec === null || metadata.dwellSec === undefined ? null : num('dwellSec', 0),
+      dwellSec:
+        metadata.dwellSec === null || metadata.dwellSec === undefined ? null : num('dwellSec', 0),
       occurredAt,
       lat: num('lat', Number.NaN),
       lng: num('lng', Number.NaN),

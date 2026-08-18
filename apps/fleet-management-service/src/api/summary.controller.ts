@@ -11,9 +11,9 @@
 import { CurrentUser, RequirePermissions } from '@fleetvision/auth';
 import type { AuthenticatedContext } from '@fleetvision/auth';
 import { Controller, Get, Inject } from '@nestjs/common';
+import type { SummaryService } from '../application/summary.service.js';
 import { readActor } from './shared/actor.js';
 import { SUMMARY_SERVICE } from './tokens.js';
-import type { SummaryService } from '../application/summary.service.js';
 
 @Controller('api/v1/summary')
 export class SummaryController {

@@ -27,11 +27,7 @@ export async function up(knex) {
   await knex.schema.withSchema('fleet').createTable('device_commands', (t) => {
     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     t.uuid('tenant_id').notNullable();
-    t.uuid('device_id')
-      .notNullable()
-      .references('id')
-      .inTable('fleet.devices')
-      .onDelete('CASCADE');
+    t.uuid('device_id').notNullable().references('id').inTable('fleet.devices').onDelete('CASCADE');
     /** Protocol command code, e.g. 'A11' (Meitrack MDVR GPRS Protocol V2.0). */
     t.text('command_code').notNullable();
     /** Catalog category, e.g. 'tracking' / 'geofence' / 'system' (UI grouping). */
@@ -74,8 +70,7 @@ export async function up(knex) {
 
   await knex.raw('ALTER TABLE fleet.device_commands ENABLE ROW LEVEL SECURITY');
   // Fail-closed tenant isolation (same predicate as the hardened Sprint-C policies).
-  const predicate =
-    "tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid";
+  const predicate = "tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid";
   await knex.raw(
     `CREATE POLICY device_commands_tenant_isolation ON fleet.device_commands USING (${predicate}) WITH CHECK (${predicate})`,
   );

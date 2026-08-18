@@ -65,4 +65,4 @@ export async function down(knex) {
       `CREATE POLICY "${table}_tenant_isolation" ON "${schema}"."${table}" USING (true) WITH CHECK (true)`,
     );
   }
-};
+}

@@ -1,3 +1,4 @@
+import { type ChildProcess, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -28,10 +29,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  *   pnpm --filter device-gateway-service build && pnpm --filter fleet-management-service build
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { JwtService } from '@nestjs/jwt';
 import { Kafka, type Producer } from 'kafkajs';
-import { io, type Socket } from 'socket.io-client';
+import { type Socket, io } from 'socket.io-client';
 import { DeviceStatusController } from '../../api/device-status.controller.js';
 import { PositionsController } from '../../api/positions.controller.js';
 import { DeviceStatusPipeline } from '../../application/device-status-pipeline.js';
@@ -214,13 +214,22 @@ const AuthResolver = (await distModule(GW, 'application/auth-resolver.js')).Auth
   registry: unknown,
 ) => { resolve: (imei: string) => Promise<unknown> };
 const PacketDispatcher = (await distModule(GW, 'application/packet-dispatcher.js'))
-  .PacketDispatcher as new (deps: unknown) => {
+  .PacketDispatcher as new (
+  deps: unknown,
+) => {
   dispatch: (s: unknown, a: unknown, r: unknown) => Promise<unknown>;
 };
 const SessionManager = (await distModule(GW, 'application/session-manager.js'))
-  .SessionManager as new (a: unknown, b: unknown, pod: string, o: unknown) => unknown;
+  .SessionManager as new (
+  a: unknown,
+  b: unknown,
+  pod: string,
+  o: unknown,
+) => unknown;
 const DeviceGatewayKafkaProducer = (await distModule(GW, 'infrastructure/kafka/kafka-producer.js'))
-  .DeviceGatewayKafkaProducer as new (o: unknown) => {
+  .DeviceGatewayKafkaProducer as new (
+  o: unknown,
+) => {
   publish: (m: unknown) => Promise<void>;
   publishSessionLifecycle: (e: Record<string, unknown>) => Promise<void>;
   onApplicationShutdown: () => Promise<void>;
@@ -578,7 +587,9 @@ d('Sprint E E2E — login → fleet CRUD → binding → telemetry → WS (§30)
       clientId: `sprinte-dlq-${RUN}`,
       groupId: GROUP_ID,
     });
-    const GpsConsumer = GpsEngineKafkaConsumer as unknown as new (o: unknown) => {
+    const GpsConsumer = GpsEngineKafkaConsumer as unknown as new (
+      o: unknown,
+    ) => {
       onApplicationBootstrap: () => Promise<void>;
       onApplicationShutdown: () => Promise<void>;
       isRunning: boolean;
@@ -807,11 +818,14 @@ d('Sprint E E2E — login → fleet CRUD → binding → telemetry → WS (§30)
       { getStatus: async () => null } as never,
       statusRepo,
     );
-    const afterOffline = await waitFor(async () => {
-      const rows = await statusController.list(tenantId);
-      const row = rows.find((s) => s.deviceId === deviceId);
-      return row?.state === 'OFFLINE' ? row : null;
-    }, { what: 'device OFFLINE projection' });
+    const afterOffline = await waitFor(
+      async () => {
+        const rows = await statusController.list(tenantId);
+        const row = rows.find((s) => s.deviceId === deviceId);
+        return row?.state === 'OFFLINE' ? row : null;
+      },
+      { what: 'device OFFLINE projection' },
+    );
     expect(afterOffline.state).toBe('OFFLINE');
 
     // Reconnect: a fresh LOGIN frame brings the device ONLINE again (§30 step 21).
@@ -828,11 +842,7 @@ d('Sprint E E2E — login → fleet CRUD → binding → telemetry → WS (§30)
 });
 
 /** Wait for the next socket event matching `match` (skips non-matching ones). */
-function nextEvent<T>(
-  client: Socket,
-  event: string,
-  match: (payload: T) => boolean,
-): Promise<T> {
+function nextEvent<T>(client: Socket, event: string, match: (payload: T) => boolean): Promise<T> {
   return new Promise((resolve) => {
     const onEvent = (payload: T) => {
       if (match(payload)) {

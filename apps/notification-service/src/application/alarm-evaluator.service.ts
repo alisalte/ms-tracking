@@ -280,8 +280,9 @@ export class AlarmEvaluatorService {
   public async processGeofence(signal: InputSignal & { kind: 'geofence' }): Promise<void> {
     try {
       const rules = await this.deps.rules.listEnabled(signal.tenantId);
-      const applicable = this.rulesForVehicle(rules, signal.vehicleId).filter((r) =>
-        r.type === 'geofence_enter' || r.type === 'geofence_exit' || r.type === 'geofence_dwell',
+      const applicable = this.rulesForVehicle(rules, signal.vehicleId).filter(
+        (r) =>
+          r.type === 'geofence_enter' || r.type === 'geofence_exit' || r.type === 'geofence_dwell',
       );
       if (applicable.length === 0) return;
       for (const rule of applicable) {

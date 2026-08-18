@@ -33,9 +33,9 @@ import { MapController } from './map.controller.js';
 import { RouteController } from './route.controller.js';
 import {
   CLUSTER_SERVICE,
-  GEO_AUDIT_REPOSITORY,
   GEOFENCE_REPOSITORY,
   GEOFENCE_SERVICE,
+  GEO_AUDIT_REPOSITORY,
   GEO_CACHE,
   HEAT_SERVICE,
   MAP_ENGINE_CONFIG,

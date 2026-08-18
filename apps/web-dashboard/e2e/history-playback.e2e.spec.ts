@@ -18,7 +18,8 @@ test('TEST 3: history custom range loads a track and playback animates it', asyn
 
   // Resolve a real vehicle through the fleet API with the UI's own token.
   const vehicle = await page.evaluate(async () => {
-    const token = JSON.parse(localStorage.getItem('fleetvision_tokens') ?? '{}')?.accessToken ?? null;
+    const token =
+      JSON.parse(localStorage.getItem('fleetvision_tokens') ?? '{}')?.accessToken ?? null;
     const res = await fetch('/api/v1/vehicles', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });

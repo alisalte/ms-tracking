@@ -23,22 +23,40 @@ const TRIANGLE = (n = 1): number[][] => [
 
 describe('validateCircleInput (§7/§56)', () => {
   it('accepts boundary coordinates (±90 / ±180 included)', () => {
-    expect(() => validateCircleInput({ latitude: -90, longitude: -180, radiusMeters: 10 })).not.toThrow();
-    expect(() => validateCircleInput({ latitude: 90, longitude: 180, radiusMeters: 10 })).not.toThrow();
+    expect(() =>
+      validateCircleInput({ latitude: -90, longitude: -180, radiusMeters: 10 }),
+    ).not.toThrow();
+    expect(() =>
+      validateCircleInput({ latitude: 90, longitude: 180, radiusMeters: 10 }),
+    ).not.toThrow();
     expect(() => validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: 1 })).not.toThrow();
   });
 
   it('rejects out-of-range coordinates (91 / -91 / 181 / -181)', () => {
-    expect(() => validateCircleInput({ latitude: 91, longitude: 0, radiusMeters: 10 })).toThrow(GeofenceValidationError);
-    expect(() => validateCircleInput({ latitude: -91, longitude: 0, radiusMeters: 10 })).toThrow(GeofenceValidationError);
-    expect(() => validateCircleInput({ latitude: 0, longitude: 181, radiusMeters: 10 })).toThrow(GeofenceValidationError);
-    expect(() => validateCircleInput({ latitude: 0, longitude: -181, radiusMeters: 10 })).toThrow(GeofenceValidationError);
+    expect(() => validateCircleInput({ latitude: 91, longitude: 0, radiusMeters: 10 })).toThrow(
+      GeofenceValidationError,
+    );
+    expect(() => validateCircleInput({ latitude: -91, longitude: 0, radiusMeters: 10 })).toThrow(
+      GeofenceValidationError,
+    );
+    expect(() => validateCircleInput({ latitude: 0, longitude: 181, radiusMeters: 10 })).toThrow(
+      GeofenceValidationError,
+    );
+    expect(() => validateCircleInput({ latitude: 0, longitude: -181, radiusMeters: 10 })).toThrow(
+      GeofenceValidationError,
+    );
   });
 
   it('rejects radius 0 / negative / NaN / oversized', () => {
-    expect(() => validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: 0 })).toThrow(/radius/);
-    expect(() => validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: -5 })).toThrow(/radius/);
-    expect(() => validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: Number.NaN })).toThrow(/radius/);
+    expect(() => validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: 0 })).toThrow(
+      /radius/,
+    );
+    expect(() => validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: -5 })).toThrow(
+      /radius/,
+    );
+    expect(() =>
+      validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: Number.NaN }),
+    ).toThrow(/radius/);
     expect(() =>
       validateCircleInput({ latitude: 0, longitude: 0, radiusMeters: MAX_RADIUS_METERS + 1 }),
     ).toThrow(/cap/);
@@ -51,7 +69,13 @@ describe('validatePolygonRing (§8/§56)', () => {
   });
 
   it('rejects too few positions (< 4 = 3 unique + closure)', () => {
-    expect(() => validatePolygonRing([[0, 0], [1, 1], [0, 0]])).toThrow(/at least 4/);
+    expect(() =>
+      validatePolygonRing([
+        [0, 0],
+        [1, 1],
+        [0, 0],
+      ]),
+    ).toThrow(/at least 4/);
   });
 
   it('rejects an unclosed ring', () => {
@@ -87,7 +111,9 @@ describe('validateBoundaryGeoJson (§9)', () => {
   });
 
   it('rejects non-polygon shapes, holes, and wrong types', () => {
-    expect(() => validateBoundaryGeoJson({ type: 'Point', coordinates: [0, 0] })).toThrow(GeofenceValidationError);
+    expect(() => validateBoundaryGeoJson({ type: 'Point', coordinates: [0, 0] })).toThrow(
+      GeofenceValidationError,
+    );
     expect(() =>
       validateBoundaryGeoJson({ type: 'Polygon', coordinates: [TRIANGLE(), TRIANGLE()] }),
     ).toThrow(/single-ring/);

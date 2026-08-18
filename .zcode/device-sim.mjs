@@ -34,9 +34,25 @@ const stamp = `${p(now.getFullYear() % 100)}${p(now.getMonth() + 1)}${p(now.getD
 
 // AAA body per Meitrack v1.6 §field order (see gateway decode): event 35 (track by time interval).
 const aaa = [
-  IMEI, 'AAA', 35,
-  '22.913191', '114.079882', stamp, 'A', 10, 4, 38, 120, 7, 55, 1234567, 987654,
-  '460|0|1234|5678', '01', '00', '4.10|13.18',
+  IMEI,
+  'AAA',
+  35,
+  '22.913191',
+  '114.079882',
+  stamp,
+  'A',
+  10,
+  4,
+  38,
+  120,
+  7,
+  55,
+  1234567,
+  987654,
+  '460|0|1234|5678',
+  '01',
+  '00',
+  '4.10|13.18',
 ].join(',');
 
 const socket = net.connect(PORT, HOST, () => {

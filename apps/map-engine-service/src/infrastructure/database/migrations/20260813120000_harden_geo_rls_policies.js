@@ -42,7 +42,7 @@ export async function up(knex) {
   await knex.raw(
     `CREATE POLICY geofences_tenant_isolation ON tracking.geofences USING (${SCOPED}) WITH CHECK (${SCOPED})`,
   );
-};
+}
 
 export async function down(knex) {
   for (const table of ['pois', 'addresses']) {
@@ -55,4 +55,4 @@ export async function down(knex) {
   await knex.raw(
     'CREATE POLICY geofences_tenant_isolation ON tracking.geofences USING (true) WITH CHECK (true)',
   );
-};
+}

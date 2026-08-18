@@ -90,8 +90,7 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
           className="mx-2 h-1.5 min-w-40 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-brand-500 dark:bg-white/10"
         />
 
-        <div
-          role="group"
+        <fieldset
           aria-label={t('map.playback.speed')}
           className="flex items-center overflow-hidden rounded-lg border border-gray-300 dark:border-white/10"
         >
@@ -110,7 +109,7 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
               {s}×
             </button>
           ))}
-        </div>
+        </fieldset>
       </div>
       <div className="mt-0.5 flex items-center justify-between">
         <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">

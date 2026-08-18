@@ -6,8 +6,12 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GAP_THRESHOLD_MS, sampleTrackAt, useTrackPlayback } from '@/components/map/useTrackPlayback';
 import type { TrackPoint } from '@/api/map.api';
+import {
+  GAP_THRESHOLD_MS,
+  sampleTrackAt,
+  useTrackPlayback,
+} from '@/components/map/useTrackPlayback';
 
 function track(points: Array<[string, number, number]>): TrackPoint[] {
   return points.map(([capturedAt, latitude, longitude], i) => ({

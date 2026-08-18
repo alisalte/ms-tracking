@@ -47,10 +47,7 @@ export class GeofenceService {
       throw new GeofenceValidationError('Geofence name is required', 'INVALID_NAME');
     }
     if (input.name.length > 200) {
-      throw new GeofenceValidationError(
-        'Geofence name must be ≤ 200 characters',
-        'INVALID_NAME',
-      );
+      throw new GeofenceValidationError('Geofence name must be ≤ 200 characters', 'INVALID_NAME');
     }
     const created = await this.deps.repo.create(input);
     this.deps.metrics?.geofenceMutations.inc({ action: 'created' });
@@ -92,7 +89,10 @@ export class GeofenceService {
   public async update(
     id: string,
     tenantId: string,
-    patch: Parameters<GeofenceRepository['update']>[2] & { actorId?: string | null; requestId?: string | null },
+    patch: Parameters<GeofenceRepository['update']>[2] & {
+      actorId?: string | null;
+      requestId?: string | null;
+    },
   ): Promise<Geofence | null> {
     const before = await this.deps.repo.findById(id, tenantId);
     if (!before) return null;
@@ -128,7 +128,8 @@ export class GeofenceService {
           ? 'geofence.deactivated'
           : 'geofence.deleted';
     this.deps.metrics?.geofenceMutations.inc({
-      action: status === 'ACTIVE' ? 'activated' : status === 'INACTIVE' ? 'deactivated' : 'archived',
+      action:
+        status === 'ACTIVE' ? 'activated' : status === 'INACTIVE' ? 'deactivated' : 'archived',
     });
     void this.deps.audit?.appendBestEffort({
       tenantId,
@@ -235,7 +236,12 @@ export class GeofenceService {
   ): Promise<Geofence | null> {
     const fence = await this.deps.repo.findById(geofenceId, tenantId);
     if (!fence) return null;
-    await this.deps.repo.replaceAssignments(tenantId, geofenceId, vehicleIds, ctx?.actorId ?? undefined);
+    await this.deps.repo.replaceAssignments(
+      tenantId,
+      geofenceId,
+      vehicleIds,
+      ctx?.actorId ?? undefined,
+    );
     if (vehicleIds.length > 0) {
       this.deps.metrics?.geofenceMutations.inc({ action: 'assigned' });
     }

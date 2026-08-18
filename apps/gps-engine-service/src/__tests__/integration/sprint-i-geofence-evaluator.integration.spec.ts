@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 /**
  * Sprint I geofence evaluator integration tests — REAL PostGIS + the REAL
  * GeofenceEvaluator (§62: spatial integration; §63 — nothing spatial is
@@ -10,13 +12,11 @@
  * restart-safe state.
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { GeofenceEvaluator } from '../../application/geofence-evaluator.js';
-import { SignalBus, type GeofenceSignal } from '../../application/signal-bus.js';
+import { type GeofenceSignal, SignalBus } from '../../application/signal-bus.js';
 import { GeofenceDefinitionsRepository } from '../../infrastructure/persistence/geofence-definitions.repository.js';
 import { GeofenceStateRepository } from '../../infrastructure/persistence/geofence-state.repository.js';
-import { bootstrap, dropTestDb, type IntegrationCtx } from './db.js';
+import { type IntegrationCtx, bootstrap, dropTestDb } from './db.js';
 
 const TENANT_A = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const TENANT_B = 'aaaaaaaa-0000-4000-8000-00000000000b';
@@ -97,8 +97,14 @@ beforeAll(async () => {
   if (!ctx) return;
   // The evaluator reads the map-engine-owned tables — apply those migrations
   // too (same direct-import pattern; production applies them via map-engine).
-  const dir = resolve(process.cwd(), '../map-engine-service/src/infrastructure/database/migrations');
-  for (const file of ['20260806120000_create_geo_schema.js', '20260816120000_extend_geofences_for_sprint_i.js']) {
+  const dir = resolve(
+    process.cwd(),
+    '../map-engine-service/src/infrastructure/database/migrations',
+  );
+  for (const file of [
+    '20260806120000_create_geo_schema.js',
+    '20260816120000_extend_geofences_for_sprint_i.js',
+  ]) {
     const mod = (await import(pathToFileURL(resolve(dir, file)).href)) as {
       up: (knex: IntegrationCtx['knex']) => Promise<void>;
     };
@@ -183,12 +189,20 @@ describe('Sprint I — geofence evaluator over real PostGIS', () => {
     const t0 = new Date('2026-08-16T11:00:00Z');
     await evaluator.process(makePosition(OUTSIDE.lat, OUTSIDE.lng, t0, 'd-0'));
     await evaluator.process(makePosition(INSIDE.lat, INSIDE.lng, t0, 'd-1'));
-    await evaluator.process(makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 60_000), 'd-2')); // ENTER @ +1min
-    await evaluator.process(makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 240_000), 'd-3')); // 3 min < 5 min
+    await evaluator.process(
+      makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 60_000), 'd-2'),
+    ); // ENTER @ +1min
+    await evaluator.process(
+      makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 240_000), 'd-3'),
+    ); // 3 min < 5 min
     expect(captured.filter((s) => s.type === 'geofence.dwell')).toHaveLength(0);
-    await evaluator.process(makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 400_000), 'd-4')); // ≥ 5 min → DWELL
+    await evaluator.process(
+      makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 400_000), 'd-4'),
+    ); // ≥ 5 min → DWELL
     for (let i = 5; i < 8; i++) {
-      await evaluator.process(makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 500_000), `d-${i}`));
+      await evaluator.process(
+        makePosition(INSIDE.lat, INSIDE.lng, new Date(t0.getTime() + 500_000), `d-${i}`),
+      );
     }
     const dwells = captured.filter((s) => s.type === 'geofence.dwell' && s.geofenceId === fenceId);
     expect(dwells).toHaveLength(1);

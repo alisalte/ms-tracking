@@ -100,5 +100,19 @@ export default defineConfig({
     // Use "static" instead of the default "assets" so the SPA route /assets
     // (the Asset Management page) doesn't collide with the static-asset path.
     assetsDir: 'static',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-i18n': ['i18next', 'i18next-browser-languagedetector', 'react-i18next'],
+          'vendor-mui': ['@emotion/cache', '@emotion/react', '@emotion/styled', '@mui/material', '@mui/icons-material'],
+          'vendor-echarts': ['echarts', 'echarts-for-react'],
+          'vendor-map': ['maplibre-gl', 'supercluster'],
+          'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          'vendor-utils': ['axios', 'socket.io-client', 'zustand', 'lucide-react', 'recharts'],
+        },
+      },
+    },
   },
 });

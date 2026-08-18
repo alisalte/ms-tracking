@@ -33,13 +33,13 @@ export async function up(knex) {
     t.text('status').notNullable().defaultTo('ACTIVE');
     t.uuid('created_by').nullable();
   });
-  await knex.raw(
-    "ALTER TABLE tracking.geofences DROP CONSTRAINT IF EXISTS geofences_status_check",
-  );
+  await knex.raw('ALTER TABLE tracking.geofences DROP CONSTRAINT IF EXISTS geofences_status_check');
   await knex.raw(
     "ALTER TABLE tracking.geofences ADD CONSTRAINT geofences_status_check CHECK (status IN ('ACTIVE','INACTIVE','ARCHIVED'))",
   );
-  await knex.raw('CREATE INDEX IF NOT EXISTS ix_geofences_tenant_status ON tracking.geofences (tenant_id, status)');
+  await knex.raw(
+    'CREATE INDEX IF NOT EXISTS ix_geofences_tenant_status ON tracking.geofences (tenant_id, status)',
+  );
 
   await knex.schema.withSchema('tracking').createTable('geofence_vehicles', (t) => {
     t.uuid('geofence_id').notNullable();
@@ -60,7 +60,9 @@ export async function up(knex) {
 
 /** @param {import("knex").Knex} knex */
 export async function down(knex) {
-  await knex.raw('DROP POLICY IF EXISTS geofence_vehicles_tenant_isolation ON tracking.geofence_vehicles');
+  await knex.raw(
+    'DROP POLICY IF EXISTS geofence_vehicles_tenant_isolation ON tracking.geofence_vehicles',
+  );
   await knex.schema.withSchema('tracking').dropTableIfExists('geofence_vehicles');
   await knex.raw('DROP INDEX IF EXISTS tracking.ix_geofences_tenant_status');
   await knex.raw('ALTER TABLE tracking.geofences DROP CONSTRAINT IF EXISTS geofences_status_check');

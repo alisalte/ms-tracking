@@ -7,9 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
+import { AssetManagementPage } from '@/pages/AssetManagementPage';
 import type { Device, Fleet, Vehicle } from '@/types/asset.types';
 import type { User } from '@/types/auth.types';
-import { AssetManagementPage } from '@/pages/AssetManagementPage';
 
 import { i18n } from '@/i18n';
 
@@ -143,8 +143,7 @@ vi.mock('@/api/asset.api', () => {
   });
   return {
     useFleets: () => ok(fx.fleets),
-    useFleetDetail: (id: string | null) =>
-      ok(id ? fx.fleets.find((f) => f.id === id) : undefined),
+    useFleetDetail: (id: string | null) => ok(id ? fx.fleets.find((f) => f.id === id) : undefined),
     useVehicles: () => ok(fx.vehicles),
     useVehicleDetail: (id: string | null) =>
       ok(id ? fx.vehicles.find((v) => v.id === id) : undefined),
