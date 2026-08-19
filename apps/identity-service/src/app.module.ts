@@ -30,6 +30,7 @@ export class AppModule {
         LoggerModule.forRootFromConfig(config as BaseConfig),
         PersistenceModule.forRoot({
           client: { url: config.DBURL },
+          migrationsClient: { url: config.DBURL_PLATFORM },
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
           },

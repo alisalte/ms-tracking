@@ -17,6 +17,8 @@ export const identityConfigSchema = baseConfigSchema.merge(
   z.object({
     /** Postgres connection URL (e.g. `postgres://fleetvision:pw@localhost:5432/fleetvision`). */
     DBURL: z.string().min(1),
+    /** Privileged Postgres URL for migrations/platform ops (BYPASSRLS role). */
+    DBURL_PLATFORM: z.string().min(1),
     /** Redis connection URL (e.g. `redis://localhost:6379/0`). */
     REDISURL: z.string().min(1),
 

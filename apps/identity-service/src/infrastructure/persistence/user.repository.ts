@@ -152,7 +152,7 @@ export class UserRepository {
     events: import('@fleetvision/shared-kernel').DomainEvent[],
     ctx: EventContext,
   ): Promise<void> {
-    await withoutTenantContext(this.knex, async (trx) => {
+    await withTenantContext(this.knex, tenantId, async (trx) => {
       await trx('iam.users').insert({
         id: user.id as string,
         tenant_id: tenantId,
