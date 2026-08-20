@@ -58,10 +58,14 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
 
   // Shared inner content between the desktop rail and the mobile drawer.
   const content = (
-    <div className="flex h-full flex-col bg-graydark-200 text-graydark-700 dark:bg-[#141b24]">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#111827_0%,#182231_48%,#0f1722_100%)] text-graydark-700 dark:bg-[linear-gradient(180deg,#0d1420_0%,#141b24_55%,#0b111b_100%)]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-24 start-8 size-56 rounded-full bg-brand-500/18 blur-3xl"
+      />
       {/* Brand + collapse toggle */}
       <div
-        className={`flex h-16 shrink-0 items-center border-b border-white/5 ${
+        className={`relative z-10 flex h-16 shrink-0 items-center border-b border-white/8 bg-white/[0.02] ${
           collapsed ? 'justify-center' : 'justify-between ps-5 pe-3'
         }`}
       >
@@ -97,7 +101,7 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
       <nav
         aria-label={t('common.navigation')}
         data-collapsed={collapsed}
-        className="fv-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3"
+        className="fv-scroll relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-4"
       >
         {groups.map((group, gi) => (
           <div key={group.groupKey ?? `g-${gi}`} className="mb-1.5">
@@ -147,8 +151,9 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
 
       {/* Footer version strip */}
       {!collapsed && (
-        <div className="shrink-0 border-t border-white/5 px-5 py-3 text-xs text-graydark-500">
-          FleetVision v0.1
+        <div className="relative z-10 m-3 shrink-0 rounded-xl border border-white/8 bg-white/[0.035] px-4 py-3 text-xs text-graydark-500 shadow-inner shadow-white/[0.02]">
+          <div className="font-semibold text-graydark-800">FleetVision</div>
+          <div>v0.1 · Secure ops console</div>
         </div>
       )}
     </div>
@@ -183,7 +188,7 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
 
       {/* Desktop permanent rail */}
       <aside
-        className="hidden shrink-0 border-e border-white/5 transition-[width] duration-200 lg:block"
+        className="hidden shrink-0 border-e border-white/10 shadow-2xl shadow-gray-950/20 transition-[width] duration-200 lg:block"
         style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
         {content}

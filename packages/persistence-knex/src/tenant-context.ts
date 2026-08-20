@@ -54,7 +54,10 @@ export async function withoutTenantContext<T>(
   knex: Knex,
   fn: (trx: Knex.Transaction) => Promise<T>,
 ): Promise<T> {
-  return knex.transaction(async (trx) => fn(trx));
+  return knex.transaction(async (trx) => {
+    await trx.raw("SET LOCAL app.is_platform = 'true'");
+    return fn(trx);
+  });
 }
 
 /**

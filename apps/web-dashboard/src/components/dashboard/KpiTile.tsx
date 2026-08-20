@@ -47,8 +47,8 @@ export function KpiTile({
 
   return (
     <div
-      className={`flex items-center gap-3.5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow dark:border-white/5 dark:bg-graydark-300 ${
-        onClick ? 'cursor-pointer hover:shadow-md' : ''
+      className={`fv-surface group relative overflow-hidden rounded-2xl border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl ${
+        onClick ? 'cursor-pointer' : ''
       }`}
       onClick={onClick}
       onKeyDown={
@@ -61,23 +61,29 @@ export function KpiTile({
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      <span
+      <div
         aria-hidden
-        className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border [&_svg]:size-5 ${TONES[tone]}`}
-      >
-        <Icon />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-graydark-600">
-          {t(labelKey)}
-        </p>
-        {loading ? (
-          <Skeleton className="mt-1 h-8 w-14" />
-        ) : (
-          <p className="text-[1.75rem] leading-tight font-bold tabular-nums text-gray-900 dark:text-white">
-            {(value ?? 0).toLocaleString()}
+        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20"
+      />
+      <div className="flex items-center gap-3.5">
+        <span
+          aria-hidden
+          className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border [&_svg]:size-5 ${TONES[tone]}`}
+        >
+          <Icon />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[0.68rem] font-bold tracking-[0.12em] text-gray-500 uppercase dark:text-graydark-600">
+            {t(labelKey)}
           </p>
-        )}
+          {loading ? (
+            <Skeleton className="mt-1 h-8 w-14" />
+          ) : (
+            <p className="mt-1 text-[1.85rem] leading-none font-black tabular-nums tracking-tight text-gray-950 dark:text-white">
+              {(value ?? 0).toLocaleString()}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ describe('identityConfigSchema', () => {
     LOG_LEVEL: 'info',
     ENVIRONMENT: 'local',
     DBURL: 'postgres://fleetvision:pw@localhost:5432/fleetvision',
+    DBURL_PLATFORM: 'postgres://fleetvision_platform:pw@localhost:5432/fleetvision',
     REDISURL: 'redis://localhost:6379/0',
     JWT_SECRET: 'a'.repeat(48),
   };

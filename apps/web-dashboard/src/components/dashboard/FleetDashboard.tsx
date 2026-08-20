@@ -54,14 +54,31 @@ export function FleetDashboard() {
   return (
     <div className="flex w-full flex-col gap-5">
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('dashboard.title')}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('dashboard.subtitle')}</p>
+      <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-[linear-gradient(135deg,rgba(70,95,251,0.96),rgba(27,30,110,0.94)),radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.35),transparent_28%)] p-6 text-white shadow-2xl shadow-brand-900/20 dark:border-white/10 dark:shadow-black/30 sm:p-7">
+        <div
+          aria-hidden
+          className="absolute -top-20 end-10 size-56 rounded-full bg-white/16 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="absolute -bottom-24 -start-10 size-64 rounded-full bg-cyan-300/18 blur-3xl"
+        />
+        <div className="relative z-10 flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0 max-w-2xl">
+            <p className="mb-2 text-xs font-bold tracking-[0.18em] text-brand-100 uppercase">
+              Fleet operations console
+            </p>
+            <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+              {t('dashboard.title')}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-white/78 sm:text-[0.95rem]">
+              {t('dashboard.subtitle')}
+            </p>
+          </div>
+          <div className="rounded-full border border-white/18 bg-white/12 px-3 py-2 shadow-inner shadow-white/10 backdrop-blur">
+            <LiveBadge />
+          </div>
         </div>
-        <LiveBadge />
       </div>
 
       {/* ── KPI row (Phase 4 §KPI) ── */}

@@ -190,11 +190,14 @@ services:
     ports:
       - "${IDENTITY_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      # Gate dependents on readiness (HTTP + Postgres + Redis), not just process liveness.
+      # Timescale can briefly refuse TCP even after pg_isready passes during cold boots,
+      # so give identity enough warm-up budget to retry instead of failing the compose graph.
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 18
+      start_period: 90s
 
   # web-dashboard — Vite SPA served by nginx. Reverse-proxies /api →
   # identity-service so the browser's relative /api/v1 calls reach the backend.

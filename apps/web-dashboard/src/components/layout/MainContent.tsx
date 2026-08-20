@@ -18,7 +18,7 @@ export function MainContent() {
   return (
     <main
       id="fv-main-content"
-      className="relative min-h-0 flex-1 overflow-auto bg-gray-50 dark:bg-graydark-200"
+      className="relative min-h-0 flex-1 overflow-auto bg-transparent"
       style={{ padding: PAGE_PADDING }}
     >
       <Outlet />

@@ -31,6 +31,7 @@ export class AppModule {
         PersistenceModule.forRoot({
           client: { url: config.DBURL },
           migrationsClient: { url: config.DBURL_PLATFORM },
+          platformClient: { url: config.DBURL_PLATFORM },
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
           },

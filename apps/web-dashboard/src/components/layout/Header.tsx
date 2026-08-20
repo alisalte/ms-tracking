@@ -28,7 +28,7 @@ export function Header({ onMobileMenu }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-gray-200 bg-white ps-2.5 pe-4 dark:border-white/5 dark:bg-graydark-200">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-white/70 bg-white/82 ps-2.5 pe-4 shadow-sm shadow-gray-900/[0.03] backdrop-blur-xl dark:border-white/8 dark:bg-graydark-200/82 dark:shadow-black/15">
       {/* Mobile hamburger */}
       <IconButton
         variant="ghost"
@@ -45,7 +45,7 @@ export function Header({ onMobileMenu }: HeaderProps) {
       <div className="min-w-0 flex-1" />
 
       {/* Global search — planned; inert today, parity with the previous topbar */}
-      <div className="hidden h-9 max-w-64 w-full items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 transition-colors focus-within:border-brand-500 focus-within:bg-white md:flex dark:border-white/10 dark:bg-white/5 dark:focus-within:bg-graydark-300">
+      <div className="hidden h-9 max-w-72 w-full items-center gap-2 rounded-full border border-gray-200/80 bg-gray-50/80 px-3.5 shadow-inner shadow-gray-900/[0.02] transition-colors focus-within:border-brand-500 focus-within:bg-white md:flex dark:border-white/10 dark:bg-white/6 dark:focus-within:bg-graydark-300/90">
         <Search size={15} className="shrink-0 text-gray-400 dark:text-graydark-600" aria-hidden />
         <input
           type="search"

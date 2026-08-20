@@ -17,11 +17,11 @@ export type CardProps<T extends ElementType = 'div'> = {
   flush?: boolean;
 } & Omit<ComponentPropsWithoutRef<T>, 'as' | 'children' | 'className'>;
 
-const BASE =
-  'rounded-xl border bg-white border-gray-200 dark:bg-graydark-200 dark:border-white/5 shadow-sm';
+const BASE = 'fv-surface rounded-2xl border';
 
 const PADDING = 'p-4 sm:p-5';
-const INTERACTIVE = 'transition-shadow duration-150 hover:shadow-md dark:hover:border-white/10';
+const INTERACTIVE =
+  'transition duration-200 hover:-translate-y-0.5 hover:shadow-xl dark:hover:border-white/12';
 
 export function Card<T extends ElementType = 'div'>({
   as,

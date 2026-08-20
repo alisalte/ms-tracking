@@ -72,19 +72,25 @@ export class UserRepository {
   /**
    * Persist a (new or changed) user and its domain events atomically. New users
    * are INSERTed; existing users are UPDATEd with optimistic version check.
+   *
+   * The existence check and the write run inside ONE tenant-scoped transaction
+   * so the create/update decision cannot race with a concurrent save of the same
+   * aggregate (a check-then-insert split across two transactions let a stale
+   * pre-check fall through to a second INSERT, violating the global `users_pkey`).
    */
   public async save(user: User, ctx: EventContext): Promise<void> {
     const tenantId = user.tenantId;
     const events = user.pullEvents();
-
-    const existing = await this.knex('iam.users')
-      .where({ id: user.id as string })
-      .first();
-    if (!existing) {
-      await this.insertUser(tenantId, user, events, ctx);
-    } else {
-      await this.updateUser(tenantId, user, events, ctx);
-    }
+    await withTenantContext(this.knex, tenantId, async (trx) => {
+      const existing = await trx('iam.users')
+        .where({ id: user.id as string, tenant_id: tenantId })
+        .first();
+      if (!existing) {
+        await this.insertUser(trx, tenantId, user, events, ctx);
+      } else {
+        await this.updateUser(trx, tenantId, user, events, ctx);
+      }
+    });
     user.markEventsCommitted();
   }
 
@@ -147,13 +153,18 @@ export class UserRepository {
   }
 
   private async insertUser(
+    trx: Knex.Transaction,
     tenantId: string,
     user: User,
     events: import('@fleetvision/shared-kernel').DomainEvent[],
     ctx: EventContext,
   ): Promise<void> {
-    await withTenantContext(this.knex, tenantId, async (trx) => {
-      await trx('iam.users').insert({
+    // `users_pkey` is globally unique on `id` (not composite), so a row created
+    // under another tenant can shadow this id from the tenant-scoped pre-check.
+    // Guard the INSERT so a residual duplicate-id attempt is a no-op instead of
+    // a crash; events are skipped too because a skipped row was already created.
+    const inserted = await trx('iam.users')
+      .insert({
         id: user.id as string,
         tenant_id: tenantId,
         email: user.email,
@@ -164,37 +175,39 @@ export class UserRepository {
         auth_provider: user.authProvider,
         mfa_enabled: user.mfaEnabled,
         version: 1,
-      });
-      await this.persistEvents(trx, tenantId, user.id as string, events, ctx);
-    });
+      })
+      .onConflict('id')
+      .ignore()
+      .returning('id');
+    if (inserted.length === 0) return;
+    await this.persistEvents(trx, tenantId, user.id as string, events, ctx);
   }
 
   private async updateUser(
+    trx: Knex.Transaction,
     tenantId: string,
     user: User,
     events: import('@fleetvision/shared-kernel').DomainEvent[],
     ctx: EventContext,
   ): Promise<void> {
-    await withTenantContext(this.knex, tenantId, async (trx) => {
-      // Match by id+tenant; the aggregate was just loaded by findById, so the
-      // row exists. Version is bumped server-side. (Full optimistic-concurrency
-      // with expectedVersion rehydration is a follow-up; MVP scopes by id.)
-      const updated = await trx('iam.users')
-        .where({ id: user.id as string, tenant_id: tenantId })
-        .update({
-          email: user.email,
-          password_hash: user.passwordHash,
-          status: user.status,
-          last_login_at: user.lastLoginAt,
-          failed_login_attempts: user.failedLoginAttempts,
-          lockout_until: user.lockoutUntil,
-          version: this.knex.raw('version + 1'),
-        });
-      if (updated === 0) {
-        throw new Error('User not found during update.');
-      }
-      await this.persistEvents(trx, tenantId, user.id as string, events, ctx);
-    });
+    // Match by id+tenant; the aggregate was just loaded by findById, so the
+    // row exists. Version is bumped server-side. (Full optimistic-concurrency
+    // with expectedVersion rehydration is a follow-up; MVP scopes by id.)
+    const updated = await trx('iam.users')
+      .where({ id: user.id as string, tenant_id: tenantId })
+      .update({
+        email: user.email,
+        password_hash: user.passwordHash,
+        status: user.status,
+        last_login_at: user.lastLoginAt,
+        failed_login_attempts: user.failedLoginAttempts,
+        lockout_until: user.lockoutUntil,
+        version: this.knex.raw('version + 1'),
+      });
+    if (updated === 0) {
+      throw new Error('User not found during update.');
+    }
+    await this.persistEvents(trx, tenantId, user.id as string, events, ctx);
   }
 
   /** Drain events into the outbox inside the same transaction. */
