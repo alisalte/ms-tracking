@@ -25,7 +25,10 @@ import type {
   NotificationPreference,
   UnreadCount,
 } from '@/types/notification.types';
-import { apiGet, apiPostNoContent, apiPut } from './client';
+// notification-service responds RAW (no { data } envelope) for lists and
+// counts (Page-shaped bodies / plain objects) — apiGetRaw, like the
+// fleet-management + map-engine modules (see asset.api.ts).
+import { apiGetRaw, apiPostNoContent, apiPut } from './client';
 import { queryKeys } from './query-keys';
 
 export interface NotificationListParams {
@@ -60,7 +63,7 @@ async function fetchNotifications(params: NotificationListParams = {}): Promise<
   // §22); mock mode falls back to an empty list when the service is down.
   return withMockFallback(
     async () => {
-      const page = await apiGet<{ data: Record<string, unknown>[] }>(
+      const page = await apiGetRaw<{ data: Record<string, unknown>[] }>(
         '/notification/notifications',
         {
           limit: params.limit ?? 50,
@@ -82,7 +85,7 @@ async function fetchNotifications(params: NotificationListParams = {}): Promise<
 async function fetchNotificationDetail(id: string): Promise<NotificationDetail> {
   return withMockFallback(
     async () => {
-      const res = await apiGet<{ data: Record<string, unknown> }>(
+      const res = await apiGetRaw<{ data: Record<string, unknown> }>(
         `/notification/notifications/${id}`,
       );
       const raw = res.data ?? {};
@@ -108,7 +111,7 @@ async function fetchNotificationDetail(id: string): Promise<NotificationDetail> 
 
 async function fetchUnreadCount(): Promise<UnreadCount> {
   return withMockFallback(
-    () => apiGet<UnreadCount>('/notification/notifications/unread-count'),
+    () => apiGetRaw<UnreadCount>('/notification/notifications/unread-count'),
     () => resolveMock({ total: 0, critical: 0, high: 0 }),
   );
 }
@@ -116,7 +119,7 @@ async function fetchUnreadCount(): Promise<UnreadCount> {
 async function fetchPreferences(): Promise<NotificationPreference[]> {
   return withMockFallback(
     async () => {
-      const res = await apiGet<{ data: Record<string, unknown>[] }>(
+      const res = await apiGetRaw<{ data: Record<string, unknown>[] }>(
         '/notification/notifications/preferences',
       );
       return res.data.map((p) => ({
@@ -133,7 +136,9 @@ async function fetchPreferences(): Promise<NotificationPreference[]> {
 async function fetchChannelHealth(): Promise<ChannelHealth[]> {
   return withMockFallback(
     async () => {
-      const res = await apiGet<{ data: ChannelHealth[] }>('/notification/notifications/channels');
+      const res = await apiGetRaw<{ data: ChannelHealth[] }>(
+        '/notification/notifications/channels',
+      );
       return res.data;
     },
     () => resolveMock([]),
@@ -155,20 +160,20 @@ export function useNotificationsPage(params: NotificationListParams = {}) {
     async (cursor) => {
       const page = await withMockFallback(
         async () => {
-          const res = await apiGet<{ data: Record<string, unknown>[]; nextCursor: string | null }>(
-            '/notification/notifications',
-            {
-              limit: params.limit ?? 25,
-              ...(cursor ? { cursor } : {}),
-              ...(params.unreadOnly ? { unreadOnly: 'true' } : {}),
-              ...(params.eventType ? { eventType: params.eventType } : {}),
-              ...(params.severity ? { severity: params.severity } : {}),
-              ...(params.vehicleId ? { vehicleId: params.vehicleId } : {}),
-              ...(params.from ? { from: params.from } : {}),
-              ...(params.to ? { to: params.to } : {}),
-              ...(params.scope ? { scope: params.scope } : {}),
-            },
-          );
+          const res = await apiGetRaw<{
+            data: Record<string, unknown>[];
+            nextCursor: string | null;
+          }>('/notification/notifications', {
+            limit: params.limit ?? 25,
+            ...(cursor ? { cursor } : {}),
+            ...(params.unreadOnly ? { unreadOnly: 'true' } : {}),
+            ...(params.eventType ? { eventType: params.eventType } : {}),
+            ...(params.severity ? { severity: params.severity } : {}),
+            ...(params.vehicleId ? { vehicleId: params.vehicleId } : {}),
+            ...(params.from ? { from: params.from } : {}),
+            ...(params.to ? { to: params.to } : {}),
+            ...(params.scope ? { scope: params.scope } : {}),
+          });
           return { data: res.data.map(mapNotification), nextCursor: res.nextCursor };
         },
         () => resolveMock({ data: [] as Notification[], nextCursor: null }),

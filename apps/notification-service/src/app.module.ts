@@ -48,7 +48,7 @@ export class AppModule {
           telemetry: { prefix: 'fleetvision' },
           exposeEndpoint: config.NOTIF_METRICS_ENABLED,
         }),
-        HealthModule,
+        HealthModule.forRoot(),
         NotificationModule.forRoot(config),
       ],
     };

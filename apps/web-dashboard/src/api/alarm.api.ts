@@ -18,7 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { mockAlarmDetail, mockAlarms } from '@/mock/alarm-data';
 import type { Alarm, AlarmStatus } from '@/types/alarm.types';
-import { apiGet, apiPost } from './client';
+import { apiGetRaw, apiPost } from './client';
 import { queryKeys } from './query-keys';
 
 // ── Wire types (snake_case → camelCase mapping) ─────────────────────────────
@@ -70,7 +70,8 @@ export async function fetchAlarms(params: AlarmListParams = {}): Promise<Alarm[]
   if (shouldUseMock()) return resolveMock(mockAlarms);
   return withMockFallback(
     async () => {
-      const page = await apiGet<{ data: Record<string, unknown>[] }>('/notification/alerts', {
+      // notification-service lists respond RAW (Page-shaped) — apiGetRaw.
+      const page = await apiGetRaw<{ data: Record<string, unknown>[] }>('/notification/alerts', {
         limit: params.limit ?? 100,
         ...(params.status ? { status: params.status } : {}),
         ...(params.severity ? { severity: params.severity } : {}),
@@ -89,7 +90,7 @@ async function fetchAlarmDetail(id: string): Promise<Alarm | undefined> {
   if (shouldUseMock()) return resolveMock(mockAlarmDetail(id));
   return withMockFallback(
     async () => {
-      const res = await apiGet<{ data: Record<string, unknown> }>(`/notification/alerts/${id}`);
+      const res = await apiGetRaw<{ data: Record<string, unknown> }>(`/notification/alerts/${id}`);
       return res.data ? mapAlarm(res.data as Record<string, unknown>) : undefined;
     },
     () => resolveMock(mockAlarmDetail(id)),
