@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bell,
   BellRing,
+  Boxes,
   LayoutDashboard,
   Map as MapIcon,
   MapPin,
@@ -10,7 +11,6 @@ import {
   Settings,
   ShieldCheck,
   TerminalSquare,
-  Truck,
   Video,
   Wrench,
 } from 'lucide-react';
@@ -100,13 +100,13 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Asset hub: readable with EITHER the fleet or the vehicle registry scope.
+    // Sprint E — the consolidated Fleets/Vehicles/Devices registry hub.
     groupKey: 'assets',
     items: [
       {
         key: 'assets',
         path: '/assets',
-        icon: Truck,
+        icon: Boxes,
         anyOf: [PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead],
       },
     ],

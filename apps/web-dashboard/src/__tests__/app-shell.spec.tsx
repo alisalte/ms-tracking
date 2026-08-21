@@ -90,7 +90,9 @@ describe('AppLayout — TailAdmin shell', () => {
     setUser([]);
     renderShellAt('/dashboard');
 
-    expect(screen.getByText('FleetVision')).toBeTruthy(); // wordmark
+    // Wordmark — rendered by both the desktop rail and the (always-mounted,
+    // visually hidden until opened) mobile off-canvas drawer.
+    expect(screen.getAllByText('FleetVision').length).toBeGreaterThan(0);
     expect(screen.getByRole('banner')).toBeTruthy(); // <header>
     const main = document.getElementById('fv-main-content');
     expect(main).toBeTruthy();

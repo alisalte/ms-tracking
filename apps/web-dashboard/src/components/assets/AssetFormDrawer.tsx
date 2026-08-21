@@ -1,6 +1,6 @@
 /**
- * AssetFormDrawer — one reusable right slide-over drawer for creating OR
- * editing the three REAL asset entities (Fleet / Vehicle / Device).
+ * AssetFormDrawer — one reusable slide-over drawer for creating OR editing
+ * the three REAL asset entities (Fleet / Vehicle / Device).
  *
  * - Selects the right zod schema + field set per `entity` (Sprint E §10
  *   contracts: fleet {name, code, description?}; vehicle {fleetId, name,
@@ -12,20 +12,9 @@
  * - Edit mode prefills from `record`; create mode starts empty.
  * - Submits via the matching create/update hook; 409 ConflictError maps to a
  *   friendly "code/IMEI clash" message, other backend errors surface via
- *   getApiErrorMessage. Shown inline via `<FormAlert>` + toasted.
+ *   getApiErrorMessage. Shown inline via the tailwind `Alert` + toasted.
  */
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Divider,
-  Drawer,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -41,8 +30,16 @@ import {
 } from '@/api/asset.api';
 import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { FormAlert } from '@/components/form/FormAlert';
 import type { AssetTab } from '@/pages/AssetManagementPage';
+import {
+  Alert,
+  Button,
+  Drawer,
+  Input,
+  Select,
+  Textarea,
+  type SelectOption,
+} from '@/components/tailwind-ui';
 import type {
   CreateDevicePayload,
   CreateFleetPayload,
@@ -54,8 +51,6 @@ import type {
   UpdateDevicePayload,
   Vehicle,
 } from '@/types/asset.types';
-
-const DRAWER_WIDTH = 480;
 
 /** The discriminated record a drawer can edit (create omits the record). */
 export type AssetRecord = Fleet | Vehicle | Device;
@@ -165,7 +160,12 @@ const deviceEditSchema = z.object({
 });
 
 const PROTOCOL_OPTIONS: DeviceProtocol[] = ['gt06', 'jt808', 'meitrack', 'stub'];
-const DEVICE_STATUS_OPTIONS: DeviceStatus[] = ['ACTIVE', 'SUSPENDED', 'UNPAIRED', 'DECOMMISSIONED'];
+const DEVICE_STATUS_OPTIONS: DeviceStatus[] = [
+  'ACTIVE',
+  'SUSPENDED',
+  'UNPAIRED',
+  'DECOMMISSIONED',
+];
 
 export function AssetFormDrawer({
   open,
@@ -311,97 +311,50 @@ export function AssetFormDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      anchor="right"
-      variant="temporary"
-      sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, maxWidth: '100vw' } }}
-    >
-      <Stack sx={{ height: '100%' }}>
-        {/* Header */}
-        <Stack
-          direction="row"
-          alignItems="center"
-          sx={{
-            p: 2,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            position: 'sticky',
-            top: 0,
-            bgcolor: 'background.paper',
-            zIndex: 1,
-          }}
-        >
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              {t(isEdit ? 'common.edit' : 'common.add')} {t(entityLabelKey)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {t(entityLabelKey)}
-            </Typography>
-          </Box>
-          <Box sx={{ flex: 1 }} />
-          <Button size="small" onClick={onClose} aria-label={t('common.close')}>
-            ✕
+      title={`${t(isEdit ? 'common.edit' : 'common.add')} ${t(entityLabelKey)}`}
+      subtitle={t(entityLabelKey)}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
+            {t('common.cancel')}
           </Button>
-        </Stack>
+          <Button type="submit" form="asset-form" loading={isPending}>
+            {isPending ? t('common.submitting') : t(isEdit ? 'common.save' : 'common.create')}
+          </Button>
+        </>
+      }
+    >
+      <form id="asset-form" onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+        {serverError && <Alert variant="danger">{serverError}</Alert>}
 
-        {/* Body */}
-        <Box
-          component="form"
-          onSubmit={handleSubmit(onSubmit)}
-          noValidate
-          sx={{ flex: 1, overflowY: 'auto', p: 2 }}
-        >
-          <FormAlert severity="error" message={serverError} />
+        {entity === 'fleets' && <FleetFields control={control} errors={errors} t={t} />}
+        {entity === 'vehicles' && (
+          <VehicleFields control={control} errors={errors} fleets={fleets} t={t} />
+        )}
+        {entity === 'devices' && (
+          <DeviceFields
+            control={control}
+            errors={errors}
+            isEdit={isEdit}
+            imei={record && entity === 'devices' ? (record as Device).imei : undefined}
+            t={t}
+          />
+        )}
 
-          <Stack gap={2}>
-            {entity === 'fleets' && <FleetFields control={control} errors={errors} t={t} />}
-            {entity === 'vehicles' && (
-              <VehicleFields control={control} errors={errors} fleets={fleets} t={t} />
-            )}
-            {entity === 'devices' && (
-              <DeviceFields
-                control={control}
-                errors={errors}
-                isEdit={isEdit}
-                imei={record && entity === 'devices' ? (record as Device).imei : undefined}
-                t={t}
-              />
-            )}
-          </Stack>
-
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="caption" color="text.secondary">
-            {t('validation.asteriskHelp', { defaultValue: '* = required field' })}
-          </Typography>
-
-          {/* Sticky footer actions */}
-          <Stack direction="row" gap={1} sx={{ mt: 2, mb: 1 }}>
-            <Button fullWidth variant="outlined" onClick={onClose} disabled={isPending}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              fullWidth
-              type="submit"
-              variant="contained"
-              disabled={isPending}
-              startIcon={isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
-            >
-              {isPending ? t('common.submitting') : t(isEdit ? 'common.save' : 'common.create')}
-            </Button>
-          </Stack>
-        </Box>
-      </Stack>
+        <p className="mt-2 text-xs text-gray-500 dark:text-graydark-600">
+          {t('validation.asteriskHelp', { defaultValue: '* = required field' })}
+        </p>
+      </form>
     </Drawer>
   );
 }
 
 // ── Per-entity field sets ────────────────────────────────────────────────────
-// Each renders MUI TextField / Select via <Controller>. Required fields carry
-// a trailing " *" in the label and zod-enforced validation.
+// Each renders tailwind Input / Select / Textarea via <Controller>. Required
+// fields carry a trailing " *" in the label and zod-enforced validation.
 
-import type { SxProps, Theme } from '@mui/material';
 import type { TFunction } from 'i18next';
-import type { Control, ControllerRenderProps, FieldError, FieldErrors } from 'react-hook-form';
+import type { Control, FieldError, FieldErrors } from 'react-hook-form';
 
 interface FieldProps {
   // biome-ignore lint/suspicious/noExplicitAny: form values are dynamic across entities
@@ -475,12 +428,11 @@ function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fl
         error={errors.code as FieldError | undefined}
         t={t}
       />
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FieldText
           control={control}
           name="plate"
           label={t('assets.vehicle.plate')}
-          sx={{ flex: 1 }}
           optional
           error={errors.plate as FieldError | undefined}
           t={t}
@@ -489,12 +441,11 @@ function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fl
           control={control}
           name="vin"
           label={t('assets.vehicle.vin')}
-          sx={{ flex: 1 }}
           optional
           error={errors.vin as FieldError | undefined}
           t={t}
         />
-      </Stack>
+      </div>
     </>
   );
 }
@@ -510,13 +461,12 @@ function DeviceFields({
     <>
       {isEdit ? (
         // IMEI is the immutable physical identity — display-only on edit.
-        <TextField
+        <Input
           label={t('assets.device.imei')}
           value={imei ?? ''}
-          fullWidth
-          slotProps={{ input: { readOnly: true } }}
-          helperText=" "
-          sx={{ '& input': { fontFamily: 'monospace' } }}
+          readOnly
+          className="font-mono"
+          hint=" "
         />
       ) : (
         <FieldText
@@ -525,6 +475,7 @@ function DeviceFields({
           label={`${t('assets.device.imei')} *`}
           error={errors.imei as FieldError | undefined}
           t={t}
+          mono
         />
       )}
       <FieldText
@@ -535,12 +486,11 @@ function DeviceFields({
         error={errors.serialNumber as FieldError | undefined}
         t={t}
       />
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FieldText
           control={control}
           name="manufacturer"
           label={t('assets.device.manufacturer')}
-          sx={{ flex: 1 }}
           optional
           error={errors.manufacturer as FieldError | undefined}
           t={t}
@@ -549,12 +499,11 @@ function DeviceFields({
           control={control}
           name="model"
           label={t('assets.device.model')}
-          sx={{ flex: 1 }}
           optional
           error={errors.model as FieldError | undefined}
           t={t}
         />
-      </Stack>
+      </div>
       <FieldSelect
         control={control}
         name="protocol"
@@ -589,7 +538,6 @@ interface FieldCommon {
   // biome-ignore lint/suspicious/noExplicitAny: dynamic form control
   control: Control<any>;
   t: TFunction;
-  sx?: SxProps<Theme>;
   optional?: boolean;
 }
 
@@ -599,11 +547,11 @@ function FieldText({
   label,
   error,
   t,
-  sx,
   optional,
   type = 'text',
   multiline,
   rows,
+  mono,
 }: FieldCommon & {
   name: string;
   label: string;
@@ -611,25 +559,34 @@ function FieldText({
   type?: string;
   multiline?: boolean;
   rows?: number;
+  mono?: boolean;
 }) {
   return (
     <Controller
       control={control}
       name={name}
-      render={({ field }: { field: ControllerRenderProps }) => (
-        <TextField
-          {...field}
-          value={field.value ?? ''}
-          fullWidth
-          label={label}
-          type={type}
-          multiline={multiline}
-          rows={rows}
-          sx={sx}
-          error={Boolean(error)}
-          helperText={error ? t(error.message ?? '') : optional ? t('common.optional') : ' '}
-        />
-      )}
+      render={({ field }) =>
+        multiline ? (
+          <Textarea
+            {...field}
+            value={field.value ?? ''}
+            label={label}
+            rows={rows ?? 3}
+            error={error ? t(error.message ?? '') : null}
+            hint={error ? null : optional ? t('common.optional') : null}
+          />
+        ) : (
+          <Input
+            {...field}
+            value={field.value ?? ''}
+            label={label}
+            type={type}
+            className={mono ? 'font-mono' : ''}
+            error={error ? t(error.message ?? '') : null}
+            hint={error ? null : optional ? t('common.optional') : null}
+          />
+        )
+      }
     />
   );
 }
@@ -639,37 +596,26 @@ function FieldSelect({
   name,
   label,
   options,
-  t: _t,
-  sx,
+  t,
   error,
 }: FieldCommon & {
   name: string;
   label: string;
-  options: { value: string; label: string }[];
+  options: SelectOption[];
   error?: FieldError;
 }) {
   return (
     <Controller
       control={control}
       name={name}
-      render={({ field }: { field: ControllerRenderProps }) => (
-        <TextField
-          select
+      render={({ field }) => (
+        <Select
           {...field}
           value={field.value ?? ''}
-          fullWidth
           label={label}
-          sx={sx}
-          error={Boolean(error)}
-          helperText={error ? _t(error.message ?? '') : ' '}
-          SelectProps={{ displayEmpty: true }}
-        >
-          {options.map((o) => (
-            <MenuItem key={o.value} value={o.value}>
-              {o.label}
-            </MenuItem>
-          ))}
-        </TextField>
+          options={options}
+          error={error ? t(error.message ?? '') : null}
+        />
       )}
     />
   );

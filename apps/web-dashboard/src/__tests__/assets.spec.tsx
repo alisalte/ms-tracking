@@ -246,18 +246,19 @@ describe('AssetManagementPage', () => {
       expect(screen.getAllByText('North Fleet').length).toBeGreaterThan(0);
       expect(screen.getByText('WP0ZZZ99ZTS392124')).toBeInTheDocument();
     });
-    // The archived vehicle shows its lifecycle badge.
-    expect(screen.getByText('Archived')).toBeInTheDocument();
+    // The archived vehicle shows its lifecycle badge (the native status
+    // filter also renders an <option>Archived</option> — match the badge).
+    expect(screen.getAllByText('Archived').length).toBeGreaterThan(1);
   });
 
   it('filters vehicles by lifecycle status', async () => {
     renderAssets();
     await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
 
-    // The status filter is the second combobox (fleet filter is first).
+    // The status filter is the second combobox (fleet filter is first) — a
+    // native select, so drive it with a change event.
     const selects = screen.getAllByRole('combobox');
-    fireEvent.mouseDown(selects[1]);
-    fireEvent.click(screen.getByRole('option', { name: 'Archived' }));
+    fireEvent.change(selects[1], { target: { value: 'ARCHIVED' } });
 
     await waitFor(() => {
       expect(screen.queryByText('Truck One')).not.toBeInTheDocument();
@@ -288,10 +289,11 @@ describe('AssetManagementPage', () => {
       expect(screen.getByText('490154203237518')).toBeInTheDocument();
       expect(screen.getByText('490154203237526')).toBeInTheDocument();
     });
-    // Protocol badge + lifecycle status.
-    expect(screen.getByText('GT06')).toBeInTheDocument();
-    expect(screen.getByText('JT/T 808')).toBeInTheDocument();
-    expect(screen.getByText('Unpaired')).toBeInTheDocument();
+    // Protocol badge + lifecycle status (the protocol filter select also
+    // renders these labels as <option>s — expect more than one occurrence).
+    expect(screen.getAllByText('GT06').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('JT/T 808').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('Unpaired').length).toBeGreaterThan(1);
     // Never-seen unbound device → relative "never"; bound one shows a vehicle.
     expect(screen.getByText('never')).toBeInTheDocument();
     expect(screen.getByText('Truck One')).toBeInTheDocument();
@@ -320,9 +322,9 @@ describe('AssetManagementPage', () => {
     renderAssets();
     await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
 
-    // Open the first row's action menu and pick "Archive".
-    fireEvent.click(screen.getAllByRole('button', { name: 'Actions' })[0]);
-    fireEvent.click(screen.getByText('Archive'));
+    // The row's inline archive action (icon button, tooltip-gated by
+    // vehicle.write which the wildcard permission grants).
+    fireEvent.click(screen.getAllByRole('button', { name: 'Archive' })[0]);
 
     // The confirm dialog uses ARCHIVE semantics, not "delete".
     await waitFor(() => {

@@ -130,7 +130,9 @@
     "required": "Required",
     "unknown": "Unknown",
     "clear": "Clear",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "previous": "Previous",
+    "next": "Next"
   },
   "errors": {
     "retry": "Retry",

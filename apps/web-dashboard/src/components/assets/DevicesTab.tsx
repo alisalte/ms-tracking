@@ -6,18 +6,24 @@
  * Status (lifecycle badge) · Vehicle (resolved via vehicleId, '—' when
  * unbound) · Last Seen (relative from lastSeenAt, 'never' when null).
  * Filters: status, protocol, free-text search. Row click opens the device
- * detail drawer; per-row menu offers Edit / Decommission gated by
+ * detail drawer; per-row actions (view / edit / decommission) gated by
  * `device.write`.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { PermissionGate } from '@/auth/permissions';
+import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { deviceProtocolColor, deviceStatusColor } from '@/components/assets/asset-meta';
-import { type Column, DataTable, EmptyState, StatusBadge, Toolbar } from '@/components/ui';
+import {
+  Badge,
+  DataTable,
+  EmptyState,
+  Select,
+  Toolbar,
+  type TableColumn,
+} from '@/components/tailwind-ui';
 import type { Device, DeviceProtocol, DeviceStatus, Vehicle } from '@/types/asset.types';
-import { Box, IconButton, ListItemIcon, Menu, MenuItem, Select, Typography } from '@mui/material';
-import { CircleSlash, Eye, MoreVertical, Pencil } from 'lucide-react';
+import { Cpu } from 'lucide-react';
 
 interface DevicesTabProps {
   devices: Device[];
@@ -63,16 +69,6 @@ export function DevicesTab({
   onDelete,
 }: DevicesTabProps) {
   const { t } = useTranslation();
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [menuDevice, setMenuDevice] = useState<Device | null>(null);
-  const openMenu = (e: React.MouseEvent<HTMLElement>, d: Device) => {
-    setMenuDevice(d);
-    setMenuAnchor(e.currentTarget);
-  };
-  const closeMenu = () => {
-    setMenuAnchor(null);
-    setMenuDevice(null);
-  };
 
   const vehicleName = useMemo(() => {
     const byId = new Map(vehicles.map((v) => [v.id, v] as const));
@@ -96,149 +92,123 @@ export function DevicesTab({
     });
   }, [devices, filterStatus, filterProtocol, query, vehicleName]);
 
-  const columns: Array<Column<Device>> = [
+  const columns: Array<TableColumn<Device>> = [
     {
       id: 'imei',
       headerKey: 'assets.device.colImei',
-      render: (d) => (
-        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }} noWrap>
-          {d.imei}
-        </Typography>
-      ),
+      sortBy: (d) => d.imei,
+      render: (d) => <span className="font-mono text-xs font-medium">{d.imei}</span>,
     },
     {
       id: 'serial',
       headerKey: 'assets.device.colSerial',
-      render: (d) => (
-        <Typography variant="body2" sx={{ fontFamily: 'monospace' }} noWrap>
-          {d.serialNumber ?? '—'}
-        </Typography>
-      ),
+      render: (d) => <span className="font-mono text-xs">{d.serialNumber ?? '—'}</span>,
     },
     {
       id: 'manufacturer',
       headerKey: 'assets.device.colManufacturer',
-      render: (d) => (
-        <Typography variant="body2" noWrap>
-          {d.manufacturer ?? '—'}
-        </Typography>
-      ),
+      render: (d) => d.manufacturer ?? '—',
     },
     {
       id: 'model',
       headerKey: 'assets.device.colModel',
-      render: (d) => (
-        <Typography variant="body2" noWrap>
-          {d.model ?? '—'}
-        </Typography>
-      ),
+      render: (d) => d.model ?? '—',
     },
     {
       id: 'protocol',
       headerKey: 'assets.device.colProtocol',
+      sortBy: (d) => d.protocol,
       render: (d) => (
-        <StatusBadge
-          label={t(`assets.device.protocols.${d.protocol}`)}
-          color={deviceProtocolColor(d.protocol)}
-        />
+        <Badge color={deviceProtocolColor(d.protocol)} dot>
+          {t(`assets.device.protocols.${d.protocol}`)}
+        </Badge>
       ),
     },
     {
       id: 'status',
       headerKey: 'assets.device.colStatus',
+      sortBy: (d) => d.status,
       render: (d) => (
-        <StatusBadge
-          label={t(`assets.device.statusValues.${d.status}`)}
-          color={deviceStatusColor(d.status)}
-          variant="solid"
-        />
+        <Badge color={deviceStatusColor(d.status)} dot>
+          {t(`assets.device.statusValues.${d.status}`)}
+        </Badge>
       ),
     },
     {
       id: 'vehicle',
       headerKey: 'assets.device.colVehicle',
-      render: (d) => (
-        <Typography variant="body2" noWrap>
-          {d.vehicleId ? vehicleName(d.vehicleId) : '—'}
-        </Typography>
-      ),
+      render: (d) => (d.vehicleId ? vehicleName(d.vehicleId) : '—'),
     },
     {
       id: 'lastSeen',
       headerKey: 'assets.device.colLastSeen',
+      sortBy: (d) => d.lastSeenAt ?? '',
       render: (d) => (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
+        <span
+          className="text-xs text-gray-500 dark:text-graydark-600"
           title={d.lastSeenAt ?? undefined}
         >
           {d.lastSeenAt ? relTime(d.lastSeenAt) : t('assets.device.never')}
-        </Typography>
+        </span>
       ),
     },
     {
       id: 'actions',
       header: t('common.actions'),
-      align: 'right',
+      align: 'end',
       render: (d) => (
-        <IconButton
-          size="small"
-          aria-label={t('common.actions')}
-          onClick={(e) => {
-            e.stopPropagation();
-            openMenu(e, d);
-          }}
-        >
-          <MoreVertical size={18} />
-        </IconButton>
+        <AssetRowActions
+          record={d}
+          writePermission="device.write"
+          deleteIcon="decommission"
+          onView={(device) => onSelect(device.id)}
+          onEdit={onEdit}
+          onDelete={
+            onDelete
+              ? (device) => onDelete(device.id, device.imei)
+              : undefined
+          }
+        />
       ),
     },
   ];
 
   return (
-    <Box>
+    <div className="flex flex-col gap-3">
       <Toolbar
         search
         searchValue={query}
         onSearchChange={onQuery}
-        searchPlaceholderKey="assets.device.search"
+        searchPlaceholder={t('assets.device.search')}
         left={
           <>
             <Select
-              size="small"
               value={filterStatus}
               onChange={(e) => onFilterStatus(e.target.value as DeviceStatus | 'all')}
-              sx={{ height: 32, minWidth: 140, fontSize: '0.8rem' }}
-            >
-              {STATUSES.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s === 'all'
-                    ? t('assets.filters.allStatus')
-                    : t(`assets.device.statusValues.${s}`)}
-                </MenuItem>
-              ))}
-            </Select>
+              wrapperClassName="w-40"
+              aria-label={t('assets.device.colStatus')}
+              options={STATUSES.map((s) => ({
+                value: s,
+                label:
+                  s === 'all' ? t('assets.filters.allStatus') : t(`assets.device.statusValues.${s}`),
+              }))}
+            />
             <Select
-              size="small"
               value={filterProtocol}
               onChange={(e) => onFilterProtocol(e.target.value as DeviceProtocol | 'all')}
-              sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
-            >
-              {PROTOCOLS.map((p) => (
-                <MenuItem key={p} value={p}>
-                  {p === 'all'
-                    ? t('assets.filters.allProtocols')
-                    : t(`assets.device.protocols.${p}`)}
-                </MenuItem>
-              ))}
-            </Select>
+              wrapperClassName="w-36"
+              aria-label={t('assets.device.colProtocol')}
+              options={PROTOCOLS.map((p) => ({
+                value: p,
+                label: p === 'all' ? t('common.all') : t(`assets.device.protocols.${p}`),
+              }))}
+            />
           </>
         }
         right={
-          <Typography variant="caption" color="text.secondary">
+          <span className="text-xs text-gray-500 dark:text-graydark-600">
             {t('assets.count', { count: filtered.length })}
-          </Typography>
+          </span>
         }
       />
       <DataTable
@@ -251,60 +221,13 @@ export function DevicesTab({
         maxHeight="calc(100vh - 320px)"
         emptyState={
           <EmptyState
-            icon={CircleSlash}
+            icon={<Cpu />}
             title={t('assets.empty')}
             description={t('assets.device.search')}
           />
         }
       />
-
-      {/* Per-row action menu — Edit/Decommission gated by device.write. */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={closeMenu}
-        slotProps={{ paper: { sx: { minWidth: 200 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            if (menuDevice) onSelect(menuDevice.id);
-            closeMenu();
-          }}
-        >
-          <ListItemIcon>
-            <Eye size={16} />
-          </ListItemIcon>
-          <Typography variant="body2">{t('common.view')}</Typography>
-        </MenuItem>
-        <PermissionGate requires="device.write">
-          <MenuItem
-            onClick={() => {
-              if (menuDevice && onEdit) onEdit(menuDevice);
-              closeMenu();
-            }}
-            disabled={!onEdit}
-          >
-            <ListItemIcon>
-              <Pencil size={16} />
-            </ListItemIcon>
-            <Typography variant="body2">{t('common.edit')}</Typography>
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              if (menuDevice && onDelete) onDelete(menuDevice.id, menuDevice.imei);
-              closeMenu();
-            }}
-            disabled={!onDelete}
-            sx={{ color: 'error.main' }}
-          >
-            <ListItemIcon>
-              <CircleSlash size={16} />
-            </ListItemIcon>
-            <Typography variant="body2">{t('assets.actions.decommission')}</Typography>
-          </MenuItem>
-        </PermissionGate>
-      </Menu>
-    </Box>
+    </div>
   );
 }
 

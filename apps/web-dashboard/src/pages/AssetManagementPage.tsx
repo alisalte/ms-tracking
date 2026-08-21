@@ -32,10 +32,10 @@ import { VehiclesTab } from '@/components/assets/VehiclesTab';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { PageHeader } from '@/components/ui';
+import { Button, Tabs } from '@/components/tailwind-ui';
 import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
-import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
-import { Plus } from 'lucide-react';
+import { FolderTree, Plus, Truck } from 'lucide-react';
+import { Cpu } from 'lucide-react';
 
 /** The three real asset-class tabs. */
 export type AssetTab = 'fleets' | 'vehicles' | 'devices';
@@ -140,52 +140,37 @@ export function AssetManagementPage() {
     tab === 'fleets' ? fleetsQuery : tab === 'vehicles' ? vehiclesQuery : devicesQuery;
 
   return (
-    <Stack sx={{ height: '100%' }}>
+    <div className="flex h-full flex-col gap-4">
       {/* Header — + Add is permission-gated per tab. */}
-      <PageHeader
-        compact
-        title={t('assets.title')}
-        subtitle={t('assets.subtitle')}
-        actions={
-          <PermissionGate requires={WRITE_PERMISSION[tab]}>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<Plus size={16} />}
-              onClick={openCreate}
-            >
-              {t('common.add')} {t(`assets.tabs.${tab}`)}
-            </Button>
-          </PermissionGate>
-        }
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {t('assets.title')}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('assets.subtitle')}</p>
+        </div>
+        <PermissionGate requires={WRITE_PERMISSION[tab]}>
+          <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
+            {t('common.add')} {t(`assets.tabs.${tab}`)}
+          </Button>
+        </PermissionGate>
+      </div>
 
       {/* Tabs */}
       <Tabs
+        aria-label={t('assets.title')}
         value={tab}
-        onChange={(_, v) => setTab(v as AssetTab)}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
-      >
-        {TABS.map((tb) => (
-          <Tab
-            key={tb}
-            value={tb}
-            label={
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {t(`assets.tabs.${tb}`)}
-                <Typography component="span" variant="caption" color="text.secondary">
-                  ({counts[tb]})
-                </Typography>
-              </span>
-            }
-          />
-        ))}
-      </Tabs>
+        onChange={setTab}
+        tabs={TABS.map((tb) => ({
+          value: tb,
+          label: t(`assets.tabs.${tb}`),
+          icon: tb === 'fleets' ? <FolderTree /> : tb === 'vehicles' ? <Truck /> : <Cpu />,
+          count: counts[tb],
+        }))}
+      />
 
       {/* Active tab */}
-      <Box
-        sx={{ flex: 1, minHeight: 0, border: '1px solid', borderColor: 'divider', borderTop: 0 }}
-      >
+      <div className="min-h-0 flex-1">
         {listQuery.isError ? (
           <ErrorState error={listQuery.error} onRetry={() => listQuery.refetch()} />
         ) : (
@@ -241,7 +226,7 @@ export function AssetManagementPage() {
             )}
           </>
         )}
-      </Box>
+      </div>
 
       {/* Detail drawer for the active tab */}
       <AssetDetailDrawers
@@ -278,6 +263,6 @@ export function AssetManagementPage() {
         onConfirm={onConfirmDelete}
         onClose={() => setDeleteTarget(null)}
       />
-    </Stack>
+    </div>
   );
 }

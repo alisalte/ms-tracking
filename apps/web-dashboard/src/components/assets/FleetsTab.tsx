@@ -3,18 +3,24 @@
  *
  * Columns: Name · Code · Status · Vehicles (count resolved from the vehicle
  * list) · Description · Updated. Filterable by status + free-text search
- * (client-side). Row click opens the fleet detail drawer; per-row menu offers
- * Edit / Archive gated by `fleet.write` (archive = the backend's soft DELETE).
+ * (client-side). Row click opens the fleet detail drawer; per-row actions
+ * (view / edit / archive) gated by `fleet.write`.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { PermissionGate } from '@/auth/permissions';
+import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { fleetStatusColor } from '@/components/assets/asset-meta';
-import { type Column, DataTable, EmptyState, StatusBadge, Toolbar } from '@/components/ui';
+import {
+  Badge,
+  DataTable,
+  EmptyState,
+  Select,
+  Toolbar,
+  type TableColumn,
+} from '@/components/tailwind-ui';
 import type { Fleet, FleetStatus, Vehicle } from '@/types/asset.types';
-import { Box, IconButton, ListItemIcon, Menu, MenuItem, Select, Typography } from '@mui/material';
-import { Archive, Eye, FolderTree, MoreVertical, Pencil } from 'lucide-react';
+import { FolderTree } from 'lucide-react';
 
 interface FleetsTabProps {
   fleets: Fleet[];
@@ -49,16 +55,6 @@ export function FleetsTab({
   onDelete,
 }: FleetsTabProps) {
   const { t } = useTranslation();
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [menuFleet, setMenuFleet] = useState<Fleet | null>(null);
-  const openMenu = (e: React.MouseEvent<HTMLElement>, f: Fleet) => {
-    setMenuFleet(f);
-    setMenuAnchor(e.currentTarget);
-  };
-  const closeMenu = () => {
-    setMenuAnchor(null);
-    setMenuFleet(null);
-  };
 
   // Vehicles-per-fleet counts (cheap: one pass over the already-loaded list).
   const vehicleCounts = useMemo(() => {
@@ -80,44 +76,40 @@ export function FleetsTab({
     });
   }, [fleets, filterStatus, query]);
 
-  const columns: Array<Column<Fleet>> = [
+  const columns: Array<TableColumn<Fleet>> = [
     {
       id: 'name',
       headerKey: 'assets.fleet.colName',
+      sortBy: (f) => f.name,
       render: (f) => (
-        <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-          {f.name}
-        </Typography>
+        <span className="font-medium text-gray-800 dark:text-graydark-800">{f.name}</span>
       ),
     },
     {
       id: 'code',
       headerKey: 'assets.fleet.colCode',
-      render: (f) => (
-        <Typography variant="body2" sx={{ fontFamily: 'monospace' }} noWrap>
-          {f.code}
-        </Typography>
-      ),
+      sortBy: (f) => f.code,
+      render: (f) => <span className="font-mono text-xs">{f.code}</span>,
     },
     {
       id: 'status',
       headerKey: 'assets.fleet.colStatus',
+      sortBy: (f) => f.status,
       render: (f) => (
-        <StatusBadge
-          label={t(`assets.fleet.status.${f.status}`)}
-          color={fleetStatusColor(f.status)}
-          variant="solid"
-        />
+        <Badge color={fleetStatusColor(f.status)} dot>
+          {t(`assets.fleet.status.${f.status}`)}
+        </Badge>
       ),
     },
     {
       id: 'vehicles',
       headerKey: 'assets.fleet.colVehicles',
-      align: 'right',
+      align: 'end',
+      sortBy: (f) => vehicleCounts.get(f.id) ?? 0,
       render: (f) => (
-        <Typography variant="body2" color="text.secondary">
+        <span className="tabular-nums text-gray-500 dark:text-graydark-600">
           {vehicleCounts.get(f.id) ?? 0}
-        </Typography>
+        </span>
       ),
     },
     {
@@ -125,64 +117,58 @@ export function FleetsTab({
       headerKey: 'assets.fleet.description',
       nowrap: false,
       render: (f) => (
-        <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 280 }}>
-          {f.description ?? '—'}
-        </Typography>
+        <span className="text-gray-500 dark:text-graydark-600">{f.description ?? '—'}</span>
       ),
     },
     {
       id: 'updated',
       headerKey: 'assets.fleet.colUpdated',
+      sortBy: (f) => f.updatedAt,
       render: (f) => (
-        <Typography variant="caption" color="text.secondary">
+        <span className="text-xs text-gray-500 dark:text-graydark-600">
           {new Date(f.updatedAt).toLocaleDateString()}
-        </Typography>
+        </span>
       ),
     },
     {
       id: 'actions',
       header: t('common.actions'),
-      align: 'right',
+      align: 'end',
       render: (f) => (
-        <IconButton
-          size="small"
-          aria-label={t('common.actions')}
-          onClick={(e) => {
-            e.stopPropagation();
-            openMenu(e, f);
-          }}
-        >
-          <MoreVertical size={18} />
-        </IconButton>
+        <AssetRowActions
+          record={f}
+          writePermission="fleet.write"
+          onView={(fleet) => onSelect(fleet.id)}
+          onEdit={onEdit}
+          onDelete={onDelete ? (fleet) => onDelete(fleet.id, fleet.name) : undefined}
+        />
       ),
     },
   ];
 
   return (
-    <Box>
+    <div className="flex flex-col gap-3">
       <Toolbar
         search
         searchValue={query}
         onSearchChange={onQuery}
-        searchPlaceholderKey="assets.fleet.search"
+        searchPlaceholder={t('assets.fleet.search')}
         left={
           <Select
-            size="small"
             value={filterStatus}
             onChange={(e) => onFilterStatus(e.target.value as FleetStatus | 'all')}
-            sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
-          >
-            {STATUSES.map((s) => (
-              <MenuItem key={s} value={s}>
-                {s === 'all' ? t('assets.filters.allStatus') : t(`assets.fleet.status.${s}`)}
-              </MenuItem>
-            ))}
-          </Select>
+            wrapperClassName="w-36"
+            aria-label={t('assets.fleet.colStatus')}
+            options={STATUSES.map((s) => ({
+              value: s,
+              label: s === 'all' ? t('assets.filters.allStatus') : t(`assets.fleet.status.${s}`),
+            }))}
+          />
         }
         right={
-          <Typography variant="caption" color="text.secondary">
+          <span className="text-xs text-gray-500 dark:text-graydark-600">
             {t('assets.count', { count: filtered.length })}
-          </Typography>
+          </span>
         }
       />
       <DataTable
@@ -195,59 +181,12 @@ export function FleetsTab({
         maxHeight="calc(100vh - 320px)"
         emptyState={
           <EmptyState
-            icon={FolderTree}
+            icon={<FolderTree />}
             title={t('assets.empty')}
             description={t('assets.fleet.search')}
           />
         }
       />
-
-      {/* Per-row action menu — Edit/Archive gated by fleet.write. */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={closeMenu}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            if (menuFleet) onSelect(menuFleet.id);
-            closeMenu();
-          }}
-        >
-          <ListItemIcon>
-            <Eye size={16} />
-          </ListItemIcon>
-          <Typography variant="body2">{t('common.view')}</Typography>
-        </MenuItem>
-        <PermissionGate requires="fleet.write">
-          <MenuItem
-            onClick={() => {
-              if (menuFleet && onEdit) onEdit(menuFleet);
-              closeMenu();
-            }}
-            disabled={!onEdit}
-          >
-            <ListItemIcon>
-              <Pencil size={16} />
-            </ListItemIcon>
-            <Typography variant="body2">{t('common.edit')}</Typography>
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              if (menuFleet && onDelete) onDelete(menuFleet.id, menuFleet.name);
-              closeMenu();
-            }}
-            disabled={!onDelete}
-            sx={{ color: 'error.main' }}
-          >
-            <ListItemIcon>
-              <Archive size={16} />
-            </ListItemIcon>
-            <Typography variant="body2">{t('assets.actions.archive')}</Typography>
-          </MenuItem>
-        </PermissionGate>
-      </Menu>
-    </Box>
+    </div>
   );
 }

@@ -130,7 +130,9 @@
     "required": "الزامی",
     "unknown": "نامشخص",
     "clear": "پاک کردن",
-    "loadMore": "بارگیری بیشتر"
+    "loadMore": "بارگیری بیشتر",
+    "previous": "قبلی",
+    "next": "بعدی"
   },
   "errors": {
     "retry": "تلاش مجدد",

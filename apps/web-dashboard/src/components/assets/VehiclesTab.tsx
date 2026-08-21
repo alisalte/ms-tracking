@@ -4,17 +4,23 @@
  * Columns: Name · Code · Fleet (name resolved via the fleet list) · Plate ·
  * VIN · Status (ACTIVE/ARCHIVED) · Updated. Filters: fleet dropdown, status,
  * free-text search (client-side). Row click opens the vehicle detail drawer;
- * per-row menu offers Edit / Archive gated by `vehicle.write`.
+ * per-row actions (view / edit / archive) gated by `vehicle.write`.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { PermissionGate } from '@/auth/permissions';
+import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { vehicleStatusColor } from '@/components/assets/asset-meta';
-import { type Column, DataTable, EmptyState, StatusBadge, Toolbar } from '@/components/ui';
+import {
+  Badge,
+  DataTable,
+  EmptyState,
+  Select,
+  Toolbar,
+  type TableColumn,
+} from '@/components/tailwind-ui';
 import type { Fleet, Vehicle, VehicleStatus } from '@/types/asset.types';
-import { Box, IconButton, ListItemIcon, Menu, MenuItem, Select, Typography } from '@mui/material';
-import { Archive, Eye, MoreVertical, Pencil, Truck } from 'lucide-react';
+import { Truck } from 'lucide-react';
 
 interface VehiclesTabProps {
   vehicles: Vehicle[];
@@ -53,16 +59,6 @@ export function VehiclesTab({
   onDelete,
 }: VehiclesTabProps) {
   const { t } = useTranslation();
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [menuVehicle, setMenuVehicle] = useState<Vehicle | null>(null);
-  const openMenu = (e: React.MouseEvent<HTMLElement>, v: Vehicle) => {
-    setMenuVehicle(v);
-    setMenuAnchor(e.currentTarget);
-  };
-  const closeMenu = () => {
-    setMenuAnchor(null);
-    setMenuVehicle(null);
-  };
 
   const fleetName = useMemo(() => {
     const byId = new Map(fleets.map((f) => [f.id, f] as const));
@@ -85,136 +81,110 @@ export function VehiclesTab({
     });
   }, [vehicles, filterStatus, filterFleet, query, fleetName]);
 
-  const columns: Array<Column<Vehicle>> = [
+  const columns: Array<TableColumn<Vehicle>> = [
     {
       id: 'name',
       headerKey: 'assets.vehicle.colName',
+      sortBy: (v) => v.name,
       render: (v) => (
-        <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-          {v.name}
-        </Typography>
+        <span className="font-medium text-gray-800 dark:text-graydark-800">{v.name}</span>
       ),
     },
     {
       id: 'code',
       headerKey: 'assets.vehicle.colCode',
-      render: (v) => (
-        <Typography variant="body2" sx={{ fontFamily: 'monospace' }} noWrap>
-          {v.code}
-        </Typography>
-      ),
+      sortBy: (v) => v.code,
+      render: (v) => <span className="font-mono text-xs">{v.code}</span>,
     },
     {
       id: 'fleet',
       headerKey: 'assets.vehicle.colFleet',
-      render: (v) => (
-        <Typography variant="body2" noWrap>
-          {fleetName(v.fleetId)}
-        </Typography>
-      ),
+      render: (v) => fleetName(v.fleetId),
     },
     {
       id: 'plate',
       headerKey: 'assets.vehicle.colPlate',
       render: (v) =>
-        v.plate ? (
-          <Typography variant="body2" noWrap>
-            {v.plate}
-          </Typography>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            —
-          </Typography>
-        ),
+        v.plate ?? <span className="text-gray-400 dark:text-graydark-600">—</span>,
     },
     {
       id: 'vin',
       headerKey: 'assets.vehicle.colVin',
-      render: (v) => (
-        <Typography variant="caption" sx={{ fontFamily: 'monospace' }} noWrap>
-          {v.vin ?? '—'}
-        </Typography>
-      ),
+      render: (v) => <span className="font-mono text-xs">{v.vin ?? '—'}</span>,
     },
     {
       id: 'status',
       headerKey: 'assets.vehicle.colStatus',
+      sortBy: (v) => v.status,
       render: (v) => (
-        <StatusBadge
-          label={t(`assets.vehicle.status.${v.status}`)}
-          color={vehicleStatusColor(v.status)}
-          variant="solid"
-        />
+        <Badge color={vehicleStatusColor(v.status)} dot>
+          {t(`assets.vehicle.status.${v.status}`)}
+        </Badge>
       ),
     },
     {
       id: 'updated',
       headerKey: 'assets.vehicle.colUpdated',
+      sortBy: (v) => v.updatedAt,
       render: (v) => (
-        <Typography variant="caption" color="text.secondary">
+        <span className="text-xs text-gray-500 dark:text-graydark-600">
           {new Date(v.updatedAt).toLocaleDateString()}
-        </Typography>
+        </span>
       ),
     },
     {
       id: 'actions',
       header: t('common.actions'),
-      align: 'right',
+      align: 'end',
       render: (v) => (
-        <IconButton
-          size="small"
-          aria-label={t('common.actions')}
-          onClick={(e) => {
-            e.stopPropagation();
-            openMenu(e, v);
-          }}
-        >
-          <MoreVertical size={18} />
-        </IconButton>
+        <AssetRowActions
+          record={v}
+          writePermission="vehicle.write"
+          onView={(vehicle) => onSelect(vehicle.id)}
+          onEdit={onEdit}
+          onDelete={
+            onDelete ? (vehicle) => onDelete(vehicle.id, vehicle.name) : undefined
+          }
+        />
       ),
     },
   ];
 
   return (
-    <Box>
+    <div className="flex flex-col gap-3">
       <Toolbar
         search
         searchValue={query}
         onSearchChange={onQuery}
-        searchPlaceholderKey="assets.vehicle.search"
+        searchPlaceholder={t('assets.vehicle.search')}
         left={
           <>
             <Select
-              size="small"
               value={filterFleet}
               onChange={(e) => onFilterFleet(e.target.value as string | 'all')}
-              sx={{ height: 32, minWidth: 150, fontSize: '0.8rem' }}
-            >
-              <MenuItem value="all">{t('assets.filters.allFleets')}</MenuItem>
-              {fleets.map((f) => (
-                <MenuItem key={f.id} value={f.id}>
-                  {f.name}
-                </MenuItem>
-              ))}
-            </Select>
+              wrapperClassName="w-44"
+              aria-label={t('assets.filters.allFleets')}
+              options={[
+                { value: 'all', label: t('assets.filters.allFleets') },
+                ...fleets.map((f) => ({ value: f.id, label: f.name })),
+              ]}
+            />
             <Select
-              size="small"
               value={filterStatus}
               onChange={(e) => onFilterStatus(e.target.value as VehicleStatus | 'all')}
-              sx={{ height: 32, minWidth: 130, fontSize: '0.8rem' }}
-            >
-              {STATUSES.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s === 'all' ? t('assets.filters.allStatus') : t(`assets.vehicle.status.${s}`)}
-                </MenuItem>
-              ))}
-            </Select>
+              wrapperClassName="w-36"
+              aria-label={t('assets.vehicle.colStatus')}
+              options={STATUSES.map((s) => ({
+                value: s,
+                label: s === 'all' ? t('assets.filters.allStatus') : t(`assets.vehicle.status.${s}`),
+              }))}
+            />
           </>
         }
         right={
-          <Typography variant="caption" color="text.secondary">
+          <span className="text-xs text-gray-500 dark:text-graydark-600">
             {t('assets.count', { count: filtered.length })}
-          </Typography>
+          </span>
         }
       />
       <DataTable
@@ -227,59 +197,12 @@ export function VehiclesTab({
         maxHeight="calc(100vh - 320px)"
         emptyState={
           <EmptyState
-            icon={Truck}
+            icon={<Truck />}
             title={t('assets.empty')}
             description={t('assets.vehicle.search')}
           />
         }
       />
-
-      {/* Per-row action menu — Edit/Archive gated by vehicle.write. */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={closeMenu}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            if (menuVehicle) onSelect(menuVehicle.id);
-            closeMenu();
-          }}
-        >
-          <ListItemIcon>
-            <Eye size={16} />
-          </ListItemIcon>
-          <Typography variant="body2">{t('common.view')}</Typography>
-        </MenuItem>
-        <PermissionGate requires="vehicle.write">
-          <MenuItem
-            onClick={() => {
-              if (menuVehicle && onEdit) onEdit(menuVehicle);
-              closeMenu();
-            }}
-            disabled={!onEdit}
-          >
-            <ListItemIcon>
-              <Pencil size={16} />
-            </ListItemIcon>
-            <Typography variant="body2">{t('common.edit')}</Typography>
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              if (menuVehicle && onDelete) onDelete(menuVehicle.id, menuVehicle.name);
-              closeMenu();
-            }}
-            disabled={!onDelete}
-            sx={{ color: 'error.main' }}
-          >
-            <ListItemIcon>
-              <Archive size={16} />
-            </ListItemIcon>
-            <Typography variant="body2">{t('assets.actions.archive')}</Typography>
-          </MenuItem>
-        </PermissionGate>
-      </Menu>
-    </Box>
+    </div>
   );
 }

@@ -1,9 +1,9 @@
 /**
- * Asset detail drawers — right slide-overs for the three REAL asset classes
+ * Asset detail drawers — slide-overs for the three REAL asset classes
  * (fleet / vehicle / device). One file holds all three because they share the
- * MUI Drawer slide-over pattern (UI_UX §0.6 selection → detail) and a common
- * meta-row helper. Each renders the full entity attributes from the real
- * hooks (useFleetDetail / useVehicleDetail / useDeviceDetail).
+ * slide-over pattern (UI_UX §0.6 selection → detail) and common meta-row
+ * helpers. Each renders the full entity attributes from the real hooks
+ * (useFleetDetail / useVehicleDetail / useDeviceDetail).
  *
  * The vehicle drawer additionally owns the vehicle↔device binding surface
  * (Sprint E §11): the bound-device list (GET /vehicles/:id/devices), an
@@ -12,7 +12,7 @@
  * visibly. The active drawer is selected by the current tab + selected id.
  */
 import { Calendar, CircleSlash, Cpu, Link2, Link2Off, Smartphone, Truck } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -33,8 +33,15 @@ import {
 } from '@/components/assets/asset-meta';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { FormAlert } from '@/components/form/FormAlert';
-import { StatusBadge } from '@/components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Drawer,
+  IconButton,
+  Select,
+  Spinner,
+} from '@/components/tailwind-ui';
 import type { AssetTab } from '@/pages/AssetManagementPage';
 import type {
   BoundDevice,
@@ -44,23 +51,6 @@ import type {
   Fleet,
   Vehicle,
 } from '@/types/asset.types';
-import {
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Divider,
-  Drawer,
-  FormControl,
-  IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
-} from '@mui/material';
-
-const DRAWER_WIDTH = 420;
 
 interface AssetDetailDrawersProps {
   tab: AssetTab;
@@ -101,7 +91,7 @@ export function AssetDetailDrawers({
   );
 }
 
-/** Shared slide-over shell. */
+/** Shared slide-over shell — badge row rendered at the top of the body. */
 function DetailShell({
   open,
   onClose,
@@ -114,49 +104,13 @@ function DetailShell({
   onClose: () => void;
   title: string;
   subtitle?: string;
-  badge?: React.ReactNode;
-  children: React.ReactNode;
+  badge?: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      variant="temporary"
-      sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, maxWidth: '100vw' } }}
-    >
-      <Stack sx={{ height: '100%', overflowY: 'auto' }}>
-        <Stack
-          direction="row"
-          alignItems="center"
-          gap={1.5}
-          sx={{
-            p: 2,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            position: 'sticky',
-            top: 0,
-            bgcolor: 'background.paper',
-            zIndex: 1,
-          }}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
-              {title}
-            </Typography>
-            {subtitle && (
-              <Typography variant="caption" color="text.secondary" noWrap>
-                {subtitle}
-              </Typography>
-            )}
-          </Box>
-          {badge}
-          <IconButton onClick={onClose} aria-label="close" size="small">
-            ✕
-          </IconButton>
-        </Stack>
-        {children}
-      </Stack>
+    <Drawer open={open} onClose={onClose} title={title} subtitle={subtitle} size="sm">
+      {badge && <div className="mb-4">{badge}</div>}
+      {children}
     </Drawer>
   );
 }
@@ -171,22 +125,18 @@ function DrawerBody({
   loading: boolean;
   notFound: boolean;
   notFoundKey: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { t } = useTranslation();
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center py-10">
+        <Spinner size="lg" />
+      </div>
     );
   }
   if (notFound) {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Typography color="text.secondary">{t(notFoundKey)}</Typography>
-      </Box>
-    );
+    return <p className="py-6 text-sm text-gray-500 dark:text-graydark-600">{t(notFoundKey)}</p>;
   }
   return <>{children}</>;
 }
@@ -197,20 +147,20 @@ function MetaRow({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
-  value: React.ReactNode;
+  value: ReactNode;
 }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
-      <Box sx={{ color: 'text.secondary', display: 'flex', width: 20 }}>{icon}</Box>
-      <Typography variant="body2" sx={{ minWidth: 110, color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ flex: 1 }} noWrap>
+    <div className="flex items-center gap-2 py-1.5">
+      <span className="flex w-5 shrink-0 justify-center text-gray-400 dark:text-graydark-600 [&_svg]:size-4">
+        {icon}
+      </span>
+      <span className="w-28 shrink-0 text-sm text-gray-500 dark:text-graydark-600">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
         {value}
-      </Typography>
-    </Box>
+      </span>
+    </div>
   );
 }
 
@@ -219,19 +169,19 @@ function isoToLocal(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString() : '—';
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Box sx={{ mt: 2 }}>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
-      >
+    <section className="mt-5">
+      <p className="text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-graydark-600">
         {label}
-      </Typography>
-      <Box sx={{ mt: 0.5 }}>{children}</Box>
-    </Box>
+      </p>
+      <div className="mt-1">{children}</div>
+    </section>
   );
+}
+
+function Divider() {
+  return <hr className="my-4 border-gray-100 dark:border-white/5" />;
 }
 
 // ── Fleet drawer ─────────────────────────────────────────────────────────────
@@ -261,11 +211,9 @@ function FleetDetailDrawer({
       subtitle={fleet?.code}
       badge={
         fleet ? (
-          <StatusBadge
-            label={t(`assets.fleet.status.${fleet.status}`)}
-            color={fleetStatusColor(fleet.status)}
-            variant="solid"
-          />
+          <Badge color={fleetStatusColor(fleet.status)} dot>
+            {t(`assets.fleet.status.${fleet.status}`)}
+          </Badge>
         ) : null
       }
     >
@@ -275,38 +223,34 @@ function FleetDetailDrawer({
         notFoundKey="assets.fleet.notFound"
       >
         {fleet && (
-          <Stack gap={2} sx={{ p: 2 }}>
-            <Box>
+          <div className="flex flex-col gap-3">
+            <div>
+              <MetaRow icon={<Truck />} label={t('assets.fleet.code')} value={fleet.code} />
               <MetaRow
-                icon={<Truck size={16} />}
-                label={t('assets.fleet.code')}
-                value={fleet.code}
-              />
-              <MetaRow
-                icon={<Truck size={16} />}
+                icon={<Truck />}
                 label={t('assets.fleet.colVehicles')}
                 value={t('assets.fleet.vehiclesCount', { count: vehicleCount })}
               />
               <MetaRow
-                icon={<Truck size={16} />}
+                icon={<Truck />}
                 label={t('assets.fleet.description')}
                 value={fleet.description ?? '—'}
               />
-            </Box>
+            </div>
             <Divider />
             <Section label={t('assets.fleet.updatedAt')}>
               <MetaRow
-                icon={<Calendar size={16} />}
+                icon={<Calendar />}
                 label={t('assets.fleet.createdAt')}
                 value={isoToLocal(fleet.createdAt)}
               />
               <MetaRow
-                icon={<Calendar size={16} />}
+                icon={<Calendar />}
                 label={t('assets.fleet.updatedAt')}
                 value={isoToLocal(fleet.updatedAt)}
               />
             </Section>
-          </Stack>
+          </div>
         )}
       </DrawerBody>
     </DetailShell>
@@ -386,11 +330,9 @@ function VehicleDetailDrawer({
         subtitle={vehicle?.code}
         badge={
           vehicle ? (
-            <StatusBadge
-              label={t(`assets.vehicle.status.${vehicle.status}`)}
-              color={vehicleStatusColor(vehicle.status)}
-              variant="solid"
-            />
+            <Badge color={vehicleStatusColor(vehicle.status)} dot>
+              {t(`assets.vehicle.status.${vehicle.status}`)}
+            </Badge>
           ) : null
         }
       >
@@ -400,168 +342,131 @@ function VehicleDetailDrawer({
           notFoundKey="assets.vehicle.notFound"
         >
           {vehicle && (
-            <Stack gap={2} sx={{ p: 2 }}>
-              <Box>
+            <div className="flex flex-col gap-3">
+              <div>
                 <MetaRow
-                  icon={<Truck size={16} />}
+                  icon={<Truck />}
                   label={t('assets.vehicle.fleet')}
                   value={fleetName}
                 />
                 <MetaRow
-                  icon={<Truck size={16} />}
+                  icon={<Truck />}
                   label={t('assets.vehicle.plate')}
                   value={vehicle.plate ?? '—'}
                 />
-                <MetaRow
-                  icon={<Truck size={16} />}
-                  label={t('assets.vehicle.vin')}
-                  value={vehicle.vin ?? '—'}
-                />
-              </Box>
+                <MetaRow icon={<Truck />} label={t('assets.vehicle.vin')} value={vehicle.vin ?? '—'} />
+              </div>
 
               <Divider />
 
               {/* Bound devices (GET /vehicles/:id/devices) */}
               <Section label={t('assets.device.devices')}>
                 {bound.isLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                    <CircularProgress size={20} />
-                  </Box>
+                  <div className="flex justify-center py-3">
+                    <Spinner size="sm" />
+                  </div>
                 ) : (bound.data ?? []).length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                  <p className="py-2 text-sm text-gray-500 dark:text-graydark-600">
                     {t('assets.device.unbound')}
-                  </Typography>
+                  </p>
                 ) : (
-                  <Stack gap={1}>
+                  <div className="flex flex-col gap-2">
                     {(bound.data ?? []).map((d) => (
-                      <Stack
+                      <div
                         key={d.deviceId}
-                        direction="row"
-                        alignItems="center"
-                        gap={1}
-                        sx={{
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          borderRadius: 1,
-                          px: 1.5,
-                          py: 1,
-                        }}
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10"
                       >
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontFamily: 'monospace', fontWeight: 500 }}
-                            noWrap
-                          >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-xs font-medium text-gray-800 dark:text-graydark-800">
                             {d.imei}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" noWrap>
+                          </p>
+                          <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
                             {[d.manufacturer, d.model].filter(Boolean).join(' ') || '—'}
-                          </Typography>
-                        </Box>
-                        <Chip
-                          size="small"
-                          label={t(`assets.device.roles.${d.role}`, { defaultValue: d.role })}
-                          variant="outlined"
-                        />
-                        {d.isPrimary && (
-                          <Chip size="small" label={t('assets.device.primary')} color="primary" />
-                        )}
-                        <StatusBadge
-                          label={t(`assets.device.statusValues.${d.deviceStatus}`, {
+                          </p>
+                        </div>
+                        <Badge color="gray">
+                          {t(`assets.device.roles.${d.role}`, { defaultValue: d.role })}
+                        </Badge>
+                        {d.isPrimary && <Badge color="brand">{t('assets.device.primary')}</Badge>}
+                        <Badge color={deviceStatusColor(d.deviceStatus as DeviceStatus)} dot>
+                          {t(`assets.device.statusValues.${d.deviceStatus}`, {
                             defaultValue: d.deviceStatus,
                           })}
-                          color={deviceStatusColor(d.deviceStatus as DeviceStatus)}
-                        />
+                        </Badge>
                         <PermissionGate requires="device.write">
                           <IconButton
-                            size="small"
+                            size="sm"
+                            variant="ghost"
                             aria-label={t('assets.device.unassign')}
                             onClick={() => setUnbindTarget(d)}
                           >
-                            <Link2Off size={16} />
+                            <Link2Off size={15} />
                           </IconButton>
                         </PermissionGate>
-                      </Stack>
+                      </div>
                     ))}
-                  </Stack>
+                  </div>
                 )}
 
                 {/* Assign flow — gated by device.write. */}
                 <PermissionGate requires="device.write">
-                  <Stack gap={1.5} sx={{ mt: 1.5 }}>
-                    <FormAlert severity="error" message={bindError} />
+                  <div className="mt-3 flex flex-col gap-2">
+                    {bindError && <Alert variant="danger">{bindError}</Alert>}
                     {unboundDevices.length === 0 ? (
-                      <Typography variant="caption" color="text.secondary">
+                      <p className="text-xs text-gray-500 dark:text-graydark-600">
                         {t('assets.device.noUnbound')}
-                      </Typography>
+                      </p>
                     ) : (
-                      <Stack direction="row" gap={1} sx={{ alignItems: 'flex-start' }}>
-                        <FormControl size="small" sx={{ flex: 2, minWidth: 0 }}>
-                          <InputLabel id="assign-device-label">
-                            {t('assets.device.imei')}
-                          </InputLabel>
-                          <Select
-                            labelId="assign-device-label"
-                            label={t('assets.device.imei')}
-                            value={assignDeviceId}
-                            onChange={(e) => setAssignDeviceId(e.target.value)}
-                            fullWidth
-                          >
-                            {unboundDevices.map((d) => (
-                              <MenuItem key={d.id} value={d.id}>
-                                <span style={{ fontFamily: 'monospace' }}>{d.imei}</span>
-                                {d.model ? ` · ${d.model}` : ''}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}>
-                          <InputLabel id="assign-role-label">{t('assets.device.role')}</InputLabel>
-                          <Select
-                            labelId="assign-role-label"
-                            label={t('assets.device.role')}
-                            value={assignRole}
-                            onChange={(e) => setAssignRole(e.target.value as DeviceRole)}
-                            fullWidth
-                          >
-                            {ROLE_OPTIONS.map((r) => (
-                              <MenuItem key={r} value={r}>
-                                {t(`assets.device.roles.${r}`)}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                      <div className="flex flex-wrap items-start gap-2">
+                        <Select
+                          value={assignDeviceId}
+                          onChange={(e) => setAssignDeviceId(e.target.value)}
+                          wrapperClassName="min-w-40 flex-1"
+                          aria-label={t('assets.device.imei')}
+                          options={unboundDevices.map((d) => ({
+                            value: d.id,
+                            label: d.model ? `${d.imei} · ${d.model}` : d.imei,
+                          }))}
+                        />
+                        <Select
+                          value={assignRole}
+                          onChange={(e) => setAssignRole(e.target.value as DeviceRole)}
+                          wrapperClassName="w-32"
+                          aria-label={t('assets.device.role')}
+                          options={ROLE_OPTIONS.map((r) => ({
+                            value: r,
+                            label: t(`assets.device.roles.${r}`),
+                          }))}
+                        />
                         <Button
-                          size="small"
-                          variant="contained"
-                          startIcon={<Link2 size={14} />}
+                          size="sm"
+                          leftIcon={<Link2 size={14} />}
                           disabled={!assignDeviceId || bind.isPending}
+                          loading={bind.isPending}
                           onClick={onAssign}
-                          sx={{ minWidth: 'auto', whiteSpace: 'nowrap' }}
                         >
                           {t('assets.device.assignAction')}
                         </Button>
-                      </Stack>
+                      </div>
                     )}
-                  </Stack>
+                  </div>
                 </PermissionGate>
               </Section>
 
               <Divider />
               <Section label={t('assets.vehicle.updatedAt')}>
                 <MetaRow
-                  icon={<Calendar size={16} />}
+                  icon={<Calendar />}
                   label={t('assets.vehicle.createdAt')}
                   value={isoToLocal(vehicle.createdAt)}
                 />
                 <MetaRow
-                  icon={<Calendar size={16} />}
+                  icon={<Calendar />}
                   label={t('assets.vehicle.updatedAt')}
                   value={isoToLocal(vehicle.updatedAt)}
                 />
               </Section>
-            </Stack>
+            </div>
           )}
         </DrawerBody>
       </DetailShell>
@@ -607,11 +512,9 @@ function DeviceDetailDrawer({
       subtitle={device ? [device.manufacturer, device.model].filter(Boolean).join(' ') : undefined}
       badge={
         device ? (
-          <StatusBadge
-            label={t(`assets.device.statusValues.${device.status}`)}
-            color={deviceStatusColor(device.status)}
-            variant="solid"
-          />
+          <Badge color={deviceStatusColor(device.status)} dot>
+            {t(`assets.device.statusValues.${device.status}`)}
+          </Badge>
         ) : null
       }
     >
@@ -621,40 +524,31 @@ function DeviceDetailDrawer({
         notFoundKey="assets.device.notFound"
       >
         {device && (
-          <Stack gap={2} sx={{ p: 2 }}>
+          <div className="flex flex-col gap-3">
             <Section label={t('assets.device.registry')}>
               <MetaRow
-                icon={<Smartphone size={16} />}
+                icon={<Smartphone />}
                 label={t('assets.device.imei')}
-                value={<span style={{ fontFamily: 'monospace' }}>{device.imei}</span>}
+                value={<span className="font-mono">{device.imei}</span>}
               />
+              <MetaRow icon={<Cpu />} label={t('assets.device.serial')} value={device.serialNumber ?? '—'} />
               <MetaRow
-                icon={<Cpu size={16} />}
-                label={t('assets.device.serial')}
-                value={device.serialNumber ?? '—'}
-              />
-              <MetaRow
-                icon={<Cpu size={16} />}
+                icon={<Cpu />}
                 label={t('assets.device.manufacturer')}
                 value={device.manufacturer ?? '—'}
               />
+              <MetaRow icon={<Cpu />} label={t('assets.device.model')} value={device.model ?? '—'} />
               <MetaRow
-                icon={<Cpu size={16} />}
-                label={t('assets.device.model')}
-                value={device.model ?? '—'}
-              />
-              <MetaRow
-                icon={<Cpu size={16} />}
+                icon={<Cpu />}
                 label={t('assets.device.protocol')}
                 value={
-                  <StatusBadge
-                    label={t(`assets.device.protocols.${device.protocol}`)}
-                    color={deviceProtocolColor(device.protocol)}
-                  />
+                  <Badge color={deviceProtocolColor(device.protocol)} dot>
+                    {t(`assets.device.protocols.${device.protocol}`)}
+                  </Badge>
                 }
               />
               <MetaRow
-                icon={<Truck size={16} />}
+                icon={<Truck />}
                 label={t('assets.device.colVehicle')}
                 value={device.vehicleId ? (vehicle?.name ?? device.vehicleId) : '—'}
               />
@@ -663,17 +557,17 @@ function DeviceDetailDrawer({
             <Divider />
             <Section label={t('assets.device.connection')}>
               <MetaRow
-                icon={<CircleSlash size={16} />}
+                icon={<CircleSlash />}
                 label={t('assets.device.lastSeen')}
                 value={isoToLocal(device.lastSeenAt)}
               />
               <MetaRow
-                icon={<Link2 size={16} />}
+                icon={<Link2 />}
                 label={t('assets.device.connectedAt')}
                 value={isoToLocal(device.connectedAt)}
               />
               <MetaRow
-                icon={<Link2Off size={16} />}
+                icon={<Link2Off />}
                 label={t('assets.device.disconnectedAt')}
                 value={isoToLocal(device.disconnectedAt)}
               />
@@ -682,17 +576,17 @@ function DeviceDetailDrawer({
             <Divider />
             <Section label={t('assets.device.updatedAt')}>
               <MetaRow
-                icon={<Calendar size={16} />}
+                icon={<Calendar />}
                 label={t('assets.device.createdAt')}
                 value={isoToLocal(device.createdAt)}
               />
               <MetaRow
-                icon={<Calendar size={16} />}
+                icon={<Calendar />}
                 label={t('assets.device.updatedAt')}
                 value={isoToLocal(device.updatedAt)}
               />
             </Section>
-          </Stack>
+          </div>
         )}
       </DrawerBody>
     </DetailShell>

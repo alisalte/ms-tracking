@@ -1,15 +1,8 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Typography,
-} from '@mui/material';
-import { AlertTriangle } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { Button, Modal } from '@/components/tailwind-ui';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -35,9 +28,9 @@ interface ConfirmDialogProps {
  * ConfirmDialog — a reusable confirmation dialog for destructive/irreversible
  * actions (primarily deletes).
  *
- * Renders a title + body ("This action cannot be undone." by default) +
- * `[Cancel] [Delete]` actions. The confirm button shows a pending label while
- * `loading` and is disabled.
+ * Tailwind implementation on the shared `Modal` primitive: title + body
+ * ("This action cannot be undone." by default) + `[Cancel] [Delete]` actions.
+ * The confirm button shows a pending label while `loading`.
  */
 export function ConfirmDialog({
   open,
@@ -54,39 +47,30 @@ export function ConfirmDialog({
   const isDanger = tone === 'danger';
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        {isDanger && <AlertTriangle size={20} color="var(--mui-palette-error-main)" />}
-        {title}
-      </DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary">
+    <Modal open={open} onClose={loading ? () => {} : onClose} title={title} size="sm">
+      <div className="flex items-start gap-3">
+        {isDanger && (
+          <span className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-danger-50 text-danger-600 dark:bg-danger-500/10 dark:text-danger-400">
+            <TriangleAlert size={18} aria-hidden />
+          </span>
+        )}
+        <p className="text-sm text-gray-600 dark:text-graydark-700">
           {message ?? t('common.irreversible')}
-        </Typography>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
-        <Stack direction="row" gap={1} sx={{ width: '100%' }}>
-          <Button
-            fullWidth
-            variant="outlined"
-            onClick={onClose}
-            disabled={loading}
-            sx={{ flex: 1 }}
-          >
-            {t(cancelLabelKey)}
-          </Button>
-          <Button
-            fullWidth
-            variant="contained"
-            color={isDanger ? 'error' : 'primary'}
-            onClick={onConfirm}
-            disabled={loading}
-            sx={{ flex: 1 }}
-          >
-            {loading ? t('common.submitting') : t(confirmLabelKey)}
-          </Button>
-        </Stack>
-      </DialogActions>
-    </Dialog>
+        </p>
+      </div>
+      <div className="mt-5 flex gap-2">
+        <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
+          {t(cancelLabelKey)}
+        </Button>
+        <Button
+          variant={isDanger ? 'danger' : 'primary'}
+          className="flex-1"
+          onClick={onConfirm}
+          loading={loading}
+        >
+          {loading ? t('common.submitting') : t(confirmLabelKey)}
+        </Button>
+      </div>
+    </Modal>
   );
 }
