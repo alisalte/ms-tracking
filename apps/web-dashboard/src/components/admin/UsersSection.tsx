@@ -1,30 +1,23 @@
 /**
  * UsersSection — the Users & Roles table (UI_UX §5.3 wireframe).
  *
- * Columns: name, email, role, MFA, last-login. Filter by role/status + search.
+ * Columns: name, email, role, MFA, last-login. Filter by status + search.
  * Row click opens the user detail drawer (selection → detail, UI_UX §0.6).
  */
+import { Users } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { userStatusColor } from '@/components/admin/admin-meta';
-import { StatusBadge, Toolbar } from '@/components/ui';
-import type { AdminUserStatus } from '@/types/admin.types';
-import type { AdminUser } from '@/types/admin.types';
 import {
-  Box,
-  MenuItem,
+  Badge,
+  DataTable,
+  EmptyState,
   Select,
-  Skeleton,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from '@mui/material';
+  type TableColumn,
+  Toolbar,
+} from '@/components/tailwind-ui';
+import type { AdminUser, AdminUserStatus } from '@/types/admin.types';
 
 interface UsersSectionProps {
   users: AdminUser[];
@@ -70,111 +63,101 @@ export function UsersSection({
     });
   }, [users, filterStatus, query]);
 
-  if (loading) {
-    const keys = ['usk-a', 'usk-b', 'usk-c', 'usk-d', 'usk-e', 'usk-f'];
-    return (
-      <Stack sx={{ p: 2, gap: 1 }}>
-        {keys.map((k) => (
-          <Skeleton key={k} height={28} />
-        ))}
-      </Stack>
-    );
-  }
+  const columns: Array<TableColumn<AdminUser>> = [
+    {
+      id: 'name',
+      headerKey: 'admin.users.colName',
+      sortBy: (u) => `${u.firstName} ${u.lastName}`.toLowerCase(),
+      render: (u) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-gray-800 dark:text-graydark-800">
+            {u.firstName} {u.lastName}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-graydark-600">{u.email}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'role',
+      headerKey: 'admin.users.colRole',
+      sortBy: (u) => u.roleName,
+      render: (u) => <span className="text-sm">{u.roleName}</span>,
+    },
+    {
+      id: 'mfa',
+      headerKey: 'admin.users.colMfa',
+      render: (u) =>
+        u.mfaEnabled ? (
+          <Badge color="success">✓</Badge>
+        ) : (
+          <span className="text-gray-400 dark:text-graydark-600">—</span>
+        ),
+    },
+    {
+      id: 'status',
+      headerKey: 'admin.users.colStatus',
+      sortBy: (u) => u.status,
+      render: (u) => (
+        <Badge color={userStatusColor(u.status)} dot>
+          {t(`admin.users.status.${u.status}`)}
+        </Badge>
+      ),
+    },
+    {
+      id: 'lastLogin',
+      headerKey: 'admin.users.colLastLogin',
+      align: 'end',
+      sortBy: (u) => u.lastLoginAt ?? '',
+      render: (u) => (
+        <span className="text-xs text-gray-500 dark:text-graydark-600">
+          {u.lastLoginAt ? rel(u.lastLoginAt) : '—'}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <Box>
+    <div className="flex flex-col gap-3">
       <Toolbar
         search
         searchValue={query}
         onSearchChange={onQuery}
-        searchPlaceholderKey="admin.users.search"
+        searchPlaceholder={t('admin.users.search')}
         left={
           <Select
-            size="small"
             value={filterStatus}
             onChange={(e) => onFilterStatus(e.target.value as AdminUserStatus | 'all')}
-            sx={{ height: 32, minWidth: 140, fontSize: '0.8rem' }}
-          >
-            {STATUSES.map((s) => (
-              <MenuItem key={s} value={s}>
-                {s === 'all' ? t('admin.users.allStatus') : t(`admin.users.status.${s}`)}
-              </MenuItem>
-            ))}
-          </Select>
+            wrapperClassName="w-40"
+            aria-label={t('admin.users.colStatus')}
+            options={STATUSES.map((s) => ({
+              value: s,
+              label: s === 'all' ? t('admin.users.allStatus') : t(`admin.users.status.${s}`),
+            }))}
+          />
         }
         right={
-          <Typography variant="caption" color="text.secondary">
+          <span className="text-xs text-gray-500 dark:text-graydark-600">
             {t('admin.count', { count: filtered.length })}
-          </Typography>
+          </span>
         }
       />
-      <TableContainer sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('admin.users.colName')}</TableCell>
-              <TableCell>{t('admin.users.colRole')}</TableCell>
-              <TableCell>{t('admin.users.colMfa')}</TableCell>
-              <TableCell>{t('admin.users.colStatus')}</TableCell>
-              <TableCell align="right">{t('admin.users.colLastLogin')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filtered.map((u) => (
-              <TableRow
-                key={u.id}
-                hover
-                selected={u.id === selectedId}
-                onClick={() => onSelect(u.id)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {u.firstName} {u.lastName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {u.email}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{u.roleName}</Typography>
-                </TableCell>
-                <TableCell>
-                  {u.mfaEnabled ? (
-                    <StatusBadge label="✓" tone="success" variant="solid" />
-                  ) : (
-                    <Typography variant="caption" color="text.disabled">
-                      —
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge
-                    label={t(`admin.users.status.${u.status}`)}
-                    color={userStatusColor(u.status)}
-                    variant="solid"
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="caption" color="text.secondary">
-                    {u.lastLoginAt ? rel(u.lastLoginAt) : '—'}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5}>
-                  <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                    {t('admin.empty')}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Box>
+      <DataTable
+        rows={filtered}
+        columns={columns}
+        rowKey={(u) => u.id}
+        loading={loading}
+        selectedKey={selectedId}
+        onRowClick={(u) => onSelect(u.id)}
+        maxHeight="calc(100vh - 300px)"
+        emptyState={
+          <EmptyState
+            icon={<Users />}
+            title={t('admin.empty')}
+            description={t('admin.users.search')}
+          />
+        }
+      />
+    </div>
   );
 }
 

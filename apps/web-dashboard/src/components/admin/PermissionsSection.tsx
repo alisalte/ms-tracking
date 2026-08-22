@@ -5,8 +5,8 @@
  */
 import { useTranslation } from 'react-i18next';
 
+import { Badge } from '@/components/tailwind-ui';
 import type { PermissionGroup } from '@/types/admin.types';
-import { Box, Chip, Stack, Typography } from '@mui/material';
 
 interface PermissionsSectionProps {
   catalog: PermissionGroup[];
@@ -15,47 +15,35 @@ interface PermissionsSectionProps {
 export function PermissionsSection({ catalog }: PermissionsSectionProps) {
   const { t } = useTranslation();
   return (
-    <Stack gap={1.5} sx={{ p: 2 }}>
-      <Typography variant="body2" color="text.secondary">
+    <div className="flex flex-col gap-3 p-2">
+      <p className="text-sm text-gray-500 dark:text-graydark-600">
         {t('admin.permissions.subtitle')}
-      </Typography>
-      <Box
-        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}
-      >
+      </p>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {catalog.map((group) => (
-          <Box
+          <div
             key={group.domain}
-            sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}
+            className="rounded-xl border border-gray-200 p-4 dark:border-white/10"
           >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1 }}
-            >
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-white">
                 {t(group.labelKey)}
-              </Typography>
-              <Chip
-                size="small"
-                label={group.permissions.length}
-                sx={{ height: 18, fontSize: '0.6rem' }}
-              />
-            </Stack>
-            <Stack gap={0.25}>
+              </h3>
+              <Badge color="gray">{group.permissions.length}</Badge>
+            </div>
+            <div className="flex flex-col gap-0.5">
               {group.permissions.map((p) => (
-                <Typography
+                <span
                   key={p}
-                  variant="caption"
-                  sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: 'text.secondary' }}
+                  className="font-mono text-[0.68rem] text-gray-500 dark:text-graydark-600"
                 >
                   {p}
-                </Typography>
+                </span>
               ))}
-            </Stack>
-          </Box>
+            </div>
+          </div>
         ))}
-      </Box>
-    </Stack>
+      </div>
+    </div>
   );
 }

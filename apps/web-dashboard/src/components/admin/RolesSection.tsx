@@ -8,17 +8,8 @@
  */
 import { useTranslation } from 'react-i18next';
 
+import { Badge, Card, Skeleton } from '@/components/tailwind-ui';
 import type { Role } from '@/types/admin.types';
-import {
-  Box,
-  Card,
-  CardActionArea,
-  CardContent,
-  Chip,
-  Skeleton,
-  Stack,
-  Typography,
-} from '@mui/material';
 
 interface RolesSectionProps {
   roles: Role[];
@@ -34,32 +25,32 @@ export function RolesSection({ roles, loading = false, selectedId, onSelect }: R
 
   if (loading) {
     return (
-      <Stack gap={1.5} sx={{ p: 2 }}>
+      <div className="flex flex-col gap-3 p-2">
         {['rsk-a', 'rsk-b', 'rsk-c'].map((k) => (
-          <Skeleton key={k} variant="rounded" height={90} />
+          <Skeleton key={k} className="h-24 w-full" />
         ))}
-      </Stack>
+      </div>
     );
   }
 
   return (
-    <Stack gap={2} sx={{ p: 2 }}>
+    <div className="flex flex-col gap-4 p-2">
       {/* Custom roles (UI_UX §5.3) */}
-      <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-gray-800 dark:text-white">
           {t('admin.roles.custom')}
-        </Typography>
+        </h2>
         <RoleGrid roles={custom} selectedId={selectedId} onSelect={onSelect} t={t} />
-      </Box>
+      </section>
 
       {/* System roles (§6.2) */}
-      <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-gray-800 dark:text-white">
           {t('admin.roles.system')}
-        </Typography>
+        </h2>
         <RoleGrid roles={system} selectedId={selectedId} onSelect={onSelect} t={t} />
-      </Box>
-    </Stack>
+      </section>
+    </div>
   );
 }
 
@@ -76,58 +67,46 @@ function RoleGrid({
   t: (k: string) => string;
 }) {
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
-        gap: 1.5,
-      }}
-    >
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
       {roles.map((r) => (
         <Card
           key={r.id}
-          variant="outlined"
-          sx={{
-            borderColor: r.id === selectedId ? 'primary.main' : 'divider',
-            borderWidth: r.id === selectedId ? 2 : 1,
-          }}
+          as="button"
+          type="button"
+          onClick={() => onSelect(r.id)}
+          className={`text-start transition-colors ${
+            r.id === selectedId
+              ? 'border-2 border-brand-500 ring-2 ring-brand-500/20'
+              : 'hover:border-gray-300 dark:hover:border-white/20'
+          }`}
         >
-          <CardActionArea onClick={() => onSelect(r.id)}>
-            <CardContent>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }} noWrap>
-                  {r.name}
-                </Typography>
-                {r.mfaRequired && (
-                  <Chip
-                    size="small"
-                    label="MFA"
-                    color="error"
-                    sx={{ height: 16, fontSize: '0.55rem' }}
-                  />
-                )}
-              </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, minHeight: 36 }}>
-                {r.description}
-              </Typography>
-              <Stack direction="row" gap={2} sx={{ mt: 1 }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {t('admin.roles.permissions')}
-                  </Typography>
-                  <Typography variant="h6">{r.permissionKeys.length}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {t('admin.roles.members')}
-                  </Typography>
-                  <Typography variant="h6">{r.memberCount}</Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </CardActionArea>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-semibold text-gray-800 dark:text-white">
+              {r.name}
+            </span>
+            {r.mfaRequired && <Badge color="danger">MFA</Badge>}
+          </div>
+          <p className="mt-1 min-h-9 text-sm text-gray-500 dark:text-graydark-600">
+            {r.description}
+          </p>
+          <div className="mt-2 flex gap-6">
+            <div>
+              <p className="text-xs text-gray-500 dark:text-graydark-600">
+                {t('admin.roles.permissions')}
+              </p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {r.permissionKeys.length}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-graydark-600">
+                {t('admin.roles.members')}
+              </p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">{r.memberCount}</p>
+            </div>
+          </div>
         </Card>
       ))}
-    </Box>
+    </div>
   );
 }

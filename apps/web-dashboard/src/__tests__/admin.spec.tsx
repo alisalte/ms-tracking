@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
@@ -9,6 +9,12 @@ import { PERMISSION_CATALOG, mockAuditEntries, mockRoles, mockUsers } from '@/mo
 import { AdminPage } from '@/pages/AdminPage';
 
 import { i18n } from '@/i18n';
+
+// Ported to tailwind-ui: filters are NATIVE <select> elements (fire change
+// events with target.value), detail panels are Drawer components with
+// role="dialog", and no MUI menus/portals remain. Native <option>s render in
+// the DOM, so text that exists in both a filter and row content is asserted
+// via getAllByText or scoped with within(...).
 
 // ── Mock the API client so fetchUsers returns the mock user list (no live
 // identity-service in the test env). The users endpoint is now real; the rest
@@ -109,8 +115,27 @@ describe('AdminPage', () => {
 
     fireEvent.click(screen.getByText(first.email));
     await waitFor(() => {
+      // tailwind Drawer renders role="dialog" with the user name as title.
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(screen.getByText('Username')).toBeInTheDocument();
     });
+  });
+
+  it('filters users by status via the native select', async () => {
+    renderAdmin();
+    const active = mockUsers[0]; // statuses cycle: [active, active, active, suspended, …]
+    const suspended = mockUsers[3];
+    expect(active.status).toBe('active');
+    expect(suspended.status).toBe('suspended');
+    await waitFor(() => expect(screen.getByText(active.email)).toBeInTheDocument());
+
+    // Native <select> — change events carry the value directly (no MUI listbox).
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'suspended' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(suspended.email)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(active.email)).not.toBeInTheDocument();
   });
 
   it('switches to the Roles section and renders system + custom roles', async () => {
@@ -127,6 +152,7 @@ describe('AdminPage', () => {
     if (role) fireEvent.click(screen.getByText(role.name));
 
     await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(screen.getByText('Permission matrix')).toBeInTheDocument();
     });
   });
@@ -154,6 +180,23 @@ describe('AdminPage', () => {
     });
     // The header renders too.
     expect(screen.getByText('Integrity hash')).toBeInTheDocument();
+  });
+
+  it('filters audit entries by action via the native select', async () => {
+    renderAdmin('/admin?section=audit');
+    await waitFor(() => {
+      expect(screen.getAllByText(mockAuditEntries[0].sourceService).length).toBeGreaterThan(0);
+    });
+
+    // Native <select> change (the filter options also render action texts in
+    // the DOM, so row assertions are scoped to the table).
+    fireEvent.change(screen.getByLabelText('All actions'), { target: { value: 'delete' } });
+
+    // The 30 mock entries cycle through 10 actions → 3 delete rows remain.
+    await waitFor(() => {
+      expect(within(screen.getByRole('table')).getAllByText('Delete').length).toBe(3);
+    });
+    expect(within(screen.getByRole('table')).queryByText('Login')).not.toBeInTheDocument();
   });
 
   it('uses mock data covering the canonical catalog domains', () => {

@@ -3,22 +3,11 @@
  * catalog. Commands without parameters dispatch directly (confirm dialog for
  * safety-sensitive ones); parameterized commands open CommandParamDialog.
  */
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardActionArea,
-  Chip,
-  Stack,
-  Tab,
-  Tabs,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Alert, Badge, Button, Card, Input, Spinner, Tabs } from '@/components/tailwind-ui';
 import type { CommandCategory, CommandDef } from '@/types/command.types';
 
 interface CommandCatalogPanelProps {
@@ -62,46 +51,38 @@ export function CommandCatalogPanel({
 
   if (loading) {
     return (
-      <Typography color="text.secondary" sx={{ p: 2 }}>
+      <div className="flex items-center gap-2 p-4 text-sm text-gray-500 dark:text-graydark-600">
+        <Spinner size="sm" />
         {t('common.loading', { defaultValue: 'Loading…' })}
-      </Typography>
+      </div>
     );
   }
 
   return (
-    <Stack spacing={1.5}>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', flex: 1, minWidth: 0 }}>
-          <Tabs
-            value={category}
-            onChange={(_, v: CommandCategory | 'all') => setCategory(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            <Tab
-              value="all"
-              label={t('commands.categories.all', { defaultValue: 'All' })}
-              sx={{ minHeight: 40 }}
-            />
-            {categories.map((c) => (
-              <Tab
-                key={c}
-                value={c}
-                label={t(`commands.categories.${c}`, { defaultValue: c })}
-                sx={{ minHeight: 40 }}
-              />
-            ))}
-          </Tabs>
-        </Box>
-        <Button size="small" onClick={() => setSearch('')} disabled={!search}>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs
+          className="min-w-0 flex-1"
+          aria-label={t('commands.title', { defaultValue: 'Command Center' })}
+          value={category}
+          onChange={(v) => setCategory(v)}
+          tabs={[
+            { value: 'all' as const, label: t('commands.categories.all', { defaultValue: 'All' }) },
+            ...categories.map((c) => ({
+              value: c,
+              label: t(`commands.categories.${c}`, { defaultValue: c }),
+            })),
+          ]}
+        />
+        <Button size="sm" variant="ghost" onClick={() => setSearch('')} disabled={!search}>
           {t('common.clear', { defaultValue: 'Clear' })}
         </Button>
-      </Stack>
+      </div>
 
       <TextFieldMini value={search} onChange={setSearch} />
 
       {disabled && (
-        <Alert severity="info">
+        <Alert variant="info">
           {t('commands.selectDeviceFirst', {
             defaultValue: 'Select a device to enable commands.',
           })}
@@ -109,59 +90,46 @@ export function CommandCatalogPanel({
       )}
 
       {filtered.length === 0 && (
-        <Typography color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+        <p className="p-4 text-center text-sm text-gray-500 dark:text-graydark-600">
           {t('commands.noMatch', { defaultValue: 'No commands match.' })}
-        </Typography>
+        </p>
       )}
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(280px, 1fr))' },
-          gap: 1.5,
-        }}
-      >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
         {filtered.map((cmd) => (
-          <Card key={cmd.code} variant="outlined" sx={{ display: 'flex' }}>
-            <CardActionArea
-              disabled={disabled}
-              onClick={() => (cmd.params.length > 0 ? onConfigure(cmd) : onDispatch(cmd))}
-              sx={{ p: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
-            >
-              <Stack spacing={0.5} sx={{ width: '100%' }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography
-                    component="code"
-                    sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'primary.main' }}
-                  >
-                    {cmd.code}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={t(`commands.categories.${cmd.category}`, {
-                      defaultValue: cmd.category,
-                    })}
-                    sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
-                  />
-                  {cmd.supportsReadback && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={t('commands.readable', { defaultValue: 'readable' })}
-                      sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
-                    />
-                  )}
-                </Stack>
-                <Typography variant="subtitle2">{fa ? cmd.nameFa : cmd.name}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ minHeight: 30 }}>
-                  {fa ? cmd.descriptionFa : cmd.description}
-                </Typography>
-              </Stack>
-            </CardActionArea>
+          <Card
+            key={cmd.code}
+            as="button"
+            type="button"
+            flush
+            interactive
+            disabled={disabled}
+            onClick={() => (cmd.params.length > 0 ? onConfigure(cmd) : onDispatch(cmd))}
+            className="w-full p-3 text-start disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <div className="flex w-full flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-sm font-bold text-brand-600 dark:text-brand-400">
+                  {cmd.code}
+                </span>
+                <Badge>
+                  {t(`commands.categories.${cmd.category}`, { defaultValue: cmd.category })}
+                </Badge>
+                {cmd.supportsReadback && (
+                  <Badge color="teal">{t('commands.readable', { defaultValue: 'readable' })}</Badge>
+                )}
+              </div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                {fa ? cmd.nameFa : cmd.name}
+              </p>
+              <p className="min-h-[30px] text-xs text-gray-500 dark:text-graydark-600">
+                {fa ? cmd.descriptionFa : cmd.description}
+              </p>
+            </div>
           </Card>
         ))}
-      </Box>
-    </Stack>
+      </div>
+    </div>
   );
 }
 
@@ -175,12 +143,12 @@ function TextFieldMini({
 }) {
   const { t } = useTranslation();
   return (
-    <TextField
-      size="small"
-      fullWidth
+    <Input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={t('commands.search', { defaultValue: 'Search commands…' })}
+      aria-label={t('commands.search', { defaultValue: 'Search commands…' })}
+      leftIcon={<Search size={14} />}
     />
   );
 }

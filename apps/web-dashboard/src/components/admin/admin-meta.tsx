@@ -1,41 +1,41 @@
 /**
  * Admin visual helpers — single source of truth for the status→color maps
- * shared by the Users, Roles, and Audit sections. Colors come from the semantic
- * palette (`theme/palette.ts` `status.*`).
+ * shared by the Users and Audit sections. Values are tailwind `Badge` color
+ * names so the UI never hardcodes hex values.
  */
-import { status } from '@/theme/palette';
+import type { BadgeProps } from '@/components/tailwind-ui';
 import type { AdminUserStatus, AuditAction } from '@/types/admin.types';
 
 /** User status → semantic color (IAM §3.1 UserStatus). */
-export function userStatusColor(s: AdminUserStatus): string {
+export function userStatusColor(s: AdminUserStatus): BadgeProps['color'] {
   switch (s) {
     case 'active':
-      return status.green;
+      return 'success';
     case 'suspended':
-      return status.amber;
+      return 'warning';
     case 'locked':
-      return status.red;
+      return 'danger';
     default:
-      return status.slate;
+      return 'gray';
   }
 }
 
 /** Audit action → semantic color (Audit §3.1 AuditAction). */
-export function auditActionColor(a: AuditAction): string {
+export function auditActionColor(a: AuditAction): BadgeProps['color'] {
   switch (a) {
     case 'delete':
-      return status.red;
+      return 'danger';
     case 'create':
-      return status.green;
+      return 'success';
     case 'update':
     case 'config_change':
-      return status.amber;
+      return 'warning';
     case 'deny':
-      return status.red;
+      return 'danger';
     case 'login':
     case 'logout':
-      return status.blue;
+      return 'info';
     default:
-      return status.slate;
+      return 'gray';
   }
 }

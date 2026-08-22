@@ -5,31 +5,23 @@
  * correlation id, and the chain integrity hash. Includes an export action
  * (§5.1 `/export`) and an integrity-verify indicator (§5.1 `/integrity/status`).
  */
+import { Download, ScrollText, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuditEntries, useExportAudit } from '@/api/admin.api';
 import { auditActionColor } from '@/components/admin/admin-meta';
-import type { AuditAction, AuditCategory } from '@/types/admin.types';
 import {
-  Box,
+  Badge,
   Button,
-  Chip,
-  MenuItem,
+  DataTable,
+  EmptyState,
   Select,
-  Skeleton,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
+  type TableColumn,
+  Toolbar,
   Tooltip,
-  Typography,
-} from '@mui/material';
-import { Download, ShieldCheck } from 'lucide-react';
+} from '@/components/tailwind-ui';
+import type { AuditAction, AuditCategory, AuditEntry } from '@/types/admin.types';
 
 const ACTIONS: Array<AuditAction | 'all'> = [
   'all',
@@ -81,154 +73,137 @@ export function AuditSection() {
     });
   }, [entries, action, category, query]);
 
+  const columns: Array<TableColumn<AuditEntry>> = [
+    {
+      id: 'time',
+      headerKey: 'admin.audit.colTime',
+      sortBy: (e) => e.timestamp,
+      render: (e) => (
+        <span className="text-xs text-gray-500 dark:text-graydark-600">
+          {new Date(e.timestamp).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      id: 'action',
+      headerKey: 'admin.audit.colAction',
+      sortBy: (e) => e.action,
+      render: (e) => (
+        <Badge color={auditActionColor(e.action)} dot>
+          {t(`admin.audit.action.${e.action}`)}
+        </Badge>
+      ),
+    },
+    {
+      id: 'actor',
+      headerKey: 'admin.audit.colActor',
+      sortBy: (e) => e.actorName,
+      render: (e) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-gray-800 dark:text-graydark-800">{e.actorName}</span>
+          <span className="text-xs text-gray-500 dark:text-graydark-600">{e.actorType}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'target',
+      headerKey: 'admin.audit.colTarget',
+      render: (e) => (
+        <div className="flex flex-col">
+          <span className="text-sm">{e.targetType}</span>
+          <span className="font-mono text-xs text-gray-500 dark:text-graydark-600">
+            {e.targetId}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: 'service',
+      headerKey: 'admin.audit.colService',
+      render: (e) => (
+        <span className="text-xs text-gray-500 dark:text-graydark-600">{e.sourceService}</span>
+      ),
+    },
+    {
+      id: 'hash',
+      headerKey: 'admin.audit.colHash',
+      render: (e) => (
+        <Tooltip label={e.integrityHash}>
+          <span className="cursor-help font-mono text-[0.6rem] text-gray-500 dark:text-graydark-600">
+            {e.integrityHash.slice(0, 16)}…
+          </span>
+        </Tooltip>
+      ),
+    },
+  ];
+
   return (
-    <Stack gap={1}>
+    <div className="flex flex-col gap-3">
       {/* Filters + actions */}
-      <Box sx={{ display: 'flex', gap: 1, p: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Select
-          size="small"
-          value={action}
-          onChange={(e) => setAction(e.target.value as AuditAction | 'all')}
-          sx={{ height: 32, minWidth: 140, fontSize: '0.8rem' }}
-        >
-          {ACTIONS.map((a) => (
-            <MenuItem key={a} value={a}>
-              {a === 'all' ? t('admin.audit.allActions') : t(`admin.audit.action.${a}`)}
-            </MenuItem>
-          ))}
-        </Select>
-        <Select
-          size="small"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as AuditCategory | 'all')}
-          sx={{ height: 32, minWidth: 150, fontSize: '0.8rem' }}
-        >
-          {CATEGORIES.map((c) => (
-            <MenuItem key={c} value={c}>
-              {c === 'all' ? t('admin.audit.allCategories') : t(`admin.audit.category.${c}`)}
-            </MenuItem>
-          ))}
-        </Select>
-        <TextField
-          size="small"
-          placeholder={t('admin.audit.search')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          sx={{ minWidth: 200, flex: 1, maxWidth: 300 }}
-        />
-        <Box sx={{ flex: 1 }} />
-        <Chip
-          size="small"
-          icon={<ShieldCheck size={14} />}
-          label={t('admin.audit.integrityOk')}
-          color="success"
-          variant="outlined"
-          sx={{ height: 28 }}
-        />
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<Download size={16} />}
-          disabled={exportAudit.isPending || filtered.length === 0}
-          onClick={() => exportAudit.mutate({ entries: filtered })}
-        >
-          {exportAudit.isPending ? t('admin.audit.exporting') : t('admin.audit.export')}
-        </Button>
-      </Box>
+      <Toolbar
+        search
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder={t('admin.audit.search')}
+        left={
+          <>
+            <Select
+              value={action}
+              onChange={(e) => setAction(e.target.value as AuditAction | 'all')}
+              wrapperClassName="w-36"
+              aria-label={t('admin.audit.allActions')}
+              options={ACTIONS.map((a) => ({
+                value: a,
+                label: a === 'all' ? t('admin.audit.allActions') : t(`admin.audit.action.${a}`),
+              }))}
+            />
+            <Select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as AuditCategory | 'all')}
+              wrapperClassName="w-40"
+              aria-label={t('admin.audit.allCategories')}
+              options={CATEGORIES.map((c) => ({
+                value: c,
+                label:
+                  c === 'all' ? t('admin.audit.allCategories') : t(`admin.audit.category.${c}`),
+              }))}
+            />
+          </>
+        }
+        right={
+          <>
+            <Badge color="success">
+              <ShieldCheck size={12} aria-hidden />
+              {t('admin.audit.integrityOk')}
+            </Badge>
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<Download size={15} />}
+              disabled={exportAudit.isPending || filtered.length === 0}
+              onClick={() => exportAudit.mutate({ entries: filtered })}
+            >
+              {exportAudit.isPending ? t('admin.audit.exporting') : t('admin.audit.export')}
+            </Button>
+          </>
+        }
+      />
 
       {/* Table */}
-      <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('admin.audit.colTime')}</TableCell>
-              <TableCell>{t('admin.audit.colAction')}</TableCell>
-              <TableCell>{t('admin.audit.colActor')}</TableCell>
-              <TableCell>{t('admin.audit.colTarget')}</TableCell>
-              <TableCell>{t('admin.audit.colService')}</TableCell>
-              <TableCell>{t('admin.audit.colHash')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isLoading
-              ? ['ask-a', 'ask-b', 'ask-c', 'ask-d'].map((k) => (
-                  <TableRow key={k}>
-                    <TableCell colSpan={6}>
-                      <Skeleton height={22} />
-                    </TableCell>
-                  </TableRow>
-                ))
-              : filtered.map((e) => (
-                  <TableRow key={e.id} hover>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(e.timestamp).toLocaleString()}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={t(`admin.audit.action.${e.action}`)}
-                        sx={{
-                          height: 18,
-                          fontSize: '0.65rem',
-                          fontWeight: 600,
-                          color: '#fff',
-                          bgcolor: auditActionColor(e.action),
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap>
-                        {e.actorName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        {e.actorType}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap>
-                        {e.targetType}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: 'monospace' }}
-                        noWrap
-                      >
-                        {e.targetId}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        {e.sourceService}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={e.integrityHash}>
-                        <Typography
-                          variant="caption"
-                          sx={{ fontFamily: 'monospace', fontSize: '0.6rem' }}
-                          noWrap
-                        >
-                          {e.integrityHash.slice(0, 16)}…
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-            {!isLoading && filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                    {t('admin.empty')}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Stack>
+      <DataTable
+        rows={filtered}
+        columns={columns}
+        rowKey={(e) => e.id}
+        loading={isLoading}
+        maxHeight="calc(100vh - 280px)"
+        emptyState={
+          <EmptyState
+            icon={<ScrollText />}
+            title={t('admin.empty')}
+            description={t('admin.audit.search')}
+          />
+        }
+      />
+    </div>
   );
 }

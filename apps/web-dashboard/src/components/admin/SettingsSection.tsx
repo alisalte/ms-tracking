@@ -10,19 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useSettings, useUpdateSettings } from '@/api/admin.api';
 import { ErrorState } from '@/components/common/ErrorState';
+import { Button, Card, CardHeader, Input, Select, Spinner } from '@/components/tailwind-ui';
 import type { DistanceUnit, TempUnit, VolumeUnit } from '@/types/admin.types';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
 
 const TIMEZONES = ['UTC', 'Asia/Tehran', 'America/New_York', 'Europe/London', 'Asia/Dubai'];
 const LOCALES = ['en', 'fa'];
@@ -37,9 +26,9 @@ export function SettingsSection() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center py-10">
+        <Spinner size="lg" />
+      </div>
     );
   }
 
@@ -54,143 +43,93 @@ export function SettingsSection() {
   }
 
   return (
-    <Stack gap={2} sx={{ p: 2, maxWidth: 640 }}>
+    <div className="flex max-w-2xl flex-col gap-4 p-2">
       {/* Locale & format */}
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-            {t('admin.settings.locale')}
-          </Typography>
-          <Stack gap={2}>
-            <Field label={t('admin.settings.language')}>
-              <Select
-                size="small"
-                fullWidth
-                value={draft.locale}
-                onChange={(e) => update.mutate({ locale: e.target.value })}
-              >
-                {LOCALES.map((l) => (
-                  <MenuItem key={l} value={l}>
-                    {t(`admin.settings.lang.${l}`)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t('admin.settings.timezone')}>
-              <Select
-                size="small"
-                fullWidth
-                value={draft.timezone}
-                onChange={(e) => update.mutate({ timezone: e.target.value })}
-              >
-                {TIMEZONES.map((tz) => (
-                  <MenuItem key={tz} value={tz}>
-                    {tz}
-                  </MenuItem>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t('admin.settings.dateFormat')}>
-              <TextField
-                size="small"
-                fullWidth
-                value={draft.dateFormat}
-                onChange={(e) => update.mutate({ dateFormat: e.target.value })}
-              />
-            </Field>
-          </Stack>
-        </CardContent>
+      <Card>
+        <CardHeader title={t('admin.settings.locale')} />
+        <div className="flex flex-col gap-4">
+          <Select
+            label={t('admin.settings.language')}
+            value={draft.locale}
+            onChange={(e) => update.mutate({ locale: e.target.value })}
+            options={LOCALES.map((l) => ({ value: l, label: t(`admin.settings.lang.${l}`) }))}
+          />
+          <Select
+            label={t('admin.settings.timezone')}
+            value={draft.timezone}
+            onChange={(e) => update.mutate({ timezone: e.target.value })}
+            options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+          />
+          <Input
+            label={t('admin.settings.dateFormat')}
+            value={draft.dateFormat}
+            onChange={(e) => update.mutate({ dateFormat: e.target.value })}
+          />
+        </div>
       </Card>
 
       {/* Units */}
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-            {t('admin.settings.units')}
-          </Typography>
-          <Stack direction="row" gap={2} sx={{ flexWrap: 'wrap' }}>
-            <Field label={t('admin.settings.distance')}>
-              <Select
-                size="small"
-                value={draft.distanceUnit}
-                onChange={(e) => update.mutate({ distanceUnit: e.target.value as DistanceUnit })}
-              >
-                <MenuItem value="km">km</MenuItem>
-                <MenuItem value="mi">mi</MenuItem>
-              </Select>
-            </Field>
-            <Field label={t('admin.settings.volume')}>
-              <Select
-                size="small"
-                value={draft.volumeUnit}
-                onChange={(e) => update.mutate({ volumeUnit: e.target.value as VolumeUnit })}
-              >
-                <MenuItem value="L">L</MenuItem>
-                <MenuItem value="gal">gal</MenuItem>
-              </Select>
-            </Field>
-            <Field label={t('admin.settings.temperature')}>
-              <Select
-                size="small"
-                value={draft.tempUnit}
-                onChange={(e) => update.mutate({ tempUnit: e.target.value as TempUnit })}
-              >
-                <MenuItem value="C">°C</MenuItem>
-                <MenuItem value="F">°F</MenuItem>
-              </Select>
-            </Field>
-          </Stack>
-        </CardContent>
+      <Card>
+        <CardHeader title={t('admin.settings.units')} />
+        <div className="flex flex-wrap gap-4">
+          <Select
+            label={t('admin.settings.distance')}
+            wrapperClassName="w-32"
+            value={draft.distanceUnit}
+            onChange={(e) => update.mutate({ distanceUnit: e.target.value as DistanceUnit })}
+            options={[
+              { value: 'km', label: 'km' },
+              { value: 'mi', label: 'mi' },
+            ]}
+          />
+          <Select
+            label={t('admin.settings.volume')}
+            wrapperClassName="w-32"
+            value={draft.volumeUnit}
+            onChange={(e) => update.mutate({ volumeUnit: e.target.value as VolumeUnit })}
+            options={[
+              { value: 'L', label: 'L' },
+              { value: 'gal', label: 'gal' },
+            ]}
+          />
+          <Select
+            label={t('admin.settings.temperature')}
+            wrapperClassName="w-32"
+            value={draft.tempUnit}
+            onChange={(e) => update.mutate({ tempUnit: e.target.value as TempUnit })}
+            options={[
+              { value: 'C', label: '°C' },
+              { value: 'F', label: '°F' },
+            ]}
+          />
+        </div>
       </Card>
 
       {/* Branding + retention */}
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-            {t('admin.settings.branding')}
-          </Typography>
-          <Stack gap={2}>
-            <Field label={t('admin.settings.orgName')}>
-              <TextField
-                size="small"
-                fullWidth
-                value={draft.orgName}
-                onChange={(e) => update.mutate({ orgName: e.target.value })}
-              />
-            </Field>
-            <Field label={t('admin.settings.retention')}>
-              <TextField
-                size="small"
-                type="number"
-                value={draft.retentionDays}
-                onChange={(e) => update.mutate({ retentionDays: Number(e.target.value) || 0 })}
-                sx={{ maxWidth: 120 }}
-              />
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                {t('admin.settings.retentionDays')}
-              </Typography>
-            </Field>
-          </Stack>
-        </CardContent>
+      <Card>
+        <CardHeader title={t('admin.settings.branding')} />
+        <div className="flex flex-col gap-4">
+          <Input
+            label={t('admin.settings.orgName')}
+            value={draft.orgName}
+            onChange={(e) => update.mutate({ orgName: e.target.value })}
+          />
+          <Input
+            type="number"
+            label={t('admin.settings.retention')}
+            wrapperClassName="w-40"
+            value={draft.retentionDays}
+            onChange={(e) => update.mutate({ retentionDays: Number(e.target.value) || 0 })}
+            hint={t('admin.settings.retentionDays')}
+          />
+        </div>
       </Card>
 
-      <Box>
-        <Button variant="contained" disabled={update.isPending}>
+      <div>
+        <Button disabled={update.isPending}>
           {update.isPending ? t('admin.settings.saving') : t('admin.settings.saved')}
         </Button>
-      </Box>
-    </Stack>
-  );
-}
-
-/** A labeled field wrapper. */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <Box sx={{ flex: 1, minWidth: 160 }}>
-      <Typography variant="caption" color="text.secondary">
-        {label}
-      </Typography>
-      <Box sx={{ mt: 0.5 }}>{children}</Box>
-    </Box>
+      </div>
+    </div>
   );
 }

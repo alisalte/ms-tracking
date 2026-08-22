@@ -19,9 +19,7 @@ import { RolesSection } from '@/components/admin/RolesSection';
 import { SettingsSection } from '@/components/admin/SettingsSection';
 import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer';
 import { UsersSection } from '@/components/admin/UsersSection';
-import { PageHeader } from '@/components/ui';
 import type { AdminSection, AdminUserStatus } from '@/types/admin.types';
-import { Box, Stack } from '@mui/material';
 
 const ENABLED: AdminSection[] = ['users', 'roles', 'permissions', 'settings', 'audit'];
 
@@ -57,26 +55,17 @@ export function AdminPage() {
   };
 
   return (
-    <Stack direction="row" sx={{ height: '100%' }}>
+    <div className="flex h-full">
       {/* Left nav (UI_UX §5.5) */}
-      <Box
-        sx={{
-          width: 240,
-          minWidth: 240,
-          borderInlineEnd: '1px solid',
-          borderColor: 'divider',
-          p: 1.5,
-          overflowY: 'auto',
-        }}
-      >
-        <PageHeader title={t('admin.title')} compact sx={{ mb: 1.5, px: 1 }} />
-        <Box sx={{ mt: 0.5 }}>
-          <AdminNav section={section} onSelect={setSection} />
-        </Box>
-      </Box>
+      <aside className="w-60 shrink-0 overflow-y-auto border-e border-gray-200 p-3 dark:border-white/10">
+        <h1 className="px-2 pb-3 text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+          {t('admin.title')}
+        </h1>
+        <AdminNav section={section} onSelect={setSection} />
+      </aside>
 
       {/* Right content */}
-      <Box sx={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+      <div className="min-w-0 flex-1 overflow-y-auto p-4">
         {section === 'users' && (
           <>
             <UsersSection
@@ -106,7 +95,7 @@ export function AdminPage() {
         {section === 'permissions' && <PermissionsSection catalog={permissions.data ?? []} />}
         {section === 'settings' && <SettingsSection />}
         {section === 'audit' && <AuditSection />}
-      </Box>
-    </Stack>
+      </div>
+    </div>
   );
 }

@@ -10,7 +10,6 @@
  * Backend: fleet-management-service device-commands API (06 §11.3) → Kafka
  * command.request → device-gateway CommandDispatcher → socket write.
  */
-import { Autocomplete, Card, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +22,7 @@ import { CommandHistoryTable } from '@/components/commands/CommandHistoryTable';
 import { CommandParamDialog } from '@/components/commands/CommandParamDialog';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { PageHeader } from '@/components/ui';
+import { Card, Select } from '@/components/tailwind-ui';
 import type { Device } from '@/types/asset.types';
 import type { CommandDef, CommandStatus } from '@/types/command.types';
 
@@ -54,95 +53,85 @@ export function CommandCenterPage() {
     await sendMutation.mutateAsync({ commandCode: command.code, params });
   };
 
+  // Native-select replacement for the old Autocomplete: while devices load (or
+  // none are Meitrack) the placeholder slot carries the same messaging.
+  const deviceOptions = devicesQuery.isLoading
+    ? [{ value: '', label: t('common.loading', { defaultValue: 'Loading…' }) }]
+    : devicesQuery.data && meitrackDevices.length === 0
+      ? [
+          {
+            value: '',
+            label: t('commands.noMeitrackDevices', {
+              defaultValue: 'No Meitrack devices registered',
+            }),
+          },
+        ]
+      : [
+          { value: '', label: t('commands.selectDevice', { defaultValue: 'Device (IMEI)' }) },
+          ...meitrackDevices.map((d) => ({
+            value: d.id,
+            label: `${d.imei}${d.model ? ` · ${d.model}` : ''}`,
+          })),
+        ];
+
   return (
-    <Stack spacing={2}>
-      <PageHeader
-        compact
-        title={t('commands.title', { defaultValue: 'Command Center' })}
-        subtitle={t('commands.subtitle', {
-          defaultValue:
-            'Configure devices over TCP — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).',
-        })}
-        actions={
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 280 }}>
-            <Autocomplete
-              size="small"
-              sx={{ minWidth: 280 }}
-              options={meitrackDevices}
-              value={selectedDevice}
-              onChange={(_, v) => setDeviceId(v?.id ?? null)}
-              getOptionLabel={(d) => `${d.imei}${d.model ? ` · ${d.model}` : ''}`}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label={t('commands.selectDevice', { defaultValue: 'Device (IMEI)' })}
-                />
-              )}
-              renderOption={(props, d) => {
-                const { key, ...rest } = props;
-                return (
-                  <li key={key} {...rest}>
-                    <Stack>
-                      <Typography variant="body2">{d.imei}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {[d.model, d.serialNumber].filter(Boolean).join(' · ') ||
-                          t('commands.noModel', { defaultValue: 'No model' })}
-                      </Typography>
-                    </Stack>
-                  </li>
-                );
-              }}
-              loading={devicesQuery.isLoading}
-              noOptionsText={
-                devicesQuery.data && meitrackDevices.length === 0
-                  ? t('commands.noMeitrackDevices', {
-                      defaultValue: 'No Meitrack devices registered',
-                    })
-                  : t('common.noData')
-              }
-            />
-          </Stack>
-        }
-      />
+    <div className="flex flex-col gap-4">
+      {/* Header — device picker (IMEI · model) is the flow's entry point. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {t('commands.title', { defaultValue: 'Command Center' })}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-graydark-600">
+            {t('commands.subtitle', {
+              defaultValue:
+                'Configure devices over TCP — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).',
+            })}
+          </p>
+        </div>
+        <Select
+          value={deviceId ?? ''}
+          onChange={(e) => setDeviceId(e.target.value || null)}
+          wrapperClassName="w-72 max-w-full"
+          disabled={devicesQuery.isLoading}
+          aria-label={t('commands.selectDevice', { defaultValue: 'Device (IMEI)' })}
+          options={deviceOptions}
+        />
+      </div>
 
       {selectedDevice && (
-        <Card sx={{ p: 1.5 }}>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <Typography variant="subtitle2">
-              {t('commands.history.title', { defaultValue: 'Command history' })}
-            </Typography>
-            <TextField
-              select
-              size="small"
-              label={t('commands.history.filterStatus', { defaultValue: 'Status' })}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as CommandStatus | '')}
-              sx={{ minWidth: 140 }}
-            >
-              <MenuItem value="">{t('common.all', { defaultValue: 'All' })}</MenuItem>
-              {STATUS_FILTERS.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {t(`commands.status.${s}`, { defaultValue: s })}
-                </MenuItem>
-              ))}
-            </TextField>
-            <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-              {selectedDevice.imei}
-              {selectedDevice.vehicleId ? '' : ''}
-            </Typography>
-          </Stack>
+        <Card flush className="flex flex-wrap items-center gap-3 p-3">
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+            {t('commands.history.title', { defaultValue: 'Command history' })}
+          </h2>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as CommandStatus | '')}
+            wrapperClassName="w-40"
+            aria-label={t('commands.history.filterStatus', { defaultValue: 'Status' })}
+            options={[
+              { value: '', label: t('common.all', { defaultValue: 'All' }) },
+              ...STATUS_FILTERS.map((s) => ({
+                value: s,
+                label: t(`commands.status.${s}`, { defaultValue: s }),
+              })),
+            ]}
+          />
+          <span className="flex-1 text-xs text-gray-500 dark:text-graydark-600">
+            {selectedDevice.imei}
+          </span>
         </Card>
       )}
 
-      <Card sx={{ p: 1.5 }}>
+      <Card flush className="p-3">
         <PermissionGate
           requires={PERMISSIONS.commandSend}
           fallback={
-            <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+            <p className="p-4 text-sm text-gray-500 dark:text-graydark-600">
               {t('commands.noSendPermission', {
                 defaultValue: 'You lack permission to send commands (read-only).',
               })}
-            </Typography>
+            </p>
           }
         >
           <CommandCatalogPanel
@@ -156,7 +145,7 @@ export function CommandCenterPage() {
       </Card>
 
       {selectedDevice && (
-        <Card sx={{ p: 1.5 }}>
+        <Card flush className="p-3">
           <CommandHistoryTable rows={historyQuery.data ?? []} loading={historyQuery.isLoading} />
         </Card>
       )}
@@ -199,6 +188,6 @@ export function CommandCenterPage() {
         }}
         onClose={() => setConfirming(null)}
       />
-    </Stack>
+    </div>
   );
 }

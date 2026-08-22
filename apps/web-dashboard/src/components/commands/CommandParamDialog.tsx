@@ -8,24 +8,11 @@
  * rules (required / min / max / integer / maxLength); the backend re-validates
  * authoritatively (validateParams) and its message is surfaced on 422.
  */
-import {
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
-import Alert from '@mui/material/Alert';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToast } from '@/components/feedback/ToastProvider';
-import { FormAlert } from '@/components/form/FormAlert';
+import { Alert, Button, Input, Modal, Select, Textarea } from '@/components/tailwind-ui';
 import type { CommandDef, CommandParamDef } from '@/types/command.types';
 
 interface CommandParamDialogProps {
@@ -136,84 +123,106 @@ export function CommandParamDialog({ command, onSubmit, onClose }: CommandParamD
   const hasParams = useMemo(() => (command?.params.length ?? 0) > 0, [command]);
 
   return (
-    <Dialog open={Boolean(command)} onClose={onClose} maxWidth="sm" fullWidth>
-      {command && (
-        <>
-          <DialogTitle>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Typography
-                component="span"
-                sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'primary.main' }}
-              >
-                {command.code}
-              </Typography>
-              <Typography component="span" variant="h6">
-                {fa ? command.nameFa : command.name}
-              </Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {fa ? command.descriptionFa : command.description}
-            </Typography>
-          </DialogTitle>
-          <DialogContent dividers>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {serverError && <FormAlert severity="error" message={serverError} />}
-              {!hasParams && (
-                <Alert severity="info">
-                  {t('commands.form.noParams', {
-                    defaultValue: 'This command takes no parameters — confirm to send.',
-                  })}
-                </Alert>
-              )}
-              {command.params.map((p) => (
-                <TextField
-                  key={p.key}
-                  size="small"
-                  label={`${label(p)}${p.unit ? ` (${p.unit})` : ''}`}
-                  value={values[p.key] ?? ''}
-                  onChange={(e) => set(p.key, e.target.value)}
-                  error={Boolean(errors[p.key])}
-                  helperText={errors[p.key] || hint(p) || ' '}
-                  select={p.type === 'enum' && (p.options?.length ?? 0) > 0}
-                  multiline={p.type === 'string' && (p.maxLength ?? 0) > 60}
-                  minRows={p.type === 'string' && (p.maxLength ?? 0) > 60 ? 2 : undefined}
-                  slotProps={{
-                    htmlInput:
-                      p.type === 'number'
-                        ? { inputMode: 'decimal' }
-                        : p.maxLength !== undefined
-                          ? { maxLength: p.maxLength }
-                          : undefined,
-                  }}
-                >
-                  {p.type === 'enum' &&
-                    (p.options ?? []).map((o) => (
-                      <MenuItem key={o.value} value={o.value}>
-                        {fa ? o.labelFa : o.label}{' '}
-                        <Typography component="span" variant="caption" color="text.secondary">
-                          ({o.value})
-                        </Typography>
-                      </MenuItem>
-                    ))}
-                </TextField>
-              ))}
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={onClose} disabled={submitting}>
+    <Modal
+      open={Boolean(command)}
+      onClose={onClose}
+      size="lg"
+      title={
+        command ? (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-mono font-bold text-brand-600 dark:text-brand-400">
+              {command.code}
+            </span>
+            <span>{fa ? command.nameFa : command.name}</span>
+          </span>
+        ) : undefined
+      }
+      footer={
+        command ? (
+          <>
+            <Button variant="outline" onClick={onClose} disabled={submitting}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </Button>
-            <Button
-              variant="contained"
-              onClick={() => void handleSubmit()}
-              disabled={submitting}
-              startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
-            >
+            <Button onClick={() => void handleSubmit()} loading={submitting}>
               {t('commands.form.send', { defaultValue: 'Send command' })}
             </Button>
-          </DialogActions>
-        </>
+          </>
+        ) : undefined
+      }
+    >
+      {command && (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-500 dark:text-graydark-600">
+            {fa ? command.descriptionFa : command.description}
+          </p>
+          {serverError && <Alert variant="danger">{serverError}</Alert>}
+          {!hasParams && (
+            <Alert variant="info">
+              {t('commands.form.noParams', {
+                defaultValue: 'This command takes no parameters — confirm to send.',
+              })}
+            </Alert>
+          )}
+          {command.params.map((p) => {
+            const fieldLabel = `${label(p)}${p.unit ? ` (${p.unit})` : ''}`;
+            const fieldError = errors[p.key] || null;
+            // Mirrors the MUI helperText chain: error text → hint → spacer.
+            const hintText = errors[p.key] ? null : (hint(p) ?? ' ');
+            const isEnum = p.type === 'enum' && (p.options?.length ?? 0) > 0;
+            const multiline = p.type === 'string' && (p.maxLength ?? 0) > 60;
+
+            if (isEnum) {
+              return (
+                <Select
+                  key={p.key}
+                  label={fieldLabel}
+                  value={values[p.key] ?? ''}
+                  onChange={(e) => set(p.key, e.target.value)}
+                  error={fieldError}
+                  hint={hintText}
+                  options={(p.options ?? []).map((o) => ({
+                    value: o.value,
+                    label: (
+                      <>
+                        {fa ? o.labelFa : o.label}{' '}
+                        <span className="text-xs text-gray-500 dark:text-graydark-600">
+                          ({o.value})
+                        </span>
+                      </>
+                    ),
+                  }))}
+                />
+              );
+            }
+            if (multiline) {
+              return (
+                <Textarea
+                  key={p.key}
+                  label={fieldLabel}
+                  rows={2}
+                  value={values[p.key] ?? ''}
+                  onChange={(e) => set(p.key, e.target.value)}
+                  error={fieldError}
+                  hint={hintText}
+                  maxLength={p.maxLength}
+                />
+              );
+            }
+            return (
+              <Input
+                key={p.key}
+                label={fieldLabel}
+                value={values[p.key] ?? ''}
+                onChange={(e) => set(p.key, e.target.value)}
+                error={fieldError}
+                hint={hintText}
+                inputMode={p.type === 'number' ? 'decimal' : undefined}
+                maxLength={p.maxLength}
+              />
+            );
+          })}
+        </div>
       )}
-    </Dialog>
+    </Modal>
   );
 }
