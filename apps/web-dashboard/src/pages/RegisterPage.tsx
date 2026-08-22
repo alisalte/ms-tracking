@@ -1,15 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  Link,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
 import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -18,8 +7,8 @@ import { Link as RouterLink, useNavigate } from 'react-router';
 import { z } from 'zod';
 
 import { register as registerApi } from '@/api/auth.api';
-import { FormAlert } from '@/components/form/FormAlert';
 import { PasswordTextField } from '@/components/form/PasswordTextField';
+import { Alert, Button, Card, IconButton, Input } from '@/components/tailwind-ui';
 import { isNotImplemented } from '@/lib/errors';
 import {
   displayNameSchema,
@@ -29,7 +18,7 @@ import {
 } from '@/lib/validation';
 
 /**
- * RegisterPage — self-service registration (documented; backend pending).
+ * RegisterPage — TailAdmin self-service registration (Phase 3 port).
  *
  * Fields mirror the backend `createUserSchema` (email, username 3–64,
  * password ≥ 12, optional display name ≤ 128) plus a confirmation field.
@@ -84,131 +73,123 @@ export function RegisterPage() {
   };
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 460 }}>
-      <CardContent sx={{ p: 4 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-          <IconButton
-            size="small"
-            onClick={() => navigate('/login')}
-            aria-label={t('common.backToLogin')}
+    <Card className="w-full p-6 sm:p-8">
+      {/* Heading */}
+      <div className="mb-6 flex items-center gap-2">
+        <IconButton
+          size="sm"
+          variant="ghost"
+          onClick={() => navigate('/login')}
+          aria-label={t('common.backToLogin')}
+        >
+          <ArrowLeft size={16} aria-hidden />
+        </IconButton>
+        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+          {t('auth.createAccount')}
+        </h1>
+      </div>
+
+      {/* Server error (backend not implemented / network). */}
+      {submitError && (
+        <Alert variant="danger" className="mb-4">
+          {submitError}
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+        <Controller
+          name="email"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ''}
+              id="email"
+              type="email"
+              label={t('auth.email')}
+              autoComplete="email"
+              disabled={isSubmitting}
+              error={errors.email ? t(errors.email.message ?? '') : null}
+            />
+          )}
+        />
+        <Controller
+          name="username"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ''}
+              id="username"
+              label={t('auth.username')}
+              autoComplete="username"
+              disabled={isSubmitting}
+              error={errors.username ? t(errors.username.message ?? '') : null}
+              hint={errors.username ? null : t('auth.usernameHelp')}
+            />
+          )}
+        />
+        <Controller
+          name="displayName"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ''}
+              id="displayName"
+              label={t('auth.displayName')}
+              autoComplete="name"
+              disabled={isSubmitting}
+              error={errors.displayName ? t(errors.displayName.message ?? '') : null}
+            />
+          )}
+        />
+        <Controller
+          name="password"
+          control={control}
+          render={({ field }) => (
+            <PasswordTextField
+              {...field}
+              value={field.value ?? ''}
+              id="password"
+              label={t('auth.password')}
+              autoCompleteValue="new-password"
+              disabled={isSubmitting}
+              error={errors.password ? t(errors.password.message ?? '') : null}
+              hint={errors.password ? null : t('auth.passwordPolicy')}
+            />
+          )}
+        />
+        <Controller
+          name="confirmPassword"
+          control={control}
+          render={({ field }) => (
+            <PasswordTextField
+              {...field}
+              value={field.value ?? ''}
+              id="confirmPassword"
+              label={t('auth.confirmPassword')}
+              autoCompleteValue="new-password"
+              disabled={isSubmitting}
+              error={errors.confirmPassword ? t(errors.confirmPassword.message ?? '') : null}
+            />
+          )}
+        />
+
+        <Button type="submit" size="lg" fullWidth disabled={isSubmitting} loading={isSubmitting}>
+          {isSubmitting ? t('common.submitting') : t('auth.createAccount')}
+        </Button>
+
+        <p className="text-center text-sm text-gray-500 dark:text-graydark-600">
+          {t('auth.haveAccount')}{' '}
+          <RouterLink
+            to="/login"
+            className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            <ArrowLeft size={20} />
-          </IconButton>
-          <Typography variant="h5" fontWeight={700}>
-            {t('auth.createAccount')}
-          </Typography>
-        </Stack>
-
-        <FormAlert severity="error" message={submitError} />
-
-        <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <Controller
-            name="email"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label={t('auth.email')}
-                margin="normal"
-                type="email"
-                autoComplete="email"
-                disabled={isSubmitting}
-                error={Boolean(errors.email)}
-                helperText={errors.email ? t(errors.email?.message ?? '') : ' '}
-              />
-            )}
-          />
-          <Controller
-            name="username"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label={t('auth.username')}
-                margin="normal"
-                autoComplete="username"
-                disabled={isSubmitting}
-                error={Boolean(errors.username)}
-                helperText={
-                  errors.username ? t(errors.username?.message ?? '') : t('auth.usernameHelp')
-                }
-              />
-            )}
-          />
-          <Controller
-            name="displayName"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label={t('auth.displayName')}
-                margin="normal"
-                autoComplete="name"
-                disabled={isSubmitting}
-                error={Boolean(errors.displayName)}
-                helperText={errors.displayName ? t(errors.displayName?.message ?? '') : ' '}
-              />
-            )}
-          />
-          <Controller
-            name="password"
-            control={control}
-            render={({ field }) => (
-              <PasswordTextField
-                {...field}
-                fullWidth
-                label={t('auth.password')}
-                margin="normal"
-                autoCompleteValue="new-password"
-                disabled={isSubmitting}
-                error={Boolean(errors.password)}
-                helperText={
-                  errors.password ? t(errors.password?.message ?? '') : t('auth.passwordPolicy')
-                }
-              />
-            )}
-          />
-          <Controller
-            name="confirmPassword"
-            control={control}
-            render={({ field }) => (
-              <PasswordTextField
-                {...field}
-                fullWidth
-                label={t('auth.confirmPassword')}
-                margin="normal"
-                autoCompleteValue="new-password"
-                disabled={isSubmitting}
-                error={Boolean(errors.confirmPassword)}
-                helperText={errors.confirmPassword ? t(errors.confirmPassword?.message ?? '') : ' '}
-              />
-            )}
-          />
-
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            size="large"
-            disabled={isSubmitting}
-            sx={{ mt: 2, mb: 2 }}
-          >
-            {isSubmitting ? t('common.submitting') : t('auth.createAccount')}
-          </Button>
-
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary" component="span">
-              {t('auth.haveAccount')}{' '}
-            </Typography>
-            <Link component={RouterLink} to="/login" variant="body2" underline="hover">
-              {t('auth.login')}
-            </Link>
-          </Box>
-        </Box>
-      </CardContent>
+            {t('auth.login')}
+          </RouterLink>
+        </p>
+      </form>
     </Card>
   );
 }

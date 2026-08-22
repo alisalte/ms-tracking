@@ -1,6 +1,5 @@
-import { Box, Typography } from '@mui/material';
-import { Navigate, createBrowserRouter } from 'react-router';
 import { Suspense, lazy } from 'react';
+import { Navigate, createBrowserRouter } from 'react-router';
 
 import { ProtectedRoute } from '@/auth/auth.guard';
 import { PERMISSIONS } from '@/auth/permissions';
@@ -25,10 +24,16 @@ import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TripDetailPage } from '@/pages/TripDetailPage';
 import { TripsPage } from '@/pages/TripsPage';
 
-const GeofencePage = lazy(() => import('@/pages/GeofencePage').then((m) => ({ default: m.GeofencePage })));
+const GeofencePage = lazy(() =>
+  import('@/pages/GeofencePage').then((m) => ({ default: m.GeofencePage })),
+);
 const MapPage = lazy(() => import('@/pages/MapPage').then((m) => ({ default: m.MapPage })));
-const ReportsPage = lazy(() => import('@/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
-const VideoWallPage = lazy(() => import('@/pages/VideoWallPage').then((m) => ({ default: m.VideoWallPage })));
+const ReportsPage = lazy(() =>
+  import('@/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
+);
+const VideoWallPage = lazy(() =>
+  import('@/pages/VideoWallPage').then((m) => ({ default: m.VideoWallPage })),
+);
 
 function LazyWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -43,23 +48,12 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
  */
 function NotFoundPage() {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '50vh',
-        textAlign: 'center',
-      }}
-    >
-      <Typography variant="h4" color="text.secondary" gutterBottom>
+    <div className="flex h-[50vh] flex-col items-center justify-center text-center">
+      <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-500 dark:text-graydark-600">
         404
-      </Typography>
-      <Typography variant="body1" color="text.secondary">
-        Page not found
-      </Typography>
-    </Box>
+      </h1>
+      <p className="text-sm text-gray-500 dark:text-graydark-600">Page not found</p>
+    </div>
   );
 }
 

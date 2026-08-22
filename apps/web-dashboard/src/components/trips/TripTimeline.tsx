@@ -1,15 +1,7 @@
-import {
-  Box,
-  IconButton,
-  Slider,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material';
 import { Pause, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { IconButton } from '@/components/tailwind-ui';
 import { status } from '@/theme/palette';
 import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
 import { PLAYBACK_SPEEDS, type PlaybackSpeed } from './useTripPlayback';
@@ -34,7 +26,7 @@ const TICK_COLOR: Record<TripEvent['type'], string> = {
 };
 
 /**
- * TripTimeline — the seekable replay scrubber.
+ * TripTimeline — the seekable replay scrubber (TailAdmin port).
  *
  * Play/pause + 1×/2×/4× speed + a draggable playhead over the trip duration.
  * Event markers (stop/idle/overspeed) are rendered as colored ticks above the
@@ -78,51 +70,51 @@ export function TripTimeline({
     : startLabel;
 
   return (
-    <Stack gap={1.5}>
+    <div className="flex flex-col gap-3">
       {/* Transport controls */}
-      <Stack direction="row" alignItems="center" gap={1.5}>
+      <div className="flex items-center gap-3">
         <IconButton
           onClick={onToggle}
           aria-label={isPlaying ? t('trips.timeline.pause') : t('trips.timeline.play')}
-          size="small"
-          color="primary"
+          size="sm"
+          variant="outline"
         >
-          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          {isPlaying ? (
+            <Pause size={16} aria-hidden />
+          ) : (
+            <Play size={16} aria-hidden className="ms-0.5" />
+          )}
         </IconButton>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={speed}
-          onChange={(_, s: PlaybackSpeed | null) => s && onSpeedChange(s)}
+        <fieldset
           aria-label={t('trips.timeline.speed')}
+          className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-white/10 dark:bg-graydark-300"
         >
-          {PLAYBACK_SPEEDS.map((s) => (
-            <ToggleButton
-              key={s}
-              value={s}
-              sx={{
-                px: 1.25,
-                py: 0.25,
-                fontSize: '0.75rem',
-                textTransform: 'none',
-                lineHeight: 1.4,
-              }}
-            >
-              {s}×
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
+          {PLAYBACK_SPEEDS.map((s) => {
+            const active = speed === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onSpeedChange(s)}
+                className={`cursor-pointer rounded-md px-2.5 py-0.5 text-xs leading-relaxed font-medium transition-colors ${
+                  active
+                    ? 'bg-white text-brand-600 shadow-sm dark:bg-graydark-400 dark:text-brand-300'
+                    : 'text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-graydark-800'
+                }`}
+              >
+                {s}×
+              </button>
+            );
+          })}
+        </fieldset>
+        <span className="text-sm tabular-nums text-gray-500 dark:text-graydark-600">
           {nowLabel}
-        </Typography>
-      </Stack>
+        </span>
+      </div>
 
       {/* Event ticks (clickable → seek) */}
-      <Box sx={{ position: 'relative', height: 14, px: 0.5 }}>
+      <div className="relative h-3.5 px-1">
         {events.map((e) => {
           const pos = (eventPos(e) / Math.max(1, total - 1)) * 100;
           return (
@@ -148,38 +140,28 @@ export function TripTimeline({
             />
           );
         })}
-      </Box>
+      </div>
 
       {/* Seekable playhead slider */}
-      <Slider
+      <input
+        type="range"
         value={index}
         min={0}
         max={total - 1}
         step={1}
-        onChange={(_, v) => {
-          const next = Array.isArray(v) ? v[0] : v;
-          if (typeof next === 'number') onSeek(next);
-        }}
+        onChange={(e) => onSeek(Number(e.target.value))}
         aria-label={t('trips.timeline.seek')}
-        sx={{ mt: -0.5 }}
+        className="-mt-1 h-1.5 w-full cursor-pointer accent-brand-500"
       />
 
-      <Stack direction="row" justifyContent="space-between">
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
+      <div className="flex justify-between">
+        <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
           {startLabel}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
+        </span>
+        <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
           {endLabel}
-        </Typography>
-      </Stack>
-    </Stack>
+        </span>
+      </div>
+    </div>
   );
 }

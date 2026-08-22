@@ -1,26 +1,40 @@
-import { Box, Card, Stack } from '@mui/material';
 import { ArrowRight, Route } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
-import { type Column, EmptyState, PageHeader, StatusBadge, Toolbar } from '@/components/ui';
-import { DataTable } from '@/components/ui';
+import {
+  Badge,
+  Card,
+  DataTable,
+  EmptyState,
+  type TableColumn,
+  Toolbar,
+} from '@/components/tailwind-ui';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
-/** Status → StatusBadge tone. */
-const STATUS_TONE: Record<TripStatus, 'success' | 'info' | 'neutral' | 'danger'> = {
+/** Status → Badge color (cell) / chip tone (filter). */
+const STATUS_COLOR: Record<TripStatus, 'success' | 'info' | 'gray' | 'danger'> = {
   completed: 'success',
   in_progress: 'info',
-  planned: 'neutral',
+  planned: 'gray',
   cancelled: 'danger',
+};
+
+/** Active filter-chip fill per status (inactive chips share one neutral style). */
+const CHIP_ACTIVE: Record<TripStatus | 'all', string> = {
+  all: 'bg-gray-600 text-white',
+  completed: 'bg-success-500 text-white',
+  in_progress: 'bg-info-500 text-white',
+  planned: 'bg-gray-400 text-white',
+  cancelled: 'bg-danger-500 text-white',
 };
 
 const STATUSES: TripStatus[] = ['completed', 'in_progress', 'planned', 'cancelled'];
 
 /**
- * TripsPage — the fleet trip roster.
+ * TripsPage — the fleet trip roster (TailAdmin port).
  *
  * A filterable table of trips (search by vehicle/driver + status chips). Row
  * click → trip detail with replay. Backed by `useTrips`: in REAL mode the
@@ -53,20 +67,24 @@ export function TripsPage() {
     });
   }, [trips, query, statusFilter]);
 
-  const columns: Array<Column<Trip>> = [
+  const columns: Array<TableColumn<Trip>> = [
     {
       id: 'trip',
       headerKey: 'trips.list.colTrip',
-      render: (trip) => (
-        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{trip.id}</span>
-      ),
+      sortBy: (trip) => trip.id,
+      render: (trip) => <span className="font-semibold tabular-nums">{trip.id}</span>,
     },
-    { id: 'vehicle', headerKey: 'trips.list.colVehicle', render: (trip) => trip.vehicleLabel },
+    {
+      id: 'vehicle',
+      headerKey: 'trips.list.colVehicle',
+      sortBy: (trip) => trip.vehicleLabel,
+      render: (trip) => trip.vehicleLabel,
+    },
     {
       id: 'route',
       headerKey: 'trips.list.colRoute',
       render: (trip) => (
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span className="block max-w-64 truncate">
           {trip.originLabel} → {trip.destinationLabel}
         </span>
       ),
@@ -74,10 +92,9 @@ export function TripsPage() {
     {
       id: 'date',
       headerKey: 'trips.list.colDate',
+      sortBy: (trip) => trip.startTime,
       render: (trip) => (
-        <span
-          style={{ color: 'var(--mui-palette-text-secondary)', fontVariantNumeric: 'tabular-nums' }}
-        >
+        <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
           {new Date(trip.startTime).toLocaleDateString([], {
             year: 'numeric',
             month: 'short',
@@ -89,80 +106,88 @@ export function TripsPage() {
     {
       id: 'distance',
       headerKey: 'trips.list.colDistance',
-      align: 'right',
-      render: (trip) => (
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{trip.distanceKm} km</span>
-      ),
+      align: 'end',
+      sortBy: (trip) => trip.distanceKm,
+      render: (trip) => <span className="tabular-nums">{trip.distanceKm} km</span>,
     },
     {
       id: 'duration',
       headerKey: 'trips.list.colDuration',
-      align: 'right',
-      render: (trip) => (
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {formatDuration(trip.durationMin)}
-        </span>
-      ),
+      align: 'end',
+      sortBy: (trip) => trip.durationMin,
+      render: (trip) => <span className="tabular-nums">{formatDuration(trip.durationMin)}</span>,
     },
     {
       id: 'status',
       headerKey: 'trips.list.colStatus',
+      sortBy: (trip) => trip.status,
       render: (trip) => (
-        <StatusBadge
-          label={t(`trips.status.${trip.status}`)}
-          tone={STATUS_TONE[trip.status]}
-          variant={trip.status === 'planned' ? 'outlined' : 'solid'}
-        />
+        <Badge color={STATUS_COLOR[trip.status]} dot>
+          {t(`trips.status.${trip.status}`)}
+        </Badge>
       ),
     },
     {
       id: 'open',
       width: 32,
-      render: () => <ArrowRight size={16} color="var(--mui-palette-text-secondary)" />,
+      render: () => (
+        <ArrowRight size={16} aria-hidden className="text-gray-400 dark:text-graydark-600" />
+      ),
     },
   ];
 
+  /** A status filter chip — toggle button styled as a pill. */
+  const chip = (value: TripStatus | 'all', label: string) => {
+    const active = statusFilter === value;
+    return (
+      <button
+        key={value}
+        type="button"
+        aria-pressed={active}
+        onClick={() => setStatusFilter(value)}
+        className={`inline-flex cursor-pointer items-center rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+          active
+            ? CHIP_ACTIVE[value]
+            : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-700 dark:hover:bg-graydark-400'
+        }`}
+      >
+        {label}
+      </button>
+    );
+  };
+
   return (
-    <Box>
-      <PageHeader title={t('trips.title')} subtitle={t('trips.subtitle')} />
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+          {t('trips.title')}
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-graydark-600">{t('trips.subtitle')}</p>
+      </div>
 
       {!isLoading && trips.length === 0 ? (
         /* REAL mode: no trips API yet — honest empty state, never fake rows. */
         <Card>
           <EmptyState
-            icon={Route}
+            icon={<Route />}
             title={t('trips.empty.title')}
             description={t('trips.empty.notAvailable')}
-            py={10}
+            className="py-10"
           />
         </Card>
       ) : (
-        <Card>
+        <div className="flex flex-col gap-3">
           <Toolbar
             search
             searchValue={query}
             onSearchChange={setQuery}
-            searchPlaceholderKey="trips.list.searchPlaceholder"
+            searchPlaceholder={t('trips.list.searchPlaceholder')}
             right={
-              <Stack direction="row" gap={0.75} flexWrap="wrap" alignItems="center">
-                <StatusBadge
-                  label={t('trips.status.all')}
-                  tone="neutral"
-                  variant={statusFilter === 'all' ? 'solid' : 'outlined'}
-                  active={statusFilter === 'all'}
-                  onClick={() => setStatusFilter('all')}
-                />
-                {STATUSES.map((s) => (
-                  <StatusBadge
-                    key={s}
-                    label={t(`trips.status.${s}`)}
-                    tone={STATUS_TONE[s]}
-                    variant={statusFilter === s ? 'solid' : 'outlined'}
-                    active={statusFilter === s}
-                    onClick={() => setStatusFilter(s)}
-                  />
-                ))}
-              </Stack>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {chip('all', t('trips.status.all'))}
+                {STATUSES.map((s) => chip(s, t(`trips.status.${s}`)))}
+              </div>
             }
           />
           <DataTable
@@ -172,10 +197,17 @@ export function TripsPage() {
             loading={isLoading}
             onRowClick={(trip) => navigate(`/trips/${trip.id}`)}
             maxHeight="calc(100vh - 280px)"
+            emptyState={
+              <EmptyState
+                icon={<Route />}
+                title={t('trips.empty.title')}
+                description={t('trips.list.noResults')}
+              />
+            }
           />
-        </Card>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 

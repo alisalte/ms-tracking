@@ -1,8 +1,8 @@
-import { Box, Card, CardContent, Stack, Typography } from '@mui/material';
 import { Clock, Fuel, Gauge, MapPin, PauseCircle, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { Card } from '@/components/tailwind-ui';
 import type { Trip } from '@/types/fleet.types';
 
 interface TripSummaryProps {
@@ -10,7 +10,7 @@ interface TripSummaryProps {
 }
 
 /**
- * TripSummary — the at-a-glance metric tiles for a trip.
+ * TripSummary — the at-a-glance metric tiles for a trip (TailAdmin port).
  *
  * Distance, duration, max/avg speed, stop count, idle time, and fuel — the
  * numbers a dispatcher scans first. Each tile pairs an icon with the label
@@ -19,7 +19,7 @@ interface TripSummaryProps {
 export function TripSummary({ trip }: TripSummaryProps) {
   const { t } = useTranslation();
 
-  const tiles: Array<{ icon: LucideIcon; label: string; value: string; color?: string }> = [
+  const tiles: Array<{ icon: LucideIcon; label: string; value: string }> = [
     {
       icon: MapPin,
       label: t('trips.summary.distance'),
@@ -40,44 +40,22 @@ export function TripSummary({ trip }: TripSummaryProps) {
   ];
 
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 1.5,
-      }}
-    >
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
       {tiles.map((tile) => {
         const Icon = tile.icon;
         return (
-          <Card key={tile.label} variant="outlined">
-            <CardContent
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                p: 1.5,
-                '&:last-child': { pb: 1.5 },
-              }}
-            >
-              <Icon size={18} color="var(--mui-palette-text-secondary)" />
-              <Stack>
-                <Typography variant="caption" color="text.secondary">
-                  {tile.label}
-                </Typography>
-                <Typography
-                  variant="subtitle1"
-                  fontWeight={700}
-                  sx={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {tile.value}
-                </Typography>
-              </Stack>
-            </CardContent>
+          <Card key={tile.label} className="flex items-center gap-3 p-3">
+            <Icon size={18} aria-hidden className="shrink-0 text-gray-500 dark:text-graydark-600" />
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 dark:text-graydark-600">{tile.label}</p>
+              <p className="text-base font-bold tabular-nums text-gray-900 dark:text-white">
+                {tile.value}
+              </p>
+            </div>
           </Card>
         );
       })}
-    </Box>
+    </div>
   );
 }
 

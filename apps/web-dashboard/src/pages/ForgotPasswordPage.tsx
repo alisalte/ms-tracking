@@ -1,15 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  Link,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
 import { ArrowLeft, MailCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -18,12 +7,12 @@ import { Link as RouterLink, useNavigate } from 'react-router';
 import { z } from 'zod';
 
 import { forgotPassword as forgotPasswordApi } from '@/api/auth.api';
-import { FormAlert } from '@/components/form/FormAlert';
+import { Alert, Button, Card, IconButton, Input } from '@/components/tailwind-ui';
 import { isNotImplemented } from '@/lib/errors';
 import { emailSchema } from '@/lib/validation';
 
 /**
- * ForgotPasswordPage — request a password-reset email (documented; backend pending).
+ * ForgotPasswordPage — TailAdmin password-reset request (Phase 3 port).
  *
  * Security note (ARR SEC-3, no user-enumeration oracle): regardless of whether
  * the email exists — or whether the backend is implemented — the UI shows the
@@ -69,83 +58,81 @@ export function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <Card sx={{ width: '100%', maxWidth: 420 }}>
-        <CardContent sx={{ p: 4, textAlign: 'center' }}>
-          <MailCheck size={48} color="var(--mui-palette-primary-main)" />
-          <Typography variant="h5" fontWeight={700} sx={{ mt: 2, mb: 1 }}>
-            {t('auth.resetLinkSentTitle')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {t('auth.resetLinkSentBody')}
-          </Typography>
-          <Button variant="contained" fullWidth onClick={() => navigate('/login')}>
-            {t('common.backToLogin')}
-          </Button>
-        </CardContent>
+      <Card className="w-full p-6 text-center sm:p-8">
+        <MailCheck size={48} className="mx-auto text-brand-500" aria-hidden />
+        <h1 className="mt-4 mb-1 text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+          {t('auth.resetLinkSentTitle')}
+        </h1>
+        <p className="mb-6 text-sm text-gray-500 dark:text-graydark-600">
+          {t('auth.resetLinkSentBody')}
+        </p>
+        <Button variant="primary" fullWidth onClick={() => navigate('/login')}>
+          {t('common.backToLogin')}
+        </Button>
       </Card>
     );
   }
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 420 }}>
-      <CardContent sx={{ p: 4 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-          <IconButton
-            size="small"
-            onClick={() => navigate('/login')}
-            aria-label={t('common.backToLogin')}
+    <Card className="w-full p-6 sm:p-8">
+      {/* Heading */}
+      <div className="mb-2 flex items-center gap-2">
+        <IconButton
+          size="sm"
+          variant="ghost"
+          onClick={() => navigate('/login')}
+          aria-label={t('common.backToLogin')}
+        >
+          <ArrowLeft size={16} aria-hidden />
+        </IconButton>
+        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+          {t('auth.forgotPassword')}
+        </h1>
+      </div>
+
+      <p className="mb-6 text-sm text-gray-500 dark:text-graydark-600">
+        {t('auth.forgotPasswordHelp')}
+      </p>
+
+      {/* Server error (network — never account-existence). */}
+      {submitError && (
+        <Alert variant="danger" className="mb-4">
+          {submitError}
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+        <Controller
+          name="email"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ''}
+              id="email"
+              type="email"
+              label={t('auth.email')}
+              autoComplete="email"
+              autoFocus
+              disabled={isSubmitting}
+              error={errors.email ? t(errors.email.message ?? '') : null}
+            />
+          )}
+        />
+
+        <Button type="submit" size="lg" fullWidth disabled={isSubmitting} loading={isSubmitting}>
+          {isSubmitting ? t('common.submitting') : t('auth.sendResetLink')}
+        </Button>
+
+        <p className="text-center">
+          <RouterLink
+            to="/login"
+            className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            <ArrowLeft size={20} />
-          </IconButton>
-          <Typography variant="h5" fontWeight={700}>
-            {t('auth.forgotPassword')}
-          </Typography>
-        </Stack>
-
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {t('auth.forgotPasswordHelp')}
-        </Typography>
-
-        <FormAlert severity="error" message={submitError} />
-
-        <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <Controller
-            name="email"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label={t('auth.email')}
-                margin="normal"
-                type="email"
-                autoComplete="email"
-                autoFocus
-                disabled={isSubmitting}
-                error={Boolean(errors.email)}
-                helperText={errors.email ? t(errors.email?.message ?? '') : ' '}
-              />
-            )}
-          />
-
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            size="large"
-            disabled={isSubmitting}
-            sx={{ mt: 2, mb: 2 }}
-          >
-            {isSubmitting ? t('common.submitting') : t('auth.sendResetLink')}
-          </Button>
-
-          <Box sx={{ textAlign: 'center' }}>
-            <Link component={RouterLink} to="/login" variant="body2" underline="hover">
-              {t('common.backToLogin')}
-            </Link>
-          </Box>
-        </Box>
-      </CardContent>
+            {t('common.backToLogin')}
+          </RouterLink>
+        </p>
+      </form>
     </Card>
   );
 }

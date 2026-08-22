@@ -1,15 +1,9 @@
-import { Box, Skeleton, Stack, Typography } from '@mui/material';
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import type { EChartsOption } from 'echarts';
+import { useMemo } from 'react';
 
+import { EChart } from '@/components/dashboard/EChart';
+import { Skeleton } from '@/components/tailwind-ui';
+import { useThemeContext } from '@/theme/ThemeRegistry';
 import { status } from '@/theme/palette';
 import type { TripWaypoint } from '@/types/fleet.types';
 
@@ -29,109 +23,101 @@ function timeLabel(ts: string): string {
 }
 
 /**
- * SpeedGraph — speed-over-time line chart for a trip.
+ * SpeedGraph — speed-over-time line chart for a trip (ECharts port).
  *
- * Plots `waypoint.speed` across the trip with a dashed reference line at the
- * speed limit, overspeed events as reference dots, and a highlighted playhead
- * that follows the replay index. The custom tooltip shows speed + time.
+ * Plots `waypoint.speed` across the trip on the shared EChart wrapper (which
+ * handles dark/light theming) with a dashed markLine at the speed limit, a
+ * vertical markLine playhead that follows the replay index, and a highlighted
+ * scatter dot on the current point. The axis tooltip shows time + km/h.
  */
 export function SpeedGraph({ waypoints, speedLimitKmh, index, loading = false }: SpeedGraphProps) {
-  const data = waypoints.map((w, i) => ({ i, speed: w.speed, label: timeLabel(w.ts) }));
+  const { mode } = useThemeContext();
+  const isDark = mode === 'dark';
 
-  return (
-    <Box sx={{ width: '100%', height: 240 }}>
-      {loading || waypoints.length === 0 ? (
-        <Skeleton variant="rounded" sx={{ width: '100%', height: '100%' }} />
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="var(--mui-palette-divider)"
-            />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 11, fill: 'var(--mui-palette-text-secondary)' }}
-              tickLine={false}
-              axisLine={false}
-              interval={Math.max(0, Math.floor(waypoints.length / 6) - 1)}
-            />
-            <YAxis
-              tick={{ fontSize: 11, fill: 'var(--mui-palette-text-secondary)' }}
-              tickLine={false}
-              axisLine={false}
-              width={40}
-              unit=""
-            />
-            <Tooltip
-              content={({ active, payload }) =>
-                active && payload && payload.length > 0 ? (
-                  <Box
-                    sx={{
-                      backgroundColor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      p: 1,
-                      boxShadow: 1,
-                    }}
-                  >
-                    <Typography variant="caption" fontWeight={600}>
-                      {payload[0]?.payload.label}
-                    </Typography>
-                    <Stack direction="row" alignItems="center" gap={0.5} sx={{ mt: 0.25 }}>
-                      <Box
-                        component="span"
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          backgroundColor: status.blue,
-                        }}
-                      />
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {payload[0]?.value} km/h
-                      </Typography>
-                    </Stack>
-                  </Box>
-                ) : null
-              }
-            />
-            <ReferenceLine
-              y={speedLimitKmh}
-              stroke={status.red}
-              strokeDasharray="4 4"
-              label={{
-                value: `${speedLimitKmh}`,
-                position: 'insideTopRight',
-                fontSize: 10,
-                fill: status.red,
-              }}
-            />
-            <Line
-              type="monotone"
-              dataKey="speed"
-              stroke={status.blue}
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive={false}
-              // Highlight the current replay point with a larger green dot.
-              activeDot={{
-                r: 5,
-                fill: status.green,
-                stroke: '#FFFFFF',
-                strokeWidth: 2,
-                key: `dot-${index}`,
-              }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </Box>
-  );
+  const option = useMemo<EChartsOption>(() => {
+    const labels = waypoints.map((w) => timeLabel(w.ts));
+    const speeds = waypoints.map((w) => w.speed);
+    // Match the EChart wrapper's theme-aware axis text tokens (the wrapper's
+    // shallow merge replaces whole axes when a caller defines them).
+    const axisColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(15,23,42,0.55)';
+    const splitColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)';
+
+    return {
+      grid: { containLabel: true, left: 8, right: 16, top: 20, bottom: 8 },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        boundaryGap: false,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          color: axisColor,
+          fontSize: 11,
+          // Thin the time labels (≈6 ticks regardless of sample count).
+          interval: Math.max(0, Math.floor(waypoints.length / 6) - 1),
+        },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: axisColor, fontSize: 11 },
+        splitLine: { lineStyle: { color: splitColor, type: 'dashed' } },
+      },
+      tooltip: {
+        trigger: 'axis',
+        valueFormatter: (value) => `${value} km/h`,
+      },
+      series: [
+        {
+          type: 'line',
+          data: speeds,
+          smooth: 0.2,
+          showSymbol: false,
+          animation: false,
+          lineStyle: { color: status.blue, width: 2 },
+          itemStyle: { color: status.blue },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            data: [
+              // Dashed reference at the speed limit, labeled with its value.
+              {
+                yAxis: speedLimitKmh,
+                lineStyle: { color: status.red, type: 'dashed' },
+                label: {
+                  formatter: String(speedLimitKmh),
+                  position: 'insideEndTop',
+                  color: status.red,
+                  fontSize: 10,
+                },
+              },
+              // Vertical playhead following the current replay index.
+              {
+                xAxis: index,
+                lineStyle: { color: status.green, width: 1, opacity: 0.6 },
+                label: { show: false },
+              },
+            ],
+          },
+        },
+        {
+          // Highlight the current replay point with a larger green dot.
+          type: 'scatter',
+          data: speeds.map((s, i) => (i === index ? s : '-')),
+          symbolSize: 10,
+          itemStyle: { color: status.green, borderColor: '#FFFFFF', borderWidth: 2 },
+          silent: true,
+          z: 10,
+        },
+      ],
+    };
+  }, [waypoints, speedLimitKmh, index, isDark]);
+
+  if (loading || waypoints.length === 0) {
+    return <Skeleton className="h-60 w-full rounded-lg" />;
+  }
+
+  return <EChart option={option} height={240} />;
 }

@@ -1,4 +1,3 @@
-import { Box, Stack, Typography } from '@mui/material';
 import {
   LngLatBounds as MaplibreLngLatBounds,
   Map as MaplibreMap,
@@ -29,7 +28,7 @@ const EVENT_COLOR: Record<TripEvent['type'], string> = {
 };
 
 /**
- * TripReplayMap — a dedicated replay map for a single trip.
+ * TripReplayMap — a dedicated replay map for a single trip (TailAdmin port).
  *
  * Unlike the live FleetMap, this renders a static trip track: a green dashed
  * polyline (UI_UX_Design.md §0.2 `mapAccents.selectedRoute`) of the waypoints,
@@ -154,32 +153,10 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
   }, [index, waypoints, t]);
 
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        minHeight: 320,
-        borderRadius: 1,
-        overflow: 'hidden',
-      }}
-    >
-      <Box ref={containerRef} sx={{ width: '100%', height: '100%' }} />
+    <div className="relative h-full min-h-80 w-full overflow-hidden rounded-lg">
+      <div ref={containerRef} className="h-full w-full" />
       {/* Legend overlay (§0.7: pair color with label). */}
-      <Stack
-        direction="row"
-        gap={1.5}
-        sx={{
-          position: 'absolute',
-          bottom: 6,
-          start: 6,
-          backgroundColor: 'rgba(255,255,255,0.85)',
-          px: 1,
-          py: 0.5,
-          borderRadius: 1,
-          backdropFilter: 'blur(4px)',
-        }}
-      >
+      <div className="absolute bottom-1.5 start-1.5 flex flex-wrap items-center gap-3 rounded-lg bg-white/85 px-2 py-1 backdrop-blur-sm">
         {(
           [
             ['route', mapAccents.selectedRoute],
@@ -188,17 +165,14 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
             ['overspeed', status.red],
           ] as const
         ).map(([key, color]) => (
-          <Stack key={key} direction="row" alignItems="center" gap={0.25}>
-            <Box
-              component="span"
-              sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: color }}
-            />
-            <Typography variant="caption" color="text.secondary">
+          <span key={key} className="flex items-center gap-1">
+            <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: color }} />
+            <span className="text-xs text-gray-500 dark:text-graydark-600">
               {t(`trips.replay.legend.${key}`)}
-            </Typography>
-          </Stack>
+            </span>
+          </span>
         ))}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 }
