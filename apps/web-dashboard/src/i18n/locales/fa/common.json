@@ -1247,10 +1247,12 @@
   },
   "profile": {
     "title": "پروفایل",
+    "subtitle": "حساب کاربری، نقش‌ها و امنیت شما",
     "unknownUser": "کاربر ناشناخته",
-    "tenant": "مستأجر",
+    "tenant": "سازمان",
     "editDisabled": "ویرایش در دسترس نیست",
     "editDisabledHelp": "ویرایش پروفایل خودکار هنوز در دسترس نیست.",
+    "account": "اطلاعات حساب",
     "userId": "شناسه کاربر",
     "email": "ایمیل",
     "rolesAndPermissions": "نقش‌ها و دسترسی‌ها",
@@ -1260,8 +1262,11 @@
     "noPermissions": "دسترسی‌ای بارگذاری نشده",
     "security": "امنیت",
     "mfaStatus": "احراز هویت چندمرحله‌ای",
-    "mfaNotEnforced": "فعال نیست",
-    "mfaNotEnforcedHelp": "احراز هویت چندمرحله‌ای هنوز برای این حساب فعال نیست."
+    "mfaNotEnrolled": "فعال نیست",
+    "mfaNotEnforcedHelp": "احراز هویت چندمرحله‌ای هنوز برای این حساب فعال نیست.",
+    "changePassword": "رمز عبور",
+    "changePasswordHelp": "رمز عبور خود را از طریق فرایند ایمیل بازنشانی کنید.",
+    "changePasswordAction": "تغییر"
   },
   "validation": {
     "tenantId": {

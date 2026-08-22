@@ -18,15 +18,17 @@ const VARIANTS: Record<Variant, string> = {
   ghost:
     'text-gray-500 hover:bg-gray-100 hover:text-gray-700 ' +
     'dark:text-graydark-600 dark:hover:bg-white/5 dark:hover:text-white',
-  solid: 'bg-brand-500 text-white hover:bg-brand-600',
+  solid:
+    'bg-brand-500 text-white shadow-sm shadow-brand-500/25 hover:bg-brand-600 active:bg-brand-700',
   outline:
-    'border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900 ' +
-    'dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5',
+    'bg-white text-gray-600 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 hover:text-gray-900 ' +
+    'dark:bg-white/5 dark:text-graydark-700 dark:ring-white/10 dark:hover:bg-white/10',
 };
 
+/** TailAdmin scale: sm 32px · md 38px · lg 44px. */
 const SIZES = {
   sm: 'size-8',
-  md: 'size-9',
+  md: 'size-9.5',
   lg: 'size-11',
 };
 

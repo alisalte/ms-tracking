@@ -1247,10 +1247,12 @@
   },
   "profile": {
     "title": "Profile",
+    "subtitle": "Your account, roles and security",
     "unknownUser": "Unknown user",
     "tenant": "Tenant",
     "editDisabled": "Editing unavailable",
     "editDisabledHelp": "Self-service profile editing is not yet available.",
+    "account": "Account information",
     "userId": "User ID",
     "email": "Email",
     "rolesAndPermissions": "Roles & permissions",
@@ -1260,8 +1262,11 @@
     "noPermissions": "No permissions loaded",
     "security": "Security",
     "mfaStatus": "Multi-factor authentication",
-    "mfaNotEnforced": "Not enforced",
-    "mfaNotEnforcedHelp": "MFA is not yet active for this account."
+    "mfaNotEnrolled": "Not enrolled",
+    "mfaNotEnforcedHelp": "MFA is not yet active for this account.",
+    "changePassword": "Password",
+    "changePasswordHelp": "Reset your password via the email flow.",
+    "changePasswordAction": "Change"
   },
   "validation": {
     "tenantId": {
