@@ -39,6 +39,11 @@ html[dir="rtl"] body {
   }
 }
 
+/* The pulsing dot inside live-freshness pills (LiveBadge). */
+.fv-live-dot {
+  animation: fv-pulse 1.6s ease-in-out infinite;
+}
+
 /* Subtle fade-in for page transitions + content mounts. */
 @keyframes fv-fade-in {
   from {

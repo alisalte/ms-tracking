@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 
+import pkg from '../../../package.json';
 import { Brand } from '@/components/branding/Brand';
 import { NAV_GROUPS, filterNavByPermissions } from '@/components/shell/nav.config';
 import { Tooltip } from '@/components/tailwind-ui';
@@ -153,7 +154,9 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
       {!collapsed && (
         <div className="relative z-10 m-3 shrink-0 rounded-xl border border-white/8 bg-white/[0.035] px-4 py-3 text-xs text-graydark-500 shadow-inner shadow-white/[0.02]">
           <div className="font-semibold text-graydark-800">FleetVision</div>
-          <div>v0.1 · Secure ops console</div>
+          <div>
+            v{pkg.version} · {t('nav.secureConsole')}
+          </div>
         </div>
       )}
     </div>

@@ -110,7 +110,7 @@ export default defineConfig({
           'vendor-echarts': ['echarts', 'echarts-for-react'],
           'vendor-map': ['maplibre-gl', 'supercluster'],
           'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
-          'vendor-utils': ['axios', 'socket.io-client', 'zustand', 'lucide-react', 'recharts'],
+          'vendor-utils': ['axios', 'socket.io-client', 'zustand', 'lucide-react'],
         },
       },
     },

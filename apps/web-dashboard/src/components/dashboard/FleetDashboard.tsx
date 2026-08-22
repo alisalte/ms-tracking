@@ -66,7 +66,7 @@ export function FleetDashboard() {
         <div className="relative z-10 flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0 max-w-2xl">
             <p className="mb-2 text-xs font-bold tracking-[0.18em] text-brand-100 uppercase">
-              Fleet operations console
+              {t('dashboard.heroEyebrow')}
             </p>
             <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
               {t('dashboard.title')}

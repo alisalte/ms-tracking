@@ -70,7 +70,8 @@
     "geofences": "محدوده‌های جغرافیایی",
     "commands": "فرمان‌ها",
     "notifications": "اعلان‌ها",
-    "events": "رویدادها"
+    "events": "رویدادها",
+    "secureConsole": "کنسول عملیات امن"
   },
   "common": {
     "search": "جستجو...",
@@ -276,7 +277,8 @@
       "critical": "بحرانی",
       "warning": "هشدار",
       "info": "اطلاع"
-    }
+    },
+    "heroEyebrow": "کنسول عملیات ناوگان"
   },
   "map": {
     "title": "رهگیری زنده",

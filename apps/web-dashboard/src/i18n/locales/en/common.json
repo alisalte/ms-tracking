@@ -70,7 +70,8 @@
     "geofences": "Geofences",
     "commands": "Commands",
     "notifications": "Notifications",
-    "events": "Events"
+    "events": "Events",
+    "secureConsole": "Secure ops console"
   },
   "common": {
     "search": "Search...",
@@ -276,7 +277,8 @@
       "critical": "Critical",
       "warning": "Warning",
       "info": "Info"
-    }
+    },
+    "heroEyebrow": "Fleet operations console"
   },
   "map": {
     "title": "Live Tracking",
