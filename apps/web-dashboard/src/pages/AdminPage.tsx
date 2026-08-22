@@ -19,6 +19,7 @@ import { RolesSection } from '@/components/admin/RolesSection';
 import { SettingsSection } from '@/components/admin/SettingsSection';
 import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer';
 import { UsersSection } from '@/components/admin/UsersSection';
+import { PageHeader } from '@/components/tailwind-ui';
 import type { AdminSection, AdminUserStatus } from '@/types/admin.types';
 
 const ENABLED: AdminSection[] = ['users', 'roles', 'permissions', 'settings', 'audit'];
@@ -55,46 +56,46 @@ export function AdminPage() {
   };
 
   return (
-    <div className="flex h-full">
-      {/* Left nav (UI_UX §5.5) */}
-      <aside className="w-60 shrink-0 overflow-y-auto border-e border-gray-200 p-3 dark:border-white/10">
-        <h1 className="px-2 pb-3 text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {t('admin.title')}
-        </h1>
-        <AdminNav section={section} onSelect={setSection} />
-      </aside>
+    <div className="flex h-full flex-col">
+      <PageHeader title={t('admin.title')} />
+      <div className="flex min-h-0 flex-1">
+        {/* Left nav (UI_UX §5.5) */}
+        <aside className="w-60 shrink-0 overflow-y-auto border-e border-gray-200 p-3 dark:border-white/10">
+          <AdminNav section={section} onSelect={setSection} />
+        </aside>
 
-      {/* Right content */}
-      <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        {section === 'users' && (
-          <>
-            <UsersSection
-              users={users.data ?? []}
-              loading={users.isLoading}
-              selectedId={selectedUserId}
-              onSelect={setSelectedUserId}
-              filterStatus={userStatus}
-              query={userQuery}
-              onFilterStatus={setUserStatus}
-              onQuery={setUserQuery}
-            />
-            <UserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
-          </>
-        )}
-        {section === 'roles' && (
-          <>
-            <RolesSection
-              roles={roles.data ?? []}
-              loading={roles.isLoading}
-              selectedId={selectedRoleId}
-              onSelect={setSelectedRoleId}
-            />
-            <RoleDetailDrawer role={selectedRole} onClose={() => setSelectedRoleId(null)} />
-          </>
-        )}
-        {section === 'permissions' && <PermissionsSection catalog={permissions.data ?? []} />}
-        {section === 'settings' && <SettingsSection />}
-        {section === 'audit' && <AuditSection />}
+        {/* Right content */}
+        <div className="min-w-0 flex-1 overflow-y-auto p-4">
+          {section === 'users' && (
+            <>
+              <UsersSection
+                users={users.data ?? []}
+                loading={users.isLoading}
+                selectedId={selectedUserId}
+                onSelect={setSelectedUserId}
+                filterStatus={userStatus}
+                query={userQuery}
+                onFilterStatus={setUserStatus}
+                onQuery={setUserQuery}
+              />
+              <UserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
+            </>
+          )}
+          {section === 'roles' && (
+            <>
+              <RolesSection
+                roles={roles.data ?? []}
+                loading={roles.isLoading}
+                selectedId={selectedRoleId}
+                onSelect={setSelectedRoleId}
+              />
+              <RoleDetailDrawer role={selectedRole} onClose={() => setSelectedRoleId(null)} />
+            </>
+          )}
+          {section === 'permissions' && <PermissionsSection catalog={permissions.data ?? []} />}
+          {section === 'settings' && <SettingsSection />}
+          {section === 'audit' && <AuditSection />}
+        </div>
       </div>
     </div>
   );

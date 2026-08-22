@@ -530,23 +530,17 @@ export function GeofenceDrawMap({
             })
         : t('geofences.draw.selectType', { defaultValue: 'Select a geometry type to draw' });
 
-  const btnStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.94)',
-    border: '1px solid #cbd5e1',
-    borderRadius: 6,
-    padding: '3px 10px',
-    fontSize: 12,
-    color: '#0f172a',
-    cursor: 'pointer',
-  };
+  // TailAdmin map-overlay button (token-owned classes — Phase 2.6 §10).
+  const btnClassName =
+    'cursor-pointer rounded-md border border-gray-300 bg-white/95 px-2.5 py-0.5 text-xs text-gray-900 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30';
 
   return (
     <div>
       {/* Non-map, screen-reader-visible status (Sprint I §51). */}
-      <p aria-live="polite" style={{ margin: '4px 2px', fontSize: 12, color: '#475569' }}>
+      <p aria-live="polite" className="my-1 mx-0.5 text-xs text-gray-600 dark:text-graydark-600">
         {statusText}
       </p>
-      <div style={{ position: 'relative' }}>
+      <div className="relative">
         <div
           ref={containerRef}
           style={{ width: '100%', height, borderRadius: 8, overflow: 'hidden' }}
@@ -554,20 +548,12 @@ export function GeofenceDrawMap({
           role="application"
           aria-label={t('geofences.draw.mapLabel', { defaultValue: 'Geofence drawing map' })}
         />
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            display: 'flex',
-            gap: 6,
-          }}
-        >
+        <div className="absolute top-2 start-2 flex gap-1.5">
           {mode === 'polygon' && polygonVertices.length > 0 && (
             <>
               <button
                 type="button"
-                style={btnStyle}
+                className={btnClassName}
                 aria-label={t('geofences.draw.removeLast', { defaultValue: 'Remove last vertex' })}
                 onClick={() => setPolygonVertices((prev) => prev.slice(0, -1))}
               >
@@ -575,7 +561,7 @@ export function GeofenceDrawMap({
               </button>
               <button
                 type="button"
-                style={btnStyle}
+                className={btnClassName}
                 aria-label={t('geofences.draw.clear', { defaultValue: 'Clear polygon' })}
                 onClick={() => setPolygonVertices([])}
               >
@@ -586,7 +572,7 @@ export function GeofenceDrawMap({
           {mode === 'circle' && circleCenter && (
             <button
               type="button"
-              style={btnStyle}
+              className={btnClassName}
               aria-label={t('geofences.draw.redrawCircle', {
                 defaultValue: 'Clear circle and redraw',
               })}

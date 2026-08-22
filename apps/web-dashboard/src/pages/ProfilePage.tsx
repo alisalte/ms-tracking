@@ -1,7 +1,7 @@
 import { Lock, ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { Avatar, Badge, Card, Tooltip } from '@/components/tailwind-ui';
+import { Avatar, Badge, Card, PageHeader, Tooltip } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 
 /**
@@ -29,11 +29,7 @@ export function ProfilePage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {t('profile.title')}
-        </h1>
-      </div>
+      <PageHeader title={t('profile.title')} />
 
       {/* Identity card */}
       <Card>

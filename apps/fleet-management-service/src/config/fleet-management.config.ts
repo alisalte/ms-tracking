@@ -24,10 +24,17 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     PORT: z.coerce.number().int().min(1).max(65535).default(3006),
 
     // --- PostgreSQL (owns the `fleet` schema). ---
+    /** Runtime client URL (app role, RLS-enforced). */
     DBURL: z
       .string()
       .min(1)
       .default('postgres://fleetvision:fleetvision@localhost:5432/fleetvision'),
+    /**
+     * Privileged platform-role URL for migrations (fleet schema DDL ownership).
+     * Optional: when unset, migrations run on DBURL; on hardened stacks it
+     * MUST point at fleetvision_platform (see persistence-knex module docs).
+     */
+    DBURL_PLATFORM: z.string().min(1).optional(),
 
     // --- Redis (cache + future use). ---
     REDISURL: z.string().min(1).default('redis://localhost:6379/2'),

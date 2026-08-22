@@ -45,7 +45,7 @@ export function Header({ onMobileMenu }: HeaderProps) {
       <div className="min-w-0 flex-1" />
 
       {/* Global search — planned; inert today, parity with the previous topbar */}
-      <div className="hidden h-9 max-w-72 w-full items-center gap-2 rounded-full border border-gray-200/80 bg-gray-50/80 px-3.5 shadow-inner shadow-gray-900/[0.02] transition-colors focus-within:border-brand-500 focus-within:bg-white md:flex dark:border-white/10 dark:bg-white/6 dark:focus-within:bg-graydark-300/90">
+      <div className="hidden h-9 max-w-72 w-full items-center gap-2 rounded-full border border-gray-200/80 bg-gray-50/80 px-3.5 shadow-inner shadow-gray-900/[0.02] transition-colors focus-within:border-brand-500 focus-within:bg-white md:flex dark:border-white/15 dark:bg-white/6 dark:focus-within:border-brand-500 dark:focus-within:bg-graydark-300/90">
         <Search size={15} className="shrink-0 text-gray-400 dark:text-graydark-600" aria-hidden />
         <input
           type="search"

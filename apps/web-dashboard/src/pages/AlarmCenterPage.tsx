@@ -20,7 +20,7 @@ import { AlarmLiveIndicator } from '@/components/alarms/AlarmLiveIndicator';
 import { AlarmMap } from '@/components/alarms/AlarmMap';
 import { AlarmTimeline } from '@/components/alarms/AlarmTimeline';
 import { ErrorState } from '@/components/common/ErrorState';
-import { Tooltip } from '@/components/tailwind-ui';
+import { PageHeader, Tooltip } from '@/components/tailwind-ui';
 import type { AlarmFilters, AlarmSeverity, AlarmStatus, AlarmType } from '@/types/alarm.types';
 
 type ViewMode = 'list' | 'timeline' | 'map';
@@ -225,17 +225,13 @@ function Header({
   stats: { active: number; unacked: number; escalated: number };
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('alarms.title')}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.subtitle')}</p>
-        </div>
-        <AlarmLiveIndicator />
-      </div>
-      <div className="flex flex-wrap gap-2">
+    <div className="mb-4">
+      <PageHeader
+        title={t('alarms.title')}
+        description={t('alarms.subtitle')}
+        actions={<AlarmLiveIndicator />}
+      />
+      <div className="mt-3 flex flex-wrap gap-2">
         <StatChip label={t('alarms.stats.active')} value={stats.active} tone="brand" />
         <StatChip label={t('alarms.stats.unacked')} value={stats.unacked} tone="warning" />
         <StatChip label={t('alarms.stats.escalated')} value={stats.escalated} tone="danger" />

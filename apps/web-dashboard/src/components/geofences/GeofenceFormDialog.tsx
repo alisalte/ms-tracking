@@ -24,9 +24,8 @@ import {
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type DrawnGeofence, GeofenceDrawMap } from '@/components/geofences/GeofenceDrawMap';
 import type { AlertOn, Geofence, GeofenceType } from '@/types/geofence.types';
-import { Box, Chip, FormControl, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 
-import { Button, Input, Modal } from '@/components/tailwind-ui';
+import { Button, Input, ListboxSelect, Modal, MultiSelect } from '@/components/tailwind-ui';
 
 const ALERT_OPTIONS: AlertOn[] = ['ENTER', 'EXIT', 'DWELL'];
 
@@ -193,25 +192,17 @@ export function GeofenceFormDialog({
             aria-label={t('geofences.name', { defaultValue: 'Name' })}
             wrapperClassName="flex-1"
           />
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="geofence-type-label">
-              {t('geofences.type', { defaultValue: 'Type' })}
-            </InputLabel>
-            <Select
-              labelId="geofence-type-label"
-              value={type}
-              onChange={(e) => setType(e.target.value as GeofenceType)}
-              label={t('geofences.type', { defaultValue: 'Type' })}
-              disabled={editing}
-            >
-              <MenuItem value="CIRCLE">
-                {t('geofences.circle', { defaultValue: 'Circle' })}
-              </MenuItem>
-              <MenuItem value="POLYGON">
-                {t('geofences.polygon', { defaultValue: 'Polygon' })}
-              </MenuItem>
-            </Select>
-          </FormControl>
+          <ListboxSelect
+            label={t('geofences.type', { defaultValue: 'Type' })}
+            value={type}
+            onChange={(v) => setType(v as GeofenceType)}
+            disabled={editing}
+            wrapperClassName="sm:w-44"
+            options={[
+              { value: 'CIRCLE', label: t('geofences.circle', { defaultValue: 'Circle' }) },
+              { value: 'POLYGON', label: t('geofences.polygon', { defaultValue: 'Polygon' }) },
+            ]}
+          />
           {type === 'CIRCLE' && (
             <Input
               label={t('geofences.radius', { defaultValue: 'Radius (m)' })}
@@ -239,31 +230,16 @@ export function GeofenceFormDialog({
           key={geofence?.id ?? 'new'}
         />
         <div className="flex flex-col gap-3 sm:flex-row">
-          <FormControl size="small" fullWidth>
-            <InputLabel id="geofence-alerts-label">
-              {t('geofences.alerts', { defaultValue: 'Alerts' })}
-            </InputLabel>
-            <Select
-              labelId="geofence-alerts-label"
-              multiple
-              value={alerts}
-              onChange={(e) => setAlerts(e.target.value as unknown as AlertOn[])}
-              label={t('geofences.alerts', { defaultValue: 'Alerts' })}
-              renderValue={(v) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(v as AlertOn[]).map((a) => (
-                    <Chip key={a} size="small" label={a} />
-                  ))}
-                </Box>
-              )}
-            >
-              {ALERT_OPTIONS.map((a) => (
-                <MenuItem key={a} value={a}>
-                  {t(`geofences.alertKinds.${a}`, { defaultValue: a })}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <MultiSelect
+            label={t('geofences.alerts', { defaultValue: 'Alerts' })}
+            values={alerts}
+            onChange={(v) => setAlerts(v as AlertOn[])}
+            wrapperClassName="flex-1"
+            options={ALERT_OPTIONS.map((a) => ({
+              value: a,
+              label: t(`geofences.alertKinds.${a}`, { defaultValue: a }),
+            }))}
+          />
           {alerts.includes('DWELL') && (
             <Input
               label={t('geofences.dwellSec', { defaultValue: 'Dwell threshold (s)' })}
@@ -274,47 +250,14 @@ export function GeofenceFormDialog({
             />
           )}
         </div>
-        <FormControl size="small" fullWidth>
-          <InputLabel id="geofence-vehicles-label">
-            {t('geofences.assignVehicles', { defaultValue: 'Assigned vehicles' })}
-          </InputLabel>
-          <Select
-            labelId="geofence-vehicles-label"
-            multiple
-            value={vehicleIds}
-            onChange={(e) => setVehicleIds(e.target.value as unknown as string[])}
-            label={t('geofences.assignVehicles', { defaultValue: 'Assigned vehicles' })}
-            renderValue={(v) =>
-              (v as string[]).length === 0 ? (
-                <Typography variant="caption">
-                  {t('geofences.allVehicles', { defaultValue: 'All vehicles (tenant-wide)' })}
-                </Typography>
-              ) : (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(v as string[]).map((id) => (
-                    <Chip
-                      key={id}
-                      size="small"
-                      label={vehicleOptions.find((o) => o.id === id)?.label ?? id.slice(0, 8)}
-                    />
-                  ))}
-                </Box>
-              )
-            }
-          >
-            {vehicleOptions.length === 0 ? (
-              <MenuItem disabled>
-                {t('geofences.noVehicles', { defaultValue: 'No vehicles in the registry' })}
-              </MenuItem>
-            ) : (
-              vehicleOptions.map((v) => (
-                <MenuItem key={v.id} value={v.id}>
-                  {v.label}
-                </MenuItem>
-              ))
-            )}
-          </Select>
-        </FormControl>
+        <MultiSelect
+          label={t('geofences.assignVehicles', { defaultValue: 'Assigned vehicles' })}
+          values={vehicleIds}
+          onChange={setVehicleIds}
+          placeholder={t('geofences.allVehicles', { defaultValue: 'All vehicles (tenant-wide)' })}
+          emptyMessage={t('geofences.noVehicles', { defaultValue: 'No vehicles in the registry' })}
+          options={vehicleOptions.map((v) => ({ value: v.id, label: v.label }))}
+        />
       </div>
     </Modal>
   );

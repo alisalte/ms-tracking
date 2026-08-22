@@ -1,10 +1,9 @@
 /**
- * Tailwind UI primitives barrel — TailAdmin-style building blocks.
+ * Tailwind UI primitives barrel — the single presentation-layer entry point
+ * (TailAdmin-style building blocks).
  *
- * These coexist with the legacy MUI components (`components/ui/`). Pages still
- * on MUI import from `@/components/ui`; the shell, dashboard, and newly-ported
- * pages import from here. As more pages migrate, this barrel becomes the
- * single presentation-layer entry point.
+ * Phase 2.5: this barrel IS the UI kit — MUI is fully removed from the app.
+ * Pages and feature components import presentation components from here only.
  */
 export { Alert } from './Alert';
 export type { AlertProps, AlertVariant } from './Alert';
@@ -32,7 +31,11 @@ export { Input } from './Input';
 export type { InputProps } from './Input';
 export { Modal } from './Modal';
 export type { ModalProps } from './Modal';
+export { PageHeader } from './PageHeader';
+export type { PageHeaderProps } from './PageHeader';
 export { LoadMoreButton, NumberedPagination } from './Pagination';
+export { ListboxSelect, MultiSelect } from './ListboxSelect';
+export type { ListboxOption, ListboxSelectProps, MultiSelectProps } from './ListboxSelect';
 export { Select } from './Select';
 export type { SelectProps, SelectOption } from './Select';
 export { Spinner } from './Spinner';

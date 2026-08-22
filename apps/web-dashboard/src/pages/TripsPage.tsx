@@ -9,6 +9,7 @@ import {
   Card,
   DataTable,
   EmptyState,
+  PageHeader,
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
@@ -159,12 +160,7 @@ export function TripsPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {t('trips.title')}
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-graydark-600">{t('trips.subtitle')}</p>
-      </div>
+      <PageHeader title={t('trips.title')} description={t('trips.subtitle')} />
 
       {!isLoading && trips.length === 0 ? (
         /* REAL mode: no trips API yet — honest empty state, never fake rows. */

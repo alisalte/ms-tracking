@@ -1,13 +1,7 @@
-import { CacheProvider } from '@emotion/react';
-import { CssBaseline, type Theme, ThemeProvider } from '@mui/material';
-import { createTheme } from '@mui/material/styles';
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isRTL } from '@/i18n/config';
-import { darkTheme } from './dark.theme';
-import { getRtlCache } from './rtl';
-import { fontStackFor, lightTheme } from './theme';
 
 type ColorMode = 'light' | 'dark';
 /** What the user chose — 'system' resolves against the OS preference. */
@@ -72,14 +66,16 @@ interface ThemeRegistryProps {
 }
 
 /**
- * ThemeRegistry wraps the app with:
- * 1. Emotion `CacheProvider` — direction-aware cache (RTL flips styles)
- * 2. MUI `ThemeProvider` + `CssBaseline` — light/dark theme with `direction`
- * 3. A small context for toggling color mode (persisted to localStorage)
+ * ThemeRegistry owns the app's color mode + document direction (Phase 2.5:
+ * fully MUI-free — the Emotion/MUI ThemeProvider was removed with the last
+ * MUI components; Tailwind preflight is the global reset now).
  *
- * Direction is derived from the active i18next language (UI_UX_Design.md §0.9):
- * RTL languages (fa/he/ar) flip both the MUI theme direction and the
- * `<html dir>` attribute.
+ * 1. A small context for toggling color mode (persisted to localStorage)
+ * 2. Mirrors the mode onto `<html class="dark">` (Tailwind class strategy)
+ * 3. Keeps `<html lang>`/`<html dir>` in sync with the active i18next language
+ *    (UI_UX_Design.md §0.9) — RTL languages flip the document, and all layout
+ *    uses Tailwind logical utilities (ps/pe/ms/me) so no CSS-JS mirroring is
+ *    needed.
  */
 export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
   const [preference, setPreferenceState] = useState<ThemePreference>(
@@ -107,34 +103,18 @@ export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
   const mode: ColorMode = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
 
   // Keep <html lang> and <html dir> in sync with the active language so the
-  // browser, screen readers, and any non-MUI markup honor the text direction.
+  // browser, screen readers, and every layout utility honor the direction.
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = direction;
   }, [language, direction]);
 
-  // Mirror the color mode onto <html class="dark"> so Tailwind's `dark:`
-  // variant tracks the same toggle that drives the MUI theme swap. One switch
-  // governs both systems (TailAdmin-style class strategy + MUI ThemeProvider).
+  // Tailwind `dark:` variant strategy — one class on <html>.
   useEffect(() => {
     const root = document.documentElement;
     if (mode === 'dark') root.classList.add('dark');
     else root.classList.remove('dark');
   }, [mode]);
-
-  const theme = useMemo((): Theme => {
-    // Recreate the base theme so direction + the direction-aware font stack are
-    // baked in. In RTL the body font becomes Vazirmatn (Persian) so MUI/Emotion
-    // applies it to every component — the `global.css` rule alone is overridden
-    // by MUI's per-component injected styles.
-    const base = mode === 'dark' ? darkTheme : lightTheme;
-    return createTheme(base, {
-      direction,
-      typography: { fontFamily: fontStackFor(direction) },
-    });
-  }, [mode, direction]);
-
-  const emotionCache = useMemo(() => getRtlCache(direction), [direction]);
 
   const themeContextValue = useMemo(
     (): ThemeContextValue => ({
@@ -159,14 +139,5 @@ export function ThemeRegistry({ children, defaultMode }: ThemeRegistryProps) {
     [mode, preference],
   );
 
-  return (
-    <ThemeContext.Provider value={themeContextValue}>
-      <CacheProvider value={emotionCache}>
-        <ThemeProvider theme={theme}>
-          <CssBaseline enableColorScheme />
-          {children}
-        </ThemeProvider>
-      </CacheProvider>
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={themeContextValue}>{children}</ThemeContext.Provider>;
 }

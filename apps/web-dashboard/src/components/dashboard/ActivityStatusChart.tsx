@@ -3,17 +3,18 @@ import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { mapAccents, neutral, status } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
 import { DashboardCard } from './DashboardCard';
 import { EChart } from './EChart';
 
-/** Movement state → (i18n label key, semantic hex). Labels pair with colors —
- *  the legend never relies on color alone (§0.7). */
+/** Movement state → (i18n label key, semantic palette color). Labels pair with
+ *  colors — the legend never relies on color alone (§0.7). */
 const STATES: Array<{ state: keyof StateCounts; key: string; color: string }> = [
-  { state: 'driving', key: 'dashboard.states.driving', color: '#12b76a' },
-  { state: 'idle', key: 'dashboard.states.idle', color: '#f79009' },
-  { state: 'stopped', key: 'dashboard.states.stopped', color: '#98a2b3' },
-  { state: 'offline', key: 'dashboard.states.offline', color: '#475467' },
+  { state: 'driving', key: 'dashboard.states.driving', color: status.success },
+  { state: 'idle', key: 'dashboard.states.idle', color: status.warning },
+  { state: 'stopped', key: 'dashboard.states.stopped', color: mapAccents.vehicleOffline },
+  { state: 'offline', key: 'dashboard.states.offline', color: neutral[600] },
 ];
 
 export interface StateCounts {

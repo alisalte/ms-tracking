@@ -1,11 +1,10 @@
-import { MenuItem, Select } from '@mui/material';
 import { Clock, Map as MapIcon, Pause, Play, Route, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { HISTORY_PRESETS, type HistoryPresetId } from '@/api/map.api';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
-import { Button, IconButton, Tooltip } from '@/components/tailwind-ui';
+import { Button, IconButton, ListboxSelect, Tooltip } from '@/components/tailwind-ui';
 
 /** Custom [from, to] ISO window (Sprint I §29 — date/time range). */
 export interface CustomRange {
@@ -60,10 +59,9 @@ function localInputToIso(value: string): string | null {
  * §20: a LIVE/HISTORY mode switch; Sprint I §29: custom from/to date-time
  * range; Sprint I §38: map-matching toggle with graceful fallback.
  *
- * The history-preset selector deliberately stays an MUI `<Select>` — the e2e
- * suite opens it with a real click and picks `role="option"` entries, a
- * gesture native selects don't support in a real browser. Everything else is
- * Tailwind.
+ * The history-preset selector is a tailwind-ui ListboxSelect (WAI-ARIA
+ * combobox/listbox) — the e2e suite opens it with a real click and picks
+ * `role="option"` entries. Everything is Tailwind.
  */
 export function MapToolbar({
   visibleCount,
@@ -148,23 +146,23 @@ export function MapToolbar({
           </IconButton>
         </div>
 
-        {/* History window: presets OR custom from/to (Sprint I §29). */}
+        {/* History window: presets OR custom from/to (Sprint I §29). The
+            listbox combobox keeps the e2e `role="option"` click gesture. */}
         {mode === 'history' && (
-          <Select
-            size="small"
+          <ListboxSelect
             value={historyPreset}
-            onChange={(e) => onHistoryPresetChange(e.target.value as HistoryPresetId | 'custom')}
+            onChange={(v) => onHistoryPresetChange(v as HistoryPresetId | 'custom')}
             aria-label={t('map.history.range')}
             data-testid="history-preset-select"
-            sx={{ minWidth: 96, '& .MuiSelect-select': { py: 0.5 } }}
-          >
-            {HISTORY_PRESETS.map((p) => (
-              <MenuItem key={p.id} value={p.id}>
-                {t(`map.history.preset.${p.id}`)}
-              </MenuItem>
-            ))}
-            <MenuItem value="custom">{t('map.history.customRange')}</MenuItem>
-          </Select>
+            className="w-40"
+            options={[
+              ...HISTORY_PRESETS.map((p) => ({
+                value: p.id,
+                label: t(`map.history.preset.${p.id}`),
+              })),
+              { value: 'custom', label: t('map.history.customRange') },
+            ]}
+          />
         )}
         {mode === 'history' && historyPreset === 'custom' && (
           <div className="flex items-center gap-1.5">

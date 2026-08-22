@@ -179,8 +179,8 @@ export function VideoTile({
               </span>
             )}
             {channel.recordingActive && (
-              <span className="inline-flex h-[18px] items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.6rem] font-semibold text-rose-400">
-                <span aria-hidden className="size-1.5 rounded-full bg-rose-400" />
+              <span className="inline-flex h-[18px] items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.6rem] font-semibold text-danger-400">
+                <span aria-hidden className="size-1.5 rounded-full bg-danger-400" />
                 REC
               </span>
             )}

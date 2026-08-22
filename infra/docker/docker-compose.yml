@@ -64,6 +64,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      # Grace for cold boots (esp. Windows/Docker Desktop first start): without
+      # this, ZK can exceed the 5x10s retry budget, get marked unhealthy, and
+      # fail every dependent ("container fleetvision-zookeeper is unhealthy").
+      start_period: 30s
 
   kafka:
     # Single-broker dev profile with topic auto-create (Sprint 1 plan Deliverable 4).
@@ -263,6 +267,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ENVIRONMENT: local
       DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      # Migrations (tracking schema DDL) run via the platform role — the app
+      # role is DML-only under RLS (see 20260822100000 grant migration).
+      DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
       REDISURL: redis://redis:6379/0
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
@@ -317,6 +324,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ENVIRONMENT: local
       DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      # Migrations (notification schema DDL) run via the platform role — the
+      # app role is DML-only under RLS (the service code already supports it).
+      DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
       REDISURL: redis://redis:6379/0
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}

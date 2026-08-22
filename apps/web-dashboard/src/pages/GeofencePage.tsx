@@ -32,6 +32,7 @@ import {
   Button,
   IconButton,
   Modal,
+  PageHeader,
   Spinner,
   TBody,
   TD,
@@ -40,6 +41,7 @@ import {
   Table,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { mapAccents, status } from '@/theme/palette';
 import type { Geofence, GeofenceStatus, GeofenceType } from '@/types/geofence.types';
 
 const TYPE_FILTERS: Array<{ value: '' | GeofenceType; labelKey: string }> = [
@@ -84,23 +86,21 @@ export function GeofencePage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('geofences.title')}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('geofences.subtitle')}</p>
-        </div>
-        <PermissionGate requires="maps.write">
-          <Button
-            leftIcon={<Plus size={16} />}
-            onClick={() => setShowCreate(true)}
-            data-testid="geofence-create"
-          >
-            {t('geofences.create')}
-          </Button>
-        </PermissionGate>
-      </div>
+      <PageHeader
+        title={t('geofences.title')}
+        description={t('geofences.subtitle')}
+        actions={
+          <PermissionGate requires="maps.write">
+            <Button
+              leftIcon={<Plus size={16} />}
+              onClick={() => setShowCreate(true)}
+              data-testid="geofence-create"
+            >
+              {t('geofences.create')}
+            </Button>
+          </PermissionGate>
+        }
+      />
 
       {/* Filters (Sprint I §46) — native selects */}
       <div className="flex flex-wrap items-center gap-2">
@@ -353,7 +353,7 @@ function GeofenceDetailDialog({
               >
                 <Power
                   size={18}
-                  color={geofence.status === 'ACTIVE' ? '#12B76A' : '#98A2B3'}
+                  color={geofence.status === 'ACTIVE' ? status.success : mapAccents.vehicleOffline}
                   aria-hidden
                 />
               </IconButton>

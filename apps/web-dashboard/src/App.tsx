@@ -10,7 +10,7 @@ import { RouterProvider } from 'react-router';
  * Root application component.
  *
  * Provider hierarchy (outermost → innermost):
- * 1. ThemeRegistry — MUI theme + dark mode
+ * 1. ThemeRegistry — color mode (Tailwind `dark:` class) + document direction
  * 2. AuthProvider — Zustand auth store hydration from localStorage
  * 3. QueryClientProvider — TanStack Query for server state
  * 4. ToastProvider — app-wide success/error notifications

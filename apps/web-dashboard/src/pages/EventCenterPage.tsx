@@ -19,7 +19,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 
 import { useNotificationsPage } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
-import { Badge, Card, EmptyState, Spinner } from '@/components/tailwind-ui';
+import { Badge, Card, EmptyState, PageHeader, Spinner } from '@/components/tailwind-ui';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import { relativeTime } from '@/lib/relative-time';
 
@@ -96,22 +96,18 @@ export function EventCenterPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('events.title', { defaultValue: 'Event Center' })}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">
-            {t('events.subtitle', {
-              defaultValue: 'Fleet event timeline — what happened, when, and to which vehicle',
-            })}
-          </p>
-        </div>
-        <Badge color="brand">
-          <Activity size={13} aria-hidden className="me-1" />
-          {t('dashboard.live')}
-        </Badge>
-      </div>
+      <PageHeader
+        title={t('events.title', { defaultValue: 'Event Center' })}
+        description={t('events.subtitle', {
+          defaultValue: 'Fleet event timeline — what happened, when, and to which vehicle',
+        })}
+        actions={
+          <Badge color="brand">
+            <Activity size={13} aria-hidden className="me-1" />
+            {t('dashboard.live')}
+          </Badge>
+        }
+      />
 
       {/* Filters */}
       <Card className="flex flex-wrap items-center gap-2 p-3">

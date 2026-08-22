@@ -32,7 +32,7 @@ import { VehiclesTab } from '@/components/assets/VehiclesTab';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { Button, Tabs } from '@/components/tailwind-ui';
+import { Button, PageHeader, Tabs } from '@/components/tailwind-ui';
 import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
 import { FolderTree, Plus, Truck } from 'lucide-react';
 import { Cpu } from 'lucide-react';
@@ -142,19 +142,17 @@ export function AssetManagementPage() {
   return (
     <div className="flex h-full flex-col gap-4">
       {/* Header — + Add is permission-gated per tab. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('assets.title')}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">{t('assets.subtitle')}</p>
-        </div>
-        <PermissionGate requires={WRITE_PERMISSION[tab]}>
-          <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
-            {t('common.add')} {t(`assets.tabs.${tab}`)}
-          </Button>
-        </PermissionGate>
-      </div>
+      <PageHeader
+        title={t('assets.title')}
+        description={t('assets.subtitle')}
+        actions={
+          <PermissionGate requires={WRITE_PERMISSION[tab]}>
+            <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
+              {t('common.add')} {t(`assets.tabs.${tab}`)}
+            </Button>
+          </PermissionGate>
+        }
+      />
 
       {/* Tabs */}
       <Tabs

@@ -9,7 +9,7 @@ export function LiveBadge() {
 
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-success-500/30 bg-success-500/10 px-2.5 py-1 backdrop-blur-sm">
-      <span className="fv-live-dot inline-block size-[7px] rounded-full bg-success-500 shadow-[0_0_6px_rgba(76,175,80,0.7)]" />
+      <span className="fv-live-dot inline-block size-[7px] rounded-full bg-success-500" />
       <span className="text-[0.6875rem] font-bold text-success-600 dark:text-success-400">
         {t('dashboard.live')}
       </span>

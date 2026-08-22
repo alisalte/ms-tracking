@@ -37,27 +37,18 @@ class ErrorBoundaryImpl extends Component<Props & { t: (k: string, d?: string) =
       return (
         <div
           role="alert"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            minHeight: 320,
-            padding: 24,
-            textAlign: 'center',
-          }}
+          className="flex min-h-80 flex-col items-center justify-center gap-3 p-6 text-center"
         >
-          <h2 style={{ margin: 0 }}>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
             {this.props.t('errors.boundaryTitle', 'Something went wrong')}
           </h2>
-          <p style={{ margin: 0, opacity: 0.7 }}>
+          <p className="m-0 text-sm text-gray-500 dark:text-graydark-600">
             {this.props.t('errors.boundaryBody', 'The screen failed to render. You can retry.')}.
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            style={{ padding: '8px 20px', cursor: 'pointer' }}
+            className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             {this.props.t('errors.reload', 'Reload')}
           </button>

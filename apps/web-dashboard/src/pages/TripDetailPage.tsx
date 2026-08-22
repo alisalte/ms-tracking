@@ -4,24 +4,25 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useParams } from 'react-router';
 
 import { useTripDetail } from '@/api/fleet.api';
-import { Badge, Card, EmptyState, Skeleton, Spinner } from '@/components/tailwind-ui';
+import { Badge, Card, EmptyState, PageHeader, Skeleton, Spinner } from '@/components/tailwind-ui';
 import { SpeedGraph } from '@/components/trips/SpeedGraph';
 import { TripReplayMap } from '@/components/trips/TripReplayMap';
 import { TripSummary } from '@/components/trips/TripSummary';
 import { TripTimeline } from '@/components/trips/TripTimeline';
 import { useTripPlayback } from '@/components/trips/useTripPlayback';
 import { shouldUseMock } from '@/lib/mock-gate';
+import { status as statusPalette } from '@/theme/palette';
 import type { Trip, TripEvent } from '@/types/fleet.types';
 
 /** Speed limit used for the reference line (km/h) — matches the mock generator. */
 const SPEED_LIMIT_KMH = 100;
 
-/** Event type → list-dot color. */
+/** Event type → list-dot color (semantic palette — Phase 2.6 §10). */
 const EVENT_COLOR: Record<TripEvent['type'], string> = {
-  stop: '#F59E0B',
-  idle: '#64748B',
-  overspeed: '#DC2626',
-  geofence: '#A78BFA',
+  stop: statusPalette.warning,
+  idle: statusPalette.slate,
+  overspeed: statusPalette.danger,
+  geofence: statusPalette.purple,
 };
 
 /** Trip status → Badge color. */
@@ -123,12 +124,10 @@ export function TripDetailPage() {
           {t('trips.detail.showOnMap')}
         </RouterLink>
       </div>
-      <div className="mb-1 flex flex-col justify-between gap-2 md:flex-row">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {trip.id}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-4">
+      <PageHeader
+        title={trip.id}
+        description={
+          <span className="mt-1 flex flex-wrap items-center gap-4">
             <span className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-graydark-600">
               <MapPin size={15} aria-hidden />
               {trip.originLabel} → {trip.destinationLabel}
@@ -137,12 +136,14 @@ export function TripDetailPage() {
               <Clock3 size={15} aria-hidden />
               {trip.vehicleLabel} · {startLabel}
             </span>
-          </div>
-        </div>
-        <Badge color={STATUS_COLOR[trip.status]} dot className="self-start font-semibold">
-          {t(`trips.status.${trip.status}`)}
-        </Badge>
-      </div>
+          </span>
+        }
+        actions={
+          <Badge color={STATUS_COLOR[trip.status]} dot className="font-semibold">
+            {t(`trips.status.${trip.status}`)}
+          </Badge>
+        }
+      />
 
       {/* Summary tiles */}
       <div className="my-6">

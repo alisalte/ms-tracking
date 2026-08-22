@@ -37,6 +37,10 @@ export class AppModule {
         LoggerModule.forRootFromConfig(config as BaseConfig),
         PersistenceModule.forRoot({
           client: { url: config.DBURL },
+          // Migrations run via the privileged platform connection — the app
+          // role cannot CREATE the tracking schema/tables/ledger on hardened
+          // stacks (RLS model: app = DML-only, platform = DDL/BYPASSRLS).
+          migrationsClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
             // Per-service migration ledger (Sprint I convention — see

@@ -26,7 +26,7 @@ import {
   useUpdatePreferences,
 } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
-import { Button, Card, Spinner, Tooltip } from '@/components/tailwind-ui';
+import { Button, Card, PageHeader, Spinner, Tooltip } from '@/components/tailwind-ui';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import { relativeTime } from '@/lib/relative-time';
 import type { Notification, NotificationChannel } from '@/types/notification.types';
@@ -108,38 +108,34 @@ export function NotificationCenterPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('notifications.center.title', { defaultValue: 'Notification Center' })}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">
-            {t('notifications.center.subtitle', {
-              defaultValue: 'Alarm-driven notifications, delivery status, and your preferences',
-            })}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            leftIcon={<RefreshCw size={14} />}
-            onClick={() => page.refetch()}
-            disabled={page.isLoading}
-          >
-            {t('common.refresh', { defaultValue: 'Refresh' })}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            leftIcon={<CheckCheck size={14} />}
-            onClick={() => markAllAsRead.mutate()}
-            disabled={markAllAsRead.isPending}
-          >
-            {t('notifications.markAllRead', { defaultValue: 'Mark all read' })}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('notifications.center.title', { defaultValue: 'Notification Center' })}
+        description={t('notifications.center.subtitle', {
+          defaultValue: 'Alarm-driven notifications, delivery status, and your preferences',
+        })}
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<RefreshCw size={14} />}
+              onClick={() => page.refetch()}
+              disabled={page.isLoading}
+            >
+              {t('common.refresh', { defaultValue: 'Refresh' })}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<CheckCheck size={14} />}
+              onClick={() => markAllAsRead.mutate()}
+              disabled={markAllAsRead.isPending}
+            >
+              {t('notifications.markAllRead', { defaultValue: 'Mark all read' })}
+            </Button>
+          </>
+        }
+      />
 
       {/* Tabs */}
       <div

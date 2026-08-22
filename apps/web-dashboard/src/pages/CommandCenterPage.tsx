@@ -22,7 +22,7 @@ import { CommandHistoryTable } from '@/components/commands/CommandHistoryTable';
 import { CommandParamDialog } from '@/components/commands/CommandParamDialog';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { Card, Select } from '@/components/tailwind-ui';
+import { Card, PageHeader, Select } from '@/components/tailwind-ui';
 import type { Device } from '@/types/asset.types';
 import type { CommandDef, CommandStatus } from '@/types/command.types';
 
@@ -77,27 +77,23 @@ export function CommandCenterPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header — device picker (IMEI · model) is the flow's entry point. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-            {t('commands.title', { defaultValue: 'Command Center' })}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-graydark-600">
-            {t('commands.subtitle', {
-              defaultValue:
-                'Configure devices over TCP — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).',
-            })}
-          </p>
-        </div>
-        <Select
-          value={deviceId ?? ''}
-          onChange={(e) => setDeviceId(e.target.value || null)}
-          wrapperClassName="w-72 max-w-full"
-          disabled={devicesQuery.isLoading}
-          aria-label={t('commands.selectDevice', { defaultValue: 'Device (IMEI)' })}
-          options={deviceOptions}
-        />
-      </div>
+      <PageHeader
+        title={t('commands.title', { defaultValue: 'Command Center' })}
+        description={t('commands.subtitle', {
+          defaultValue:
+            'Configure devices over TCP — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).',
+        })}
+        actions={
+          <Select
+            value={deviceId ?? ''}
+            onChange={(e) => setDeviceId(e.target.value || null)}
+            wrapperClassName="w-72 max-w-full"
+            disabled={devicesQuery.isLoading}
+            aria-label={t('commands.selectDevice', { defaultValue: 'Device (IMEI)' })}
+            options={deviceOptions}
+          />
+        }
+      />
 
       {selectedDevice && (
         <Card flush className="flex flex-wrap items-center gap-3 p-3">

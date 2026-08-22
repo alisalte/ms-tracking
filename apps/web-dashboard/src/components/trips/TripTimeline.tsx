@@ -22,7 +22,7 @@ const TICK_COLOR: Record<TripEvent['type'], string> = {
   stop: status.amber,
   idle: status.slate,
   overspeed: status.red,
-  geofence: '#A78BFA',
+  geofence: status.purple,
 };
 
 /**

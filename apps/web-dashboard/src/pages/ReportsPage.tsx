@@ -18,6 +18,7 @@ import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { VehiclesSection } from '@/components/reports/VehiclesSection';
+import { PageHeader } from '@/components/tailwind-ui';
 
 const SECTIONS = ['overview', 'vehicles', 'trips', 'alarms', 'geofences', 'activity'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -46,12 +47,7 @@ export function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {t('reports.title')}
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-graydark-600">{t('reports.subtitle')}</p>
-      </div>
+      <PageHeader title={t('reports.title')} description={t('reports.subtitle')} />
       <ReportRangePicker range={range} onChange={setRange} />
 
       {/* Section tabs */}

@@ -19,8 +19,15 @@ import { z } from 'zod';
  */
 export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
-    /** Postgres/TimescaleDB connection URL. */
+    /** Postgres/TimescaleDB connection URL (runtime app role, RLS-enforced). */
     DBURL: z.string().min(1),
+    /**
+     * Privileged platform-role URL for migrations (schema/DDL ownership).
+     * Optional: when unset, migrations run on DBURL (e.g. local dev against a
+     * superuser connection); on hardened stacks it MUST point at
+     * fleetvision_platform (see persistence-knex module docs).
+     */
+    DBURL_PLATFORM: z.string().min(1).optional(),
     /** Redis connection URL (last-position cache + device-status cache + WS adapter). */
     REDISURL: z.string().min(1),
 

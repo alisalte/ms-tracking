@@ -28,13 +28,17 @@ export function Breadcrumb() {
   }
   if (!match) return null;
 
+  // Single-item groups (Assets/Video/Maintenance) duplicate their group label
+  // — render the label once instead of "Assets > Assets".
+  const itemLabel = t(`nav.${match.itemKey}`);
+  const groupLabel = match.groupKey ? t(`navGroups.${match.groupKey}`) : null;
+  const showGroup = groupLabel !== null && groupLabel !== itemLabel;
+
   return (
     <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 sm:flex">
-      {match.groupKey && (
+      {showGroup && (
         <>
-          <span className="text-sm text-gray-400 dark:text-graydark-600">
-            {t(`navGroups.${match.groupKey}`)}
-          </span>
+          <span className="text-sm text-gray-400 dark:text-graydark-600">{groupLabel}</span>
           <ChevronRight
             size={14}
             aria-hidden
@@ -43,7 +47,7 @@ export function Breadcrumb() {
         </>
       )}
       <span className="truncate text-sm font-semibold text-gray-700 dark:text-graydark-800">
-        {t(`nav.${match.itemKey}`)}
+        {itemLabel}
       </span>
     </nav>
   );

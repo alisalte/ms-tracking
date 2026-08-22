@@ -27,14 +27,14 @@ export function EmptyState({ icon, title, description, action, className = '' }:
       {icon && (
         <span
           aria-hidden
-          className="mb-1 inline-flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-graydark-300 dark:text-graydark-600 [&_svg]:size-6"
+          className="mb-1 inline-flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500 dark:bg-graydark-300 dark:text-graydark-700 [&_svg]:size-6"
         >
           {icon}
         </span>
       )}
       <p className="text-sm font-semibold text-gray-700 dark:text-graydark-800">{title}</p>
       {description && (
-        <p className="max-w-sm text-sm text-gray-500 dark:text-graydark-600">{description}</p>
+        <p className="max-w-sm text-sm text-gray-500 dark:text-graydark-700">{description}</p>
       )}
       {action && <div className="mt-3">{action}</div>}
     </div>

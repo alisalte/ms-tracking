@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { Skeleton } from '@/components/tailwind-ui';
+import { Card, Skeleton } from '@/components/tailwind-ui';
 
 /** Semantic tile tones → Tailwind badge classes. */
 const TONES = {
@@ -46,20 +46,20 @@ export function KpiTile({
   const { t } = useTranslation();
 
   return (
-    <div
-      className={`fv-surface group relative overflow-hidden rounded-2xl border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl ${
-        onClick ? 'cursor-pointer' : ''
-      }`}
+    <Card
+      interactive={Boolean(onClick)}
+      flush
       onClick={onClick}
       onKeyDown={
         onClick
-          ? (e) => {
+          ? (e: React.KeyboardEvent<HTMLElement>) => {
               if (e.key === 'Enter' || e.key === ' ') onClick();
             }
           : undefined
       }
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
+      className={`group relative overflow-hidden p-4 ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div
         aria-hidden
@@ -85,6 +85,6 @@ export function KpiTile({
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
