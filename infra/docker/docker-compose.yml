@@ -199,6 +199,150 @@ services:
       retries: 18
       start_period: 90s
 
+  # fleet-management-service — Fleet/Vehicle/Device registry + commands.
+  fleet-management-service:
+    build:
+      context: ../..
+      dockerfile: apps/fleet-management-service/Dockerfile
+    container_name: fleetvision-fleet-management
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3006"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      # Runtime client uses the app role (RLS-enforced). Platform role for migrations.
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      JWT_SECRET: ${JWT_SECRET}
+      # Kafka (command acks + session lifecycle).
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: fleet-management-service
+      KAFKA_COMMAND_REQUEST_TOPIC: fleetvision.fleet.command.request
+      KAFKA_COMMAND_ACK_TOPIC: fleetvision.fleet.command.ack
+      KAFKA_SESSION_TOPIC: fleetvision.telemetry.session.lifecycle
+      KAFKA_GROUP_ID: fleet-management-service
+    ports:
+      - "${FLEET_MGMT_PORT:-3006}:3006"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3006/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # gps-engine-service — Real-time position processing + WebSocket.
+  gps-engine-service:
+    build:
+      context: ../..
+      dockerfile: apps/gps-engine-service/Dockerfile
+    container_name: fleetvision-gps-engine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3005"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      JWT_SECRET: ${JWT_SECRET}
+      # Kafka (positions + sessions).
+      GPS_KAFKA_BROKERS: kafka:29092
+      GPS_KAFKA_CLIENT_ID: gps-engine-service
+      GPS_KAFKA_GROUP_ID: gps-engine-service
+      GPS_KAFKA_POSITION_TOPIC: fleetvision.telemetry.position.raw
+      GPS_KAFKA_SESSION_TOPIC: fleetvision.telemetry.session.lifecycle
+      GPS_WS_PORT: "3001"
+      GPS_WS_ENABLED: "true"
+      GPS_WS_CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080"
+      GPS_REPORT_INTERVAL_SECONDS: "60"
+      GPS_STALE_AFTER_SECONDS: "300"
+      GPS_FUTURE_THRESHOLD_SECONDS: "60"
+      # Geofence evaluation (Sprint I).
+      GEOFENCE_ENABLED: "true"
+      GEOFENCE_JITTER_BUFFER_METERS: "50"
+      GEOFENCE_CONFIRMATION_POINTS: "2"
+      GEOFENCE_DWELL_SECONDS: "600"
+      GPS_KAFKA_GEOFENCE_TOPIC: fleetvision.tracking.geofence.event
+      GPS_HISTORY_MAX_RANGE_DAYS: "31"
+    ports:
+      - "${GPS_ENGINE_PORT:-3005}:3005"
+      - "${GPS_WS_PORT:-3001}:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3005/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # notification-service — Alarm engine + realtime notifications.
+  notification-service:
+    build:
+      context: ../..
+      dockerfile: apps/notification-service/Dockerfile
+    container_name: fleetvision-notification
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3008"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      JWT_SECRET: ${JWT_SECRET}
+      # Kafka (alarms + geofence events).
+      NOTIF_KAFKA_BROKERS: kafka:29092
+      NOTIF_KAFKA_CLIENT_ID: notification-service
+      NOTIF_KAFKA_GROUP_ID: notification-service
+      NOTIF_KAFKA_ALARM_TOPIC: fleetvision.telemetry.alarm.raw
+      NOTIF_KAFKA_GEOFENCE_TOPIC: fleetvision.tracking.geofence.event
+      # SMTP (opt-in via mail profile; see mailpit).
+      NOTIF_SMTP_HOST: ${NOTIF_SMTP_HOST:-}
+      NOTIF_SMTP_PORT: ${NOTIF_SMTP_PORT:-587}
+      NOTIF_SMTP_USER: ${NOTIF_SMTP_USER:-}
+      NOTIF_SMTP_PASS: ${NOTIF_SMTP_PASS:-}
+      NOTIF_SMTP_FROM: ${NOTIF_SMTP_FROM:-noreply@fleetvision.local}
+      NOTIF_SMTP_SECURE: ${NOTIF_SMTP_SECURE:-false}
+    ports:
+      - "${NOTIFICATION_PORT:-3008}:3008"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3008/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   # web-dashboard — Vite SPA served by nginx. Reverse-proxies /api →
   # identity-service so the browser's relative /api/v1 calls reach the backend.
   reporting-service:
