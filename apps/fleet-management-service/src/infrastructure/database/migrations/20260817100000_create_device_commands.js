@@ -77,6 +77,6 @@ export async function up(knex) {
 }
 
 export async function down(knex) {
-  await knex.raw(`DROP POLICY IF EXISTS device_commands_tenant_isolation ON fleet.device_commands`);
+  await knex.raw('DROP POLICY IF EXISTS device_commands_tenant_isolation ON fleet.device_commands');
   await knex.schema.withSchema('fleet').dropTableIfExists('device_commands');
 }

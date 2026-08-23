@@ -16,8 +16,8 @@ import {
   DataTable,
   EmptyState,
   Select,
-  Toolbar,
   type TableColumn,
+  Toolbar,
 } from '@/components/tailwind-ui';
 import type { Fleet, Vehicle, VehicleStatus } from '@/types/asset.types';
 import { Truck } from 'lucide-react';
@@ -104,8 +104,7 @@ export function VehiclesTab({
     {
       id: 'plate',
       headerKey: 'assets.vehicle.colPlate',
-      render: (v) =>
-        v.plate ?? <span className="text-gray-400 dark:text-graydark-600">—</span>,
+      render: (v) => v.plate ?? <span className="text-gray-400 dark:text-graydark-600">—</span>,
     },
     {
       id: 'vin',
@@ -142,9 +141,7 @@ export function VehiclesTab({
           writePermission="vehicle.write"
           onView={(vehicle) => onSelect(vehicle.id)}
           onEdit={onEdit}
-          onDelete={
-            onDelete ? (vehicle) => onDelete(vehicle.id, vehicle.name) : undefined
-          }
+          onDelete={onDelete ? (vehicle) => onDelete(vehicle.id, vehicle.name) : undefined}
         />
       ),
     },
@@ -176,7 +173,8 @@ export function VehiclesTab({
               aria-label={t('assets.vehicle.colStatus')}
               options={STATUSES.map((s) => ({
                 value: s,
-                label: s === 'all' ? t('assets.filters.allStatus') : t(`assets.vehicle.status.${s}`),
+                label:
+                  s === 'all' ? t('assets.filters.allStatus') : t(`assets.vehicle.status.${s}`),
               }))}
             />
           </>

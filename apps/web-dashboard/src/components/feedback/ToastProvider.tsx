@@ -1,5 +1,14 @@
-import { AlertCircle, CheckCircle2, Info, X, TriangleAlert } from 'lucide-react';
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react';
+import {
+  type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getApiErrorMessage } from '@/api/errors';
@@ -47,7 +56,10 @@ interface ToastProviderProps {
   children: ReactNode;
 }
 
-const SEVERITY_STYLE: Record<ToastSeverity, { icon: typeof Info; ring: string; iconColor: string }> = {
+const SEVERITY_STYLE: Record<
+  ToastSeverity,
+  { icon: typeof Info; ring: string; iconColor: string }
+> = {
   success: {
     icon: CheckCircle2,
     ring: 'border-success-500/40',
@@ -86,13 +98,10 @@ export function ToastProvider({ children }: ToastProviderProps) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const show = useCallback(
-    (severity: ToastSeverity, rawMessage: string) => {
-      const id = ++nextId.current;
-      setToasts((current) => [...current, { id, severity, message: rawMessage }].slice(-MAX_VISIBLE));
-    },
-    [],
-  );
+  const show = useCallback((severity: ToastSeverity, rawMessage: string) => {
+    const id = ++nextId.current;
+    setToasts((current) => [...current, { id, severity, message: rawMessage }].slice(-MAX_VISIBLE));
+  }, []);
 
   // Resolve a key: translate if it has a translation, otherwise use as-is.
   const resolve = useCallback(
@@ -149,7 +158,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss: () => 
 
   return (
     <div
-      role="status"
+      aria-live="polite"
       className={`fv-rise pointer-events-auto flex items-start gap-2.5 rounded-xl border ${style.ring} bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:bg-graydark-300/95`}
     >
       <Icon size={17} aria-hidden className={`mt-0.5 shrink-0 ${style.iconColor}`} />

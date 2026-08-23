@@ -199,9 +199,5 @@ export function buildGprsBinaryReply(
   const lengthBytes = Buffer.from(String(length), 'ascii');
   const checksumRegion = Buffer.concat([head, lengthBytes, commaBlock, Buffer.from('*', 'ascii')]);
   const cs = gprsChecksum(checksumRegion).toString(16).toUpperCase().padStart(2, '0');
-  return Buffer.concat([
-    checksumRegion,
-    Buffer.from(cs, 'ascii'),
-    Buffer.from('\r\n', 'ascii'),
-  ]);
+  return Buffer.concat([checksumRegion, Buffer.from(cs, 'ascii'), Buffer.from('\r\n', 'ascii')]);
 }

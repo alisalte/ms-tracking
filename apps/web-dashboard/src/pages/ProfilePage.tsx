@@ -2,7 +2,15 @@ import { KeyRound, Lock, LogOut, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
 
-import { Avatar, Badge, Button, Card, CardHeader, PageHeader, Tooltip } from '@/components/tailwind-ui';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  PageHeader,
+  Tooltip,
+} from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 
 /**

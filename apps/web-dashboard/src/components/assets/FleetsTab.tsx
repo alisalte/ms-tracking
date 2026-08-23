@@ -16,8 +16,8 @@ import {
   DataTable,
   EmptyState,
   Select,
-  Toolbar,
   type TableColumn,
+  Toolbar,
 } from '@/components/tailwind-ui';
 import type { Fleet, FleetStatus, Vehicle } from '@/types/asset.types';
 import { FolderTree } from 'lucide-react';

@@ -128,7 +128,11 @@ export function DataTable<Row>({
               {columns.map((col) => {
                 const sortable = Boolean(col.sortBy);
                 const active = sort?.id === col.id;
-                const SortIcon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+                const SortIcon = !active
+                  ? ChevronsUpDown
+                  : sort.dir === 'asc'
+                    ? ArrowUp
+                    : ArrowDown;
                 return (
                   <th
                     key={col.id}
@@ -180,6 +184,13 @@ export function DataTable<Row>({
                   <tr
                     key={key}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    onKeyDown={
+                      onRowClick
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') onRowClick(row);
+                          }
+                        : undefined
+                    }
                     aria-selected={selected || undefined}
                     className={`${onRowClick ? 'cursor-pointer' : ''} transition-colors ${
                       selected

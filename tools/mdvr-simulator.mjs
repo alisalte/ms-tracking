@@ -29,11 +29,11 @@ import {
   DataTypes,
   PacketFlags,
   PayloadTypes,
+  buildGprsBinaryReply,
   buildGprsReply,
   buildMediaPacket,
   decodeA9aStruct,
   parseGprsFrame,
-  buildGprsBinaryReply,
 } from '../packages/meitrack-media-protocol/dist/index.js';
 
 const args = process.argv.slice(2);
@@ -47,7 +47,8 @@ const IMEI = arg('imei', '867191086416152');
 const GATEWAY = arg('gateway', '127.0.0.1:5023');
 const CHANNEL = Number(arg('channel', '1'));
 
-const log = (tag, msg) => console.log(`[${new Date().toISOString().substring(11, 23)}] [${tag}] ${msg}`);
+const log = (tag, msg) =>
+  console.log(`[${new Date().toISOString().substring(11, 23)}] [${tag}] ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** §3.16 max body per packet (spec: ≤950 bytes). */
@@ -60,12 +61,29 @@ async function* nalUnits() {
   const ff = spawn(
     'ffmpeg',
     [
-      '-hide_banner', '-loglevel', 'error',
-      '-re', '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=12',
-      '-t', '600',
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
-      '-x264-params', 'repeat-headers=1:annexb=1',
-      '-f', 'h264', 'pipe:1',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-re',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=640x360:rate=12',
+      '-t',
+      '600',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-tune',
+      'zerolatency',
+      '-pix_fmt',
+      'yuv420p',
+      '-x264-params',
+      'repeat-headers=1:annexb=1',
+      '-f',
+      'h264',
+      'pipe:1',
     ],
     { stdio: ['ignore', 'pipe', 'inherit'] },
   );
@@ -73,10 +91,22 @@ async function* nalUnits() {
   let buf = Buffer.alloc(0);
   let done = false;
   const waiters = [];
-  const wake = () => { while (waiters.length) waiters.shift()(); };
-  ff.stdout.on('data', (c) => { buf = Buffer.concat([buf, c]); wake(); });
-  ff.stdout.on('end', () => { done = true; wake(); });
-  ff.on('error', (e) => { log('H264', `ffmpeg error: ${e.message}`); done = true; wake(); });
+  const wake = () => {
+    while (waiters.length) waiters.shift()();
+  };
+  ff.stdout.on('data', (c) => {
+    buf = Buffer.concat([buf, c]);
+    wake();
+  });
+  ff.stdout.on('end', () => {
+    done = true;
+    wake();
+  });
+  ff.on('error', (e) => {
+    log('H264', `ffmpeg error: ${e.message}`);
+    done = true;
+    wake();
+  });
 
   for (;;) {
     // Need at least one start code + payload + a following start code (or EOF).
@@ -103,7 +133,10 @@ function extractNal(buf) {
   const next = nextStartCode(buf, first.len);
   if (next === -1) return null;
   return {
-    unit: Buffer.concat([buf.subarray(first.pos, first.pos + first.len), buf.subarray(first.pos + first.len, next)]),
+    unit: Buffer.concat([
+      buf.subarray(first.pos, first.pos + first.len),
+      buf.subarray(first.pos + first.len, next),
+    ]),
     consumed: next,
   };
 }
@@ -112,13 +145,22 @@ function extractNal(buf) {
 function extractLastNal(buf) {
   const first = startCodeAt(buf, 0);
   if (first === -1 || buf.length <= first.pos + first.len) return null;
-  return Buffer.concat([buf.subarray(first.pos, first.pos + first.len), buf.subarray(first.pos + first.len)]);
+  return Buffer.concat([
+    buf.subarray(first.pos, first.pos + first.len),
+    buf.subarray(first.pos + first.len),
+  ]);
 }
 
 function startCodeAt(buf, from) {
   for (let i = from; i + 3 <= buf.length; i++) {
     if (buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 1) return { pos: i, len: 3 };
-    if (i + 4 <= buf.length && buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 0 && buf[i + 3] === 1) {
+    if (
+      i + 4 <= buf.length &&
+      buf[i] === 0 &&
+      buf[i + 1] === 0 &&
+      buf[i + 2] === 0 &&
+      buf[i + 3] === 1
+    ) {
       return { pos: i, len: 4 };
     }
   }
@@ -128,7 +170,13 @@ function startCodeAt(buf, from) {
 function nextStartCode(buf, from) {
   for (let i = from; i + 3 <= buf.length; i++) {
     if (buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 1) return i;
-    if (i + 4 <= buf.length && buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 0 && buf[i + 3] === 1) {
+    if (
+      i + 4 <= buf.length &&
+      buf[i] === 0 &&
+      buf[i + 1] === 0 &&
+      buf[i + 2] === 0 &&
+      buf[i + 3] === 1
+    ) {
       return i;
     }
   }
@@ -163,7 +211,11 @@ function sendTracking() {
     String(now.getUTCSeconds()).padStart(2, '0'),
   ].join('');
   cmdSock.write(
-    buildGprsReply(IMEI, 'AAA', `0,${lat},${lng},${ymdhms},A,8,60,40,90,1.2,120,5000,3600,432|mtn|1a2b|3c4d,01,00,4.1|13.2`),
+    buildGprsReply(
+      IMEI,
+      'AAA',
+      `0,${lat},${lng},${ymdhms},A,8,60,40,90,1.2,120,5000,3600,432|mtn|1a2b|3c4d,01,00,4.1|13.2`,
+    ),
   );
   log('CMD', `AAA tracking sent (${lat},${lng})`);
 }
@@ -189,12 +241,32 @@ function sendDmsAlarm() {
   const ts = Math.floor((Date.now() - Date.UTC(2000, 0, 1)) / 1000);
   const lat = Math.round((35.7 + Math.random() * 0.01) * 1e6);
   const lng = Math.round((51.4 + Math.random() * 0.01) * 1e6);
-  const photo = Buffer.from(`2408231200${String(dmsIdx).padStart(2, '0')}_CH2_E126S${dms.type}_0.jpg\0`, 'ascii');
+  const photo = Buffer.from(
+    `2408231200${String(dmsIdx).padStart(2, '0')}_CH2_E126S${dms.type}_0.jpg\0`,
+    'ascii',
+  );
   const fe31 = Buffer.concat([Buffer.from([photo.length + 2, dms.protocol, dms.type]), photo]);
 
   const params = Buffer.concat([
     Buffer.from([3, 0x08, 40, 0, 0x09, 90, 0, 0x40, 126, 0]), // speed, heading, event=126
-    Buffer.from([3, 0x02, lng & 0xff, (lng >> 8) & 0xff, (lng >> 16) & 0xff, (lng >> 24) & 0xff, 0x03, lat & 0xff, (lat >> 8) & 0xff, (lat >> 16) & 0xff, (lat >> 24) & 0xff, 0x04, ts & 0xff, (ts >> 8) & 0xff, (ts >> 16) & 0xff, (ts >> 24) & 0xff]),
+    Buffer.from([
+      3,
+      0x02,
+      lng & 0xff,
+      (lng >> 8) & 0xff,
+      (lng >> 16) & 0xff,
+      (lng >> 24) & 0xff,
+      0x03,
+      lat & 0xff,
+      (lat >> 8) & 0xff,
+      (lat >> 16) & 0xff,
+      (lat >> 24) & 0xff,
+      0x04,
+      ts & 0xff,
+      (ts >> 8) & 0xff,
+      (ts >> 16) & 0xff,
+      (ts >> 24) & 0xff,
+    ]),
     Buffer.from([1, 0xfe, 0x31, fe31.length]),
     fe31,
   ]);
@@ -208,7 +280,10 @@ cmdSock.on('data', (chunk) => {
   cmdBuf = Buffer.concat([cmdBuf, chunk]);
   for (;;) {
     const res = parseGprsFrame(cmdBuf);
-    if (res.status === 'invalid') { cmdBuf = cmdBuf.subarray(1); continue; }
+    if (res.status === 'invalid') {
+      cmdBuf = cmdBuf.subarray(1);
+      continue;
+    }
     if (res.status === 'incomplete') break;
     cmdBuf = cmdBuf.subarray(res.consumed);
     log('CMD', `frame from platform: ${res.commandCode} ${res.content.slice(0, 50)}`);
@@ -268,7 +343,8 @@ async function startMedia(host, port, channel) {
 /** One NAL → COMPLETE (small) or FIRST/MIDDLE…/LAST fragments (large). */
 function nalToPackets(nal, seqAt, channel) {
   const nalType = (nal[nal.length - 1] ?? 0) & 0x1f; // nal starts with its own start code
-  const dataType = nalType === 5 || nalType === 7 || nalType === 8 ? DataTypes.I_FRAME : DataTypes.P_FRAME;
+  const dataType =
+    nalType === 5 || nalType === 7 || nalType === 8 ? DataTypes.I_FRAME : DataTypes.P_FRAME;
   // The NAL from the generator INCLUDES its Annex-B start code; §3.16 bodies
   // in the real device also carry the start code — keep it.
   if (nal.length <= MAX_BODY) {

@@ -19,8 +19,8 @@ import {
   DataTable,
   EmptyState,
   Select,
-  Toolbar,
   type TableColumn,
+  Toolbar,
 } from '@/components/tailwind-ui';
 import type { Device, DeviceProtocol, DeviceStatus, Vehicle } from '@/types/asset.types';
 import { Cpu } from 'lucide-react';
@@ -163,11 +163,7 @@ export function DevicesTab({
           deleteIcon="decommission"
           onView={(device) => onSelect(device.id)}
           onEdit={onEdit}
-          onDelete={
-            onDelete
-              ? (device) => onDelete(device.id, device.imei)
-              : undefined
-          }
+          onDelete={onDelete ? (device) => onDelete(device.id, device.imei) : undefined}
         />
       ),
     },
@@ -190,7 +186,9 @@ export function DevicesTab({
               options={STATUSES.map((s) => ({
                 value: s,
                 label:
-                  s === 'all' ? t('assets.filters.allStatus') : t(`assets.device.statusValues.${s}`),
+                  s === 'all'
+                    ? t('assets.filters.allStatus')
+                    : t(`assets.device.statusValues.${s}`),
               }))}
             />
             <Select

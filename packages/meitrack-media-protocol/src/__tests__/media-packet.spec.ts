@@ -11,7 +11,10 @@ import {
 
 const IMEI = '867191086416152';
 
-function samplePacket(payload: Buffer, overrides: Partial<Parameters<typeof buildMediaPacket>[0]> = {}): Buffer {
+function samplePacket(
+  payload: Buffer,
+  overrides: Partial<Parameters<typeof buildMediaPacket>[0]> = {},
+): Buffer {
   return buildMediaPacket({
     imei: IMEI,
     channel: 1,

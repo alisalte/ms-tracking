@@ -46,3 +46,6 @@ pnpm-debug.log*
 .cache/
 .eslintcache
 .parcel-cache/
+
+# ZCode session artifacts (plans scratch, tokens — never commit)
+.zcode/

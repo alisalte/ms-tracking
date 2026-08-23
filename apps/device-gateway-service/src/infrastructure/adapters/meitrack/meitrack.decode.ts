@@ -365,7 +365,10 @@ function parseDmsDetail(value: Buffer): DmsDetail | null {
   const zero = nameBytes.indexOf(0);
   const slice = zero >= 0 ? nameBytes.subarray(0, zero) : nameBytes;
   if (slice.length > 0) {
-    photoName = slice.toString('ascii').replace(/\x00+$/g, '') || null;
+    // Trailing NUL padding is dropped at the byte level (no control chars in regex).
+    let end = slice.length;
+    while (end > 0 && slice[end - 1] === 0) end--;
+    photoName = slice.subarray(0, end).toString('ascii') || null;
   }
   return { protocol, alarmType, photoName };
 }

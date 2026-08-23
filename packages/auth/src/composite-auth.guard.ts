@@ -33,7 +33,6 @@ import type { Request } from 'express';
 // silently injects undefined (API-key auth + revocation checks quietly OFF —
 // the exact defect class Sprint I fixed in notification-service).
 // ApiKeyVerifier + RevocationStore are tokens too (same rule applies).
-// biome-ignore lint/style/useImportType: DI token — must stay a value import.
 import { ApiKeyVerifier } from './api-key-verifier.js';
 import type { VerifiedApiKey } from './api-key-verifier.js';
 import type { AuthenticatedContext } from './authenticated-context.js';

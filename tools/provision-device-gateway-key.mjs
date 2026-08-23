@@ -27,7 +27,10 @@ function arg(name, fallback) {
   return fallback;
 }
 
-const baseUrl = arg('base-url', process.env.FV_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+const baseUrl = arg('base-url', process.env.FV_BASE_URL ?? 'http://localhost:8080').replace(
+  /\/$/,
+  '',
+);
 const tenant = arg('tenant', process.env.FV_TENANT ?? 'FleetVision');
 const email = arg('email', process.env.FV_ADMIN_EMAIL ?? 'admin@fleetvision.local');
 const password = arg('password', process.env.FV_ADMIN_PASSWORD ?? 'ChangeMe!StrongPass123');
@@ -67,7 +70,8 @@ async function main() {
     throw new Error(`api-key create failed: ${keyRes.status} ${await keyRes.text()}`);
   }
   const created = (await keyRes.json()).data;
-  if (!created?.key?.startsWith('fv_')) throw new Error(`unexpected key shape: ${created?.key_prefix}`);
+  if (!created?.key?.startsWith('fv_'))
+    throw new Error(`unexpected key shape: ${created?.key_prefix}`);
 
   console.log('Service API key created (shown once):');
   console.log('');

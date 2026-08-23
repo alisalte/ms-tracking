@@ -139,7 +139,9 @@ export function CommandParamForm({
                 label: (
                   <>
                     {fa ? o.labelFa : o.label}{' '}
-                    <span className="text-xs text-gray-500 dark:text-graydark-600">({o.value})</span>
+                    <span className="text-xs text-gray-500 dark:text-graydark-600">
+                      ({o.value})
+                    </span>
                   </>
                 ),
               }))}

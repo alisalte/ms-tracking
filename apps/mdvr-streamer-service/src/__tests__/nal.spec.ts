@@ -1,4 +1,3 @@
-import { describe, expect, it } from '@jest/globals';
 import {
   DataTypes,
   PacketFlags,
@@ -6,6 +5,7 @@ import {
   buildMediaPacket,
   parseMediaPacket,
 } from '@fleetvision/meitrack-media-protocol';
+import { describe, expect, it } from '@jest/globals';
 import { AccessUnitAssembler, isVideoPacket, splitNalus } from '../nal.js';
 
 const IMEI = '867191086416152';
@@ -35,17 +35,19 @@ describe('isVideoPacket (the audio-in-video quirk guard)', () => {
   it('accepts I/P frames with H264/H265 payload types', () => {
     expect(isVideoPacket(mediaPacket(Buffer.alloc(8), { dataType: DataTypes.I_FRAME }))).toBe(true);
     expect(isVideoPacket(mediaPacket(Buffer.alloc(8), { dataType: DataTypes.P_FRAME }))).toBe(true);
-    expect(
-      isVideoPacket(mediaPacket(Buffer.alloc(8), { payloadType: PayloadTypes.H265 })),
-    ).toBe(true);
+    expect(isVideoPacket(mediaPacket(Buffer.alloc(8), { payloadType: PayloadTypes.H265 }))).toBe(
+      true,
+    );
   });
 
   it('rejects audio/GPS payload types and audio/B data types', () => {
     // The MD300 sends audio frames with payloadType=H264 but dataType=Audio.
-    expect(
-      isVideoPacket(mediaPacket(Buffer.alloc(8), { dataType: DataTypes.AUDIO_FRAME })),
-    ).toBe(false);
-    expect(isVideoPacket(mediaPacket(Buffer.alloc(8), { dataType: DataTypes.B_FRAME }))).toBe(false);
+    expect(isVideoPacket(mediaPacket(Buffer.alloc(8), { dataType: DataTypes.AUDIO_FRAME }))).toBe(
+      false,
+    );
+    expect(isVideoPacket(mediaPacket(Buffer.alloc(8), { dataType: DataTypes.B_FRAME }))).toBe(
+      false,
+    );
     expect(
       isVideoPacket(mediaPacket(Buffer.alloc(8), { payloadType: PayloadTypes.G711A_AUDIO })),
     ).toBe(false);
@@ -78,20 +80,43 @@ describe('splitNalus', () => {
 });
 
 describe('AccessUnitAssembler (the MD300 COMPLETE + fragments cycle)', () => {
-  const keyframe = Buffer.concat([SC, Buffer.from([0x67, ...Array(60).fill(1)]), SC, Buffer.from([0x68, 2]), SC, Buffer.from([0x65, ...Array(300).fill(3)])]);
+  const keyframe = Buffer.concat([
+    SC,
+    Buffer.from([0x67, ...Array(60).fill(1)]),
+    SC,
+    Buffer.from([0x68, 2]),
+    SC,
+    Buffer.from([0x65, ...Array(300).fill(3)]),
+  ]);
   const frag = (n: number) => Buffer.concat([SC, Buffer.from([0x21, n])]);
 
   it('flushes [COMPLETE + fragments] when the next COMPLETE arrives', () => {
     const asm = new AccessUnitAssembler();
 
     // Cycle 1: COMPLETE keyframe + 3 fragments.
-    expect(asm.feed(mediaPacket(keyframe, { dataType: DataTypes.P_FRAME, packetFlag: PacketFlags.COMPLETE }))).toBeNull();
-    expect(asm.feed(mediaPacket(frag(1), { dataType: DataTypes.I_FRAME, packetFlag: PacketFlags.FIRST }))).toBeNull();
-    expect(asm.feed(mediaPacket(frag(2), { dataType: DataTypes.I_FRAME, packetFlag: PacketFlags.MIDDLE }))).toBeNull();
-    expect(asm.feed(mediaPacket(frag(3), { dataType: DataTypes.I_FRAME, packetFlag: PacketFlags.LAST }))).toBeNull();
+    expect(
+      asm.feed(
+        mediaPacket(keyframe, { dataType: DataTypes.P_FRAME, packetFlag: PacketFlags.COMPLETE }),
+      ),
+    ).toBeNull();
+    expect(
+      asm.feed(
+        mediaPacket(frag(1), { dataType: DataTypes.I_FRAME, packetFlag: PacketFlags.FIRST }),
+      ),
+    ).toBeNull();
+    expect(
+      asm.feed(
+        mediaPacket(frag(2), { dataType: DataTypes.I_FRAME, packetFlag: PacketFlags.MIDDLE }),
+      ),
+    ).toBeNull();
+    expect(
+      asm.feed(mediaPacket(frag(3), { dataType: DataTypes.I_FRAME, packetFlag: PacketFlags.LAST })),
+    ).toBeNull();
 
     // Cycle 2's COMPLETE flushes cycle 1 as one access unit.
-    const unit = asm.feed(mediaPacket(keyframe, { dataType: DataTypes.P_FRAME, packetFlag: PacketFlags.COMPLETE }));
+    const unit = asm.feed(
+      mediaPacket(keyframe, { dataType: DataTypes.P_FRAME, packetFlag: PacketFlags.COMPLETE }),
+    );
     expect(unit).not.toBeNull();
     expect(unit!.length).toBe(keyframe.length + frag(1).length + frag(2).length + frag(3).length);
     // Order: complete first, then fragments.
@@ -100,9 +125,13 @@ describe('AccessUnitAssembler (the MD300 COMPLETE + fragments cycle)', () => {
 
   it('keeps channels independent', () => {
     const asm = new AccessUnitAssembler();
-    expect(asm.feed(mediaPacket(keyframe, { channel: 1, packetFlag: PacketFlags.COMPLETE }))).toBeNull();
+    expect(
+      asm.feed(mediaPacket(keyframe, { channel: 1, packetFlag: PacketFlags.COMPLETE })),
+    ).toBeNull();
     // Channel 2's COMPLETE must not flush channel 1's open cycle.
-    expect(asm.feed(mediaPacket(keyframe, { channel: 2, packetFlag: PacketFlags.COMPLETE }))).toBeNull();
+    expect(
+      asm.feed(mediaPacket(keyframe, { channel: 2, packetFlag: PacketFlags.COMPLETE })),
+    ).toBeNull();
     // Channel 1's next COMPLETE flushes ONLY channel 1's stored keyframe
     // (channel 2's cycle stays pending for its own next COMPLETE).
     const unit = asm.feed(mediaPacket(keyframe, { channel: 1, packetFlag: PacketFlags.COMPLETE }));

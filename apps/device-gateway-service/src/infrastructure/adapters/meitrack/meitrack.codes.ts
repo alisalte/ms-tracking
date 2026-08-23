@@ -92,7 +92,9 @@ export interface DmsAlarm {
   readonly detail: string;
 }
 
-const MEITRACK_DMS_TYPES_P1: Readonly<Record<number, Pick<DmsAlarm, 'code' | 'detail' | 'severity'>>> = {
+const MEITRACK_DMS_TYPES_P1: Readonly<
+  Record<number, Pick<DmsAlarm, 'code' | 'detail' | 'severity'>>
+> = {
   1: { code: 'DMS_EYES_CLOSED', detail: 'Eyes closed', severity: 'CRITICAL' },
   2: { code: 'DMS_YAWNING', detail: 'Yawning', severity: 'WARNING' },
   4: { code: 'DMS_HEAD_DOWN', detail: 'Head lowered', severity: 'WARNING' },
@@ -110,7 +112,9 @@ const MEITRACK_DMS_TYPES_P1: Readonly<Record<number, Pick<DmsAlarm, 'code' | 'de
   16: { code: 'ADAS_TTC2', detail: 'Time-to-collision 2', severity: 'CRITICAL' },
 };
 
-const MEITRACK_DMS_TYPES_P2: Readonly<Record<number, Pick<DmsAlarm, 'code' | 'detail' | 'severity'>>> = {
+const MEITRACK_DMS_TYPES_P2: Readonly<
+  Record<number, Pick<DmsAlarm, 'code' | 'detail' | 'severity'>>
+> = {
   1: { code: 'DMS_LOOK_LEFT', detail: 'Looking left', severity: 'WARNING' },
   2: { code: 'DMS_LOOK_RIGHT', detail: 'Looking right', severity: 'WARNING' },
   3: { code: 'DMS_HEAD_UP', detail: 'Head raised', severity: 'WARNING' },

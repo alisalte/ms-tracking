@@ -171,9 +171,7 @@ export class AlarmEvaluatorService {
       );
     } catch (err) {
       // Device alarms are best-effort telemetry — never crash the consumer.
-      this.logger.warn(
-        `Device alarm ${alarm.code} processing failed: ${(err as Error).message}`,
-      );
+      this.logger.warn(`Device alarm ${alarm.code} processing failed: ${(err as Error).message}`);
     }
   }
 
@@ -597,7 +595,6 @@ export class AlarmEvaluatorService {
   }
 }
 
-
 // ── Device-alarm helpers ─────────────────────────────────────────────────────
 
 /** Dedup window for device alarms (device resends + DMS bursts). */
@@ -615,12 +612,9 @@ const DEVICE_ALARM_SEVERITY: Readonly<Record<string, 'INFO' | 'MEDIUM' | 'CRITIC
  * based) — keeps the one-open-alarm gate + dedup keys stable across restarts.
  */
 function deviceAlarmRuleId(code: string): string {
-  const hash = createHash('sha1')
-    .update('fleetvision:device-alarm:')
-    .update(code)
-    .digest();
-  hash[6] = (hash[6]! & 0x0f) | 0x50; // version 5
-  hash[8] = (hash[8]! & 0x3f) | 0x80; // variant
+  const hash = createHash('sha1').update('fleetvision:device-alarm:').update(code).digest();
+  hash[6] = ((hash[6] ?? 0) & 0x0f) | 0x50; // version 5
+  hash[8] = ((hash[8] ?? 0) & 0x3f) | 0x80; // variant
   const hex = hash.subarray(0, 16).toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }

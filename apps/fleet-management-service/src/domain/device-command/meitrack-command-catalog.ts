@@ -3368,14 +3368,14 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     // --- geofence ----------------------------------------------------------
     case 'B05':
       return text(
-        `B05,${num(raw, 'fenceNumber')},${coord(num(raw, 'latitude')!)}` +
-          `,${coord(num(raw, 'longitude')!)},${num(raw, 'radius')}` +
+        `B05,${num(raw, 'fenceNumber')},${coord(num(raw, 'latitude') ?? 0)}` +
+          `,${coord(num(raw, 'longitude') ?? 0)},${num(raw, 'radius')}` +
           `,${str(raw, 'enterAlert')},${str(raw, 'exitAlert')}`,
       );
     case 'B06':
       return text(`B06,${num(raw, 'fenceNumber')}`);
     case 'B11': {
-      const fence = num(raw, 'fenceNumber')!;
+      const fence = num(raw, 'fenceNumber') ?? 0;
       const pointsStr = str(raw, 'points');
       if (!pointsStr) return text(`B11,${fence}`); // number only → delete
       const tokens = pointsStr.split(/[,;\s]+/).map(Number);
@@ -3499,10 +3499,10 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     // --- media (binary structs) -------------------------------------------
     case 'A9A': {
       const struct = [
-        ...lpAscii(str(raw, 'server')!),
-        ...u16be(num(raw, 'tcpPort')!),
+        ...lpAscii(str(raw, 'server') ?? ''),
+        ...u16be(num(raw, 'tcpPort') ?? 0),
         ...u16be(num(raw, 'udpPort') ?? 0),
-        ...byte(num(raw, 'channel')!),
+        ...byte(num(raw, 'channel') ?? 0),
         ...byte(Number(str(raw, 'dataType'))),
         ...byte(Number(str(raw, 'streamType'))),
       ];
@@ -3511,7 +3511,7 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     case 'A9B':
     case 'AB3': {
       const struct = [
-        ...byte(num(raw, 'channel')!),
+        ...byte(num(raw, 'channel') ?? 0),
         ...byte(Number(str(raw, 'control'))),
         ...byte(Number(str(raw, 'closeType') ?? '0')),
         ...byte(Number(str(raw, 'switchType') ?? '0')),
@@ -3536,10 +3536,10 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     }
     case 'A9D': {
       const struct = [
-        ...lpAscii(str(raw, 'server')!),
-        ...u16be(num(raw, 'tcpPort')!),
+        ...lpAscii(str(raw, 'server') ?? ''),
+        ...u16be(num(raw, 'tcpPort') ?? 0),
         ...u16be(num(raw, 'udpPort') ?? 0),
-        ...byte(num(raw, 'channel')!),
+        ...byte(num(raw, 'channel') ?? 0),
         ...byte(Number(str(raw, 'avType'))),
         ...byte(Number(str(raw, 'streamType'))),
         ...byte(Number(str(raw, 'capType'))),
@@ -3553,7 +3553,7 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     case 'A9E':
     case 'AB5': {
       const struct = [
-        ...byte(num(raw, 'channel')!),
+        ...byte(num(raw, 'channel') ?? 0),
         ...byte(Number(str(raw, 'control'))),
         ...byte(0), // viewRank
         ...bcdTime(str(raw, 'dragPoint')),
@@ -3562,11 +3562,11 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     }
     case 'A9F': {
       const struct = [
-        ...lpAscii(str(raw, 'server')!),
-        ...u16be(num(raw, 'port')!),
-        ...lpAscii(str(raw, 'username')!),
-        ...lpAscii(str(raw, 'password')!),
-        ...lpAscii(str(raw, 'path')!),
+        ...lpAscii(str(raw, 'server') ?? ''),
+        ...u16be(num(raw, 'port') ?? 0),
+        ...lpAscii(str(raw, 'username') ?? ''),
+        ...lpAscii(str(raw, 'password') ?? ''),
+        ...lpAscii(str(raw, 'path') ?? ''),
         ...byte(num(raw, 'channel') ?? 0),
         ...bcdTime(str(raw, 'startTime')),
         ...bcdTime(str(raw, 'endTime')),
@@ -3579,7 +3579,7 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       return hexBody('A9F', struct);
     }
     case 'AA0': {
-      const name = str(raw, 'fileName')!;
+      const name = str(raw, 'fileName') ?? '';
       const struct = [...byte(Number(str(raw, 'flag'))), ...ascii(name)];
       return hexBody('AA0', struct);
     }
@@ -3591,10 +3591,10 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       return hexBody('AA4', ym);
     }
     case 'AB2': {
-      const dataType = str(raw, 'dataType')!;
+      const dataType = str(raw, 'dataType') ?? '';
       const struct = [
-        ...lpAscii(str(raw, 'uploadUrl')!),
-        ...byte(num(raw, 'channel')!),
+        ...lpAscii(str(raw, 'uploadUrl') ?? ''),
+        ...byte(num(raw, 'channel') ?? 0),
         ...byte(Number(dataType)),
         ...byte(Number(str(raw, 'streamType'))),
         ...(dataType === '2' ? lpAscii(str(raw, 'downloadUrl') ?? '') : []),
@@ -3603,8 +3603,8 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     }
     case 'AB4': {
       const struct = [
-        ...lpAscii(str(raw, 'url')!),
-        ...byte(num(raw, 'channel')!),
+        ...lpAscii(str(raw, 'url') ?? ''),
+        ...byte(num(raw, 'channel') ?? 0),
         ...byte(Number(str(raw, 'avType'))),
         ...byte(Number(str(raw, 'streamType'))),
         ...byte(Number(str(raw, 'capType'))),
@@ -3667,7 +3667,7 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
 
     // --- custom ------------------------------------------------------------
     case 'RAW': {
-      const t = str(raw, 'text')!;
+      const t = str(raw, 'text') ?? '';
       if (!/^[A-F][0-9A-F]{2}($|,)/.test(t)) {
         throw new CommandValidationError(
           'RAW command must start with a command code like A10 or B05.',

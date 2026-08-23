@@ -42,7 +42,6 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(function Switch(
           <input
             ref={ref}
             type="checkbox"
-            role="switch"
             id={inputId}
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}

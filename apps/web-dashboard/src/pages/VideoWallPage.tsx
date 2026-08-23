@@ -19,13 +19,13 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useChannels, useSaveWall, useVideoWalls } from '@/api/video.api';
+import { Button } from '@/components/tailwind-ui';
 import { CamerasPanel } from '@/components/video/CamerasPanel';
-import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
 import { ChannelDock } from '@/components/video/ChannelDock';
+import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
 import { PlaybackPanel } from '@/components/video/PlaybackPanel';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
-import { Button } from '@/components/tailwind-ui';
 import { toggleFullscreen } from '@/lib/video-stream';
 import { emptyTiles } from '@/mock/video-data';
 import { MAX_LIVE_TILES, WALL_DIVISIONS } from '@/types/video.types';
@@ -264,7 +264,12 @@ export function VideoWallPage() {
         <span className="hidden text-xs text-gray-400 sm:inline dark:text-graydark-600">
           {t('video.keyboardHint', { defaultValue: 'F: fullscreen · 1-6: layout' })}
         </span>
-        <Button size="sm" variant="secondary" leftIcon={<Settings size={14} aria-hidden />} onClick={() => setSetupOpen(true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          leftIcon={<Settings size={14} aria-hidden />}
+          onClick={() => setSetupOpen(true)}
+        >
           {t('video.setup.open')}
         </Button>
       </div>

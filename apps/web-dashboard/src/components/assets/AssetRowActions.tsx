@@ -43,10 +43,16 @@ export function AssetRowActions<T>({
     <div
       className="flex items-center justify-end gap-0.5"
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
       role="presentation"
     >
       <Tooltip label={t('common.view')}>
-        <IconButton size="sm" variant="ghost" aria-label={t('common.view')} onClick={() => onView(record)}>
+        <IconButton
+          size="sm"
+          variant="ghost"
+          aria-label={t('common.view')}
+          onClick={() => onView(record)}
+        >
           <Eye size={15} />
         </IconButton>
       </Tooltip>

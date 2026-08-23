@@ -8,12 +8,14 @@
   "files": {
     "ignoreUnknown": true,
     "ignore": [
+      ".zcode/**",
       "**/dist/**",
       "**/node_modules/**",
       "**/coverage/**",
       "**/*.md",
       "**/pnpm-lock.yaml",
-      "**/generated/**"
+      "**/generated/**",
+      "apps/web-dashboard/public/**"
     ]
   },
   "formatter": {

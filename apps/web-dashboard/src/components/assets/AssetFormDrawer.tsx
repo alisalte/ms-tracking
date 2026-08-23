@@ -30,16 +30,16 @@ import {
 } from '@/api/asset.api';
 import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { useToast } from '@/components/feedback/ToastProvider';
-import type { AssetTab } from '@/pages/AssetManagementPage';
 import {
   Alert,
   Button,
   Drawer,
   Input,
   Select,
-  Textarea,
   type SelectOption,
+  Textarea,
 } from '@/components/tailwind-ui';
+import type { AssetTab } from '@/pages/AssetManagementPage';
 import type {
   CreateDevicePayload,
   CreateFleetPayload,
@@ -160,12 +160,7 @@ const deviceEditSchema = z.object({
 });
 
 const PROTOCOL_OPTIONS: DeviceProtocol[] = ['gt06', 'jt808', 'meitrack', 'stub'];
-const DEVICE_STATUS_OPTIONS: DeviceStatus[] = [
-  'ACTIVE',
-  'SUSPENDED',
-  'UNPAIRED',
-  'DECOMMISSIONED',
-];
+const DEVICE_STATUS_OPTIONS: DeviceStatus[] = ['ACTIVE', 'SUSPENDED', 'UNPAIRED', 'DECOMMISSIONED'];
 
 export function AssetFormDrawer({
   open,
@@ -324,7 +319,12 @@ export function AssetFormDrawer({
         </>
       }
     >
-      <form id="asset-form" onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+      <form
+        id="asset-form"
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        className="flex flex-col gap-4"
+      >
         {serverError && <Alert variant="danger">{serverError}</Alert>}
 
         {entity === 'fleets' && <FleetFields control={control} errors={errors} t={t} />}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { fileURLToPath } from 'node:url';
 import {
   DataTypes,
   PacketFlags,
@@ -6,9 +6,9 @@ import {
   buildMediaPacket,
   parseMediaPacket,
 } from '@fleetvision/meitrack-media-protocol';
-import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from '@jest/globals';
 import { streamerConfigSchema } from '../config.js';
-import { LateBoundSink, StreamRegistry, type BroadcastSink } from '../stream-session.js';
+import { type BroadcastSink, LateBoundSink, StreamRegistry } from '../stream-session.js';
 
 const IMEI = '867191086416152';
 const SC = Buffer.from([0x00, 0x00, 0x00, 0x01]);
@@ -16,7 +16,13 @@ const SC = Buffer.from([0x00, 0x00, 0x00, 0x01]);
 /** Stub "ffmpeg": copies stdin -> stdout (see fixtures/stub-ffmpeg.mjs). */
 const STUB = fileURLToPath(new URL('./fixtures/stub-ffmpeg.mjs', import.meta.url));
 
-function videoPacket(payload: Buffer, packetNo: number, packetFlag: number = PacketFlags.COMPLETE, dataType: number = DataTypes.P_FRAME, payloadType: number = PayloadTypes.H264) {
+function videoPacket(
+  payload: Buffer,
+  packetNo: number,
+  packetFlag: number = PacketFlags.COMPLETE,
+  dataType: number = DataTypes.P_FRAME,
+  payloadType: number = PayloadTypes.H264,
+) {
   const buf = buildMediaPacket({
     imei: IMEI,
     channel: 1,
@@ -89,7 +95,11 @@ describe('StreamSession with stub ffmpeg', () => {
   it('refuses streams beyond MAX_STREAMS and reports stats per imei', () => {
     const sink = new RecordingSink();
     const registry = new StreamRegistry(
-      streamerConfigSchema.parse({ MAX_STREAMS: '1', FFMPEG_BIN: STUB ?? 'ffmpeg', LOG_LEVEL: 'error' }),
+      streamerConfigSchema.parse({
+        MAX_STREAMS: '1',
+        FFMPEG_BIN: STUB ?? 'ffmpeg',
+        LOG_LEVEL: 'error',
+      }),
       sink,
       () => undefined,
     );

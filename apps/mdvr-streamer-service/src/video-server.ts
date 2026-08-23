@@ -12,7 +12,7 @@
  *                       -> invalid? skip one byte
  *                       -> ok? seq-gap check + feed the IMEI's StreamSession
  */
-import { createServer, type Server as NetServer } from 'node:net';
+import { type Server as NetServer, createServer } from 'node:net';
 import { findPacketStart, parseMediaPacket } from '@fleetvision/meitrack-media-protocol';
 import type { StreamerConfig } from './config.js';
 import type { StreamRegistry } from './stream-session.js';
@@ -96,7 +96,7 @@ export function startVideoServer(
       log('VIDEO', `stream connection closed (${imei ?? 'unbound'})`);
       if (imei) registry.close(imei);
     });
-    socket.on("error", (e: Error) => {
+    socket.on('error', (e: Error) => {
       log('VIDEO', `error: ${e.message}`);
     });
   });

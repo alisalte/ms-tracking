@@ -356,7 +356,6 @@ describe('WallGrid with a real MEITRACK_MDVR channel', () => {
 
 import * as WallGridModule from '@/components/video/WallGrid';
 
-
 // ── Wire-shape regression: media-service rows are camelCase ──────────────────
 
 describe('mapMediaChannel wire shape', () => {

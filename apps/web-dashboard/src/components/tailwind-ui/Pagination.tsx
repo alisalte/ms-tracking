@@ -24,12 +24,7 @@ export function LoadMoreButton({
   if (!hasNextPage) return null;
   return (
     <div className="flex justify-center">
-      <Button
-        variant="outline"
-        onClick={onClick}
-        loading={isFetchingNextPage}
-        data-testid={testId}
-      >
+      <Button variant="outline" onClick={onClick} loading={isFetchingNextPage} data-testid={testId}>
         {isFetchingNextPage ? t('common.loading') : t('common.loadMore')}
       </Button>
     </div>

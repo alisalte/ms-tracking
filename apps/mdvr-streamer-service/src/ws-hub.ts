@@ -5,7 +5,7 @@
  * WebSocket source). Status/control is served over REST so it never corrupts
  * the binary stream — the same discipline the standalone pipeline used.
  */
-import type { WebSocketServer, WebSocket } from 'ws';
+import type { WebSocket, WebSocketServer } from 'ws';
 
 export class WsHub {
   private readonly rooms = new Map<string, Set<WebSocket>>();

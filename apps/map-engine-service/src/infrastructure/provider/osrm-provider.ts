@@ -90,9 +90,7 @@ export class OsrmProvider implements MapProvider {
     if (cached) return cached;
 
     const coords = req.waypoints.map((w) => `${w.lng},${w.lat}`).join(';');
-    const url =
-      `${this.deps.baseUrl}/route/v1/${this.profile}/${coords}` +
-      '?overview=full&geometries=geojson';
+    const url = `${this.deps.baseUrl}/route/v1/${this.profile}/${coords}?overview=full&geometries=geojson`;
     const body = await this.osrmFetch<OsrmRouteResponse>(url);
 
     if (body.code !== 'Ok' || !body.routes?.length) {
@@ -127,9 +125,7 @@ export class OsrmProvider implements MapProvider {
     if (cached) return cached;
 
     const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
-    const url =
-      `${this.deps.baseUrl}/match/v1/${this.profile}/${coords}` +
-      '?geometries=geojson&overview=false&steps=false';
+    const url = `${this.deps.baseUrl}/match/v1/${this.profile}/${coords}?geometries=geojson&overview=false&steps=false`;
     const body = await this.osrmFetch<OsrmMatchResponse>(url);
     if (body.code !== 'Ok') {
       throw new RouteUnavailableError(
@@ -168,9 +164,7 @@ export class OsrmProvider implements MapProvider {
   }
 
   public async snapPoint(req: { latitude: number; longitude: number }): Promise<SnappedPoint> {
-    const url =
-      `${this.deps.baseUrl}/nearest/v1/${this.profile}/${req.longitude},${req.latitude}` +
-      '?number=1';
+    const url = `${this.deps.baseUrl}/nearest/v1/${this.profile}/${req.longitude},${req.latitude}?number=1`;
     const body = await this.osrmFetch<OsrmNearestResponse>(url);
     const wp = body.code === 'Ok' ? body.waypoints?.[0] : undefined;
     if (!wp?.location) {

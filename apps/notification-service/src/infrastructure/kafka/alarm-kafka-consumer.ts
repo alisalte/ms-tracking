@@ -118,9 +118,7 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
       // The device-alarm topic may not exist yet on fresh clusters (leadership
       // election storms on auto-create) — the alarm path is an ADDITIVE feed;
       // never block the core consumer boot on it.
-      this.logger.warn(
-        `Device-alarm topic subscribe deferred: ${(err as Error).message}`,
-      );
+      this.logger.warn(`Device-alarm topic subscribe deferred: ${(err as Error).message}`);
     }
     this.started = true;
     this.logger.log(
@@ -310,7 +308,6 @@ function extractEventId(value: Buffer): string | null {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 // ── Device-alarm envelope (device-gateway telemetry.alarm.raw.v1) ────────────
 

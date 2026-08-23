@@ -54,7 +54,6 @@ export const JSMpegLivePlayer = forwardRef<HTMLCanvasElement, JSMpegLivePlayerPr
 
     return (
       <canvas
-        // biome-ignore lint/a11y/noStaticElementInteractions: mirrored from LiveVideoPlayer's <video>
         ref={(el) => {
           canvasRef.current = el;
           if (typeof ref === 'function') ref(el);

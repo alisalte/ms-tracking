@@ -15,7 +15,11 @@
  *     arrives, flush [previous COMPLETE + fragments] as one access unit.
  *     Every part already carries its own Annex-B start code.
  */
-import { DataTypes, PayloadTypes, type MeitrackMediaPacket } from '@fleetvision/meitrack-media-protocol';
+import {
+  DataTypes,
+  type MeitrackMediaPacket,
+  PayloadTypes,
+} from '@fleetvision/meitrack-media-protocol';
 
 /** 4-byte Annex-B start code prepended to bare NAL units. */
 export const ANNEX_B_START_CODE = Buffer.from([0x00, 0x00, 0x00, 0x01]);
@@ -48,7 +52,13 @@ export function splitNalus(buf: Buffer): Buffer[] {
 
   while (i < buf.length) {
     let scLen = 0;
-    if (i + 4 <= buf.length && buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 0 && buf[i + 3] === 1) {
+    if (
+      i + 4 <= buf.length &&
+      buf[i] === 0 &&
+      buf[i + 1] === 0 &&
+      buf[i + 2] === 0 &&
+      buf[i + 3] === 1
+    ) {
       scLen = 4;
     } else if (i + 3 <= buf.length && buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 1) {
       scLen = 3;
@@ -124,7 +134,8 @@ export function summarizeNaluTypes(buf: Buffer, codec: 'h264' | 'hevc'): string 
   const nalus = splitNalus(buf);
   return nalus
     .map((n) => {
-      const t = codec === 'hevc' ? `n${(n[0]! >> 1) & 0x3f}` : String(n[0]! & 0x1f);
+      const first = n[0] ?? 0;
+      const t = codec === 'hevc' ? `n${(first >> 1) & 0x3f}` : String(first & 0x1f);
       return `${t}(${n.length}B)`;
     })
     .join(',');

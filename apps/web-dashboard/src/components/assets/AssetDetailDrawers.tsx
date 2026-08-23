@@ -344,17 +344,17 @@ function VehicleDetailDrawer({
           {vehicle && (
             <div className="flex flex-col gap-3">
               <div>
-                <MetaRow
-                  icon={<Truck />}
-                  label={t('assets.vehicle.fleet')}
-                  value={fleetName}
-                />
+                <MetaRow icon={<Truck />} label={t('assets.vehicle.fleet')} value={fleetName} />
                 <MetaRow
                   icon={<Truck />}
                   label={t('assets.vehicle.plate')}
                   value={vehicle.plate ?? '—'}
                 />
-                <MetaRow icon={<Truck />} label={t('assets.vehicle.vin')} value={vehicle.vin ?? '—'} />
+                <MetaRow
+                  icon={<Truck />}
+                  label={t('assets.vehicle.vin')}
+                  value={vehicle.vin ?? '—'}
+                />
               </div>
 
               <Divider />
@@ -531,13 +531,21 @@ function DeviceDetailDrawer({
                 label={t('assets.device.imei')}
                 value={<span className="font-mono">{device.imei}</span>}
               />
-              <MetaRow icon={<Cpu />} label={t('assets.device.serial')} value={device.serialNumber ?? '—'} />
+              <MetaRow
+                icon={<Cpu />}
+                label={t('assets.device.serial')}
+                value={device.serialNumber ?? '—'}
+              />
               <MetaRow
                 icon={<Cpu />}
                 label={t('assets.device.manufacturer')}
                 value={device.manufacturer ?? '—'}
               />
-              <MetaRow icon={<Cpu />} label={t('assets.device.model')} value={device.model ?? '—'} />
+              <MetaRow
+                icon={<Cpu />}
+                label={t('assets.device.model')}
+                value={device.model ?? '—'}
+              />
               <MetaRow
                 icon={<Cpu />}
                 label={t('assets.device.protocol')}

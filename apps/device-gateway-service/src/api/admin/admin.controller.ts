@@ -22,9 +22,11 @@ import type { ConnectionPool } from '../../application/connection-pool.js';
 import type { SessionManager } from '../../application/session-manager.js';
 import type { AdapterRegistry } from '../../infrastructure/protocol/index.js';
 import { ADAPTER_REGISTRY, CONNECTION_POOL, SESSION_MANAGER } from '../tokens.js';
-// biome-ignore lint/style/useImportType: NestJS DI needs the class VALUE at runtime for
-// reflect-metadata (a type-only import is elided by tsc and the compiled build then
-// fails to resolve the 4th constructor param — design:paramtypes degrades to Function).
+// NestJS DI needs the class VALUE at runtime: a type-only import is elided by tsc
+// and the compiled build then fails to resolve the 4th constructor param
+// (design:paramtypes degrades to Function). biome-ignore-start is required because
+// useImportType would otherwise auto-revert this to `import type`.
+// biome-ignore lint/style/useImportType: DI token — must stay a value import.
 import { GatewayAuditWriter } from './gateway-audit-writer.js';
 
 @Controller('admin')

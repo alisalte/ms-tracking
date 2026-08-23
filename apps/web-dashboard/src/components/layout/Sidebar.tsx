@@ -2,12 +2,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 
-import pkg from '../../../package.json';
 import { Brand } from '@/components/branding/Brand';
 import { NAV_GROUPS, filterNavByPermissions } from '@/components/shell/nav.config';
 import { Tooltip } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 import { isRTL } from '@/i18n/config';
+import pkg from '../../../package.json';
 
 /** Expanded sidebar width (TailAdmin default = 270px). */
 export const SIDEBAR_WIDTH = 270;

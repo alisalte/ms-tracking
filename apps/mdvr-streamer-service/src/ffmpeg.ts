@@ -13,7 +13,7 @@
  * JSMpeg (baseline decoder) can render. This is the configuration validated
  * against a real MD300 in the standalone pipeline this service ports.
  */
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 
 /** 4-byte Annex-B start code prepended to bare access units. */
@@ -101,7 +101,9 @@ export class FFmpegProcess {
     this.log(`spawning ${this.ffmpegBin} (${demuxer} stdin -> mpegts stdout)`);
     this._producing = false;
     try {
-      this.proc = spawn(this.ffmpegBin, args, { stdio: ['pipe', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams;
+      this.proc = spawn(this.ffmpegBin, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }) as ChildProcessWithoutNullStreams;
     } catch (err) {
       this.log(`spawn error: ${(err as Error).message}`);
       this.proc = null;

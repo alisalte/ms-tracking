@@ -6,22 +6,18 @@
  * @param {import('knex').Knex} knex
  */
 export async function up(knex) {
+  await knex.raw('ALTER TABLE media.video_channels DROP CONSTRAINT video_channels_protocol_check');
   await knex.raw(
-    "ALTER TABLE media.video_channels DROP CONSTRAINT video_channels_protocol_check",
-  );
-  await knex.raw(
-    "ALTER TABLE media.video_channels ADD CONSTRAINT video_channels_protocol_check " +
+    'ALTER TABLE media.video_channels ADD CONSTRAINT video_channels_protocol_check ' +
       "CHECK (protocol IN ('JT1078', 'RTSP', 'RTMP', 'WEBRTC', 'MEITRACK_MDVR'))",
   );
 }
 
 /** @param {import('knex').Knex} knex */
 export async function down(knex) {
+  await knex.raw('ALTER TABLE media.video_channels DROP CONSTRAINT video_channels_protocol_check');
   await knex.raw(
-    "ALTER TABLE media.video_channels DROP CONSTRAINT video_channels_protocol_check",
-  );
-  await knex.raw(
-    "ALTER TABLE media.video_channels ADD CONSTRAINT video_channels_protocol_check " +
+    'ALTER TABLE media.video_channels ADD CONSTRAINT video_channels_protocol_check ' +
       "CHECK (protocol IN ('JT1078', 'RTSP', 'RTMP', 'WEBRTC'))",
   );
 }

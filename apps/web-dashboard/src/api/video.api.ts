@@ -183,7 +183,11 @@ export function mdvrWsUrl(imei: string): string {
  * device-gateway writes it to the device, which then dials the mdvr-streamer.
  */
 export function useStartMdvrStream() {
-  return useMutation<unknown, Error, { deviceId: string; logicalChannel: number; dataType?: string; streamType?: string }>({
+  return useMutation<
+    unknown,
+    Error,
+    { deviceId: string; logicalChannel: number; dataType?: string; streamType?: string }
+  >({
     mutationFn: ({ deviceId, logicalChannel, dataType, streamType }) => {
       const { server, tcpPort } = mdvrStreamEndpoint();
       return apiPost(`/devices/${deviceId}/commands`, {
@@ -214,13 +218,17 @@ export function useStopMdvrStream() {
 
 /** Register a camera channel on a device (media-service POST /media/channels). */
 export function useRegisterChannel() {
-  return useMutation<unknown, Error, {
-    vehicleId?: string | null;
-    deviceId: string;
-    label: string;
-    logicalChannel: number;
-    imei: string;
-  }>({
+  return useMutation<
+    unknown,
+    Error,
+    {
+      vehicleId?: string | null;
+      deviceId: string;
+      label: string;
+      logicalChannel: number;
+      imei: string;
+    }
+  >({
     mutationFn: (body) =>
       apiPostRaw('/media/channels', {
         vehicleId: body.vehicleId ?? null,

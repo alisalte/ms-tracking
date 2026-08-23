@@ -6,7 +6,7 @@
  * come from the semantic palette (`theme/palette.ts` `status.*`) so the UI
  * never hardcodes hex values.
  */
-import { ScanFace,
+import {
   AlertTriangle,
   Camera,
   CarFront,
@@ -14,6 +14,7 @@ import { ScanFace,
   Gauge,
   type LucideIcon,
   MapPin,
+  ScanFace,
   Siren,
   Thermometer,
   WifiOff,

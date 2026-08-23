@@ -90,10 +90,7 @@ export class NominatimProvider implements MapProvider {
     const cached = await this.deps.cache.get<Address[]>(cacheKey);
     if (cached) return cached;
 
-    const url =
-      `${this.deps.baseUrl}/search?format=jsonv2&addressdetails=1&limit=10` +
-      `&q=${encodeURIComponent(req.query)}` +
-      (this.deps.language ? `&accept-language=${encodeURIComponent(this.deps.language)}` : '');
+    const url = `${this.deps.baseUrl}/search?format=jsonv2&addressdetails=1&limit=10&q=${encodeURIComponent(req.query)}${this.deps.language ? `&accept-language=${encodeURIComponent(this.deps.language)}` : ''}`;
     const places = await this.nominatimFetch<NominatimPlace[]>(url);
 
     const results = places.map((p): Address => {

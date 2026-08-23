@@ -23,20 +23,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useDevices } from '@/api/asset.api';
 import { useCommandCatalog, useCommandHistory, useSendDeviceCommand } from '@/api/command.api';
-import {
-  useRegisterChannel,
-  useStartMdvrStream,
-  useStopMdvrStream,
-} from '@/api/video.api';
+import { useRegisterChannel, useStartMdvrStream, useStopMdvrStream } from '@/api/video.api';
 import { CommandParamForm } from '@/components/commands/CommandParamForm';
-import {
-  Alert,
-  Badge,
-  Button,
-  Drawer,
-  Input,
-  Select,
-} from '@/components/tailwind-ui';
+import { Alert, Badge, Button, Drawer, Input, Select } from '@/components/tailwind-ui';
 import type { CommandCategory, CommandDef, CommandStatus } from '@/types/command.types';
 
 /** Wizard step ids: 'device' | a catalog category | 'test'. */
@@ -168,7 +157,10 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
               </Select>
               {device && (
                 <p className="text-xs text-gray-500 dark:text-graydark-600">
-                  {t('video.setup.deviceMeta', { protocol: device.protocol, status: device.status })}
+                  {t('video.setup.deviceMeta', {
+                    protocol: device.protocol,
+                    status: device.status,
+                  })}
                 </p>
               )}
               <Alert variant="info">{t('video.wizard.deviceHelp')}</Alert>
@@ -208,10 +200,7 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
                     <p className="mb-3 text-xs text-gray-500 dark:text-graydark-600">
                       {fa ? cmd.descriptionFa : cmd.description}
                     </p>
-                    <CommandParamForm
-                      command={cmd}
-                      onSend={(params) => send(cmd, params)}
-                    />
+                    <CommandParamForm command={cmd} onSend={(params) => send(cmd, params)} />
                   </article>
                 ))}
             </section>
@@ -287,7 +276,10 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
                   <Button
                     size="sm"
                     variant="success"
-                    onClick={() => deviceId && startStream.mutate({ deviceId, logicalChannel: Number(channelNo) })}
+                    onClick={() =>
+                      deviceId &&
+                      startStream.mutate({ deviceId, logicalChannel: Number(channelNo) })
+                    }
                     disabled={!deviceId || startStream.isPending}
                     loading={startStream.isPending}
                   >
@@ -296,7 +288,9 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => deviceId && stopStream.mutate({ deviceId, logicalChannel: Number(channelNo) })}
+                    onClick={() =>
+                      deviceId && stopStream.mutate({ deviceId, logicalChannel: Number(channelNo) })
+                    }
                     disabled={!deviceId || stopStream.isPending}
                   >
                     {t('video.setup.stopStream')}
@@ -428,9 +422,7 @@ function StepButton({
 
 /** Section heading inside a step body. */
 function StepHeader({ label }: { label: string }) {
-  return (
-    <h3 className="text-sm font-bold text-gray-800 dark:text-graydark-800">{label}</h3>
-  );
+  return <h3 className="text-sm font-bold text-gray-800 dark:text-graydark-800">{label}</h3>;
 }
 
 /** Command lifecycle chip: QUEUED → SENT → ACKED/FAILED/EXPIRED. */

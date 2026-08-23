@@ -274,7 +274,11 @@ function cceFrame(params: Buffer): Buffer {
   const commaBlock = Buffer.concat([Buffer.from(',', 'ascii'), body]);
   const length = commaBlock.length + 1 + 2 + 2;
   const head = `$$A${String(length)}`;
-  const checksumRegion = Buffer.concat([Buffer.from(head, 'ascii'), commaBlock, Buffer.from('*', 'ascii')]);
+  const checksumRegion = Buffer.concat([
+    Buffer.from(head, 'ascii'),
+    commaBlock,
+    Buffer.from('*', 'ascii'),
+  ]);
   const checksum = meitrackChecksum(checksumRegion);
   return Buffer.concat([
     checksumRegion,
@@ -378,7 +382,15 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
 
   it('maps severe DMS types (protocol 2, type 5 = drowsiness) to CRITICAL', () => {
     const fe31 = Buffer.from([3, 0x02, 0x05, 0x00]);
-    const params = cceParams([[0x40, 126]], [[0x02, LNG], [0x03, LAT], [0x04, T0]], [[0xfe31, fe31]]);
+    const params = cceParams(
+      [[0x40, 126]],
+      [
+        [0x02, LNG],
+        [0x03, LAT],
+        [0x04, T0],
+      ],
+      [[0xfe31, fe31]],
+    );
     const msgs = decodeFrame(cceFrame(params));
     expect(first(msgs).alarms?.[0]?.code).toBe('DMS_DROWSINESS');
     expect(first(msgs).alarms?.[0]?.severity).toBe('CRITICAL');
@@ -393,7 +405,14 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
   });
 
   it('decodes a plain event alarm (overspeed 19) without DMS detail', () => {
-    const params = cceParams([[0x40, 19]], [[0x02, LNG], [0x03, LAT], [0x04, T0]]);
+    const params = cceParams(
+      [[0x40, 19]],
+      [
+        [0x02, LNG],
+        [0x03, LAT],
+        [0x04, T0],
+      ],
+    );
     const msgs = decodeFrame(cceFrame(params));
     expect(first(msgs).alarms?.[0]?.code).toBe('OVERSPEED');
   });

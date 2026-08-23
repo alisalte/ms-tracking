@@ -14,7 +14,7 @@
  * tenant deployment). See docs/implementation/MDVR_LIVE_VIDEO.md before
  * exposing :3013/:6182 beyond a trusted network.
  */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type { StreamerConfig } from './config.js';
 import type { StreamRegistry } from './stream-session.js';
@@ -76,7 +76,10 @@ export function startHttpApi(
   const wss = new WebSocketServer({ server });
   const hub = new WsHub(wss);
   wss.on('connection', () => {
-    log('WS', `player connected (${hub.totalViewers()} viewers across ${hub.activeRooms().length} rooms)`);
+    log(
+      'WS',
+      `player connected (${hub.totalViewers()} viewers across ${hub.activeRooms().length} rooms)`,
+    );
   });
 
   server.listen(config.PORT, config.HOST, () => {
