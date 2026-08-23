@@ -18,7 +18,7 @@
  * engine's full 4-level matrix per §2.11.
  */
 
-/** The 8 catalog alarm types (12_Alarm_Engine.md §2.1) + an "other" catch-all. */
+/** The 8 catalog alarm types (12_Alarm_Engine.md §2.1) + DMS/ADAS + "other". */
 export type AlarmType =
   | 'sos'
   | 'overspeed'
@@ -28,6 +28,7 @@ export type AlarmType =
   | 'temperature'
   | 'collision'
   | 'camera'
+  | 'dms'
   | 'other';
 
 /** The 4-level severity matrix (§2.11). */

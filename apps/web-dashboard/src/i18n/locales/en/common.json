@@ -568,6 +568,72 @@
       "playing": "Playing",
       "rewind": "Back to start",
       "window": "{{min}} min window"
+    },
+    "setup": {
+      "open": "Camera Setup",
+      "title": "MDVR Camera Setup",
+      "stepDevice": "Select device",
+      "device": "Device",
+      "deviceHint": "A registered MDVR device (IMEI)",
+      "pickDevice": "— pick a device —",
+      "deviceMeta": "Protocol: {{protocol}} · Status: {{status}}",
+      "stepServer": "Point the device at the server (A21)",
+      "host": "Server IP / domain",
+      "port": "Port",
+      "apn": "Carrier APN",
+      "apnUser": "APN user (optional)",
+      "apnPass": "APN password (optional)",
+      "sendA21": "Send A21",
+      "a21Help": "This command binds the device to the platform. Reboot the device afterwards. The same values work over SMS.",
+      "stepChannel": "Register camera channel",
+      "channelLabel": "Channel label",
+      "channelLabelPlaceholder": "e.g. Truck-42 · Forward",
+      "channelNo": "Channel no.",
+      "registerChannel": "Register channel",
+      "registered": "Registered",
+      "stepTest": "Test the live path",
+      "startStream": "Start stream (A9A)",
+      "stopStream": "Stop (A9B)",
+      "testHelp": "After starting, wait 5–15s for the device to dial the media server; the channel tile starts decoding.",
+      "helpTitle": "SMS setup cheat-sheet & troubleshooting",
+      "helpCodec": "The device codec must be H.264 (not H.265), with live streaming and the camera channel enabled.",
+      "helpSmsTitle": "SMS commands (to the device SIM)",
+      "helpSmsCommands": "A21,1,<IP>,5023,<APN>,,      ← server config\nD11                        ← device status\nA10,0                      ← one-shot position",
+      "helpPortsTitle": "Required open ports",
+      "helpPorts": "5023 (device GPRS) and 6182 (video dialback) must be forwarded to this server from the internet.",
+      "cmdStatus": {
+        "QUEUED": "Queued",
+        "SENT": "Sent",
+        "ACKED": "Device ack",
+        "FAILED": "Failed",
+        "REJECTED": "Rejected"
+      }
+    },
+    "wizard": {
+      "title": "Device Config Wizard (TCP)",
+      "steps": "Configuration steps",
+      "stepDevice": "Select device",
+      "stepTest": "Live stream test",
+      "deviceHelp": "Every setting in this wizard is delivered over the device's TCP connection (port 5023). If the device is not connected yet, send A21 via SMS first (see the help in the test step).",
+      "startConfig": "Start with network",
+      "pickFirst": "Pick a device first.",
+      "emptyCategory": "No commands in this category.",
+      "cat": {
+        "tracking": "Tracking & reports",
+        "network": "Network & server",
+        "phone": "Phone & SMS",
+        "alerts": "Alerts",
+        "geofence": "Geofence",
+        "device": "Device settings",
+        "outputs": "Outputs",
+        "rfid": "RFID",
+        "temperature": "Temperature",
+        "fuel": "Fuel",
+        "tpms": "TPMS",
+        "media": "Media & video",
+        "system": "System",
+        "custom": "Custom"
+      }
     }
   },
   "notifications": {
@@ -659,7 +725,8 @@
       "temperature": "Temperature",
       "collision": "Collision",
       "camera": "Camera / AI",
-      "other": "Other"
+      "other": "Other",
+      "dms": "DMS / Driver Monitoring"
     },
     "severity": {
       "critical": "Critical",

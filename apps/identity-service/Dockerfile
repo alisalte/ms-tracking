@@ -35,6 +35,7 @@ COPY packages/cache-redis/package.json ./packages/cache-redis/
 COPY packages/health/package.json ./packages/health/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/web/package.json ./packages/web/
+COPY packages/meitrack-media-protocol/package.json ./packages/meitrack-media-protocol/
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
 

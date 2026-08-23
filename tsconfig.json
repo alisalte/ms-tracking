@@ -1,17 +1,42 @@
 {
-  "//": "Root solution tsconfig — orchestrates the composite project graph via `tsc -b` (Codebase Architecture §3). References are listed in dependency order; tsc builds them topologically so a package's dist exists before a dependent type-checks/builds against it. App references are appended as services come online.",
+  "//": "Root solution tsconfig \u2014 orchestrates the composite project graph via `tsc -b` (Codebase Architecture \u00a73). References are listed in dependency order; tsc builds them topologically so a package's dist exists before a dependent type-checks/builds against it. App references are appended as services come online.",
   "files": [],
   "references": [
-    { "path": "packages/shared-kernel" },
-    { "path": "packages/config" },
-    { "path": "packages/observability" },
-    { "path": "packages/persistence-knex" },
-    { "path": "packages/cache-redis" },
-    { "path": "packages/health" },
-    { "path": "packages/web" },
-    { "path": "packages/auth" },
-    { "path": "apps/identity-service" },
-    { "path": "apps/device-gateway-service" },
-    { "path": "apps/fleet-management-service" }
+    {
+      "path": "packages/meitrack-media-protocol"
+    },
+    {
+      "path": "packages/shared-kernel"
+    },
+    {
+      "path": "packages/config"
+    },
+    {
+      "path": "packages/observability"
+    },
+    {
+      "path": "packages/persistence-knex"
+    },
+    {
+      "path": "packages/cache-redis"
+    },
+    {
+      "path": "packages/health"
+    },
+    {
+      "path": "packages/web"
+    },
+    {
+      "path": "packages/auth"
+    },
+    {
+      "path": "apps/identity-service"
+    },
+    {
+      "path": "apps/device-gateway-service"
+    },
+    {
+      "path": "apps/fleet-management-service"
+    }
   ]
 }

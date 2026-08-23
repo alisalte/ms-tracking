@@ -28,6 +28,7 @@ type ViewMode = 'list' | 'timeline' | 'map';
 const TYPES: Array<AlarmType | 'all'> = [
   'all',
   'sos',
+  'dms',
   'overspeed',
   'geofence',
   'offline',

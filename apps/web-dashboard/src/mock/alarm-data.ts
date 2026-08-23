@@ -57,6 +57,7 @@ const TYPES: AlarmType[] = [
 /** Type → default severity (§2.1 routing column, simplified). */
 const TYPE_SEVERITY: Record<AlarmType, AlarmSeverity> = {
   sos: 'critical',
+  dms: 'major',
   overspeed: 'major',
   geofence: 'major',
   offline: 'major',
@@ -72,6 +73,11 @@ function alarmText(type: AlarmType, rand: () => number): { message: string; deta
   switch (type) {
     case 'sos':
       return { message: 'SOS / Panic button', detail: 'Driver triggered panic at this location' };
+    case 'dms':
+      return {
+        message: 'DMS driver alarm',
+        detail: 'Driver monitoring camera detected a fatigue/distraction event',
+      };
     case 'overspeed': {
       const speed = 115 + Math.round(rand() * 30);
       return {
@@ -111,6 +117,7 @@ function alarmText(type: AlarmType, rand: () => number): { message: string; deta
 /** Source-event type per alarm type (§2.1 source column). */
 const SOURCE_EVENT_TYPE: Record<AlarmType, string> = {
   sos: 'tracking.sos.triggered.v1',
+  dms: 'device.alarm.dms.v1',
   overspeed: 'tracking.speed.exceeded.v1',
   geofence: 'tracking.geofence.exited.v1',
   offline: 'tracking.position.stale.v1',

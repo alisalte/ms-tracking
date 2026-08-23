@@ -109,6 +109,19 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
       topic: config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC,
       fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
     });
+    try {
+      await this.consumer.subscribe({
+        topic: config.NOTIF_KAFKA_DEVICE_ALARM_TOPIC,
+        fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
+      });
+    } catch (err) {
+      // The device-alarm topic may not exist yet on fresh clusters (leadership
+      // election storms on auto-create) — the alarm path is an ADDITIVE feed;
+      // never block the core consumer boot on it.
+      this.logger.warn(
+        `Device-alarm topic subscribe deferred: ${(err as Error).message}`,
+      );
+    }
     this.started = true;
     this.logger.log(
       `Kafka consumer connected — topics: ${config.NOTIF_KAFKA_POSITION_TOPIC}, ${config.NOTIF_KAFKA_SESSION_TOPIC}, ${config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC}`,
@@ -146,6 +159,14 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
       if (signal === null) return; // valid but not alarm-relevant
       await this.handleSignal(signal, 'tracking', signal.sourceEventId);
       await this.persistFleetEvent(raw, signal);
+      return;
+    }
+    if (topic === config.NOTIF_KAFKA_DEVICE_ALARM_TOPIC) {
+      const alarms = parseDeviceAlarmEnvelope(raw);
+      for (const alarm of alarms) {
+        await this.deps.evaluator.processDeviceAlarm(alarm);
+      }
+      this.deps.metrics?.eventsProcessed.inc({ source: 'device-alarm' });
       return;
     }
     // Subscribed-but-unknown topic — ignore.
@@ -288,4 +309,77 @@ function extractEventId(value: Buffer): string | null {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+// ── Device-alarm envelope (device-gateway telemetry.alarm.raw.v1) ────────────
+
+/** The gateway's message envelope for an ALARM-type device message. */
+interface GatewayAlarmEnvelope {
+  readonly eventId?: string;
+  readonly messageId?: string;
+  readonly deviceId?: string;
+  readonly vehicleId?: string | null;
+  readonly serialOrImei?: string | null;
+  readonly tenantId?: string | null;
+  readonly messageType?: string;
+  readonly timestamp?: string;
+  readonly position?: {
+    readonly latitude?: number;
+    readonly longitude?: number;
+  } | null;
+  readonly alarms?: ReadonlyArray<{
+    readonly code?: string;
+    readonly source?: string;
+    readonly severity?: string;
+  }> | null;
+  readonly telemetry?: Record<string, unknown> | null;
+}
+
+/** Parse + validate a device-alarm envelope; malformed → retryable error. */
+function parseDeviceAlarmEnvelope(raw: Buffer): Array<{
+  tenantId: string;
+  vehicleId: string | null;
+  deviceId: string;
+  serialOrImei: string | null;
+  code: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  source: string | null;
+  detail: Record<string, unknown> | null;
+  lat: number | null;
+  lng: number | null;
+  detectedAt: Date;
+}> {
+  let parsed: GatewayAlarmEnvelope;
+  try {
+    parsed = JSON.parse(raw.toString('utf8')) as GatewayAlarmEnvelope;
+  } catch {
+    throw new EventEnvelopeValidationError('device-alarm envelope is not valid JSON');
+  }
+  const deviceId = parsed.deviceId ?? '';
+  const tenantId = parsed.tenantId ?? '';
+  if (!deviceId || !tenantId || (parsed.alarms?.length ?? 0) === 0) {
+    throw new EventEnvelopeValidationError(
+      'device-alarm envelope missing deviceId/tenantId/alarms',
+    );
+  }
+  const detectedAt = parsed.timestamp ? new Date(parsed.timestamp) : new Date();
+  const lat = parsed.position?.latitude ?? null;
+  const lng = parsed.position?.longitude ?? null;
+  const telemetry = parsed.telemetry ?? null;
+
+  return (parsed.alarms ?? []).map((alarm) => ({
+    tenantId,
+    vehicleId: parsed.vehicleId ?? null,
+    deviceId,
+    serialOrImei: parsed.serialOrImei ?? null,
+    code: alarm.code ?? 'UNKNOWN',
+    severity:
+      alarm.severity === 'INFO' || alarm.severity === 'CRITICAL' ? alarm.severity : 'WARNING',
+    source: alarm.source ?? null,
+    detail: telemetry,
+    lat,
+    lng,
+    detectedAt: Number.isNaN(detectedAt.getTime()) ? new Date() : detectedAt,
+  }));
 }

@@ -1,4 +1,5 @@
 import type { Knex } from '@fleetvision/persistence-knex';
+import { withoutTenantContext } from '@fleetvision/persistence-knex';
 /**
  * API-key verifier — resolves a presented `fv_<env>_<secret>` key to a trusted
  * identity. Cross-tenant by design (the caller's tenant is unknown until the key
@@ -54,9 +55,13 @@ export class KnexApiKeyVerifier extends ApiKeyVerifier {
 
     let rows: ApiKeyRow[];
     try {
-      const result = (await this.knex.raw('SELECT * FROM iam.api_keys WHERE key_prefix = ?', [
-        prefix,
-      ])) as { rows: ApiKeyRow[] };
+      // Cross-tenant BY DESIGN (the caller's tenant is unknown until the key
+      // resolves) — iam.api_keys carries tenant-isolation RLS, so the lookup
+      // must run as a platform operation or the app role sees zero rows and
+      // every service-to-service key fails with 401.
+      const result = (await withoutTenantContext(this.knex, (trx) =>
+        trx.raw('SELECT * FROM iam.api_keys WHERE key_prefix = ?', [prefix]),
+      )) as unknown as { rows: ApiKeyRow[] };
       rows = result.rows;
     } catch {
       // DB unreachable — fail-closed (no API key authenticates against an

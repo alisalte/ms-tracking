@@ -44,6 +44,8 @@ export default defineConfig({
       '/api/v1/fleets': { target: fleetTarget, changeOrigin: true },
       '/api/v1/vehicles': { target: fleetTarget, changeOrigin: true },
       '/api/v1/devices': { target: fleetTarget, changeOrigin: true },
+      // Device-command catalog (same service as devices — distinct prefix).
+      '/api/v1/device-commands': { target: fleetTarget, changeOrigin: true },
       '/api/v1/summary': { target: fleetTarget, changeOrigin: true },
       '/api/v1/positions': {
         target: gpsTarget,

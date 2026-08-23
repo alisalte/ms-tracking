@@ -6,7 +6,7 @@
  * come from the semantic palette (`theme/palette.ts` `status.*`) so the UI
  * never hardcodes hex values.
  */
-import {
+import { ScanFace,
   AlertTriangle,
   Camera,
   CarFront,
@@ -25,6 +25,7 @@ import type { AlarmSeverity, AlarmStatus, AlarmType } from '@/types/alarm.types'
 /** Type → lucide icon (§2.1 catalog). */
 const TYPE_ICON: Record<AlarmType, LucideIcon> = {
   sos: Siren,
+  dms: ScanFace,
   overspeed: Gauge,
   geofence: MapPin,
   offline: WifiOff,

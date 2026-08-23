@@ -230,13 +230,16 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
       JWT_SECRET: ${JWT_SECRET}
-      # Kafka (command acks + session lifecycle).
-      KAFKA_BROKERS: kafka:29092
-      KAFKA_CLIENT_ID: fleet-management-service
-      KAFKA_COMMAND_REQUEST_TOPIC: fleetvision.fleet.command.request
-      KAFKA_COMMAND_ACK_TOPIC: fleetvision.fleet.command.ack
-      KAFKA_SESSION_TOPIC: fleetvision.telemetry.session.lifecycle
-      KAFKA_GROUP_ID: fleet-management-service
+      # Kafka (command path: publish A9A/A21/… requests consumed by the
+      # device-gateway; acks + session lifecycle). FLEET_KAFKA_* are the vars
+      # fleet-management's config schema actually reads; the command topics
+      # MUST match the gateway's consumer (fleetvision.telemetry.command.*).
+      FLEET_KAFKA_BROKERS: kafka:29092
+      FLEET_KAFKA_CLIENT_ID: fleet-management-service
+      FLEET_KAFKA_GROUP_ID: fleet-management-service
+      FLEET_KAFKA_COMMAND_REQUEST_TOPIC: fleetvision.telemetry.command.request
+      FLEET_KAFKA_COMMAND_ACK_TOPIC: fleetvision.telemetry.command.ack
+      FLEET_KAFKA_SESSION_TOPIC: fleetvision.telemetry.session.lifecycle
     ports:
       - "${FLEET_MGMT_PORT:-3006}:3006"
     healthcheck:
@@ -391,6 +394,122 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  # device-gateway-service — TCP/UDP protocol listeners for physical devices
+  # (Meitrack/GT06/JT808…). Devices connect here (GPRS) for telemetry AND
+  # downstream commands (A9A live-video dialback is dispatched via Kafka from
+  # fleet-management's command API). The meitrack listener on 5023 is the
+  # MDVR command plane — configure devices (A21) to point at this host:port.
+  # FLEET_REGISTRY_API_KEY must be provisioned once:
+  #   node tools/provision-device-gateway-key.mjs   → append line to .env
+  device-gateway-service:
+    build:
+      context: ../..
+      dockerfile: apps/device-gateway-service/Dockerfile
+    container_name: fleetvision-device-gateway
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      fleet-management-service:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      GATEWAY_ADMIN_PORT: "8081"
+      GATEWAY_HOST: 0.0.0.0
+      # Device protocol listeners (06 §9.3): meitrack TCP for MDVR/tracker GPRS.
+      GATEWAY_LISTENERS: meitrack:tcp:${GATEWAY_MEITRACK_PORT:-5023}
+      REDISURL: redis://redis:6379/1
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      GATEWAY_KAFKA_BROKERS: kafka:29092
+      GATEWAY_KAFKA_CLIENT_ID: device-gateway-service
+      GATEWAY_KAFKA_COMMAND_REQUEST_TOPIC: ${KAFKA_COMMAND_REQUEST_TOPIC:-fleetvision.telemetry.command.request}
+      # IMEI → device identity resolution (service API key; see header comment).
+      FLEET_REGISTRY_URL: http://fleet-management-service:3006
+      FLEET_REGISTRY_API_KEY: ${FLEET_REGISTRY_API_KEY:-}
+    ports:
+      # Device-facing GPRS plane — must be reachable from the vehicles' APN.
+      - "${GATEWAY_MEITRACK_PORT:-5023}:${GATEWAY_MEITRACK_PORT:-5023}"
+      - "${GATEWAY_ADMIN_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8081/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # mdvr-streamer-service — the MDVR live-video media plane. Receives binary
+  # §3.12/§3.16 0x12 media packets on the video TCP port (the device dials
+  # back here after the A9A command tells it to), reassembles H.264/H.265
+  # access units, transcodes via ffmpeg to low-latency MPEG-TS, and fans the
+  # TS bytes out to browser players (JSMpeg) over a binary WebSocket.
+  mdvr-streamer-service:
+    build:
+      context: ../..
+      dockerfile: apps/mdvr-streamer-service/Dockerfile
+    container_name: fleetvision-mdvr-streamer
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PORT: "3013"
+      HOST: 0.0.0.0
+      VIDEO_PORT: "6182"
+      VIDEO_HOST: 0.0.0.0
+      FFMPEG_BIN: ffmpeg
+      MAX_STREAMS: ${MDVR_MAX_STREAMS:-32}
+    ports:
+      # Device-facing media dialback — the A9A command advertises THIS port.
+      - "${MDVR_VIDEO_PORT:-6182}:6182"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3013/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # media-service — Media & Video control plane: camera-channel catalog
+  # (media.video_channels), stream sessions + signaling tokens. The Video
+  # Wall's channel dock lists these channels; the live plane itself is the
+  # mdvr-streamer above.
+  media-service:
+    build:
+      context: ../..
+      dockerfile: apps/media-service/Dockerfile
+    container_name: fleetvision-media
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3012"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      MEDIA_WS_ENABLED: "false" # JSMpeg players use the mdvr-streamer's raw WS
+    ports:
+      - "${MEDIA_PORT:-3012}:3012"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3012/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   web-dashboard:
     build:

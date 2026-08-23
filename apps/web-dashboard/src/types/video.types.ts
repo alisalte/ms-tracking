@@ -53,6 +53,17 @@ export interface CameraChannel {
    * - `unavailable` — channel exists but no stream session can be opened.
    */
   streamKind?: 'real' | 'stub' | 'unavailable';
+  /**
+   * Stream protocol (media-service wire). `MEITRACK_MDVR` channels use the
+   * real live path: A9A command → device dialback → mdvr-streamer → JSMpeg.
+   */
+  protocol?: string;
+  /** Platform device id owning this camera (command plane A9A/A9B target). */
+  deviceId?: string;
+  /** MDVR logical channel number (1–4 cameras), sent in the A9A struct. */
+  logicalChannel?: number;
+  /** Device IMEI (the mdvr-streamer WebSocket room key). */
+  imei?: string;
 }
 
 // ── Streams ──────────────────────────────────────────────────────────────────

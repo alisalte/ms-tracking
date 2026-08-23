@@ -33,12 +33,14 @@ import type { Request } from 'express';
 // silently injects undefined (API-key auth + revocation checks quietly OFF —
 // the exact defect class Sprint I fixed in notification-service).
 // ApiKeyVerifier + RevocationStore are tokens too (same rule applies).
-import type { ApiKeyVerifier } from './api-key-verifier.js';
+// biome-ignore lint/style/useImportType: DI token — must stay a value import.
+import { ApiKeyVerifier } from './api-key-verifier.js';
 import type { VerifiedApiKey } from './api-key-verifier.js';
 import type { AuthenticatedContext } from './authenticated-context.js';
 import { extractCredential } from './credentials.js';
 import { IS_PUBLIC_KEY } from './decorators.js';
 import type { RevocationStore } from './revocation-store.js';
+import { RevocationStore as RevocationStoreToken } from './revocation-store.js';
 import type { VerifiedAccessToken } from './token-claims.js';
 import { AUTH_OPTIONS_TOKEN, type AuthGuardOptions } from './tokens.js';
 
@@ -50,8 +52,8 @@ export class CompositeAuthGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
     @Inject(AUTH_OPTIONS_TOKEN) private readonly options: AuthGuardOptions,
-    @Optional() private readonly revocation?: RevocationStore,
-    @Optional() private readonly apiKeyVerifier?: ApiKeyVerifier,
+    @Optional() @Inject(RevocationStoreToken) private readonly revocation?: RevocationStore,
+    @Optional() @Inject(ApiKeyVerifier) private readonly apiKeyVerifier?: ApiKeyVerifier,
   ) {}
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {

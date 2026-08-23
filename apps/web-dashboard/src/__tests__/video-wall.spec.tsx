@@ -255,3 +255,130 @@ describe('VideoWallPage — view tabs', () => {
     });
   });
 });
+
+// ── MDVR real-channel regression (live-video port) ───────────────────────────
+
+const mdvrOverride = vi.hoisted(() => ({ channels: null as null | unknown[] }));
+
+const mdvrMockChannel = vi.hoisted(() => ({
+  id: 'ch-mdvr-1',
+  label: 'MD300 Sim · CH1',
+  facing: 'site',
+  sourceType: 'site',
+  sourceId: 'src-1',
+  sourceLabel: 'MD300 Sim · CH1',
+  codec: 'H264',
+  online: true,
+  recordingActive: false,
+  aiEnabled: false,
+  cabinCam: false,
+  consentGiven: true,
+  protocol: 'MEITRACK_MDVR',
+  deviceId: 'device-1',
+  logicalChannel: 1,
+  imei: '867191086416152',
+}));
+
+vi.mock('@/api/video.api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/video.api')>();
+  return {
+    ...actual,
+    // Test-scoped override: null → the real hook (mock-gated fixture data).
+    useChannels: (...args: Parameters<typeof actual.useChannels>) =>
+      mdvrOverride.channels
+        ? { data: mdvrOverride.channels, isLoading: false }
+        : actual.useChannels(...args),
+  };
+});
+
+describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)', () => {
+  it('assigns the MDVR channel to a wall tile', async () => {
+    mdvrOverride.channels = [mdvrMockChannel];
+    renderWall();
+    await screen.findByText('Video Wall');
+    await waitFor(() => expect(screen.getByText('Auto-fill')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Auto-fill'));
+    await waitFor(() => {
+      expect(screen.queryByText('No cameras on the wall yet')).not.toBeInTheDocument();
+    });
+    const tile = document.querySelector('[data-tile="MD300 Sim · CH1"]');
+    expect(tile).not.toBeNull();
+  });
+});
+
+// ── MDVR real-channel regression (live-video port) ───────────────────────────
+
+describe('WallGrid with a real MEITRACK_MDVR channel', () => {
+  it('renders the assigned channel tile (data-tile) even with protocol/device fields', () => {
+    const mdvrChannel = {
+      ...mockChannels[0],
+      id: 'ch-mdvr-1',
+      label: 'MD300 Sim · CH1',
+      sourceLabel: 'MD300 Sim · CH1',
+      online: true,
+      consentGiven: true,
+      protocol: 'MEITRACK_MDVR',
+      deviceId: 'device-1',
+      logicalChannel: 1,
+      imei: '867191086416152',
+    };
+    const tiles = [
+      { slot: 0, channelId: 'ch-mdvr-1', pinned: false },
+      { slot: 1, channelId: null, pinned: false },
+      { slot: 2, channelId: null, pinned: false },
+      { slot: 3, channelId: null, pinned: false },
+    ];
+    const { WallGrid } = WallGridModule;
+    const grid = render(
+      createElement(
+        QueryClientProvider,
+        { client: makeClient() },
+        createElement(
+          I18nextProvider,
+          { i18n },
+          createElement(WallGrid, {
+            division: 4 as never,
+            tiles: tiles as never,
+            channels: [mdvrChannel] as never,
+            spotlightSlot: null,
+            rotationOn: false,
+            maxLive: 16,
+            onTogglePin: () => {},
+            onRemove: () => {},
+          }),
+        ),
+      ),
+    );
+    const labeled = grid.container.querySelector('[data-tile="MD300 Sim · CH1"]');
+    expect(labeled).not.toBeNull();
+  });
+});
+
+import * as WallGridModule from '@/components/video/WallGrid';
+
+
+// ── Wire-shape regression: media-service rows are camelCase ──────────────────
+
+describe('mapMediaChannel wire shape', () => {
+  it('reads camelCase fields (channelId/vehicleId/logicalChannel)', async () => {
+    const { mapMediaChannelForTest } = await import('@/api/video.api');
+    const wire = {
+      channelId: 'wire-1',
+      vehicleId: null,
+      siteId: null,
+      deviceId: 'dev-1',
+      label: 'MD300 CH1',
+      logicalChannel: 2,
+      protocol: 'MEITRACK_MDVR',
+      codec: 'H264',
+      endpoint: '867191086416152',
+      status: 'REGISTERED',
+    };
+    const ch = mapMediaChannelForTest(wire as never);
+    expect(ch.id).toBe('wire-1');
+    expect(ch.logicalChannel).toBe(2);
+    expect(ch.imei).toBe('867191086416152');
+    expect(ch.online).toBe(true);
+    expect(ch.protocol).toBe('MEITRACK_MDVR');
+  });
+});

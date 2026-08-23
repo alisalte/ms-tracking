@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { DeviceMessage, type Position } from '../../../domain/device-message.js';
 import { ProtocolError } from '../../../domain/errors.js';
 import type { RawPacket } from '../../../domain/raw-packet.js';
-import { mapMeitrackEvent } from './meitrack.codes.js';
+import { mapDmsAlarmType, mapMeitrackEvent } from './meitrack.codes.js';
 import { MEITRACK_COMMAND } from './meitrack.frames.js';
 
 /** Parsed tracking-family frame: $$<id><len>,<body>*<cc>\r\n → command + body fields. */
@@ -98,6 +98,12 @@ function message(
  */
 export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
   const frame = parseFrame(raw.payload);
+
+  // CCE bodies are BINARY (comma-splitting is invalid) — parse from the raw
+  // buffer before the text path.
+  if (isCceFrame(raw.payload)) {
+    return decodeCce(raw);
+  }
 
   switch (frame.command) {
     case MEITRACK_COMMAND.TRACKING:
@@ -263,4 +269,209 @@ function parseIo(fields: readonly string[]): {
     output: fields[17] ?? null,
   };
   return { hdop, odometerKm, batteryVoltage, powerVoltage, raw };
+}
+
+// ── CCE (MDVR binary telemetry/alarm frame, MDVR GPRS Protocol V2.0 §2) ──────
+
+/** Detect `$$…,<imei>,CCE,` frames (the CCE body is binary — never comma-split). */
+function isCceFrame(payload: Buffer): boolean {
+  const head = payload.subarray(0, Math.min(payload.length, 64)).toString('binary');
+  const firstComma = head.indexOf(',');
+  const secondComma = head.indexOf(',', firstComma + 1);
+  const thirdComma = head.indexOf(',', secondComma + 1);
+  if (firstComma === -1 || secondComma === -1 || thirdComma === -1) return false;
+  // Command = the SECOND comma field ($$<len>,<imei>,<cmd>,…).
+  return head.substring(secondComma + 1, thirdComma) === 'CCE';
+}
+
+/** One decoded CCE parameter. */
+interface CceParam {
+  readonly id: number;
+  readonly value: Buffer;
+}
+
+/**
+ * Parse the CCE parameter stream: three length-prefixed groups — 2-byte IDs,
+ * 4-byte IDs, then n-byte IDs (whose IDs are 2 bytes when the first byte is
+ * 0xFE, e.g. 0xFE31 ADAS/DMS alarm info).
+ */
+function parseCceParams(buf: Buffer): CceParam[] {
+  const params: CceParam[] = [];
+  let off = 0;
+  const readId = (): number => {
+    const b = buf[off++] ?? 0;
+    return b;
+  };
+  const readU16 = (): number => {
+    const v = buf.readUInt16LE(off);
+    off += 2;
+    return v;
+  };
+  const readU32 = (): number => {
+    const v = buf.readUInt32LE(off);
+    off += 4;
+    return v;
+  };
+
+  // Group 1: N × (1-byte id + 2-byte LE value).
+  const n2 = readId();
+  for (let i = 0; i < n2 && off + 2 <= buf.length; i++) {
+    const id = readId();
+    const v = readU16();
+    params.push({ id, value: Buffer.from([v & 0xff, (v >> 8) & 0xff]) });
+  }
+  // Group 2: N × (1-byte id + 4-byte LE value).
+  const n4 = readId();
+  for (let i = 0; i < n4 && off + 4 <= buf.length; i++) {
+    const id = readId();
+    const v = readU32();
+    params.push({
+      id,
+      value: Buffer.from([v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]),
+    });
+  }
+  // Group 3: N × (id + 1-byte length + value). An id whose first byte is 0xFE
+  // is TWO bytes (0xFE31 ADAS/DMS info, 0xFE2D fatigue info, 0x49 camera
+  // status is one byte) — per the protocol's worked examples.
+  const nn = readId();
+  for (let i = 0; i < nn && off < buf.length; i++) {
+    let id = readId();
+    if (id === 0xfe && off < buf.length) {
+      id = ((id << 8) | readId()) & 0xffff;
+    }
+    const len = off < buf.length ? readId() : 0;
+    const value = buf.subarray(off, off + len);
+    off += len;
+    params.push({ id, value: Buffer.from(value) });
+  }
+  return params;
+}
+
+/** DMS/ADAS detail from CCE parameter 0xFE31 (0xFE2D uses the same tail shape). */
+interface DmsDetail {
+  readonly protocol: number;
+  readonly alarmType: number;
+  readonly photoName: string | null;
+}
+
+function parseDmsDetail(value: Buffer): DmsDetail | null {
+  // <ID_Len><AlarmProtocol><AlarmType><PhotoName…> — ID_Len counts the bytes
+  // AFTER it (protocol + type + photo).
+  if (value.length < 3) return null;
+  const protocol = value[1] ?? 0;
+  const alarmType = value[2] ?? 0;
+  let photoName: string | null = null;
+  const nameBytes = value.subarray(3);
+  const zero = nameBytes.indexOf(0);
+  const slice = zero >= 0 ? nameBytes.subarray(0, zero) : nameBytes;
+  if (slice.length > 0) {
+    photoName = slice.toString('ascii').replace(/\x00+$/g, '') || null;
+  }
+  return { protocol, alarmType, photoName };
+}
+
+/**
+ * Decode a CCE frame → POSITION and/or ALARM message(s). The event code rides
+ * parameter 0x40 (2-byte LE); event 126 carries the DMS/ADAS detail in 0xFE31.
+ */
+function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
+  // Locate the binary body: $$<id><len>,<IMEI>,CCE,<binary…>*<cc>
+
+  const starIdx = raw.payload.lastIndexOf(0x2a);
+  if (starIdx < 0) {
+    throw new ProtocolError('CCE frame missing checksum separator.', 'meitrack');
+  }
+  let off = raw.payload.indexOf(0x2c) + 1; // after the length comma
+  const imeiEnd = raw.payload.indexOf(0x2c, off);
+  const imei = raw.payload.subarray(off, imeiEnd).toString('ascii');
+  if (!/^\d{10,17}$/.test(imei)) {
+    throw new ProtocolError(`CCE frame has invalid IMEI '${imei}'.`, 'meitrack');
+  }
+  off = imeiEnd + 1; // at 'CCE'
+  off = raw.payload.indexOf(0x2c, off) + 1; // after the CCE comma
+  const body = raw.payload.subarray(off, starIdx);
+  if (body.length === 0) {
+    throw new ProtocolError('CCE frame has an empty body.', 'meitrack');
+  }
+
+  const params = parseCceParams(body);
+  const byId = new Map<number, CceParam>();
+  for (const p of params) byId.set(p.id, p);
+
+  const u16 = (id: number): number | null => {
+    const p = byId.get(id);
+    return p ? p.value.readUInt16LE(0) : null;
+  };
+  const u32 = (id: number): number | null => {
+    const p = byId.get(id);
+    return p ? p.value.readUInt32LE(0) : null;
+  };
+
+  const event = u16(0x40) ?? 0;
+  // Coordinates: 4-byte LE, scaled 1e-6 (protocol examples).
+  const lngRaw = u32(0x02);
+  const latRaw = u32(0x03);
+  const speed = u16(0x08) ?? 0;
+  const heading = u16(0x09) ?? 0;
+  const timeRaw = u32(0x04);
+  // GPS time = seconds since 2000-01-01.
+  const timestamp =
+    timeRaw !== null ? new Date(Date.UTC(2000, 0, 1) + timeRaw * 1000) : new Date(raw.receivedAt);
+
+  const hasFix = latRaw !== null && lngRaw !== null;
+  const position: Position | undefined = hasFix
+    ? {
+        latitude: (latRaw ?? 0) / 1e6,
+        longitude: (lngRaw ?? 0) / 1e6,
+        speedKph: speed,
+        headingDeg: heading,
+        altitudeM: null,
+        satellites: null,
+        timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+        ignitionOn: true,
+      }
+    : undefined;
+
+  const messages: DeviceMessage[] = [];
+  if (event !== 0) {
+    let alarm = mapMeitrackEvent(event);
+    let detail: Record<string, unknown> | undefined;
+    const fe31 = byId.get(0xfe31);
+    if (event === 126 && fe31) {
+      const dms = parseDmsDetail(fe31.value);
+      if (dms) {
+        const mapped = mapDmsAlarmType(dms.protocol, dms.alarmType);
+        alarm = { code: mapped.code, source: String(event), severity: mapped.severity };
+        detail = {
+          dmsProtocol: dms.protocol,
+          dmsAlarmType: dms.alarmType,
+          dmsDetail: mapped.detail,
+          photoName: dms.photoName,
+        };
+      }
+    }
+    messages.push(
+      message(raw, {
+        type: 'ALARM',
+        serialOrImei: imei,
+        timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+        position,
+        alarms: [alarm],
+        telemetry: detail,
+      }),
+    );
+  } else if (position) {
+    messages.push(
+      message(raw, {
+        type: 'POSITION',
+        serialOrImei: imei,
+        timestamp: position.timestamp,
+        position,
+      }),
+    );
+  }
+  if (messages.length === 0) {
+    throw new ProtocolError('CCE frame carried neither an event nor a position.', 'meitrack');
+  }
+  return messages;
 }

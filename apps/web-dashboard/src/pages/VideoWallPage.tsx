@@ -13,17 +13,19 @@
  * Keyboard: `f` toggles whole-wall fullscreen; `1..6` pick the division
  * presets (wall view only). Shortcuts are ignored while typing in inputs.
  */
-import { Camera, History, LayoutGrid } from 'lucide-react';
+import { Camera, History, LayoutGrid, Settings } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useChannels, useSaveWall, useVideoWalls } from '@/api/video.api';
 import { CamerasPanel } from '@/components/video/CamerasPanel';
+import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
 import { ChannelDock } from '@/components/video/ChannelDock';
 import { PlaybackPanel } from '@/components/video/PlaybackPanel';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
+import { Button } from '@/components/tailwind-ui';
 import { toggleFullscreen } from '@/lib/video-stream';
 import { emptyTiles } from '@/mock/video-data';
 import { MAX_LIVE_TILES, WALL_DIVISIONS } from '@/types/video.types';
@@ -57,6 +59,7 @@ export function VideoWallPage() {
   const [division, setDivision] = useState<WallDivision>(() => readDivision(params));
   const [tiles, setTiles] = useState<WallTile[]>(() => emptyTiles(readDivision(params)));
   const [spotlightSlot, setSpotlightSlot] = useState<number | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [rotationOn, setRotationOn] = useState(true);
   const [alertSlot, setAlertSlot] = useState<number | null>(null);
 
@@ -261,6 +264,9 @@ export function VideoWallPage() {
         <span className="hidden text-xs text-gray-400 sm:inline dark:text-graydark-600">
           {t('video.keyboardHint', { defaultValue: 'F: fullscreen · 1-6: layout' })}
         </span>
+        <Button size="sm" variant="secondary" leftIcon={<Settings size={14} aria-hidden />} onClick={() => setSetupOpen(true)}>
+          {t('video.setup.open')}
+        </Button>
       </div>
 
       {tab === 'wall' && (
@@ -315,6 +321,8 @@ export function VideoWallPage() {
       )}
 
       {tab === 'playback' && <PlaybackPanel channels={channels} />}
+
+      <DeviceConfigWizard open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>
   );
 }

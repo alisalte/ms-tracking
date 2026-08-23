@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 /**
  * AlarmEvaluatorService — the orchestrator that processes incoming telemetry
  * signals, evaluates them against active alarm rules, runs dedup, and creates
@@ -66,6 +67,114 @@ export class AlarmEvaluatorService {
 
   constructor(private readonly deps: AlarmEvaluatorDeps) {
     this.metrics = deps.metrics ?? null;
+  }
+
+  // ── Device alarms (DMS/ADAS/SOS/… straight from the device, rule-free) ─────
+
+  /**
+   * Process a DEVICE alarm published by the device-gateway
+   * (`fleetvision.telemetry.alarm.raw`) — the device is the source of truth,
+   * so no rule evaluation: dedup (60s per tenant+code+device) then raise or
+   * bump the open occurrence. DMS/ADAS codes map to the 'dms' catalog type.
+   */
+  public async processDeviceAlarm(alarm: {
+    tenantId: string;
+    vehicleId: string | null;
+    deviceId: string;
+    serialOrImei: string | null;
+    code: string;
+    severity: 'INFO' | 'WARNING' | 'CRITICAL';
+    source: string | null;
+    detail: Record<string, unknown> | null;
+    lat: number | null;
+    lng: number | null;
+    detectedAt: Date;
+  }): Promise<void> {
+    try {
+      const ruleId = deviceAlarmRuleId(alarm.code);
+      const vehicleKey = alarm.vehicleId ?? alarm.deviceId;
+      const suppress = await this.deps.stateCache.shouldSuppress(
+        alarm.tenantId,
+        ruleId,
+        vehicleKey,
+        DEVICE_ALARM_DEDUP_WINDOW_SEC,
+      );
+      if (suppress) {
+        await this.deps.stateCache.incrementOccurrenceCount(alarm.tenantId, ruleId, vehicleKey);
+        this.metrics?.duplicateEvents.inc({ source: 'device-alarm' });
+        return;
+      }
+
+      // One-open-alarm gate — bump occurrences while the same alarm is open.
+      const open = await this.deps.alarms.findOpenByRuleAndVehicle(
+        alarm.tenantId,
+        ruleId,
+        vehicleKey,
+        alarm.code,
+      );
+      if (open) {
+        const count = await this.deps.stateCache.incrementOccurrenceCount(
+          alarm.tenantId,
+          ruleId,
+          vehicleKey,
+        );
+        await this.deps.alarms.updateDetail(open, {
+          ...(open.detail ?? {}),
+          occurrenceCount: count,
+          lastSeenAt: alarm.detectedAt.toISOString(),
+          lastDetection: alarm.detail ?? null,
+        });
+        return;
+      }
+
+      const type = deviceAlarmCatalogType(alarm.code);
+      const severity = DEVICE_ALARM_SEVERITY[alarm.severity] ?? 'MEDIUM';
+      const id = randomUUID();
+      const message = `Device alarm ${alarm.code}${alarm.detail?.dmsDetail ? ` — ${String(alarm.detail.dmsDetail)}` : ''}`;
+      const occurrence = AlarmOccurrence.create(id, {
+        tenantId: alarm.tenantId,
+        ruleId,
+        type,
+        severity,
+        vehicleId: alarm.vehicleId,
+        lat: alarm.lat,
+        lng: alarm.lng,
+        message,
+        detail: { deviceAlarm: true, ...(alarm.detail ?? {}) },
+        sourceEvents: [
+          {
+            type: `device.alarm.${alarm.code}.v1`,
+            ts: alarm.detectedAt.toISOString(),
+            detail: JSON.stringify({
+              deviceId: alarm.deviceId,
+              imei: alarm.serialOrImei,
+              source: alarm.source,
+              ...(alarm.detail ?? {}),
+            }),
+          },
+        ],
+        raisedAt: alarm.detectedAt,
+      });
+      await this.deps.alarms.create(occurrence);
+      this.metrics?.alarmsOpened.inc({ type });
+
+      this.deps.gateway?.emitAlarmCreated(alarm.tenantId, occurrence);
+      if (this.deps.dispatcher) {
+        try {
+          await this.deps.dispatcher.dispatchAlarm(occurrence);
+        } catch (err) {
+          this.logger.warn(`Notification dispatch error: ${(err as Error).message}`);
+        }
+      }
+      this.logger.log(
+        `Raised device alarm ${alarm.code} alarmId=${id} vehicle=${alarm.vehicleId} tenant=${alarm.tenantId}`,
+      );
+    } catch (err) {
+      // Device alarms are best-effort telemetry — never crash the consumer.
+      this.logger.warn(
+        `Device alarm ${alarm.code} processing failed: ${(err as Error).message}`,
+      );
+    }
   }
 
   /** Process a position signal from Kafka. */
@@ -485,5 +594,65 @@ export class AlarmEvaluatorService {
     this.logger.log(
       `Auto-resolved alarm ${open.id} (${type}) vehicle=${vehicleId} tenant=${tenantId} — ${reason}`,
     );
+  }
+}
+
+
+// ── Device-alarm helpers ─────────────────────────────────────────────────────
+
+/** Dedup window for device alarms (device resends + DMS bursts). */
+const DEVICE_ALARM_DEDUP_WINDOW_SEC = 60;
+
+/** Gateway severity → notification alert severity. */
+const DEVICE_ALARM_SEVERITY: Readonly<Record<string, 'INFO' | 'MEDIUM' | 'CRITICAL'>> = {
+  INFO: 'INFO',
+  WARNING: 'MEDIUM',
+  CRITICAL: 'CRITICAL',
+};
+
+/**
+ * Deterministic pseudo-rule UUID per device alarm code (uuid v5-style, SHA-1
+ * based) — keeps the one-open-alarm gate + dedup keys stable across restarts.
+ */
+function deviceAlarmRuleId(code: string): string {
+  const hash = createHash('sha1')
+    .update('fleetvision:device-alarm:')
+    .update(code)
+    .digest();
+  hash[6] = (hash[6]! & 0x0f) | 0x50; // version 5
+  hash[8] = (hash[8]! & 0x3f) | 0x80; // variant
+  const hex = hash.subarray(0, 16).toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/** Device alarm code → dashboard alarm catalog type. */
+function deviceAlarmCatalogType(code: string): string {
+  if (code.startsWith('DMS_') || code.startsWith('ADAS_') || code.startsWith('FATIGUE')) {
+    return 'dms';
+  }
+  switch (code) {
+    case 'SOS':
+      return 'sos';
+    case 'OVERSPEED':
+      return 'overspeed';
+    case 'GEOFENCE_ENTER':
+    case 'GEOFENCE_EXIT':
+      return 'geofence';
+    case 'FUEL_THEFT':
+      return 'fuel-theft';
+    case 'TEMPERATURE_HIGH':
+    case 'TEMPERATURE_LOW':
+      return 'temperature';
+    case 'ACCIDENT':
+      return 'collision';
+    case 'VIDEO_LOSS_CH1':
+    case 'VIDEO_LOSS_CH2':
+    case 'VIDEO_LOSS_CH3':
+    case 'VIDEO_LOSS_CH4':
+    case 'STORAGE_FAILURE':
+    case 'STORAGE_FULL':
+      return 'camera';
+    default:
+      return 'other';
   }
 }

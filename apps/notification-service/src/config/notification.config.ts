@@ -36,6 +36,8 @@ export const notificationConfigSchema = baseConfigSchema.merge(
      * + device-status transitions, CloudEvents `tracking.event.v1`).
      */
     NOTIF_KAFKA_TRACKING_EVENT_TOPIC: z.string().min(1).default('fleetvision.tracking.events'),
+    /** Device-origin alarms (DMS/ADAS/SOS/…) published by the device-gateway. */
+    NOTIF_KAFKA_DEVICE_ALARM_TOPIC: z.string().min(1).default('fleetvision.telemetry.alarm.raw'),
     /** Sprint G — bounded in-process attempts per message before DLQ. */
     NOTIF_KAFKA_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(3),
     /** Sprint G — initial retry backoff (ms), doubling per attempt. */

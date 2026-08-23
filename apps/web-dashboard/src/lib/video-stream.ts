@@ -316,3 +316,103 @@ export class MockMediaSignalingClient implements MediaSignalingClient {
     this.live.clear();
   }
 }
+
+// ── JSMpeg live player (MDVR real streams) ───────────────────────────────────
+
+/** The subset of the vendored JSMpeg API the live player uses. */
+interface JSMpegPlayer {
+  destroy(): void;
+  pause(): void;
+  play(): void;
+}
+
+interface JSMpegStatic {
+  Player: new (
+    url: string,
+    options: {
+      canvas: HTMLCanvasElement;
+      autoplay?: boolean;
+      audio?: boolean;
+      loop?: boolean;
+      videoBufferSize?: number;
+      disableWebAssembly?: boolean;
+      onSourceEstablished?: () => void;
+      onPlay?: () => void;
+    },
+  ) => JSMpegPlayer;
+}
+
+declare global {
+  interface Window {
+    JSMpeg?: JSMpegStatic;
+  }
+}
+
+let jsmpegLoad: Promise<JSMpegStatic> | null = null;
+
+/**
+ * Load the vendored JSMpeg bundle (`public/jsmpeg.min.js`) exactly once and
+ * resolve its global. JSMpeg decodes low-latency MPEG-TS (H.264 baseline)
+ * on a canvas — the same player the standalone MD300 pipeline validated.
+ */
+export function loadJSMpeg(): Promise<JSMpegStatic> {
+  if (jsmpegLoad) return jsmpegLoad;
+  jsmpegLoad = new Promise((resolve, reject) => {
+    if (window.JSMpeg) {
+      resolve(window.JSMpeg);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = '/jsmpeg.min.js';
+    script.async = true;
+    script.onload = () => {
+      if (window.JSMpeg) resolve(window.JSMpeg);
+      else reject(new Error('jsmpeg.min.js loaded but window.JSMpeg is missing'));
+    };
+    script.onerror = () => {
+      jsmpegLoad = null;
+      reject(new Error('failed to load /jsmpeg.min.js'));
+    };
+    document.head.appendChild(script);
+  });
+  return jsmpegLoad;
+}
+
+/** Options driving one JSMpeg player instance. */
+export interface JSMpegStreamOptions {
+  /** Fires when the WebSocket source is established (connection open). */
+  onSourceEstablished?: () => void;
+  /** Fires when decoding + rendering actually start. */
+  onPlay?: () => void;
+}
+
+/**
+ * Start a JSMpeg player for a binary MPEG-TS WebSocket (`…/media-live/ws?imei=…`).
+ * Returns the player handle — the caller keeps ownership of the canvas.
+ */
+export async function startJSMpegPlayer(
+  wsUrl: string,
+  canvas: HTMLCanvasElement,
+  options: JSMpegStreamOptions = {},
+): Promise<JSMpegPlayer> {
+  const JSMpeg = await loadJSMpeg();
+  return new JSMpeg.Player(wsUrl, {
+    canvas,
+    autoplay: true,
+    loop: true,
+    audio: false, // the streamer's TS output is video-only (-an)
+    videoBufferSize: 512 * 1024,
+    // Pure-JS decoder: the WASM module is fetched relative to the page and we
+    // only vendor jsmpeg.min.js (no jsmpeg.wasm) — a 404 there leaves the
+    // decoder dead and the canvas never initializes.
+    disableWebAssembly: true,
+    onSourceEstablished: options.onSourceEstablished,
+    onPlay: options.onPlay,
+  });
+}
+
+/** Capture a JPEG snapshot from a live JSMpeg canvas. */
+export function captureCanvasSnapshot(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  if (!canvas.width || !canvas.height) return Promise.resolve(null);
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+}

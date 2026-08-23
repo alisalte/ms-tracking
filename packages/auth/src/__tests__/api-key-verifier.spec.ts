@@ -9,10 +9,16 @@ import { describe, expect, it } from '@jest/globals';
 import argon2 from 'argon2';
 import { KnexApiKeyVerifier } from '../api-key-verifier.js';
 
-/** Build a verifier whose knex.raw returns a fixed set of rows. */
+/** Build a verifier whose lookup returns a fixed set of rows. */
 function verifierFor(rows: unknown[]) {
+  // The verifier runs its lookup inside withoutTenantContext (a knex
+  // transaction with SET LOCAL app.is_platform) — the stub mirrors that shape.
+  const trx = {
+    raw: async () => ({ rows }),
+  };
   const knex = {
     raw: async () => ({ rows }),
+    transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(trx),
   };
   // biome-ignore lint/suspicious/noExplicitAny: test stub
   return new KnexApiKeyVerifier(knex as any);

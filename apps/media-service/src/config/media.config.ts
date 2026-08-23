@@ -18,6 +18,12 @@ export const mediaConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
     /** Postgres connection URL (media.* schema). */
     DBURL: z.string().min(1),
+    /**
+     * Privileged platform-role URL for migrations (schema/DDL ownership) —
+     * matches the fleet-management house pattern. Optional: when unset,
+     * migrations run on DBURL.
+     */
+    DBURL_PLATFORM: z.string().min(1).optional(),
     /** Redis connection URL (signaling tokens + channel→pod affinity). */
     REDISURL: z.string().min(1),
 

@@ -24,11 +24,26 @@ import { queryKeys } from './query-keys';
 // ── Wire types (snake_case → camelCase mapping) ─────────────────────────────
 
 /** Map the backend alarm wire shape to the frontend camelCase type. */
+/** Backend alert severity (INFO/LOW/MEDIUM/HIGH/CRITICAL) → the UI 4-level matrix. */
+function mapSeverity(raw: string | undefined): Alarm['severity'] {
+  switch ((raw ?? 'INFO').toUpperCase()) {
+    case 'CRITICAL':
+      return 'critical';
+    case 'HIGH':
+    case 'MEDIUM':
+      return 'major';
+    case 'LOW':
+      return 'minor';
+    default:
+      return 'info';
+  }
+}
+
 function mapAlarm(raw: Record<string, unknown>): Alarm {
   return {
     id: raw.id as string,
     type: (raw.type as string) ?? 'other',
-    severity: ((raw.severity as string) ?? 'info').toLowerCase() as Alarm['severity'],
+    severity: mapSeverity(raw.severity as string | undefined),
     status: mapStatus(raw.status as string),
     vehicleId: (raw.vehicle_id as string) ?? '',
     vehicleLabel: (raw.vehicle_label as string) ?? (raw.vehicle_id as string) ?? '',

@@ -26,8 +26,14 @@ export class AppModule {
         LoggerModule.forRootFromConfig(config as BaseConfig),
         PersistenceModule.forRoot({
           client: { url: config.DBURL },
+          // DDL (CREATE SCHEMA media …) runs as the privileged platform role
+          // when provided; runtime stays on the RLS-enforced app role.
+          migrationsClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            // Per-service migration ledger (Sprint I convention) — the shared
+            // dev database's default `schema_migrations` belongs to identity.
+            tableName: 'media_schema_migrations',
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),

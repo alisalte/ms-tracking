@@ -265,3 +265,143 @@ describe('MeitrackAdapter.encode', () => {
     expect(buf.length).toBe(0);
   });
 });
+
+// ── CCE binary frames (MDVR telemetry/DMS alarms) ─────────────────────────────
+
+/** Build a CCE frame with a binary parameter body (mirrors the device wire format). */
+function cceFrame(params: Buffer): Buffer {
+  const body = Buffer.concat([Buffer.from(`${IMEI},CCE,`, 'ascii'), params]);
+  const commaBlock = Buffer.concat([Buffer.from(',', 'ascii'), body]);
+  const length = commaBlock.length + 1 + 2 + 2;
+  const head = `$$A${String(length)}`;
+  const checksumRegion = Buffer.concat([Buffer.from(head, 'ascii'), commaBlock, Buffer.from('*', 'ascii')]);
+  const checksum = meitrackChecksum(checksumRegion);
+  return Buffer.concat([
+    checksumRegion,
+    Buffer.from(checksum, 'ascii'),
+    Buffer.from('\r\n', 'ascii'),
+  ]);
+}
+
+/** CCE parameter stream: 2-byte group + 4-byte group + n-byte group. */
+function cceParams(
+  twoByte: Array<[number, number]>,
+  fourByte: Array<[number, number]>,
+  nByte: Array<[number, Buffer]> = [],
+): Buffer {
+  const parts: Buffer[] = [];
+  parts.push(Buffer.from([twoByte.length]));
+  for (const [id, v] of twoByte) {
+    parts.push(Buffer.from([id, v & 0xff, (v >> 8) & 0xff]));
+  }
+  parts.push(Buffer.from([fourByte.length]));
+  for (const [id, v] of fourByte) {
+    parts.push(Buffer.from([id, v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]));
+  }
+  parts.push(Buffer.from([nByte.length]));
+  for (const [id, value] of nByte) {
+    if (id > 0xff) {
+      parts.push(Buffer.from([(id >> 8) & 0xff, id & 0xff, value.length]));
+    } else {
+      parts.push(Buffer.from([id & 0xff, value.length]));
+    }
+    parts.push(value);
+  }
+  return Buffer.concat(parts);
+}
+
+describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
+  const adapter = new MeitrackAdapter();
+
+  /** 2026-08-22T00:00:00Z in "seconds since 2000" (4-byte param 0x04). */
+  const T0 = Math.floor(Date.UTC(2026, 7, 22) / 1000 - Date.UTC(2000, 0, 1) / 1000);
+  const LAT = Math.round(35.7 * 1e6);
+  const LNG = Math.round(51.4 * 1e6);
+
+  function decodeFrame(buf: Buffer) {
+    const reader = new ByteReader();
+    reader.append(buf);
+    const raw = unwrap(adapter.frame(reader, NOW));
+    return adapter.decode(raw);
+  }
+
+  /** First message (tests always expect exactly one). */
+  function first(msgs: readonly ReturnType<typeof adapter.decode>[number][]) {
+    const m = msgs[0];
+    if (!m) throw new Error('expected at least one decoded message');
+    return m;
+  }
+
+  it('decodes a CCE position packet (event 0, GPS params only)', () => {
+    const params = cceParams(
+      [
+        [0x08, 42], // speed
+        [0x09, 180], // heading
+        [0x40, 0], // event 0
+      ],
+      [
+        [0x02, LNG],
+        [0x03, LAT],
+        [0x04, T0],
+      ],
+    );
+    const msgs = decodeFrame(cceFrame(params));
+    expect(msgs).toHaveLength(1);
+    expect(first(msgs).type).toBe('POSITION');
+    expect(first(msgs).position?.latitude).toBeCloseTo(35.7, 5);
+    expect(first(msgs).position?.longitude).toBeCloseTo(51.4, 5);
+    expect(first(msgs).position?.speedKph).toBe(42);
+    expect(first(msgs).serialOrImei).toBe(IMEI);
+  });
+
+  it('decodes an event-126 DMS alarm with 0xFE31 detail (protocol 2, type 7 = phone call)', () => {
+    const photo = Buffer.from('240822120001_CH2_E126S7_0.jpg\0', 'ascii');
+    const fe31 = Buffer.concat([Buffer.from([photo.length + 2, 0x02, 0x07]), photo]);
+    const params = cceParams(
+      [[0x40, 126]],
+      [
+        [0x02, LNG],
+        [0x03, LAT],
+        [0x04, T0],
+      ],
+      [[0xfe31, fe31]],
+    );
+    const msgs = decodeFrame(cceFrame(params));
+    expect(msgs).toHaveLength(1);
+    const msg = first(msgs);
+    expect(msg.type).toBe('ALARM');
+    expect(msg.alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
+    expect(msg.alarms?.[0]?.severity).toBe('WARNING');
+    expect(msg.telemetry?.photoName).toContain('E126S7');
+    expect(msg.position?.latitude).toBeCloseTo(35.7, 5);
+  });
+
+  it('maps severe DMS types (protocol 2, type 5 = drowsiness) to CRITICAL', () => {
+    const fe31 = Buffer.from([3, 0x02, 0x05, 0x00]);
+    const params = cceParams([[0x40, 126]], [[0x02, LNG], [0x03, LAT], [0x04, T0]], [[0xfe31, fe31]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('DMS_DROWSINESS');
+    expect(first(msgs).alarms?.[0]?.severity).toBe('CRITICAL');
+  });
+
+  it('maps ADAS forward collision (protocol 1, type 10)', () => {
+    const fe31 = Buffer.from([3, 0x01, 0x0a, 0x00]);
+    const params = cceParams([[0x40, 126]], [], [[0xfe31, fe31]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('ADAS_FCW');
+    expect(first(msgs).alarms?.[0]?.severity).toBe('CRITICAL');
+  });
+
+  it('decodes a plain event alarm (overspeed 19) without DMS detail', () => {
+    const params = cceParams([[0x40, 19]], [[0x02, LNG], [0x03, LAT], [0x04, T0]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('OVERSPEED');
+  });
+
+  it('keeps the generic label for unknown DMS types', () => {
+    const fe31 = Buffer.from([3, 0x02, 0x55, 0x00]);
+    const params = cceParams([[0x40, 126]], [], [[0xfe31, fe31]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('ADAS_DMS_ALARM');
+  });
+});

@@ -14,20 +14,20 @@ const PREDICATE = "tenant_id = NULLIF(current_setting('app.current_tenant_id', t
 
 const TABLES = ['video_channels', 'stream_sessions'];
 
-exports.up = async function up(knex) {
+export async function up(knex) {
   for (const table of TABLES) {
     await knex.raw(`DROP POLICY IF EXISTS ${table}_tenant_isolation ON media.${table}`);
     await knex.raw(
       `CREATE POLICY ${table}_tenant_isolation ON media.${table} USING (${PREDICATE}) WITH CHECK (${PREDICATE})`,
     );
   }
-};
+}
 
-exports.down = async function down(knex) {
+export async function down(knex) {
   for (const table of TABLES) {
     await knex.raw(`DROP POLICY IF EXISTS ${table}_tenant_isolation ON media.${table}`);
     await knex.raw(
       `CREATE POLICY ${table}_tenant_isolation ON media.${table} USING (true) WITH CHECK (true)`,
     );
   }
-};
+}
