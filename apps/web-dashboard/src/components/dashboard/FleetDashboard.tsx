@@ -3,16 +3,21 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveAlarms, useDeviceStatuses, useFleetStats, useMapVehicles } from '@/api/fleet.api';
+import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { PageHeader } from '@/components/tailwind-ui';
 import { LiveBadge } from './LiveBadge';
 
 import { ActivityStatusChart, countStates } from './ActivityStatusChart';
+import { AlarmStatusChart } from './AlarmStatusChart';
 import { AlertTypeBreakdownChart } from './AlertTypeBreakdownChart';
 import { FleetHealthPanel } from './FleetHealthPanel';
 import { FleetMapPreviewCard } from './FleetMapPreviewCard';
 import { KpiTile } from './KpiTile';
 import { RecentEventsPanel } from './RecentEventsPanel';
+import { ReportsKpiRow } from './ReportsKpiRow';
+import { TopVehiclesChart } from './TopVehiclesChart';
+import { TrendChartsRow } from './TrendChartsRow';
 
 /** Grid gap between dashboard rows/sections. */
 const GAP = 'gap-4';
@@ -28,10 +33,15 @@ const GAP = 'gap-4';
  *    counts derived client-side from the live map join: registry × device
  *    status × latest position), Active Alarms (notification-service), Active
  *    Devices (devices ONLINE).
+ * 2b. Period KPI row (report.read) — 7-day distance / trips / utilization /
+ *    geofence events from the reporting service.
  * 3. Vehicle Activity donut + Fleet Health meters (connectivity, GPS
  *    reporting, stale positions, offline devices).
+ * 3b. Trend charts (report.read) — daily distance+trips combo and stacked
+ *    daily alarms, with a 7d/30d preset switch.
  * 4. Recent Events (severity-sorted feed + summary chips) + Alert Type
  *    breakdown.
+ * 4b. Distance leaderboard + alarm lifecycle/severity (report.read).
  * 5. Full-width live map preview (MapLibre, presence-tinted markers).
  *
  * Every panel isolates its own loading/empty/error state — one failing service
@@ -122,6 +132,11 @@ export function FleetDashboard() {
         </div>
       )}
 
+      {/* ── Period KPI row (reporting-service, last 7 days; report.read) ── */}
+      <PermissionGate requires={PERMISSIONS.reportRead}>
+        <ReportsKpiRow />
+      </PermissionGate>
+
       {/* ── Activity + Fleet health ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="lg:col-span-5">
@@ -142,6 +157,11 @@ export function FleetDashboard() {
         </div>
       </div>
 
+      {/* ── Trends (distance/trips combo + stacked alarms; report.read) ── */}
+      <PermissionGate requires={PERMISSIONS.reportRead}>
+        <TrendChartsRow />
+      </PermissionGate>
+
       {/* ── Recent events + alert types ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="lg:col-span-8">
@@ -151,6 +171,18 @@ export function FleetDashboard() {
           <AlertTypeBreakdownChart />
         </div>
       </div>
+
+      {/* ── Distance leaderboard + alarm lifecycle (report.read) ── */}
+      <PermissionGate requires={PERMISSIONS.reportRead}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <TopVehiclesChart />
+          </div>
+          <div className="lg:col-span-5">
+            <AlarmStatusChart />
+          </div>
+        </div>
+      </PermissionGate>
 
       {/* ── Live map preview (full width) ── */}
       <FleetMapPreviewCard />

@@ -25,6 +25,8 @@ export interface KpiTileProps {
   icon: LucideIcon;
   tone?: keyof typeof TONES;
   loading?: boolean;
+  /** Unit suffix rendered after the value (e.g. "%" for utilization). */
+  suffix?: string;
   /** Click-through to the owning page (optional). */
   onClick?: () => void;
 }
@@ -41,6 +43,7 @@ export function KpiTile({
   icon: Icon,
   tone = 'brand',
   loading,
+  suffix,
   onClick,
 }: KpiTileProps) {
   const { t } = useTranslation();
@@ -80,7 +83,11 @@ export function KpiTile({
             <Skeleton className="mt-1 h-8 w-14" />
           ) : (
             <p className="mt-1 text-[1.85rem] leading-none font-black tabular-nums tracking-tight text-gray-950 dark:text-white">
-              {(value ?? 0).toLocaleString()}
+              {/* null post-load = genuinely no data (e.g. utilization without
+               * telemetry) — never shown as a fabricated 0. */}
+              {value === null || value === undefined
+                ? '—'
+                : `${value.toLocaleString()}${suffix ?? ''}`}
             </p>
           )}
         </div>

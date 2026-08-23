@@ -173,7 +173,11 @@
       "moving": "Moving",
       "parked": "Parked",
       "activeDevices": "Active Devices",
-      "activeAlarms": "Active Alarms"
+      "activeAlarms": "Active Alarms",
+      "distance7d": "Distance (last 7 days)",
+      "trips7d": "Trips (last 7 days)",
+      "utilization": "Avg utilization",
+      "geofenceEvents": "Geofence events"
     },
     "states": {
       "driving": "Driving",
@@ -213,7 +217,8 @@
       "offline": "Offline",
       "online": "Online",
       "stale": "Stale",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "retry": "Retry"
     },
     "utilization": {
       "utilized": "utilized"
@@ -248,7 +253,11 @@
       "latestPosts": "Latest Posts",
       "dailyFinance": "Daily Financials",
       "myMessages": "My Messages",
-      "overview": "Fleet Overview"
+      "overview": "Fleet Overview",
+      "distanceTripsTrend": "Distance & trips trend",
+      "alarmTrend": "Daily alarms by type",
+      "topVehicles": "Top vehicles by distance",
+      "alarmStatus": "Alarm status & severity"
     },
     "empty": {
       "alerts": "No active alerts — fleet is quiet.",
@@ -276,6 +285,22 @@
     "severities": {
       "critical": "Critical",
       "warning": "Warning",
+      "info": "Info"
+    },
+    "charts": {
+      "distance": "Distance (km)",
+      "trips": "Trips",
+      "speeding": "Speeding",
+      "geofence": "Geofence",
+      "offline": "Offline",
+      "other": "Other",
+      "open": "Open",
+      "acknowledged": "Acknowledged",
+      "resolved": "Resolved",
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
       "info": "Info"
     }
   },
@@ -305,7 +330,18 @@
       "overspeed": "Overspeed"
     },
     "list": {
-      "count": "{{shown}} of {{total}}"
+      "count": "{{shown}} of {{total}}",
+      "noFleet": "No fleet"
+    },
+    "settings": {
+      "open": "Map settings",
+      "basemap": "Basemap style"
+    },
+    "basemap": {
+      "streets": "Streets",
+      "satellite": "Satellite",
+      "dark": "Dark",
+      "topo": "Topographic"
     },
     "popup": {
       "close": "Close",
@@ -394,7 +430,8 @@
       "toggle": "Map Matching",
       "tooltip": "Snap the track to roads via OSRM (falls back to raw GPS when unavailable)",
       "unavailable": "Map matching unavailable — showing raw GPS"
-    }
+    },
+    "emptyCta": "Go to Asset Management"
   },
   "trips": {
     "title": "Trips",
@@ -821,6 +858,7 @@
       "vin": "VIN",
       "plate": "Plate",
       "fleet": "Fleet",
+      "pickFleet": "— Select a fleet —",
       "name": "Name",
       "code": "Code",
       "createdAt": "Created",
@@ -891,7 +929,8 @@
       "unassignConfirmTitle": "Unbind {{name}}?",
       "unassignConfirmBody": "The device will be detached from this vehicle.",
       "alreadyBound": "This device is already bound to a vehicle.",
-      "noUnbound": "No unbound devices available."
+      "noUnbound": "No unbound devices available.",
+      "colStatus": "Status"
     },
     "actions": {
       "archive": "Archive",

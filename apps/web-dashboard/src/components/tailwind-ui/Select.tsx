@@ -22,10 +22,29 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
   options?: SelectOption[];
   className?: string;
   wrapperClassName?: string;
+  /**
+   * Empty-value hint option rendered first (`value=""`, hidden from the open
+   * dropdown list). Without it, a controlled `value=""` matches no option, so
+   * the browser auto-selects option[0] when options arrive asynchronously —
+   * the box then LOOKS chosen while the form state is still empty, and
+   * re-picking that option fires no change event (the value never differs).
+   */
+  placeholder?: ReactNode;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, error, hint, options, className = '', wrapperClassName = '', id, children, ...rest },
+  {
+    label,
+    error,
+    hint,
+    options,
+    className = '',
+    wrapperClassName = '',
+    placeholder,
+    id,
+    children,
+    ...rest
+  },
   ref,
 ) {
   const autoId = useId();
@@ -57,6 +76,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           } ${className}`}
           {...rest}
         >
+          {placeholder !== undefined && (
+            <option value="" hidden>
+              {placeholder}
+            </option>
+          )}
           {options
             ? options.map((o) => (
                 <option key={o.value} value={o.value} disabled={o.disabled}>

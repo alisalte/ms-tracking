@@ -280,6 +280,42 @@ describe('AssetManagementPage', () => {
     });
   });
 
+  it('create-vehicle form keeps the fleet select on its placeholder until picked', async () => {
+    renderAssets();
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Add Vehicles'));
+
+    // The drawer's fleet select is labelled "Fleet *" and starts on the empty
+    // placeholder option. Regression: when the async fleet list renders into a
+    // controlled select with value="" and no matching option, the browser
+    // auto-selects option[0] — the box LOOKS chosen while the form value stays
+    // '' and re-picking that option fires no change event at all.
+    const fleetSelect = (await screen.findByRole('combobox', {
+      name: 'Fleet *',
+    })) as HTMLSelectElement;
+    await waitFor(() => {
+      // Fleets have loaded (placeholder + North/South options).
+      expect(fleetSelect.options.length).toBe(3);
+    });
+    expect(fleetSelect.value).toBe('');
+
+    // Fill the required text fields and submit with no fleet → field error.
+    fireEvent.change(screen.getByLabelText('Name *'), { target: { value: 'Truck Three' } });
+    fireEvent.change(screen.getByLabelText('Code *'), { target: { value: 'V010' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(await screen.findByText('Select a fleet')).toBeInTheDocument();
+
+    // Picking a fleet changes '' → id (a real change event) and the submit passes.
+    fireEvent.change(fleetSelect, { target: { value: 'fleet-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('combobox', { name: 'Fleet *' })).not.toBeInTheDocument();
+    });
+  });
+
   it('switches to the devices tab and renders the registry columns', async () => {
     renderAssets();
     await screen.findByText('Asset Management');

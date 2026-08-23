@@ -15,6 +15,7 @@
  *   getApiErrorMessage. Shown inline via the tailwind `Alert` + toasted.
  */
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -406,6 +407,10 @@ function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fl
         control={control}
         name="fleetId"
         label={`${t('assets.vehicle.fleet')} *`}
+        // Placeholder option: without it the browser auto-selects the first
+        // fleet once the async list arrives, so the box looks chosen while the
+        // form value stays '' — and re-picking that option fires no change.
+        placeholder={t('assets.vehicle.pickFleet')}
         options={options.map((f) => ({
           value: f.id,
           label:
@@ -598,11 +603,14 @@ function FieldSelect({
   options,
   t,
   error,
+  placeholder,
 }: FieldCommon & {
   name: string;
   label: string;
   options: SelectOption[];
   error?: FieldError;
+  /** Empty-value hint option — keeps the controlled '' in sync (see Select). */
+  placeholder?: ReactNode;
 }) {
   return (
     <Controller
@@ -614,6 +622,7 @@ function FieldSelect({
           value={field.value ?? ''}
           label={label}
           options={options}
+          placeholder={placeholder}
           error={error ? t(error.message ?? '') : null}
         />
       )}

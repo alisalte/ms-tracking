@@ -150,6 +150,15 @@ vi.mock('maplibre-gl', () => {
     }
     addSource() {}
     addLayer() {}
+    // Basemap switching (raster source/layer swap on display-mode change).
+    isStyleLoaded() {
+      return true;
+    }
+    getLayer() {
+      return null;
+    }
+    removeLayer() {}
+    removeSource() {}
     fitBounds() {}
     getCanvas() {
       return document.createElement('canvas');
@@ -228,10 +237,37 @@ describe('MapPage (Live Tracking)', () => {
         expect(screen.getByText(v.label)).toBeInTheDocument();
       }
     });
+    // One rich vehicle card per fixture vehicle (icon + meta strip layout).
+    expect(screen.getAllByTestId('map-vehicle-card').length).toBe(vehiclesFixture.length);
     // v5 has no status record → honest "never" (never fabricated).
     expect(screen.getByText(/never/)).toBeInTheDocument();
-    // The connected vehicles carry the backend lastSeenAt.
-    expect(screen.getAllByText(/Last seen:/).length).toBe(vehiclesFixture.length);
+  });
+
+  it('opens the map settings popover and switches the basemap display mode', async () => {
+    renderMap();
+    await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
+
+    // Settings live in their OWN floating control, separate from the toolbar.
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    const group = screen.getByRole('radiogroup', { name: 'Basemap style' });
+    const options = within(group).getAllByRole('radio');
+    expect(options.length).toBe(4);
+    // Streets is the default-active mode.
+    expect(within(group).getByRole('radio', { name: /Streets/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+
+    // Switch to satellite — selection flips (popover stays open for quick flips).
+    fireEvent.click(within(group).getByRole('radio', { name: /Satellite/ }));
+    expect(within(group).getByRole('radio', { name: /Satellite/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(group).getByRole('radio', { name: /Streets/ })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
   });
 
   it('renders the presence filter chips with counts (§18/§20)', async () => {
@@ -277,9 +313,11 @@ describe('MapPage (Live Tracking)', () => {
     renderMap();
     await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
 
-    // The fleet selector is a native <select> (combobox) — change by value.
-    // (Phase 5: the panel moved from MUI Select to a native select.)
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'fleet-a' } });
+    // The fleet selector is an MUI Select (role=combobox trigger) — it opens
+    // on mousedown; the options render in a listbox portal.
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    const option = await screen.findByRole('option', { name: 'Fleet A' });
+    fireEvent.click(option);
 
     await waitFor(() => {
       expect(screen.getByText(`2 of ${vehiclesFixture.length}`)).toBeInTheDocument();
@@ -308,5 +346,43 @@ describe('MapPage (Live Tracking)', () => {
 
     // No tenant / no WS server in tests → honest "Disconnected" chip.
     expect(screen.getByText('Disconnected')).toBeInTheDocument();
+  });
+
+  // ── Always-on map: loading/error/empty render as overlays, never page
+  // replacements — the map (and its toolbar layout) stays mounted. ──
+  it('keeps the map mounted with an empty-fleet overlay when no vehicles exist', async () => {
+    mockUseMapVehicles.mockReturnValue({ data: [], isLoading: false, isError: false });
+    renderMap();
+
+    // Honest empty guidance + CTA to Asset Management, over the mounted map.
+    expect(await screen.findByTestId('map-state-overlay')).toBeInTheDocument();
+    expect(screen.getByText('No vehicles yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Asset Management' })).toBeInTheDocument();
+    // The full-bleed layout (toolbar with live count) is still rendered.
+    expect(screen.getByText('Live Tracking')).toBeInTheDocument();
+    expect(screen.getByText('0 of 0 vehicles')).toBeInTheDocument();
+  });
+
+  it('shows a loading overlay without tearing down the map layout', async () => {
+    mockUseMapVehicles.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    renderMap();
+
+    expect(await screen.findByTestId('map-state-overlay')).toBeInTheDocument();
+    expect(screen.getByText('Live Tracking')).toBeInTheDocument();
+  });
+
+  it('shows an error overlay with retry over the mounted map', async () => {
+    mockUseMapVehicles.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('registry unreachable'),
+      refetch: vi.fn(),
+    });
+    renderMap();
+
+    expect(await screen.findByTestId('map-state-overlay')).toBeInTheDocument();
+    expect(screen.getByText(/registry unreachable/)).toBeInTheDocument();
+    expect(screen.getByText('Live Tracking')).toBeInTheDocument();
   });
 });

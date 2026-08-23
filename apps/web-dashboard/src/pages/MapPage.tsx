@@ -1,7 +1,7 @@
 import { Map as MapIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
 import { useMapVehicles } from '@/api/fleet.api';
@@ -12,12 +12,15 @@ import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
 import { FleetMap, type HistoryTrack } from '@/components/map/FleetMap';
 import { type CustomRange, MapToolbar } from '@/components/map/MapToolbar';
+import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
 import { PlaybackControls } from '@/components/map/PlaybackControls';
 import { RoutePlannerDialog } from '@/components/map/RoutePlannerDialog';
 import { type PresenceFilter, presenceOf } from '@/components/map/types';
 import { useTrackPlayback } from '@/components/map/useTrackPlayback';
-import { EmptyState, Spinner } from '@/components/tailwind-ui';
+import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
+import { loadPersistedBasemap, persistBasemap, type BasemapId } from '@/lib/basemaps';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
+import { MuiProvider } from '@/theme/MuiProvider';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
@@ -86,7 +89,9 @@ function MapChip({
  * MapPage — the Live Tracking map dashboard (UI_UX_Design.md §12–§20).
  *
  * Full-bleed layout: a collapsible left device panel + the map filling the rest,
- * with a top toolbar overlay and a right slide-over device popup drawer. Owns
+ * with a top toolbar overlay and a right slide-over device popup drawer. The
+ * map itself is ALWAYS mounted — loading/error/empty fleet states render as
+ * centered overlays over the tiles, never as page replacements. Owns
  * the shared UI state (selected vehicle, search query, presence/fleet filters,
  * paused) and derives the filtered fleet that both the list and the map consume.
  *
@@ -135,6 +140,14 @@ export function MapPage() {
   const [presence, setPresence] = useState<PresenceFilter>('all');
   const [fleetId, setFleetId] = useState<string>('all');
   const [paused, setPaused] = useState(false);
+
+  // ── Map display settings (separate from the tracking toolbar) ──
+  // Basemap style, persisted per browser. The tile swap itself happens in
+  // FleetMap; this state is the single source of truth for the settings panel.
+  const [basemap, setBasemap] = useState<BasemapId>(loadPersistedBasemap);
+  useEffect(() => {
+    persistBasemap(basemap);
+  }, [basemap]);
 
   // ── Sprint F §20: LIVE vs HISTORY mode ──
   // LIVE merges WebSocket deltas; HISTORY queries the real track for the
@@ -260,6 +273,15 @@ export function MapPage() {
     return m;
   }, [registryVehicles]);
 
+  // vehicleId → fleet NAME resolver for the list-card subtitle (registry join;
+  // falls back to the i18n "no fleet" caption when the vehicle is not in the
+  // registry yet).
+  const fleetNameOf = useMemo(() => {
+    const names = new Map<string, string>((fleetsData ?? []).map((f) => [f.id, f.name] as const));
+    return (vehicleId: string): string | undefined =>
+      names.get(fleetOfVehicle.get(vehicleId) ?? '');
+  }, [fleetsData, fleetOfVehicle]);
+
   // Counts per presence facet for the filter-chip badges (§18).
   const counts = useMemo(() => {
     const c: Record<PresenceFilter, number> = {
@@ -287,41 +309,26 @@ export function MapPage() {
     });
   }, [vehicles, query, presence, fleetId, fleetOfVehicle]);
 
-  // ── Loading state ──
-  if (isLoading) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Spinner size="lg" label={t('common.loading')} />
-      </div>
-    );
-  }
-
-  // ── Error state ──
-  if (isError) {
-    return <ErrorState error={error} onRetry={() => refetch()} />;
-  }
-
-  // ── Empty state ──
-  if (vehicles.length === 0) {
-    return (
-      <EmptyState
-        icon={<MapIcon />}
-        title={t('map.emptyTitle')}
-        description={t('map.emptyHelp')}
-        className="py-16"
-      />
-    );
-  }
+  // The map is ALWAYS mounted — loading/error/empty never replace the page;
+  // each state renders as a centered, non-blocking overlay over the tiles so
+  // the user can still pan/zoom (and deep links keep working) while the
+  // fleet data settles.
+  const showLoadingOverlay = isLoading;
+  const showErrorOverlay = !isLoading && isError;
+  const showEmptyOverlay = !isLoading && !isError && vehicles.length === 0;
 
   const chip = wsChip(connectionState);
 
   return (
-    <div
-      // Full-bleed: break out of <main>'s padding by going absolute.
-      // The AppLayout <main> is position:relative, so inset:0 covers the
-      // padding box edge-to-edge regardless of box-sizing quirks.
-      className="absolute inset-0 flex overflow-hidden"
-    >
+    // MUI scope for the map's side surfaces (device roster, settings) — the
+    // theme mirrors the app's brand palette, color mode, and direction.
+    <MuiProvider>
+      <div
+        // Full-bleed: break out of <main>'s padding by going absolute.
+        // The AppLayout <main> is position:relative, so inset:0 covers the
+        // padding box edge-to-edge regardless of box-sizing quirks.
+        className="absolute inset-0 flex overflow-hidden"
+      >
       {/* ── Left: device list panel ── */}
       <div className="hidden w-[300px] shrink-0 md:flex">
         <DeviceListPanel
@@ -332,6 +339,7 @@ export function MapPage() {
           counts={counts}
           fleets={fleetsData ?? []}
           fleetId={fleetId}
+          fleetNameOf={fleetNameOf}
           selectedId={selectedId}
           onQueryChange={setQuery}
           onPresenceChange={setPresence}
@@ -407,8 +415,40 @@ export function MapPage() {
                 : null)
             }
             playbackHead={playbackHead}
+            basemap={basemap}
           />
         </div>
+        {/* Map display settings (basemap modes) — a control SEPARATE from the
+         * tracking toolbar: floating button + popover at the bottom-start. */}
+        <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} />
+        {/* Always-on-map state overlays (loading / error / no vehicles yet).
+         * The wrapper is pointer-transparent so pan/zoom keep working; only
+         * the card itself captures clicks (retry button, CTA link). */}
+        {(showLoadingOverlay || showErrorOverlay || showEmptyOverlay) && (
+          <div
+            data-testid="map-state-overlay"
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6"
+          >
+            <div className="pointer-events-auto max-w-sm rounded-2xl border border-gray-200 bg-white/95 px-6 py-4 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-graydark-300/95">
+              {showLoadingOverlay && <Spinner size="lg" label={t('common.loading')} />}
+              {showErrorOverlay && <ErrorState error={error} onRetry={() => refetch()} />}
+              {showEmptyOverlay && (
+                <EmptyState
+                  icon={<MapIcon />}
+                  title={t('map.emptyTitle')}
+                  description={t('map.emptyHelp')}
+                  action={
+                    <Link to="/assets">
+                      <Button variant="primary" size="sm" data-testid="map-empty-cta">
+                        {t('map.emptyCta')}
+                      </Button>
+                    </Link>
+                  }
+                />
+              )}
+            </div>
+          </div>
+        )}
         {/* Sprint I §32/§33 — playback transport + timeline (history mode only). */}
         {mode === 'history' && displayPoints && displayPoints.length >= 2 && (
           <PlaybackControls playback={playback} />
@@ -428,6 +468,7 @@ export function MapPage() {
         onClose={() => setPopupOpen(false)}
         onShowHistory={() => setMode('history')}
       />
-    </div>
+      </div>
+    </MuiProvider>
   );
 }

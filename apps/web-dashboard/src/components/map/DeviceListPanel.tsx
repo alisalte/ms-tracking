@@ -1,11 +1,41 @@
-import { Search, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import {
+  AirportShuttle,
+  DirectionsBus,
+  DirectionsCar,
+  Explore,
+  LocalShipping,
+  PowerSettingsNew,
+  Schedule,
+  Search,
+  Speed,
+} from '@mui/icons-material';
+import {
+  Avatar,
+  Box,
+  Chip,
+  Divider,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
+  OutlinedInput,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import type { ChipProps } from '@mui/material';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PRESENCE_COLORS } from '@/lib/map-markers';
 import { lastSeenLabel } from '@/lib/relative-time';
 import type { Fleet } from '@/types/asset.types';
-import type { MapVehicle } from '@/types/fleet.types';
+import type { MapVehicle, VehicleType } from '@/types/fleet.types';
 import { PRESENCE_FILTERS, type PresenceFilter, presenceLabelKey, presenceOf } from './types';
 
 interface DeviceListPanelProps {
@@ -23,6 +53,8 @@ interface DeviceListPanelProps {
   fleets: Fleet[];
   /** Selected fleet id, or 'all'. */
   fleetId: string;
+  /** vehicleId → fleet NAME resolver (registry join) for the card subtitle. */
+  fleetNameOf: (vehicleId: string) => string | undefined;
   selectedId?: string | null;
   onQueryChange: (q: string) => void;
   onPresenceChange: (s: PresenceFilter) => void;
@@ -30,15 +62,57 @@ interface DeviceListPanelProps {
   onSelect: (id: string) => void;
 }
 
+/** Vehicle-type icon (registry `type` → Material body shape). */
+function VehicleTypeIcon({ type }: { type?: VehicleType }) {
+  switch (type) {
+    case 'truck':
+      return <LocalShipping />;
+    case 'bus':
+      return <DirectionsBus />;
+    case 'van':
+      return <AirportShuttle />;
+    default:
+      return <DirectionsCar />;
+  }
+}
+
+/** Material tonal tone per motion state (avatar + state chip). */
+function stateTone(
+  state: MapVehicle['state'],
+  dark: boolean,
+): { avatar: string; chip: ChipProps['color']; chipVariant: ChipProps['variant'] } {
+  switch (state) {
+    case 'driving':
+      return { avatar: 'primary.main', chip: 'primary', chipVariant: 'filled' };
+    case 'overspeed':
+      return { avatar: dark ? 'error.dark' : 'error.light', chip: 'error', chipVariant: 'filled' };
+    case 'idle':
+      return { avatar: dark ? 'warning.dark' : 'warning.light', chip: 'warning', chipVariant: 'outlined' };
+    default:
+      return { avatar: dark ? 'grey.700' : 'grey.200', chip: 'default', chipVariant: 'outlined' };
+  }
+}
+
+/** Presence dot — the §18 color always paired with a text label elsewhere. */
+function PresenceDot({ presence }: { presence: ReturnType<typeof presenceOf> }) {
+  return (
+    <Box
+      component="span"
+      aria-hidden
+      sx={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', flexShrink: 0 }}
+      style={{ backgroundColor: PRESENCE_COLORS[presence] }}
+    />
+  );
+}
+
 /**
- * DeviceListPanel — TailAdmin left panel (Phase 5): search + fleet/presence
- * filters + the scrollable device roster.
+ * DeviceListPanel — Material (MUI) left fleet roster for the Live Tracking map.
  *
- * UI_UX_Design.md §2.2 + Sprint E §18–§20: rows carry the REAL connection
- * presence (ONLINE/OFFLINE/STALE/UNKNOWN) and the backend last-seen time
- * ("never" when there is no status record). Clicking a device selects it on
- * the map and opens the detail drawer; the selected row scrolls into view.
- * The fleet selector is a native `<select>` (combobox + option roles).
+ * Search → fleet select → presence ToggleButtons → an MUI List of rich
+ * ListItemButtons: vehicle-type Avatar in a state tonal color, label +
+ * fleet/driver secondary line, a motion-state Chip, and a compact meta strip
+ * (speed · ignition · heading · last seen). Selection highlights the item and
+ * scrolls it into view (§17 list ↔ map sync).
  */
 export function DeviceListPanel({
   vehicles,
@@ -48,6 +122,7 @@ export function DeviceListPanel({
   counts,
   fleets,
   fleetId,
+  fleetNameOf,
   selectedId,
   onQueryChange,
   onPresenceChange,
@@ -55,7 +130,9 @@ export function DeviceListPanel({
   onSelect,
 }: DeviceListPanelProps) {
   const { t } = useTranslation();
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const muiTheme = useTheme();
+  const dark = muiTheme.palette.mode === 'dark';
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   // Keep the selected row visible as the selection changes.
   useEffect(() => {
@@ -65,145 +142,227 @@ export function DeviceListPanel({
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
   }, [selectedId]);
 
+  const cards = useMemo(() => vehicles.map((v) => ({ v, p: presenceOf(v) })), [vehicles]);
+
   return (
-    <div className="flex h-full flex-col border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        borderInlineEnd: 1,
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+      }}
+    >
       {/* ── Search ── */}
-      <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg bg-gray-100 px-2.5 py-1.5 transition-colors focus-within:bg-white focus-within:ring-2 focus-within:ring-brand-500/30 dark:bg-white/5 dark:focus-within:bg-graydark-300">
-        <Search size={15} aria-hidden className="shrink-0 text-gray-400 dark:text-graydark-600" />
-        <input
+      <Box sx={{ px: 1.5, pt: 1.5 }}>
+        <OutlinedInput
+          size="small"
+          fullWidth
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder={t('map.searchPlaceholder')}
           aria-label={t('map.search')}
-          className="h-6 w-full min-w-0 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none dark:text-graydark-800 dark:placeholder:text-graydark-600"
+          startAdornment={
+            <InputAdornment position="start">
+              <Search fontSize="small" />
+            </InputAdornment>
+          }
+          sx={{ borderRadius: 2, bgcolor: 'action.hover' }}
         />
-        {query && (
-          <button
-            type="button"
-            onClick={() => onQueryChange('')}
-            aria-label={t('map.clearSearch')}
-            className="flex shrink-0 cursor-pointer border-none bg-transparent p-0 text-gray-400 hover:text-gray-600 dark:hover:text-graydark-700"
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
+      </Box>
 
       {/* ── Fleet filter (§20) — registry fleets; authorization is server-side ── */}
       {fleets.length > 0 && (
-        <select
-          value={fleetId}
-          onChange={(e) => onFleetChange(e.target.value)}
-          aria-label={t('map.filters.fleet')}
-          className="mx-2.5 mt-2 mb-1 h-8 cursor-pointer rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-700 focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
-        >
-          <option value="all">{t('map.filters.allFleets')}</option>
-          {fleets.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
+        <Box sx={{ px: 1.5, pt: 1 }}>
+          <TextField
+            select
+            size="small"
+            fullWidth
+            value={fleetId}
+            onChange={(e) => onFleetChange(e.target.value)}
+            aria-label={t('map.filters.fleet')}
+            sx={{ '& .MuiSelect-select': { fontSize: 13 } }}
+          >
+            <MenuItem value="all">{t('map.filters.allFleets')}</MenuItem>
+            {fleets.map((f) => (
+              <MenuItem key={f.id} value={f.id}>
+                {f.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
       )}
 
-      {/* ── Presence filter chips (§18) ── */}
-      <div className="flex flex-wrap gap-1.5 px-2.5 pb-2">
-        {PRESENCE_FILTERS.map((s) => {
-          const active = presence === s;
-          return (
-            <button
+      {/* ── Presence filter (§18) — exclusive ToggleButtons with counts ── */}
+      <Box sx={{ px: 1.5, py: 1 }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={presence}
+          onChange={(_, v) => {
+            if (v !== null) onPresenceChange(v as PresenceFilter);
+          }}
+          aria-label={t('map.filters.all')}
+          sx={{ flexWrap: 'wrap', gap: 0.5, '& .MuiToggleButton-root': { border: 0, borderRadius: 2, px: 1, py: 0.25, fontSize: 12 } }}
+        >
+          {PRESENCE_FILTERS.map((s) => (
+            <ToggleButton
               key={s}
-              type="button"
-              onClick={() => onPresenceChange(s)}
-              aria-pressed={active}
-              className={`h-6 cursor-pointer rounded-full border px-2.5 text-xs font-semibold transition-colors ${
-                active
-                  ? 'border-brand-500 bg-brand-500 text-white'
-                  : 'border-gray-300 bg-transparent text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5'
-              }`}
+              value={s}
+              aria-pressed={presence === s}
+              color={s === 'all' ? 'standard' : 'primary'}
             >
-              {s === 'all'
-                ? t(presenceLabelKey(s))
-                : `${t(presenceLabelKey(s))} · ${counts[s] ?? 0}`}
-            </button>
-          );
-        })}
-      </div>
+              {s === 'all' ? t(presenceLabelKey(s)) : `${t(presenceLabelKey(s))} · ${counts[s] ?? 0}`}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      </Box>
 
-      <p className="px-4 pb-1 text-xs text-gray-500 dark:text-graydark-600">
+      <Typography variant="caption" sx={{ px: 2, pb: 0.5, color: 'text.secondary' }}>
         {t('map.list.count', { shown: vehicles.length, total })}
-      </p>
+      </Typography>
 
-      {/* ── Scrollable device list ── */}
-      <div ref={listRef} className="fv-scroll min-h-0 flex-1 overflow-y-auto">
-        {vehicles.length === 0 ? (
-          <p className="p-4 text-center text-sm text-gray-500 dark:text-graydark-600">
+      <Divider />
+
+      {/* ── Scrollable vehicle cards ── */}
+      <List
+        ref={listRef}
+        disablePadding
+        sx={{ minHeight: 0, flex: 1, overflowY: 'auto', px: 1, py: 1 }}
+      >
+        {cards.length === 0 ? (
+          <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
             {t('map.noResults')}
-          </p>
+          </Typography>
         ) : (
-          <ul className="m-0 list-none p-0">
-            {vehicles.map((v) => {
-              const selected = v.id === selectedId;
-              const p = presenceOf(v);
-              return (
-                <li key={v.id} data-vehicle-id={v.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(v.id)}
-                    aria-pressed={selected}
-                    className={`flex w-full cursor-pointer items-center gap-2.5 border-none bg-transparent p-0 text-start transition-colors ${
-                      selected
-                        ? 'border-s-4 border-s-brand-500 bg-brand-50 dark:bg-brand-500/10'
-                        : 'border-s-4 border-s-transparent hover:bg-gray-50 dark:hover:bg-white/5'
-                    }`}
-                    style={{
-                      paddingBlock: 8,
-                      paddingInline: selected ? 11 : 15,
-                      borderInlineStartWidth: 4,
-                      borderInlineStartStyle: 'solid',
-                      borderInlineStartColor: selected ? 'var(--color-brand-500)' : 'transparent',
-                    }}
-                  >
-                    <span
-                      title={t(`map.presence.${p}`)}
-                      aria-hidden
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: PRESENCE_COLORS[p] }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold tabular-nums text-gray-800 dark:text-graydark-800">
-                        {v.label}
-                      </span>
-                      <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
-                        {t('map.lastSeen.label')}: {lastSeenLabel(v.lastSeenAt, t)}
-                      </span>
-                    </span>
-                    <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
-                      {v.speed} km/h
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          cards.map(({ v, p }) => {
+            const selected = v.id === selectedId;
+            const tone = stateTone(v.state, dark);
+            return (
+              <ListItem
+                key={v.id}
+                data-vehicle-id={v.id}
+                disablePadding
+                sx={{ mb: 0.5, borderRadius: 2 }}
+                secondaryAction={
+                  <Chip
+                    label={t(`map.states.${v.state}`)}
+                    color={tone.chip}
+                    variant={tone.chipVariant}
+                    size="small"
+                    sx={{ fontSize: 11, height: 22, fontWeight: 600 }}
+                  />
+                }
+              >
+                <ListItemButton
+                  component="button"
+                  type="button"
+                  data-testid="map-vehicle-card"
+                  selected={selected}
+                  onClick={() => onSelect(v.id)}
+                  aria-pressed={selected}
+                  sx={{ borderRadius: 2, pr: 9, alignItems: 'flex-start', textAlign: 'start' }}
+                >
+                  <ListItemAvatar sx={{ minWidth: 44 }}>
+                    <Avatar
+                      variant="rounded"
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        bgcolor: tone.avatar,
+                        color: v.state === 'driving' ? '#fff' : undefined,
+                      }}
+                    >
+                      {<VehicleTypeIcon type={v.type} />}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Typography component="span" variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                          {v.label}
+                        </Typography>
+                        <PresenceDot presence={p} />
+                      </Box>
+                    }
+                    secondary={
+                      <Box component="span" sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                        <Typography
+                          component="span"
+                          variant="caption"
+                          noWrap
+                          sx={{ display: 'block' }}
+                        >
+                          {fleetNameOf(v.id) ?? t('map.list.noFleet')}
+                          {v.driver ? ` · ${v.driver}` : ''}
+                        </Typography>
+                        <Box
+                          component="span"
+                          sx={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 1.25,
+                            color: 'text.secondary',
+                            '& svg': { fontSize: 13, verticalAlign: 'text-bottom', me: 0.25 },
+                          }}
+                        >
+                          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                            <Speed fontSize="inherit" />
+                            {v.speed} km/h
+                          </Box>
+                          {v.ignitionOn !== undefined && (
+                            <Box
+                              component="span"
+                              sx={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 0.25,
+                                color: v.ignitionOn ? 'success.main' : 'text.disabled',
+                              }}
+                            >
+                              <PowerSettingsNew fontSize="inherit" />
+                              {t(v.ignitionOn ? 'map.popup.ignitionOn' : 'map.popup.ignitionOff')}
+                            </Box>
+                          )}
+                          <Box
+                            component="span"
+                            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}
+                            title={t('map.popup.heading')}
+                          >
+                            <Explore fontSize="inherit" />
+                            {v.heading}°
+                          </Box>
+                          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                            <Schedule fontSize="inherit" />
+                            {lastSeenLabel(v.lastSeenAt, t)}
+                          </Box>
+                        </Box>
+                      </Box>
+                    }
+                    slotProps={{ primary: { sx: { mb: 0 } } }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            );
+          })
         )}
-      </div>
+      </List>
+
+      <Divider />
 
       {/* Legend footnote (§18) — color always paired with a text label (§0.7). */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-gray-200 px-2.5 py-2 dark:border-white/5">
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, px: 1.5, py: 1 }}>
         {PRESENCE_FILTERS.filter((s) => s !== 'all').map((s) => (
-          <span key={s} className="flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="size-2 rounded-full"
-              style={{ backgroundColor: PRESENCE_COLORS[s] }}
-            />
-            <span className="text-xs text-gray-500 dark:text-graydark-600">
+          <Box key={s} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <PresenceDot presence={s} />
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               {t(presenceLabelKey(s))}
-            </span>
-          </span>
+            </Typography>
+          </Box>
         ))}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

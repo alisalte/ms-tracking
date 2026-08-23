@@ -5,8 +5,9 @@
  * movement counts derived from the map join, active alarms/devices), loading
  * skeletons, empty states, per-section error states with retry, the map
  * preview (marker creation + legend + error), fleet-health metrics, activity
- * chart wiring, and permission behavior (the dashboard is ungated — must
- * render identically regardless of the principal's permissions).
+ * chart wiring, the report.read-gated reporting widgets (period KPIs, trend
+ * charts, distance leaderboard, alarm lifecycle), and the always-mounted map
+ * preview (empty fleet → chip overlay, never a body replacement).
  *
  * API modules and maplibre are mocked — no backend required.
  */
@@ -136,6 +137,113 @@ const fleetApi = vi.hoisted(() => ({
 
 vi.mock('@/api/fleet.api', () => fleetApi);
 
+// ── Reporting fixtures (reporting-service wire shapes, Sprint J) ────────────
+const overviewFixture = {
+  totalVehicles: 4,
+  vehiclesWithTelemetry: 3,
+  noTelemetryVehicles: 1,
+  movingVehicles: 1,
+  idleVehicles: 1,
+  parkedVehicles: 1,
+  totalDistanceKm: 2450.7,
+  totalTrips: 82,
+  totalAlarms: 12,
+  openAlarms: 5,
+  geofenceEvents: 9,
+  avgUtilizationPct: 62.4,
+  from: '2026-08-17T00:00:00Z',
+  to: '2026-08-23T00:00:00Z',
+  dataAsOf: '2026-08-23T10:00:00Z',
+  freshness: 'AGGREGATED' as const,
+};
+
+const trendFixture = {
+  points: [
+    {
+      day: '2026-08-22',
+      distanceKm: 120.5,
+      trips: 9,
+      alarms: 3,
+      alarmSpeeding: 2,
+      alarmGeofence: 1,
+      alarmOffline: 0,
+      alarmOther: 0,
+    },
+    {
+      day: '2026-08-23',
+      distanceKm: 98.2,
+      trips: 7,
+      alarms: 1,
+      alarmSpeeding: 0,
+      alarmGeofence: 0,
+      alarmOffline: 1,
+      alarmOther: 0,
+    },
+  ],
+  from: '2026-08-17T00:00:00Z',
+  to: '2026-08-23T00:00:00Z',
+  dataAsOf: '2026-08-23T10:00:00Z',
+  freshness: 'AGGREGATED' as const,
+};
+
+const distanceFixture = {
+  items: [
+    {
+      vehicleId: 'mv1',
+      label: 'TRK-100',
+      distanceKm: 980.4,
+      trips: 30,
+      avgTripKm: 32.7,
+      maxTripKm: 95.1,
+      discardedTrips: 0,
+    },
+    {
+      vehicleId: 'mv2',
+      label: 'VAN-101',
+      distanceKm: 640.1,
+      trips: 22,
+      avgTripKm: 29.1,
+      maxTripKm: 61.0,
+      discardedTrips: 1,
+    },
+    {
+      vehicleId: 'mv3',
+      label: 'BUS-200',
+      distanceKm: 830.2,
+      trips: 30,
+      avgTripKm: 27.7,
+      maxTripKm: 88.3,
+      discardedTrips: 0,
+    },
+  ],
+  total: 3,
+};
+
+const alarmReportFixture = {
+  items: [],
+  total: 12,
+  summary: {
+    total: 12,
+    open: 5,
+    acknowledged: 2,
+    resolved: 5,
+    critical: 2,
+    high: 3,
+    medium: 4,
+    low: 2,
+    info: 1,
+  },
+};
+
+const reportApi = vi.hoisted(() => ({
+  useFleetOverview: vi.fn(),
+  useTrend: vi.fn(),
+  useDistance: vi.fn(),
+  useAlarmReport: vi.fn(),
+}));
+
+vi.mock('@/api/report.api', () => reportApi);
+
 const maplibre = vi.hoisted(() => ({ Marker: vi.fn() }));
 
 vi.mock('maplibre-gl', () => {
@@ -191,6 +299,34 @@ function setQueryResults() {
   });
   fleetApi.useDeviceStatuses.mockReturnValue({
     data: deviceStatusesFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  reportApi.useFleetOverview.mockReturnValue({
+    data: overviewFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  reportApi.useTrend.mockReturnValue({
+    data: trendFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  reportApi.useDistance.mockReturnValue({
+    data: distanceFixture,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  reportApi.useAlarmReport.mockReturnValue({
+    data: alarmReportFixture,
     isLoading: false,
     isError: false,
     error: null,
@@ -309,7 +445,11 @@ describe('FleetDashboard — activity + fleet health', () => {
       refetch: vi.fn(),
     });
     renderDashboard();
-    expect(screen.getAllByText('Connection error').length).toBeGreaterThanOrEqual(3);
+    // Activity + health panels surface the honest error state…
+    expect(screen.getAllByText('Connection error').length).toBeGreaterThanOrEqual(2);
+    // …and the preview map — deliberately kept mounted — overlays its own
+    // retry affordance instead of being replaced by an error body.
+    expect(screen.getByTestId('map-preview-error')).toBeTruthy();
   });
 });
 
@@ -371,7 +511,7 @@ describe('FleetDashboard — map preview', () => {
     expect(screen.getByText('Online', { selector: 'span' })).toBeTruthy();
   });
 
-  it('renders empty states when the fleet has no vehicles', () => {
+  it('keeps the map preview mounted with an empty chip when the fleet has no vehicles', () => {
     fleetApi.useMapVehicles.mockReturnValue({
       data: [],
       isLoading: false,
@@ -380,19 +520,72 @@ describe('FleetDashboard — map preview', () => {
       refetch: vi.fn(),
     });
     renderDashboard();
-    // Map preview + activity donut both show the honest empty placeholder.
-    expect(screen.getAllByText(/No active alerts/i).length).toBeGreaterThanOrEqual(2);
+    // Activity donut keeps its honest empty placeholder…
+    expect(screen.getAllByText(/No active alerts/i).length).toBeGreaterThanOrEqual(1);
+    // …while the preview map stays MOUNTED with a light chip overlay
+    // (never replaced by a body-level empty state).
+    expect(screen.getByTestId('map-preview-empty')).toBeTruthy();
+    expect(screen.getByText('No vehicles yet')).toBeTruthy();
+  });
+});
+
+describe('FleetDashboard — report widgets (report.read)', () => {
+  it('hides the reporting widgets for principals without report.read', () => {
+    renderDashboard();
+    expect(screen.queryByText('Distance & trips trend')).toBeNull();
+    expect(screen.queryByText('Daily alarms by type')).toBeNull();
+    expect(screen.queryByText('Top vehicles by distance')).toBeNull();
+    expect(screen.queryByText('Alarm status & severity')).toBeNull();
+    // The ungated live dashboard is unaffected.
+    expect(screen.getByText('Total Vehicles')).toBeTruthy();
+  });
+
+  it('renders period KPIs, trends, leaderboard and alarm lifecycle for holders', () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u3',
+        email: 'analyst@fleet.test',
+        tenantId: 't1',
+        roles: ['analyst'],
+        permissions: ['report.read'],
+      },
+    });
+    renderDashboard();
+
+    // Period KPI tiles (7-day aggregates from the reporting service).
+    expect(
+      screen.getByText('Distance (last 7 days)', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('2,451');
+    expect(
+      screen.getByText('Trips (last 7 days)', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('82');
+    expect(
+      screen.getByText('Avg utilization', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('62%');
+    expect(
+      screen.getByText('Geofence events', { selector: 'p' }).parentElement?.textContent,
+    ).toContain('9');
+
+    // Chart cards: two trend cards, leaderboard, alarm lifecycle.
+    expect(screen.getByText('Distance & trips trend')).toBeTruthy();
+    expect(screen.getByText('Daily alarms by type')).toBeTruthy();
+    expect(screen.getByText('Top vehicles by distance')).toBeTruthy();
+    expect(screen.getByText('Alarm status & severity')).toBeTruthy();
+    // EChart stubs: activity + alert-type + 2 trends + leaderboard + lifecycle.
+    expect(screen.getAllByTestId('echart').length).toBeGreaterThanOrEqual(6);
   });
 });
 
 describe('FleetDashboard — permission behavior', () => {
-  it('renders identically for an empty-permission principal and the wildcard admin', () => {
+  it('renders the live dashboard for an empty-permission principal and the wildcard admin', () => {
     const { unmount } = renderDashboard();
     expect(screen.getByText('Total Vehicles')).toBeTruthy();
     unmount();
 
-    // The dashboard is deliberately ungated (Phase 1 R9): sections never hide
-    // behind permissions — the backend authorizes each query independently.
+    // The LIVE sections stay ungated (Phase 1 R9): they never hide behind
+    // permissions — the backend authorizes each query independently. The
+    // reporting widgets are the one exception: gated on report.read (see the
+    // dedicated describe above), which the wildcard satisfies.
     useAuthStore.setState({
       user: {
         id: 'u2',
@@ -404,5 +597,6 @@ describe('FleetDashboard — permission behavior', () => {
     });
     renderDashboard();
     expect(screen.getByText('Total Vehicles')).toBeTruthy();
+    expect(screen.getByText('Distance & trips trend')).toBeTruthy();
   });
 });

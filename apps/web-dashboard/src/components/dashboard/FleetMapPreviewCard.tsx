@@ -33,7 +33,7 @@ export function FleetMapPreviewCard() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const markersRef = useRef<MaplibreMarker[]>([]);
-  const { data, isLoading, isError, error, refetch } = useMapVehicles();
+  const { data, isLoading, isError, refetch } = useMapVehicles();
   const vehicles = data ?? [];
 
   // Initialize the map once.
@@ -105,11 +105,6 @@ export function FleetMapPreviewCard() {
     <DashboardCard
       titleKey="dashboard.widgets.mapPreview"
       icon={MapPin}
-      loading={isLoading && !isError}
-      error={isError ? error : undefined}
-      onRetry={() => void refetch()}
-      empty={!isLoading && !isError && vehicles.length === 0}
-      emptyKey="dashboard.empty.alerts"
       flush
       action={
         <Link
@@ -121,6 +116,9 @@ export function FleetMapPreviewCard() {
       }
     >
       <div className="relative h-[220px] w-full overflow-hidden rounded-lg">
+        {/* The map container is ALWAYS mounted — loading/error/empty render
+         * as light overlays on top of the tiles, never as body replacements
+         * (the map should stay visible even with no devices reporting). */}
         <div ref={containerRef} className="h-full w-full" />
         {/* Legend overlay (§0.7: never rely on color alone — pair with label). */}
         <div className="absolute bottom-2 start-2 flex items-center gap-3 rounded-lg border border-white/60 bg-white/75 px-2.5 py-1 shadow-sm backdrop-blur-md">
@@ -135,7 +133,31 @@ export function FleetMapPreviewCard() {
             </span>
           ))}
         </div>
-        {isLoading && <Skeleton className="absolute inset-0" />}
+        {isLoading && !isError && <Skeleton className="absolute inset-0" />}
+        {!isLoading && isError && (
+          <div
+            data-testid="map-preview-error"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm dark:bg-graydark-800/70"
+          >
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+            >
+              {t('dashboard.map.retry')}
+            </button>
+          </div>
+        )}
+        {!isLoading && !isError && vehicles.length === 0 && (
+          <div
+            data-testid="map-preview-empty"
+            className="absolute inset-0 z-10 flex items-center justify-center"
+          >
+            <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-medium text-gray-500 shadow-sm dark:border-white/10 dark:bg-graydark-300/90 dark:text-graydark-700">
+              {t('map.emptyTitle')}
+            </span>
+          </div>
+        )}
       </div>
     </DashboardCard>
   );

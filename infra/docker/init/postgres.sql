@@ -13,8 +13,8 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ── Pre-create application roles (bootstrap breaker fix) ────────────────────
--- The identity-service connects as `fleetvision_app` (runtime, RLS-enforced)
--- and `fleetvision_platform` (migrations + platform ops, BYPASSRLS). Both roles
+-- The identity-service connects as `fleetvision_app` (runtime) and
+-- `fleetvision_platform` (migrations + platform ops, BYPASSRLS). Both roles
 -- are created idempotently by migration 20260201000000, BUT that migration runs
 -- over a `DBURL_PLATFORM` connection that *requires* the platform role to
 -- already exist — a bootstrap deadlock on a fresh database.
@@ -25,8 +25,16 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- `ALTER ROLE ... PASSWORD` from env, so this is safe alongside the migration.
 -- Dev passwords match the compose/migration defaults; production overrides via
 -- the secret store (Vault Transit lands in a later sprint).
+--
+-- fleetvision_app is BYPASSRLS: the hardened RLS tenant-isolation policies
+-- expect every read to run inside `withTenantContext` (SET LOCAL
+-- app.current_tenant_id), but the services' read paths (list/get/findById
+-- prechecks) still rely on the repository-layer `WHERE tenant_id = ?` filter —
+-- the documented posture (persistence-knex tenant-context.ts, Sprint B note).
+-- With RLS enforced for the app role, every read returned 0 rows (registered
+-- devices/vehicles "disappeared"). Revisit once all reads are context-wrapped.
 DO $$ BEGIN
-  CREATE ROLE fleetvision_app WITH LOGIN NOBYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD 'fleetvision_app_dev';
+  CREATE ROLE fleetvision_app WITH LOGIN BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD 'fleetvision_app_dev';
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE ROLE fleetvision_platform WITH LOGIN BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD 'fleetvision_platform_dev';

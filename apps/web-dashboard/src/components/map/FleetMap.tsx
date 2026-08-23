@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { basemapById, type BasemapId } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
 import {
   clusterMarkerDataUrl,
@@ -52,6 +53,13 @@ interface FleetMapProps {
    * imperatively (setLngLat + CSS rotation) — never a map re-creation.
    */
   playbackHead?: { lat: number; lng: number; heading: number | null } | null;
+  /**
+   * Basemap style (streets / satellite / dark / topo). Switching swaps the
+   * raster source's tiles in place of a full setStyle: DOM markers survive,
+   * and the re-added raster layer is inserted BENEATH the history-track
+   * overlay so an active track never disappears under the new tiles.
+   */
+  basemap?: BasemapId;
 }
 
 /** Freshness "age" of the last position fix, locale-aware. */
@@ -96,6 +104,7 @@ export function FleetMap({
   focus = null,
   track = null,
   playbackHead = null,
+  basemap = 'streets',
 }: FleetMapProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -106,6 +115,9 @@ export function FleetMap({
   );
   /** Cluster markers (churn by nature — rebuilt per sync). */
   const clusterMarkersRef = useRef<MaplibreMarker[]>([]);
+
+  /** Basemap currently applied to the map style (guards no-op swaps). */
+  const appliedBasemapRef = useRef<BasemapId>('streets');
 
   // The latest fleet for the focus effect (which must not re-run on data change).
   const vehiclesRef = useRef(vehicles);
@@ -124,25 +136,27 @@ export function FleetMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const bm = basemapById(basemap);
     const map = new MaplibreMap({
       container: containerRef.current,
       style: {
         version: 8,
         sources: {
-          osm: {
+          basemap: {
             type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tiles: [...bm.tiles],
             tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
+            attribution: bm.attribution,
           },
         },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
       },
       center: [51.338, 35.719],
       zoom: 11,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    appliedBasemapRef.current = basemap;
     // Clicking empty map clears the selection (§2.5 Esc/backdrop closes).
     map.on('click', (e) => {
       // If the click originated on a marker element, ignore (markers stop propagation).
@@ -163,7 +177,42 @@ export function FleetMap({
       map.remove();
       mapRef.current = null;
     };
+    // The init effect reads `basemap` for the FIRST style only; later changes
+    // flow through the swap effect below (the map is never recreated).
+    // biome-ignore lint/react-hooks/exhaustive-deps: mount-once by design
   }, []);
+
+  // ── Basemap switching ──
+  // Swap the raster source's tiles in place of setStyle: DOM markers survive,
+  // and the re-added raster layer goes UNDER the history-track overlay (when
+  // one is active) so tracks never vanish beneath the new tiles.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || appliedBasemapRef.current === basemap) return;
+    appliedBasemapRef.current = basemap;
+    const bm = basemapById(basemap);
+    const swap = () => {
+      if (map.getLayer('basemap')) map.removeLayer('basemap');
+      if (map.getSource('basemap')) map.removeSource('basemap');
+      map.addSource('basemap', {
+        type: 'raster',
+        tiles: [...bm.tiles],
+        tileSize: 256,
+        attribution: bm.attribution,
+      });
+      // Insert beneath the track line when it exists; otherwise append (the
+      // vehicle/cluster markers are DOM overlays and always render on top).
+      map.addLayer(
+        { id: 'basemap', type: 'raster', source: 'basemap' },
+        map.getLayer('history-track-line') ? 'history-track-line' : undefined,
+      );
+    };
+    if (map.isStyleLoaded()) {
+      swap();
+    } else {
+      map.once('styledata', swap);
+    }
+  }, [basemap]);
 
   // Re-render markers whenever the fleet / selection changes. When paused, the
   // map stops re-clustering on pan/zoom so the operator can inspect a frozen

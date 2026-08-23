@@ -173,7 +173,11 @@
       "moving": "در حرکت",
       "parked": "پارک شده",
       "activeDevices": "دستگاه‌های فعال",
-      "activeAlarms": "هشدارهای فعال"
+      "activeAlarms": "هشدارهای فعال",
+      "distance7d": "مسافت (۷ روز اخیر)",
+      "trips7d": "سفرها (۷ روز اخیر)",
+      "utilization": "میانگین بهره‌وری",
+      "geofenceEvents": "رویدادهای گئوفنس"
     },
     "states": {
       "driving": "در حرکت",
@@ -213,7 +217,8 @@
       "offline": "آفلاین",
       "online": "آنلاین",
       "stale": "غیربه‌روز",
-      "unknown": "نامشخص"
+      "unknown": "نامشخص",
+      "retry": "تلاش مجدد"
     },
     "utilization": {
       "utilized": "به‌کارگیری"
@@ -248,7 +253,11 @@
       "latestPosts": "آخرین پست‌ها",
       "dailyFinance": "مالی روزانه",
       "myMessages": "پیام‌های من",
-      "overview": "نمای کلی ناوگان"
+      "overview": "نمای کلی ناوگان",
+      "distanceTripsTrend": "روند مسافت و سفرها",
+      "alarmTrend": "هشدارهای روزانه به تفکیک نوع",
+      "topVehicles": "خودروهای برتر بر اساس مسافت",
+      "alarmStatus": "وضعیت و شدت هشدارها"
     },
     "empty": {
       "alerts": "هیچ هشدار فعلی وجود ندارد — ناوگان آرام است.",
@@ -277,6 +286,22 @@
       "critical": "بحرانی",
       "warning": "هشدار",
       "info": "اطلاع"
+    },
+    "charts": {
+      "distance": "مسافت (کیلومتر)",
+      "trips": "سفرها",
+      "speeding": "سرعت غیرمجاز",
+      "geofence": "گئوفنس",
+      "offline": "آفلاین",
+      "other": "سایر",
+      "open": "باز",
+      "acknowledged": "تأییدشده",
+      "resolved": "حل‌شده",
+      "critical": "بحرانی",
+      "high": "بالا",
+      "medium": "متوسط",
+      "low": "پایین",
+      "info": "اطلاع‌رسانی"
     }
   },
   "map": {
@@ -305,7 +330,18 @@
       "overspeed": "سرعت غیرمجاز"
     },
     "list": {
-      "count": "{{shown}} از {{total}}"
+      "count": "{{shown}} از {{total}}",
+      "noFleet": "بدون ناوگان"
+    },
+    "settings": {
+      "open": "تنظیمات نقشه",
+      "basemap": "نوع نمایش نقشه"
+    },
+    "basemap": {
+      "streets": "خیابانی",
+      "satellite": "ماهواره‌ای",
+      "dark": "تیره",
+      "topo": "توپوگرافی"
     },
     "popup": {
       "close": "بستن",
@@ -394,7 +430,8 @@
       "toggle": "تطبیق نقشه",
       "tooltip": "چسباندن مسیر به جاده‌ها با OSRM (در صورت عدم دسترسی، مسیر خام GPS نمایش داده می‌شود)",
       "unavailable": "تطبیق نقشه در دسترس نیست — مسیر خام GPS نمایش داده می‌شود"
-    }
+    },
+    "emptyCta": "رفتن به مدیریت دارایی‌ها"
   },
   "trips": {
     "title": "سفرها",
@@ -821,6 +858,7 @@
       "vin": "VIN",
       "plate": "پلاک",
       "fleet": "ناوگان",
+      "pickFleet": "— یک ناوگان انتخاب کنید —",
       "name": "نام",
       "code": "کد",
       "createdAt": "ایجاد",
@@ -891,7 +929,8 @@
       "unassignConfirmTitle": "لغو اتصال {{name}}؟",
       "unassignConfirmBody": "دستگاه از این خودرو جدا می‌شود.",
       "alreadyBound": "این دستگاه قبلاً به یک خودرو متصل شده است.",
-      "noUnbound": "دستگاه آزادی برای انتساب وجود ندارد."
+      "noUnbound": "دستگاه آزادی برای انتساب وجود ندارد.",
+      "colStatus": "وضعیت"
     },
     "actions": {
       "archive": "بایگانی",
