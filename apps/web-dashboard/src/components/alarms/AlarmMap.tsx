@@ -13,8 +13,8 @@ import { useTranslation } from 'react-i18next';
 
 import { severityColor } from '@/components/alarms/AlarmTypeIcon';
 import { markerDataUrl, selectedMarkerDataUrl } from '@/lib/map-markers';
-import type { Alarm } from '@/types/alarm.types';
 import { runWhenStyleReady } from '@/lib/map-ready';
+import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmMapProps {
   /** The (already-filtered) alarms to render. */

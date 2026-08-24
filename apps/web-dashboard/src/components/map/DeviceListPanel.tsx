@@ -86,7 +86,11 @@ function stateTone(
     case 'overspeed':
       return { avatar: dark ? 'error.dark' : 'error.light', chip: 'error', chipVariant: 'filled' };
     case 'idle':
-      return { avatar: dark ? 'warning.dark' : 'warning.light', chip: 'warning', chipVariant: 'outlined' };
+      return {
+        avatar: dark ? 'warning.dark' : 'warning.light',
+        chip: 'warning',
+        chipVariant: 'outlined',
+      };
     default:
       return { avatar: dark ? 'grey.700' : 'grey.200', chip: 'default', chipVariant: 'outlined' };
   }
@@ -206,7 +210,18 @@ export function DeviceListPanel({
             if (v !== null) onPresenceChange(v as PresenceFilter);
           }}
           aria-label={t('map.filters.all')}
-          sx={{ flexWrap: 'wrap', gap: 0.5, '& .MuiToggleButton-root': { border: 0, borderRadius: 999, px: 1.25, py: 0.25, fontSize: 12, fontWeight: 600 } }}
+          sx={{
+            flexWrap: 'wrap',
+            gap: 0.5,
+            '& .MuiToggleButton-root': {
+              border: 0,
+              borderRadius: 999,
+              px: 1.25,
+              py: 0.25,
+              fontSize: 12,
+              fontWeight: 600,
+            },
+          }}
         >
           {PRESENCE_FILTERS.map((s) => (
             <ToggleButton
@@ -215,7 +230,9 @@ export function DeviceListPanel({
               aria-pressed={presence === s}
               color={s === 'all' ? 'standard' : 'primary'}
             >
-              {s === 'all' ? t(presenceLabelKey(s)) : `${t(presenceLabelKey(s))} · ${counts[s] ?? 0}`}
+              {s === 'all'
+                ? t(presenceLabelKey(s))
+                : `${t(presenceLabelKey(s))} · ${counts[s] ?? 0}`}
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
@@ -294,14 +311,22 @@ export function DeviceListPanel({
                   <ListItemText
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        <Typography component="span" variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          noWrap
+                          sx={{ fontWeight: 600 }}
+                        >
                           {v.label}
                         </Typography>
                         <PresenceDot presence={p} />
                       </Box>
                     }
                     secondary={
-                      <Box component="span" sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                      <Box
+                        component="span"
+                        sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}
+                      >
                         <Typography
                           component="span"
                           variant="caption"
@@ -321,7 +346,10 @@ export function DeviceListPanel({
                             '& svg': { fontSize: 13, verticalAlign: 'text-bottom', me: 0.25 },
                           }}
                         >
-                          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                          <Box
+                            component="span"
+                            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}
+                          >
                             <Speed fontSize="inherit" />
                             {v.speed} km/h
                           </Box>
@@ -347,7 +375,10 @@ export function DeviceListPanel({
                             <Explore fontSize="inherit" />
                             {v.heading}°
                           </Box>
-                          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                          <Box
+                            component="span"
+                            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}
+                          >
                             <Schedule fontSize="inherit" />
                             {lastSeenLabel(v.lastSeenAt, t)}
                           </Box>

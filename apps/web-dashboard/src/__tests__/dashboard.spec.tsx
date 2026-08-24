@@ -135,7 +135,6 @@ const fleetApi = vi.hoisted(() => ({
   useDeviceStatuses: vi.fn(),
 }));
 
-
 /**
  * KpiTile v3: the label <p> and the value live in separate rows of the SAME
  * card — walk up to the card element (rounded-2xl) for text assertions.
@@ -423,21 +422,13 @@ describe('FleetDashboard — rendering + KPIs', () => {
   it('renders KPI values from the real query shapes', () => {
     renderDashboard();
     // KPI labels are the only <p> elements with these texts.
-    expect(
-      tileCardText(screen.getByText('Total Vehicles', { selector: 'p' })),
-    ).toContain('312');
+    expect(tileCardText(screen.getByText('Total Vehicles', { selector: 'p' }))).toContain('312');
     expect(tileCardText(screen.getByText('Moving', { selector: 'p' }))).toContain('1');
     expect(tileCardText(screen.getByText('Idle', { selector: 'p' }))).toContain('1');
     expect(tileCardText(screen.getByText('Parked', { selector: 'p' }))).toContain('1');
-    expect(tileCardText(screen.getByText('Offline', { selector: 'p' }))).toContain(
-      '87',
-    );
-    expect(
-      tileCardText(screen.getByText('Active Alarms', { selector: 'p' })),
-    ).toContain('3');
-    expect(
-      tileCardText(screen.getByText('Active Devices', { selector: 'p' })),
-    ).toContain('3');
+    expect(tileCardText(screen.getByText('Offline', { selector: 'p' }))).toContain('87');
+    expect(tileCardText(screen.getByText('Active Alarms', { selector: 'p' }))).toContain('3');
+    expect(tileCardText(screen.getByText('Active Devices', { selector: 'p' }))).toContain('3');
   });
 
   it('shows skeletons instead of values while the summary is loading', () => {
@@ -600,18 +591,14 @@ describe('FleetDashboard — report widgets (report.read)', () => {
     renderDashboard();
 
     // Period KPI tiles (7-day aggregates from the reporting service).
-    expect(
-      tileCardText(screen.getByText('Distance (last 7 days)', { selector: 'p' })),
-    ).toContain('2,451');
-    expect(
-      tileCardText(screen.getByText('Trips (last 7 days)', { selector: 'p' })),
-    ).toContain('82');
-    expect(
-      tileCardText(screen.getByText('Avg utilization', { selector: 'p' })),
-    ).toContain('62%');
-    expect(
-      tileCardText(screen.getByText('Geofence events', { selector: 'p' })),
-    ).toContain('9');
+    expect(tileCardText(screen.getByText('Distance (last 7 days)', { selector: 'p' }))).toContain(
+      '2,451',
+    );
+    expect(tileCardText(screen.getByText('Trips (last 7 days)', { selector: 'p' }))).toContain(
+      '82',
+    );
+    expect(tileCardText(screen.getByText('Avg utilization', { selector: 'p' }))).toContain('62%');
+    expect(tileCardText(screen.getByText('Geofence events', { selector: 'p' }))).toContain('9');
 
     // Chart cards: two trend cards, leaderboard, alarm lifecycle.
     expect(screen.getByText('Distance & trips trend')).toBeTruthy();

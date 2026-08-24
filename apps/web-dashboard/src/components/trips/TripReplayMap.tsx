@@ -7,9 +7,9 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { headingArrowDataUrl, markerDataUrl } from '@/lib/map-markers';
+import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents, status } from '@/theme/palette';
 import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
-import { runWhenStyleReady } from '@/lib/map-ready';
 
 interface TripReplayMapProps {
   /** Ordered position samples of the trip track. */

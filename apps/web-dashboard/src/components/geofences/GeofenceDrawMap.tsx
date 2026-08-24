@@ -33,8 +33,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { Geofence } from '@/types/geofence.types';
 import { runWhenStyleReady } from '@/lib/map-ready';
+import type { Geofence } from '@/types/geofence.types';
 
 export type DrawMode = 'polygon' | 'circle' | null;
 

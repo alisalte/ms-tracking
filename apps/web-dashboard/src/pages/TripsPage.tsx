@@ -76,7 +76,7 @@ export function TripsPage() {
         trip.destinationLabel.toLowerCase().includes(q)
       );
     });
-  }, [trips, query, statusFilter]);
+  }, [trips, query, statusFilter, vehicleFilter]);
 
   const columns: Array<TableColumn<Trip>> = [
     {

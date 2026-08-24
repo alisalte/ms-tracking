@@ -141,6 +141,9 @@ export function FleetMap({
   });
 
   // Initialize the map once.
+  // The init effect reads `basemap` for the FIRST style only; later changes
+  // flow through the swap effect below (the map is never recreated).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -185,9 +188,6 @@ export function FleetMap({
       map.remove();
       mapRef.current = null;
     };
-    // The init effect reads `basemap` for the FIRST style only; later changes
-    // flow through the swap effect below (the map is never recreated).
-    // biome-ignore lint/react-hooks/exhaustive-deps: mount-once by design
   }, []);
 
   // ── Basemap switching ──

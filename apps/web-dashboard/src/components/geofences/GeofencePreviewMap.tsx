@@ -10,9 +10,9 @@ import { type GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef } from 'react';
 
+import { runWhenStyleReady } from '@/lib/map-ready';
 import type { Geofence } from '@/types/geofence.types';
 import { circleToPolygonRing } from './GeofenceDrawMap';
-import { runWhenStyleReady } from '@/lib/map-ready';
 
 export function GeofencePreviewMap({
   geofence,
