@@ -1,6 +1,6 @@
 import { KeyRound, Lock, LogOut, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import {
   Avatar,
@@ -9,6 +9,7 @@ import {
   Card,
   CardHeader,
   PageHeader,
+  Skeleton,
   Tooltip,
 } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,10 +25,45 @@ import { useAuth } from '@/hooks/useAuth';
  */
 export function ProfilePage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  // Skeleton placeholder mirroring the loaded layout (banner + two cards) so
+  // the page doesn't jump and never flashes a bare "loading" line.
   if (!user) {
-    return <p className="text-sm text-gray-500 dark:text-graydark-600">{t('common.loading')}</p>;
+    return (
+      // biome-ignore lint/a11y/useSemanticElements: role=status live region for the loading announcement.
+      <div className="flex flex-col gap-4" role="status" aria-live="polite">
+        <span className="sr-only">{t('common.loading')}</span>
+        <PageHeader title={t('profile.title')} description={t('profile.subtitle')} />
+
+        {/* Identity banner skeleton */}
+        <Card flush className="overflow-hidden">
+          <Skeleton className="h-24 w-full rounded-none" />
+          <div className="flex items-end gap-4 px-5 pb-5">
+            <Skeleton circle className="-mt-10 size-20 ring-4 ring-white dark:ring-graydark-200" />
+            <div className="flex flex-col gap-2 pb-1">
+              <Skeleton className="h-5 w-44" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+          </div>
+        </Card>
+
+        {/* Account / security card skeletons */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="flex flex-col gap-3">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </Card>
+          <Card className="flex flex-col gap-3">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   const initials = (user.email || '?').charAt(0).toUpperCase();
@@ -106,12 +142,14 @@ export function ProfilePage() {
                   {t('profile.changePasswordHelp')}
                 </p>
               </div>
-              <RouterLink
-                to="/reset-password"
-                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg text-sm font-medium text-brand-600 ring-1 ring-inset ring-brand-500 transition-colors hover:bg-brand-50 hover:text-brand-700 px-3.5 dark:text-brand-300 dark:ring-brand-400/60 dark:hover:bg-brand-500/10"
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => navigate('/reset-password')}
               >
                 {t('profile.changePasswordAction')}
-              </RouterLink>
+              </Button>
             </div>
           </div>
         </Card>

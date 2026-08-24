@@ -19,8 +19,11 @@ interface EChartProps {
  * Responsibilities:
  * - Apply a theme-aware base (axis/grid/tooltip text + background colors) that
  *   adapts to the current light/dark mode via `useThemeContext().mode`.
- * - Honor the active language direction so charts read RTL where appropriate.
  * - Merge the caller's `option` last so it always wins over the base defaults.
+ *
+ * Direction note: charts intentionally stay LTR under RTL (numeric axes and
+ * time series read left→right in both locales — the product convention); the
+ * LEGEND and axis LABELS are translated by callers via i18n keys.
  *
  * The wrapper intentionally keeps its surface small: callers build the rich,
  * data-specific option (series, colors, formatters) and this wrapper only

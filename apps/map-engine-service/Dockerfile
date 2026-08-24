@@ -58,6 +58,9 @@ COPY --from=builder /app/apps/map-engine-service/package.json ./apps/map-engine-
 COPY --from=builder /app/packages ./packages
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" \
     npm_config_fetch_retries=5 npm_config_fetch_timeout=120000
+# pnpm comes from the builder's corepack cache — the runtime stage never re-downloads it (flaky-registry-proof).
+COPY --from=builder /root/.cache/node/corepack /root/.cache/node/corepack
+
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store corepack enable && corepack prepare pnpm@9.15.0 --activate \
     && pnpm install --prod --frozen-lockfile --ignore-scripts \
     && chown -R node:node /app

@@ -197,7 +197,7 @@ export function VehiclesTab({
           <EmptyState
             icon={<Truck />}
             title={t('assets.empty')}
-            description={t('assets.vehicle.search')}
+            description={t('assets.vehicle.emptyDescription')}
           />
         }
       />

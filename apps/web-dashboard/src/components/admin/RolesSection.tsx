@@ -8,7 +8,7 @@
  */
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Card, Skeleton } from '@/components/tailwind-ui';
+import { Badge, Card, EmptyState, Skeleton } from '@/components/tailwind-ui';
 import type { Role } from '@/types/admin.types';
 
 interface RolesSectionProps {
@@ -25,7 +25,7 @@ export function RolesSection({ roles, loading = false, selectedId, onSelect }: R
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-3 p-2">
+      <div className="flex flex-col gap-3">
         {['rsk-a', 'rsk-b', 'rsk-c'].map((k) => (
           <Skeleton key={k} className="h-24 w-full" />
         ))}
@@ -34,7 +34,7 @@ export function RolesSection({ roles, loading = false, selectedId, onSelect }: R
   }
 
   return (
-    <div className="flex flex-col gap-4 p-2">
+    <div className="flex flex-col gap-4">
       {/* Custom roles (UI_UX §5.3) */}
       <section>
         <h2 className="mb-2 text-sm font-semibold text-gray-800 dark:text-white">
@@ -66,6 +66,9 @@ function RoleGrid({
   onSelect: (id: string) => void;
   t: (k: string) => string;
 }) {
+  if (roles.length === 0) {
+    return <EmptyState title={t('admin.roles.empty')} />;
+  }
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
       {roles.map((r) => (

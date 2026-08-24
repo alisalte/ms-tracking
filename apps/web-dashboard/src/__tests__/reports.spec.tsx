@@ -162,10 +162,15 @@ describe('ReportsOverviewSection (backend KPIs only)', () => {
     render(<ReportsOverviewSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
 
     await waitFor(() => expect(screen.getAllByTestId('report-kpi')).toHaveLength(11));
-    // Backend values surface verbatim.
+    // Backend values surface verbatim. KPI tiles render the value via
+    // toLocaleString (locale digit grouping may render 1,500 / 1 500 / 1500
+    // depending on the runner's ICU) with the unit as a suffix node.
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('26')).toBeInTheDocument();
-    expect(screen.getByText('1.5k km')).toBeInTheDocument();
+    expect(
+      screen.getAllByTestId('report-kpi').some((el) => /1[,. ]?450/.test(el.textContent ?? '')),
+    ).toBe(true);
+    expect(screen.getByText('km')).toBeInTheDocument();
     // Freshness is labeled honestly (§44).
     expect(screen.getByTestId('report-freshness')).toHaveTextContent(/aggregated/i);
     // Charts rendered (stubbed EChart).

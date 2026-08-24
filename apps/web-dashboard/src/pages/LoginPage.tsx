@@ -1,12 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff } from 'lucide-react';
-import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
-import { Alert, Button, Card, Input } from '@/components/tailwind-ui';
+import { PasswordTextField } from '@/components/form/PasswordTextField';
+import { Alert, Button, Card, Checkbox, Input } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 import { emailSchema } from '@/lib/validation';
 
@@ -32,7 +31,6 @@ export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [showPassword, setShowPassword] = useState(false);
 
   const { login, isLoading, error, clearError } = useAuth();
   const redirectPath = searchParams.get('redirect') ?? '/dashboard';
@@ -114,27 +112,15 @@ export function LoginPage() {
           name="password"
           control={control}
           render={({ field }) => (
-            <div className="relative">
-              <Input
-                {...field}
-                value={field.value ?? ''}
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                label={t('auth.password')}
-                autoComplete="current-password"
-                disabled={isLoading}
-                error={errors.password ? t(errors.password.message ?? '') : null}
-                className="pe-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
-                className="absolute end-2 top-[30px] inline-flex size-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:text-graydark-700"
-              >
-                {showPassword ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
-              </button>
-            </div>
+            <PasswordTextField
+              {...field}
+              value={field.value ?? ''}
+              id="password"
+              label={t('auth.password')}
+              autoCompleteValue="current-password"
+              disabled={isLoading}
+              error={errors.password ? t(errors.password.message ?? '') : null}
+            />
           )}
         />
 
@@ -143,18 +129,15 @@ export function LoginPage() {
             name="rememberDevice"
             control={control}
             render={({ field }) => (
-              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-graydark-700">
-                <input
-                  type="checkbox"
-                  checked={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  disabled={isLoading}
-                  className="size-4 rounded border-gray-300 accent-brand-500"
-                />
-                {t('auth.rememberDevice')}
-              </label>
+              <Checkbox
+                checked={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                id="rememberDevice"
+                disabled={isLoading}
+                label={t('auth.rememberDevice')}
+              />
             )}
           />
           <RouterLink

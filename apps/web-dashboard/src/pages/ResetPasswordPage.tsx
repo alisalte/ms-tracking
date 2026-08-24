@@ -83,7 +83,7 @@ export function ResetPasswordPage() {
           onClick={() => navigate('/login')}
           aria-label={t('common.backToLogin')}
         >
-          <ArrowLeft size={16} aria-hidden />
+          <ArrowLeft size={16} className="rtl:rotate-180" aria-hidden />
         </IconButton>
         <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
           {t('auth.resetPassword')}

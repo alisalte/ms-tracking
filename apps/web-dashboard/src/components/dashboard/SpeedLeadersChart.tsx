@@ -105,7 +105,7 @@ export function SpeedLeadersChart() {
       onRetry={() => void speed.refetch()}
       flush
     >
-      <div className="w-full px-4 pb-3">
+      <div className="w-full px-4 pb-3 sm:px-5">
         <EChart option={option} height={Math.max(200, rows.length * 34 + 40)} />
       </div>
     </DashboardCard>

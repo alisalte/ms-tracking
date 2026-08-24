@@ -1,7 +1,7 @@
 import { Pause, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { IconButton } from '@/components/tailwind-ui';
+import { IconButton, SegmentedControl } from '@/components/tailwind-ui';
 import { status } from '@/theme/palette';
 import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
 import { PLAYBACK_SPEEDS, type PlaybackSpeed } from './useTripPlayback';
@@ -85,29 +85,13 @@ export function TripTimeline({
             <Play size={16} aria-hidden className="ms-0.5" />
           )}
         </IconButton>
-        <fieldset
+        <SegmentedControl
+          options={PLAYBACK_SPEEDS.map((s) => ({ value: s, label: `${s}×` }))}
+          value={speed}
+          onChange={onSpeedChange}
           aria-label={t('trips.timeline.speed')}
-          className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-white/10 dark:bg-graydark-300"
-        >
-          {PLAYBACK_SPEEDS.map((s) => {
-            const active = speed === s;
-            return (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onSpeedChange(s)}
-                className={`cursor-pointer rounded-md px-2.5 py-0.5 text-xs leading-relaxed font-medium transition-colors ${
-                  active
-                    ? 'bg-white text-brand-600 shadow-sm dark:bg-graydark-400 dark:text-brand-300'
-                    : 'text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-graydark-800'
-                }`}
-              >
-                {s}×
-              </button>
-            );
-          })}
-        </fieldset>
+          size="sm"
+        />
         <span className="text-sm tabular-nums text-gray-500 dark:text-graydark-600">
           {nowLabel}
         </span>
@@ -126,7 +110,9 @@ export function TripTimeline({
               aria-label={`${t(`trips.events.${e.type}`)} ${e.label}`}
               style={{
                 position: 'absolute',
-                left: `${pos}%`,
+                // insetInlineStart mirrors under dir=rtl (plain `left` would
+                // desync the ticks from the native range input, which mirrors).
+                insetInlineStart: `${pos}%`,
                 top: 0,
                 transform: 'translateX(-50%)',
                 width: 4,

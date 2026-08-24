@@ -1,13 +1,17 @@
 /**
  * UserDetailDrawer — right slide-over showing a user's profile + role bindings
  * + status actions (IAM §5.1). Selection → detail pattern (UI_UX §0.6).
+ * Status changes confirm first (deactivate is destructive/irreversible) and
+ * toast on success/failure — never silent mutations.
  */
 import { ShieldCheck, UserCog, UserX } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserDetail, useUserStatusAction } from '@/api/admin.api';
 import { userStatusColor } from '@/components/admin/admin-meta';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
+import { useToast } from '@/components/feedback/ToastProvider';
 import { Badge, Button, Drawer, Spinner } from '@/components/tailwind-ui';
 import type { AdminUserStatus } from '@/types/admin.types';
 
@@ -18,8 +22,44 @@ interface UserDetailDrawerProps {
 
 export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const { data: user, isLoading } = useUserDetail(userId);
   const action = useUserStatusAction();
+
+  // Pending confirmation: which status change is awaiting the dialog.
+  const [confirmStatus, setConfirmStatus] = useState<AdminUserStatus | null>(null);
+
+  const runStatusChange = (status: AdminUserStatus) => {
+    if (!user) return;
+    action.mutate(
+      { id: user.id, status },
+      {
+        onSuccess: () => toast.success(`admin.users.toastStatus.${status}`),
+        onError: (err) => toast.error(err),
+      },
+    );
+  };
+
+  const confirmCopy =
+    confirmStatus === 'deactivated'
+      ? {
+          title: t('admin.users.confirmDeactivateTitle'),
+          message: t('admin.users.confirmDeactivateMessage', { name: user?.firstName ?? '' }),
+          confirmLabelKey: 'admin.users.deactivate',
+        }
+      : confirmStatus === 'suspended'
+        ? {
+            title: t('admin.users.confirmSuspendTitle'),
+            message: t('admin.users.confirmSuspendMessage', { name: user?.firstName ?? '' }),
+            confirmLabelKey: 'admin.users.suspend',
+          }
+        : confirmStatus === 'active'
+          ? {
+              title: t('admin.users.confirmActivateTitle'),
+              message: t('admin.users.confirmActivateMessage', { name: user?.firstName ?? '' }),
+              confirmLabelKey: 'admin.users.activate',
+            }
+          : null;
 
   return (
     <Drawer
@@ -65,7 +105,7 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
 
           <hr className="my-2 border-gray-100 dark:border-white/5" />
 
-          {/* Status actions (IAM §5.1 PATCH /users/{id}/status) */}
+          {/* Status actions (IAM §5.1 PATCH /users/{id}/status) — confirmed + toasted. */}
           <section>
             <p className="text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-graydark-600">
               {t('admin.users.actions')}
@@ -78,9 +118,7 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
                   leftIcon={<UserX size={14} />}
                   disabled={action.isPending}
                   className="border-warning-500 text-warning-600 hover:bg-warning-50 dark:border-warning-400 dark:text-warning-400 dark:hover:bg-warning-500/10"
-                  onClick={() =>
-                    action.mutate({ id: user.id, status: 'suspended' as AdminUserStatus })
-                  }
+                  onClick={() => setConfirmStatus('suspended')}
                 >
                   {t('admin.users.suspend')}
                 </Button>
@@ -91,9 +129,7 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
                   variant="success"
                   leftIcon={<ShieldCheck size={14} />}
                   disabled={action.isPending}
-                  onClick={() =>
-                    action.mutate({ id: user.id, status: 'active' as AdminUserStatus })
-                  }
+                  onClick={() => setConfirmStatus('active')}
                 >
                   {t('admin.users.activate')}
                 </Button>
@@ -105,9 +141,7 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
                   leftIcon={<UserCog size={14} />}
                   disabled={action.isPending}
                   className="text-danger-600 hover:bg-danger-50 hover:text-danger-700 dark:text-danger-400 dark:hover:bg-danger-500/10"
-                  onClick={() =>
-                    action.mutate({ id: user.id, status: 'deactivated' as AdminUserStatus })
-                  }
+                  onClick={() => setConfirmStatus('deactivated')}
                 >
                   {t('admin.users.deactivate')}
                 </Button>
@@ -119,6 +153,22 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
         <p className="py-6 text-sm text-gray-500 dark:text-graydark-600">
           {t('admin.users.notFound')}
         </p>
+      )}
+
+      {confirmCopy && confirmStatus && (
+        <ConfirmDialog
+          open
+          title={confirmCopy.title}
+          message={confirmCopy.message}
+          confirmLabelKey={confirmCopy.confirmLabelKey}
+          tone={confirmStatus === 'deactivated' ? 'danger' : 'default'}
+          loading={action.isPending}
+          onClose={() => setConfirmStatus(null)}
+          onConfirm={() => {
+            runStatusChange(confirmStatus);
+            setConfirmStatus(null);
+          }}
+        />
       )}
     </Drawer>
   );

@@ -186,7 +186,8 @@ describe('EventCenterPage — timeline rendering', () => {
 
   it('searches across title/body/vehicle client-side', () => {
     renderEvents();
-    fireEvent.change(screen.getByRole('textbox', { name: /search events/i }), {
+    // The Toolbar search input is type="search" (implicit role "searchbox").
+    fireEvent.change(screen.getByRole('searchbox', { name: /search events/i }), {
       target: { value: 'BUS-3' },
     });
     expect(screen.getByText('Device offline: BUS-3')).toBeTruthy();

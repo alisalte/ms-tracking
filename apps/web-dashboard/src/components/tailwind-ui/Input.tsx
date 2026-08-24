@@ -14,12 +14,24 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   error?: string | null;
   hint?: string | null;
   leftIcon?: ReactNode;
+  /** Interactive element pinned to the inline-end inside the input row (e.g. password visibility toggle). */
+  endAdornment?: ReactNode;
   className?: string;
   wrapperClassName?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, hint, leftIcon, className = '', wrapperClassName = '', id, ...rest },
+  {
+    label,
+    error,
+    hint,
+    leftIcon,
+    endAdornment,
+    className = '',
+    wrapperClassName = '',
+    id,
+    ...rest
+  },
   ref,
 ) {
   const autoId = useId();
@@ -53,9 +65,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             error
               ? 'border-danger-400 focus-visible:ring-danger-500'
               : 'border-gray-300 focus-visible:border-brand-500 focus-visible:ring-brand-500/30 dark:border-white/10'
-          } ${leftIcon ? 'ps-9' : ''} ${className}`}
+          } ${leftIcon ? 'ps-9' : ''} ${endAdornment ? 'pe-10' : ''} ${className}`}
           {...rest}
         />
+        {endAdornment && (
+          <span className="absolute end-2 top-1/2 -translate-y-1/2">{endAdornment}</span>
+        )}
       </div>
       {error ? (
         <p id={errorId} className="text-xs text-danger-600 dark:text-danger-400">

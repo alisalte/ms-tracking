@@ -17,6 +17,13 @@ vi.mock('maplibre-gl', () => {
   const StubMap = class {
     on() {}
     off() {}
+    addControl() {}
+    getLayer() {
+      return undefined;
+    }
+    removeLayer() {}
+    removeSource() {}
+
     once(_ev: string, cb: (...a: never[]) => void) {
       cb();
     }
@@ -58,7 +65,13 @@ vi.mock('maplibre-gl', () => {
       return this;
     }
   };
-  return { Map: StubMap, Marker: StubMarker, Popup: StubPopup, LngLatBounds };
+  return {
+    Map: StubMap,
+    Marker: StubMarker,
+    Popup: StubPopup,
+    NavigationControl: class {},
+    LngLatBounds,
+  };
 });
 
 function makeClient() {
@@ -147,7 +160,8 @@ describe('TripsPage', () => {
     await waitFor(() => expect(screen.getByText(tripAt(0).id)).toBeInTheDocument());
 
     const plannedCount = mockTrips.filter((t) => t.status === 'planned').length;
-    fireEvent.click(screen.getByRole('button', { name: 'Planned' }));
+    // The status filter is the SegmentedControl primitive (role=radio).
+    fireEvent.click(screen.getByRole('radio', { name: 'Planned' }));
 
     await waitFor(() => {
       // Only planned trips remain: count of trip-id cells equals plannedCount.
@@ -158,16 +172,14 @@ describe('TripsPage', () => {
   });
 
   it('shows the honest "not available yet" empty state in REAL mode (§22)', async () => {
-    // Real mode: no mock fallback — useTrips resolves to [] (no trips API yet).
+    // Real mode, no backend in jsdom: the query fails with a network error and
+    // the redesigned page renders the shared ErrorState (network tone) with
+    // retry — never a fabricated list.
     window.localStorage.setItem('fleetvision_use_mock', 'false');
     try {
       renderTripsList();
-      expect(await screen.findByText('No trips yet')).toBeInTheDocument();
-      expect(screen.getByText(/Trip history APIs are not available yet/)).toBeInTheDocument();
-      // The filter toolbar/table never render — there is nothing to filter.
-      expect(
-        screen.queryByPlaceholderText('Search vehicle / driver / id…'),
-      ).not.toBeInTheDocument();
+      expect(await screen.findByText('Connection error')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     } finally {
       window.localStorage.setItem('fleetvision_use_mock', 'true');
     }
@@ -183,9 +195,8 @@ describe('TripDetailPage', () => {
     const trip = tripAt(0);
     renderTripDetail(trip.id);
 
-    // Header: trip id + back link.
-    expect(await screen.findByText(trip.id)).toBeInTheDocument();
-    expect(screen.getByText('Back to trips')).toBeInTheDocument();
+    // Header: human-readable title (vehicle · date — not the raw id) + back link.
+    expect(await screen.findByText('Back to trips')).toBeInTheDocument();
     // Summary tiles.
     expect(screen.getByText('Distance')).toBeInTheDocument();
     expect(screen.getByText('Duration')).toBeInTheDocument();
@@ -221,13 +232,13 @@ describe('TripDetailPage', () => {
   });
 
   it('shows the "not available yet" empty state in REAL mode (§22)', async () => {
-    // Real mode: useTripDetail resolves to null — no trips API exists yet, so
-    // the page honestly explains that instead of faking a replay.
+    // Real mode, no backend in jsdom: the detail query fails with a network
+    // error and the redesigned page renders the shared ErrorState — never a
+    // fabricated replay.
     window.localStorage.setItem('fleetvision_use_mock', 'false');
     try {
       renderTripDetail('TR-9999');
-      expect(await screen.findByText('No trips yet')).toBeInTheDocument();
-      expect(screen.getByText(/Trip history APIs are not available yet/)).toBeInTheDocument();
+      expect(await screen.findByText('Connection error')).toBeInTheDocument();
       expect(screen.getByText('Back to trips')).toBeInTheDocument();
       // The playback UI never renders without real data.
       expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();

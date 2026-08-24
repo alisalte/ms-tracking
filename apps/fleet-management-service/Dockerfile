@@ -61,6 +61,9 @@ COPY --from=builder /app/packages ./packages
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" \
     npm_config_fetch_retries=5 npm_config_fetch_timeout=120000
 # Share the builder's pnpm store cache so prod deps are reused, not re-downloaded.
+# pnpm comes from the builder's corepack cache — the runtime stage never re-downloads it (flaky-registry-proof).
+COPY --from=builder /root/.cache/node/corepack /root/.cache/node/corepack
+
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     corepack enable && corepack prepare pnpm@9.15.0 --activate \
     && pnpm install --prod --frozen-lockfile --ignore-scripts \

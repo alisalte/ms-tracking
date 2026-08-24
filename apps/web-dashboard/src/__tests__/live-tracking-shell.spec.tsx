@@ -79,6 +79,12 @@ vi.mock('maplibre-gl', () => {
   const StubMap = class {
     on() {}
     off() {}
+    addControl() {}
+    getLayer() {
+      return undefined;
+    }
+    removeLayer() {}
+    removeSource() {}
     once(_ev: string, cb: (...a: never[]) => void) {
       cb();
     }
@@ -121,7 +127,7 @@ vi.mock('maplibre-gl', () => {
       return this;
     }
   };
-  return { Map: StubMap, Marker, Popup };
+  return { Map: StubMap, Marker, Popup, NavigationControl: class {} };
 });
 
 function makeClient() {

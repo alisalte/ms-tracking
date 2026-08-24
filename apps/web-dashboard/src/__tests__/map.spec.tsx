@@ -122,6 +122,7 @@ vi.mock('maplibre-gl', () => {
     off(ev: string, cb: () => void) {
       handlers[ev] = (handlers[ev] ?? []).filter((h) => h !== cb);
     }
+    addControl() {}
     once(_ev: string, cb: (...a: never[]) => void) {
       // behave as loaded: fire immediately
       cb();
@@ -181,7 +182,7 @@ vi.mock('maplibre-gl', () => {
       return this;
     }
   };
-  return { Map: StubMap, Marker, Popup };
+  return { Map: StubMap, Marker, Popup, NavigationControl: class {} };
 });
 
 function makeClient() {
@@ -313,9 +314,9 @@ describe('MapPage (Live Tracking)', () => {
     renderMap();
     await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
 
-    // The fleet selector is an MUI Select (role=combobox trigger) — it opens
-    // on mousedown; the options render in a listbox portal.
-    fireEvent.mouseDown(screen.getByRole('combobox'));
+    // The fleet selector is the ListboxSelect combobox — it opens on click;
+    // the options render in an inline WAI-ARIA listbox.
+    fireEvent.click(screen.getByRole('combobox'));
     const option = await screen.findByRole('option', { name: 'Fleet A' });
     fireEvent.click(option);
 

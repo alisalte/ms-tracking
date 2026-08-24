@@ -111,7 +111,7 @@ export function DashboardCard({
           className={`absolute inset-x-0 top-0 h-[2.5px] rounded-t-2xl bg-gradient-to-r to-transparent ${ACCENTS[accent]}`}
         />
       )}
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
           {Icon && (
             <span
@@ -130,7 +130,7 @@ export function DashboardCard({
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className={`min-h-0 flex-1 ${flush ? '' : 'px-5 pb-5'}`}>{body}</div>
+      <div className={`min-h-0 flex-1 ${flush ? '' : 'px-4 pb-4 sm:px-5 sm:pb-5'}`}>{body}</div>
     </Card>
   );
 }

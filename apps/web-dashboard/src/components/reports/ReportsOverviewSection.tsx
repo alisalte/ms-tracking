@@ -2,14 +2,30 @@
  * ReportsOverviewSection — TailAdmin fleet-overview KPI cards + trend charts
  * (Sprint J §6/§34/§35, Phase 8 port). Every number is the backend's
  * documented KPI (REPORTING-KPI-DEFINITIONS.md); charts render
- * loading/empty/error states.
+ * loading/empty/error states. KPI tiles reuse the dashboard's `KpiTile` and
+ * chart labels are fully translated (no hardcoded English series names).
  */
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRightLeft,
+  Fence,
+  Gauge,
+  MapPin,
+  Radio,
+  Route,
+  TrendingUp,
+  Truck,
+  WifiOff,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ReportRange, useFleetOverview, useTrend } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { EChart } from '@/components/dashboard/EChart';
-import { Card, Spinner } from '@/components/tailwind-ui';
+import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
+import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
 import type { EChartsOption } from 'echarts';
 
 export function ReportsOverviewSection({ range }: { range: ReportRange }) {
@@ -18,9 +34,23 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
   const trend = useTrend(range);
 
   if (overview.isLoading) {
+    /* Layout-preserving skeleton — same shape as the loaded section (freshness
+       note, KPI grid, 2+1 chart row, distribution card). */
     return (
-      <div className="flex justify-center py-12">
-        <Spinner size="lg" label={t('common.loading')} />
+      // biome-ignore lint/a11y/useSemanticElements: role=status loading region.
+      <div className="flex flex-col gap-4" role="status" aria-label={t('common.loading')}>
+        <Skeleton className="h-4 w-56" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows never reorder.
+            <Skeleton key={i} className="h-[104px] rounded-2xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <Skeleton className="h-[332px] rounded-2xl lg:col-span-2" />
+          <Skeleton className="h-[332px] rounded-2xl" />
+        </div>
+        <Skeleton className="h-[272px] rounded-2xl" />
       </div>
     );
   }
@@ -28,7 +58,14 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
     return <ErrorState error={overview.error} onRetry={() => overview.refetch()} />;
   }
   const o = overview.data;
-  if (!o) return <ErrorState error={new Error('no data')} onRetry={() => overview.refetch()} />;
+  if (!o) {
+    /* No payload without an error — an honest empty state, never a fake one. */
+    return (
+      <Card flush className="p-2">
+        <EmptyState icon={<Activity />} title={t('reports.empty')} />
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -43,32 +80,108 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
       </p>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi title={t('reports.kpi.totalVehicles')} value={String(o.totalVehicles)} />
-        <Kpi title={t('reports.kpi.withTelemetry')} value={String(o.vehiclesWithTelemetry)} />
-        <Kpi title={t('reports.kpi.moving')} value={String(o.movingVehicles)} />
-        <Kpi title={t('reports.kpi.idle')} value={String(o.idleVehicles)} />
-        <Kpi title={t('reports.kpi.parked')} value={String(o.parkedVehicles)} />
-        <Kpi title={t('reports.kpi.noTelemetry')} value={String(o.noTelemetryVehicles)} />
-        <Kpi
-          title={t('reports.kpi.distance')}
-          value={
-            o.totalDistanceKm >= 1000
-              ? `${(o.totalDistanceKm / 1000).toFixed(1)}k km`
-              : `${o.totalDistanceKm.toFixed(1)} km`
-          }
-        />
-        <Kpi title={t('reports.kpi.trips')} value={String(o.totalTrips)} />
-        <Kpi
-          title={t('reports.kpi.alarms')}
-          value={String(o.totalAlarms)}
-          sub={`${o.openAlarms} ${t('reports.kpi.open')}`}
-        />
-        <Kpi title={t('reports.kpi.geofenceEvents')} value={String(o.geofenceEvents)} />
-        <Kpi
-          title={t('reports.kpi.utilization')}
-          value={o.avgUtilizationPct === null ? '—' : `${o.avgUtilizationPct.toFixed(1)}%`}
-          sub={o.avgUtilizationPct === null ? t('reports.noData') : undefined}
-        />
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.totalVehicles"
+            value={o.totalVehicles}
+            icon={Truck}
+            tone="brand"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.withTelemetry"
+            value={o.vehiclesWithTelemetry}
+            icon={Radio}
+            tone="info"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.moving"
+            value={o.movingVehicles}
+            icon={Gauge}
+            tone="success"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.idle"
+            value={o.idleVehicles}
+            icon={Activity}
+            tone="warning"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.parked"
+            value={o.parkedVehicles}
+            icon={MapPin}
+            tone="gray"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.noTelemetry"
+            value={o.noTelemetryVehicles}
+            icon={WifiOff}
+            tone="gray"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          {/* One decimal, matching the old toFixed(1) formatting; the leading
+              space in the suffix keeps "281.7 km" readable as one string. */}
+          <KpiTile
+            labelKey="reports.kpi.distance"
+            value={Math.round(o.totalDistanceKm * 10) / 10}
+            suffix=" km"
+            icon={Route}
+            tone="brand"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.trips"
+            value={o.totalTrips}
+            icon={ArrowRightLeft}
+            tone="info"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.alarms"
+            value={o.totalAlarms}
+            icon={AlertTriangle}
+            tone={o.openAlarms > 0 ? 'danger' : 'gray'}
+            footer={
+              <KpiChip tone={o.openAlarms > 0 ? 'danger' : 'success'}>
+                {o.openAlarms} {t('reports.kpi.open')}
+              </KpiChip>
+            }
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.geofenceEvents"
+            value={o.geofenceEvents}
+            icon={Fence}
+            tone={o.geofenceEvents > 0 ? 'warning' : 'gray'}
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="reports.kpi.utilization"
+            value={o.avgUtilizationPct === null ? null : Math.round(o.avgUtilizationPct * 10) / 10}
+            suffix="%"
+            icon={TrendingUp}
+            tone="success"
+            footer={
+              o.avgUtilizationPct === null ? (
+                <KpiChip tone="gray">{t('reports.noData')}</KpiChip>
+              ) : undefined
+            }
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -81,7 +194,14 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
             ) : (trend.data?.points.length ?? 0) === 0 ? (
               <EmptyChart label={t('reports.charts.empty')} />
             ) : (
-              <EChart option={distanceTripsOption(trend.data?.points ?? [])} height={280} />
+              <EChart
+                option={distanceTripsOption(trend.data?.points ?? [], {
+                  distance: t('reports.labels.distance'),
+                  trips: t('reports.labels.trips'),
+                  km: t('reports.labels.km'),
+                })}
+                height={280}
+              />
             )}
           </ChartCard>
         </div>
@@ -93,34 +213,43 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
           ) : (trend.data?.points.length ?? 0) === 0 ? (
             <EmptyChart label={t('reports.charts.empty')} />
           ) : (
-            <EChart option={alarmTrendOption(trend.data?.points ?? [])} height={280} />
+            <EChart
+              option={alarmTrendOption(trend.data?.points ?? [], {
+                speeding: t('reports.labels.speeding'),
+                geofence: t('reports.labels.geofence'),
+                offline: t('reports.labels.offline'),
+                other: t('reports.labels.other'),
+              })}
+              height={280}
+            />
           )}
         </ChartCard>
       </div>
       <ChartCard title={t('reports.charts.stateDistribution')}>
-        <EChart option={distributionOption(o)} height={220} />
+        {/* Same payload as the KPI row above, so loading/error are already
+            handled — only the all-zero case needs its own empty state. */}
+        {o.movingVehicles + o.idleVehicles + o.parkedVehicles + o.noTelemetryVehicles === 0 ? (
+          <EmptyChart label={t('reports.charts.empty')} />
+        ) : (
+          <EChart
+            option={distributionOption(o, {
+              moving: t('reports.labels.moving'),
+              idle: t('reports.labels.idle'),
+              parked: t('reports.labels.parked'),
+              noTelemetry: t('reports.labels.noTelemetry'),
+            })}
+            height={220}
+          />
+        )}
       </ChartCard>
     </div>
   );
 }
 
-function Kpi({ title, value, sub }: { title: string; value: string; sub?: string }) {
+function ChartCard({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
-    <div
-      data-testid="report-kpi"
-      className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-white/5 dark:bg-graydark-300"
-    >
-      <p className="truncate text-xs text-gray-500 dark:text-graydark-600">{title}</p>
-      <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{value}</p>
-      {sub && <p className="text-xs text-gray-400 dark:text-graydark-600">{sub}</p>}
-    </div>
-  );
-}
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card flush className="h-full p-4">
-      <h3 className="mb-2 text-sm font-semibold text-gray-800 dark:text-white">{title}</h3>
+    <Card className="h-full">
+      <CardHeader title={title} />
       {children}
     </Card>
   );
@@ -128,8 +257,10 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 
 function ChartLoading() {
   return (
-    <div className="flex justify-center py-10">
-      <Spinner size="md" />
+    // biome-ignore lint/a11y/useSemanticElements: role=status loading region.
+    <div className="flex flex-col gap-2" role="status" aria-hidden>
+      <Skeleton className="h-4 w-36" />
+      <Skeleton className="h-[240px] w-full" />
     </div>
   );
 }
@@ -146,24 +277,30 @@ function EmptyChart({ label }: { label: string }) {
 
 function distanceTripsOption(
   points: Array<{ day: string; distanceKm: number; trips: number }>,
+  labels: { distance: string; trips: string; km: string },
 ): EChartsOption {
   return {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['distance (km)', 'trips'] },
+    legend: { data: [labels.distance, labels.trips] },
     xAxis: { type: 'category' as const, data: points.map((p) => p.day) },
     yAxis: [
-      { type: 'value' as const, name: 'km' },
-      { type: 'value' as const, name: 'trips' },
+      { type: 'value' as const, name: labels.km },
+      { type: 'value' as const, name: labels.trips },
     ],
     series: [
       {
-        name: 'distance (km)',
+        name: labels.distance,
         type: 'line' as const,
         smooth: true,
         areaStyle: { opacity: 0.15 },
         data: points.map((p) => Number(p.distanceKm.toFixed(1))),
       },
-      { name: 'trips', type: 'bar' as const, yAxisIndex: 1, data: points.map((p) => p.trips) },
+      {
+        name: labels.trips,
+        type: 'bar' as const,
+        yAxisIndex: 1,
+        data: points.map((p) => p.trips),
+      },
     ],
   };
 }
@@ -176,9 +313,10 @@ function alarmTrendOption(
     alarmOffline: number;
     alarmOther: number;
   }>,
+  labels: { speeding: string; geofence: string; offline: string; other: string },
 ): EChartsOption {
   const keys = ['alarmSpeeding', 'alarmGeofence', 'alarmOffline', 'alarmOther'] as const;
-  const names = ['speeding', 'geofence', 'offline', 'other'];
+  const names = [labels.speeding, labels.geofence, labels.offline, labels.other];
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: names },
@@ -193,12 +331,15 @@ function alarmTrendOption(
   };
 }
 
-function distributionOption(o: {
-  movingVehicles: number;
-  idleVehicles: number;
-  parkedVehicles: number;
-  noTelemetryVehicles: number;
-}): EChartsOption {
+function distributionOption(
+  o: {
+    movingVehicles: number;
+    idleVehicles: number;
+    parkedVehicles: number;
+    noTelemetryVehicles: number;
+  },
+  labels: { moving: string; idle: string; parked: string; noTelemetry: string },
+): EChartsOption {
   return {
     tooltip: { trigger: 'item' },
     legend: { bottom: 0 },
@@ -208,10 +349,10 @@ function distributionOption(o: {
         radius: ['40%', '70%'],
         avoidLabelOverlap: true,
         data: [
-          { name: 'moving', value: o.movingVehicles },
-          { name: 'idle', value: o.idleVehicles },
-          { name: 'parked', value: o.parkedVehicles },
-          { name: 'no telemetry', value: o.noTelemetryVehicles },
+          { name: labels.moving, value: o.movingVehicles },
+          { name: labels.idle, value: o.idleVehicles },
+          { name: labels.parked, value: o.parkedVehicles },
+          { name: labels.noTelemetry, value: o.noTelemetryVehicles },
         ],
       },
     ],

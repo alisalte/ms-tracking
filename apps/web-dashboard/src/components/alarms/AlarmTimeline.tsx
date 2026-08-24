@@ -9,9 +9,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { severityColor } from '@/components/alarms/AlarmTypeIcon';
 import { Skeleton, Tooltip } from '@/components/tailwind-ui';
-import type { Alarm } from '@/types/alarm.types';
+import type { Alarm, AlarmSeverity } from '@/types/alarm.types';
 
 interface AlarmTimelineProps {
   alarms: Alarm[];
@@ -19,6 +18,30 @@ interface AlarmTimelineProps {
   selectedId?: string | null;
   onSelect: (id: string) => void;
 }
+
+/**
+ * Severity → semantic pill classes (mirrors the Badge tonal palette): filled
+ * when selected, tonal outline at rest. Static Tailwind classes so the
+ * dark-mode pairs are picked up by the compiler.
+ */
+const PILL_TONES: Record<AlarmSeverity, { rest: string; selected: string }> = {
+  critical: {
+    rest: 'border-danger-200 bg-danger-50 text-danger-700 hover:border-danger-400 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-400',
+    selected: 'border-danger-500 bg-danger-500 text-white',
+  },
+  major: {
+    rest: 'border-warning-200 bg-warning-50 text-warning-700 hover:border-warning-400 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-400',
+    selected: 'border-warning-500 bg-warning-500 text-white',
+  },
+  minor: {
+    rest: 'border-info-200 bg-info-50 text-info-700 hover:border-info-400 dark:border-info-500/30 dark:bg-info-500/10 dark:text-info-400',
+    selected: 'border-info-500 bg-info-500 text-white',
+  },
+  info: {
+    rest: 'border-gray-200 bg-gray-100 text-gray-600 hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-graydark-700',
+    selected: 'border-gray-400 bg-gray-500 text-white dark:border-white/25 dark:bg-white/25',
+  },
+};
 
 /** Bucket alarms into the 24 hours of the day they were raised. */
 function bucketByHour(alarms: Alarm[]): Map<number, Alarm[]> {
@@ -76,20 +99,14 @@ export function AlarmTimeline({
               <div className="flex flex-1 flex-wrap gap-1.5">
                 {bucket.map((a) => {
                   const isSel = a.id === selectedId;
-                  const color = severityColor(a.severity);
                   return (
                     <Tooltip key={a.id} label={`${a.vehicleLabel} · ${a.message}`}>
                       <button
                         type="button"
                         onClick={() => onSelect(a.id)}
-                        className={`h-6 max-w-50 cursor-pointer truncate rounded-full border px-2.5 text-xs font-semibold transition-colors ${
-                          isSel ? 'text-white' : ''
+                        className={`h-6 max-w-50 cursor-pointer truncate rounded-full border px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+                          isSel ? PILL_TONES[a.severity].selected : PILL_TONES[a.severity].rest
                         }`}
-                        style={
-                          isSel
-                            ? { backgroundColor: color, borderColor: color }
-                            : { color, borderColor: color, backgroundColor: 'transparent' }
-                        }
                       >
                         {a.message}
                       </button>

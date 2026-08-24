@@ -276,9 +276,14 @@ vi.mock('maplibre-gl', () => {
       loaded: () => true,
       once: (_e: string, cb: () => void) => cb(),
       on: vi.fn(),
+      addControl: vi.fn(),
+      getLayer: () => undefined,
+      removeLayer: vi.fn(),
+      removeSource: vi.fn(),
       remove: vi.fn(),
     })),
     Marker: maplibre.Marker,
+    NavigationControl: class {},
     Popup: vi.fn().mockImplementation(() => ({ setHTML: vi.fn().mockReturnThis() })),
   };
 });

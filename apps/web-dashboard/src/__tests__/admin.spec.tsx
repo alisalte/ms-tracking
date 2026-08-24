@@ -96,8 +96,9 @@ describe('AdminPage', () => {
   it('renders the left nav with the admin title', async () => {
     renderAdmin();
     expect(screen.getByText('Admin Panel')).toBeInTheDocument();
-    // A functional nav item label.
-    expect(screen.getByText('Users & Roles')).toBeInTheDocument();
+    // A functional nav item label — rendered by BOTH nav variants (the mobile
+    // horizontal strip + the desktop sidebar), so assert on at least one.
+    expect(screen.getAllByText('Users & Roles').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders user rows on the Users section', async () => {

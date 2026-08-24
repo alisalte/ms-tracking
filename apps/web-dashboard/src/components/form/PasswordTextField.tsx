@@ -29,22 +29,25 @@ export function PasswordTextField({
   const [visible, setVisible] = useState(false);
 
   return (
-    <div className="relative">
-      <Input
-        {...props}
-        type={visible ? 'text' : 'password'}
-        autoComplete={autoCompleteValue}
-        className={`pe-10 ${className}`}
-      />
-      <button
-        type="button"
-        onClick={() => setVisible((v) => !v)}
-        onMouseDown={(e) => e.preventDefault()} // prevent focus loss
-        aria-label={visible ? t('common.hidePassword') : t('common.showPassword')}
-        className="absolute end-2 top-[30px] inline-flex size-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:text-graydark-700"
-      >
-        {visible ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
-      </button>
-    </div>
+    <Input
+      {...props}
+      type={visible ? 'text' : 'password'}
+      autoComplete={autoCompleteValue}
+      className={className}
+      // The toggle is an Input endAdornment: it sits inside the input's own
+      // relative row (end-2 + top-1/2 -translate-y-1/2), so it stays aligned
+      // with the field regardless of label/hint height.
+      endAdornment={
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          onMouseDown={(e) => e.preventDefault()} // prevent focus loss
+          aria-label={visible ? t('common.hidePassword') : t('common.showPassword')}
+          className="inline-flex size-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:text-graydark-700"
+        >
+          {visible ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+        </button>
+      }
+    />
   );
 }

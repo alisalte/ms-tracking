@@ -13,8 +13,12 @@ import { EChart } from './EChart';
 const RANGE = { preset: 'today' } as const;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-/** Tehran local offset used by the fleet's operating day (UTC+3:30, no DST). */
-const TZ_OFFSET_MIN = 210;
+/**
+ * The VIEWER's local UTC offset (minutes, as getTimezoneOffset() returns it
+ * with the opposite sign) — hour buckets match the clock the operator sees,
+ * whatever their timezone (was hardcoded to Tehran's +3:30).
+ */
+const TZ_OFFSET_MIN = -new Date().getTimezoneOffset();
 
 /**
  * HourlyActivityChart — trip starts per local hour (today).
@@ -123,7 +127,7 @@ export function HourlyActivityChart() {
       onRetry={() => void trips.refetch()}
       flush
     >
-      <div className="w-full px-4 pb-3">
+      <div className="w-full px-4 pb-3 sm:px-5">
         <EChart option={option} height={230} />
         {peak >= 0 && counts[peak] > 0 && (
           <p className="-mt-1 pb-1 text-center text-[0.7rem] font-semibold text-gray-500 dark:text-graydark-600">

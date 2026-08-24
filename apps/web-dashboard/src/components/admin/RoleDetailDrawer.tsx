@@ -6,8 +6,8 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermissions } from '@/api/admin.api';
 import { Badge, Checkbox, Drawer, Spinner } from '@/components/tailwind-ui';
-import { PERMISSION_CATALOG } from '@/mock/admin-data';
 import type { Role } from '@/types/admin.types';
 
 interface RoleDetailDrawerProps {
@@ -18,6 +18,9 @@ interface RoleDetailDrawerProps {
 
 export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailDrawerProps) {
   const { t } = useTranslation();
+  // Live catalog — the same source PermissionsSection renders, so the matrix
+  // can never disagree with the catalog page (the old mock import could).
+  const { data: permissionCatalog } = usePermissions();
   const open = Boolean(role);
 
   return (
@@ -60,7 +63,7 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
               {t('admin.roles.permissionMatrix')}
             </p>
             <div className="mt-2 flex flex-col gap-2">
-              {PERMISSION_CATALOG.map((group) => {
+              {(permissionCatalog ?? []).map((group) => {
                 const grantedInDomain = group.permissions.filter((p) =>
                   role.permissionKeys.includes(p),
                 );

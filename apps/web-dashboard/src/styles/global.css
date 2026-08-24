@@ -198,3 +198,36 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
 .fv-alert-row:hover {
   background-color: rgba(33, 150, 243, 0.08);
 }
+
+/* ── MapLibre integration (light + dark aware) ─────────────────────────── */
+
+/* Vehicle hover popups — the default MapLibre chrome is light-only; pair it
+   with the app's dark surfaces. Meta line styling replaces the old inline
+   hex so the dark override below can win. */
+.fv-map-popup .maplibregl-popup-content {
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.fv-map-popup .fv-map-popup-meta {
+  color: #64748b;
+  font-size: 11px;
+}
+.dark .fv-map-popup .maplibregl-popup-content {
+  background-color: #333a48;
+  color: #e1e6ea;
+}
+.dark .fv-map-popup .maplibregl-popup-tip-bottom {
+  border-bottom-color: #333a48;
+}
+.dark .fv-map-popup .maplibregl-popup-tip-top {
+  border-top-color: #333a48;
+}
+.dark .fv-map-popup .fv-map-popup-meta {
+  color: #9aa6b5;
+}
+
+/* Tracking map: lift the zoom/compass controls above the history playback
+   transport so they never overlap (playback spans the bottom edge). */
+.fv-tracking-map .maplibregl-ctrl-bottom-right {
+  margin-bottom: 4.5rem;
+}

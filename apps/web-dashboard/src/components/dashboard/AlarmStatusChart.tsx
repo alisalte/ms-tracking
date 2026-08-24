@@ -21,7 +21,7 @@ const STATUS_COLOR = {
 /** Severity bars — ordered most-severe first. */
 const SEVERITY_LEVELS = [
   { key: 'critical', color: status.red },
-  { key: 'high', color: '#F79009' },
+  { key: 'high', color: status.warning },
   { key: 'medium', color: status.amber },
   { key: 'low', color: status.blue },
   { key: 'info', color: status.slate },
@@ -91,7 +91,7 @@ export function AlarmStatusChart() {
       onRetry={() => void report.refetch()}
       flush
     >
-      <div className="flex w-full flex-col gap-2 px-4 pb-3 sm:flex-row sm:items-center">
+      <div className="flex w-full flex-col gap-2 px-4 pb-3 sm:px-5 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <EChart option={option} height={220} />
         </div>

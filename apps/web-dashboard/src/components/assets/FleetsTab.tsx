@@ -183,7 +183,7 @@ export function FleetsTab({
           <EmptyState
             icon={<FolderTree />}
             title={t('assets.empty')}
-            description={t('assets.fleet.search')}
+            description={t('assets.fleet.emptyDescription')}
           />
         }
       />

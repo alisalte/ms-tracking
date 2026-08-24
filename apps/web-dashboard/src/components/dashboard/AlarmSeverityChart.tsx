@@ -13,7 +13,7 @@ const RANGE = { preset: '7d' } as const;
 
 /** Severity → palette color + display order. */
 const SEVERITIES = [
-  { key: 'critical', color: status.danger, deep: '#912018' },
+  { key: 'critical', color: status.danger, deep: status.dangerDeep },
   { key: 'high', color: status.dangerLight },
   { key: 'medium', color: status.warning },
   { key: 'low', color: status.infoLight },
@@ -86,7 +86,7 @@ export function AlarmSeverityChart() {
       onRetry={() => void alarms.refetch()}
       flush
     >
-      <div className="w-full px-4">
+      <div className="w-full px-4 sm:px-5">
         <EChart option={option} height={230} />
         {summary && summary.total > 0 && (
           <div className="flex items-center justify-center gap-2 pb-3">

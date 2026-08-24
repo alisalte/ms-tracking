@@ -5,6 +5,7 @@
  * sending — the documented UTC strategy). Accessible: labeled inputs +
  * aria-pressed chips.
  */
+import { ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -96,7 +97,8 @@ export function ReportRangePicker({
             aria-label={t('reports.range.from')}
             className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
           />
-          <span className="text-gray-400">→</span>
+          {/* Directional affordance — mirrors in RTL. */}
+          <ArrowRight size={14} aria-hidden className="shrink-0 text-gray-400 rtl:rotate-180" />
           <input
             type="datetime-local"
             value={toInput}

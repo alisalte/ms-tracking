@@ -28,6 +28,17 @@ export function FleetComparisonChart() {
   const loading =
     fleets.isLoading || vehicles.isLoading || mapVehicles.isLoading || deviceStatuses.isLoading;
 
+  // A failure of ANY joined source is a failed comparison — never render
+  // fabricated zeros (empty fleets, swollen "unassigned") as if they were data.
+  const anyError =
+    mapVehicles.error ?? fleets.error ?? vehicles.error ?? deviceStatuses.error ?? null;
+  const retryAll = () => {
+    void mapVehicles.refetch();
+    void fleets.refetch();
+    void vehicles.refetch();
+    void deviceStatuses.refetch();
+  };
+
   const rows = useMemo(() => {
     const vehicleFleet = new Map<string, string>(
       (vehicles.data ?? []).map((v) => [v.id, v.fleetId ?? ''] as const),
@@ -73,7 +84,7 @@ export function FleetComparisonChart() {
     return out.sort((a, b) => b.moving + b.idle - (a.moving + a.idle)).slice(0, 8);
   }, [fleets.data, vehicles.data, mapVehicles.data, deviceStatuses.data, t]);
 
-  const empty = !loading && !mapVehicles.isError && rows.length === 0;
+  const empty = !loading && !anyError && rows.length === 0;
 
   const option = useMemo<EChartsOption>(
     () => ({
@@ -135,13 +146,13 @@ export function FleetComparisonChart() {
       icon={Layers}
       accent="info"
       live
-      loading={loading && !mapVehicles.isError}
+      loading={loading && !anyError}
       empty={empty}
-      error={mapVehicles.isError ? mapVehicles.error : undefined}
-      onRetry={() => void mapVehicles.refetch()}
+      error={anyError}
+      onRetry={retryAll}
       flush
     >
-      <div className="w-full px-4 pb-2">
+      <div className="w-full px-4 pb-2 sm:px-5">
         <EChart option={option} height={Math.max(220, rows.length * 44 + 60)} />
       </div>
     </DashboardCard>

@@ -51,12 +51,25 @@ const NAV_ITEMS: NavItem[] = [
 interface AdminNavProps {
   section: AdminSection;
   onSelect: (s: AdminSection) => void;
+  /**
+   * `vertical` = the desktop sidebar column; `horizontal` = the mobile
+   * scrollable strip rendered above the section content.
+   */
+  orientation?: 'vertical' | 'horizontal';
 }
 
-export function AdminNav({ section, onSelect }: AdminNavProps) {
+export function AdminNav({ section, onSelect, orientation = 'vertical' }: AdminNavProps) {
   const { t } = useTranslation();
+  const horizontal = orientation === 'horizontal';
   return (
-    <nav className="flex flex-col gap-0.5" aria-label={t('admin.title')}>
+    <nav
+      className={
+        horizontal
+          ? 'fv-scroll flex flex-row gap-1.5 overflow-x-auto pb-1'
+          : 'flex flex-col gap-0.5'
+      }
+      aria-label={t('admin.title')}
+    >
       {NAV_ITEMS.map((item) => {
         const isActive = section === item.key;
         return (
@@ -66,7 +79,8 @@ export function AdminNav({ section, onSelect }: AdminNavProps) {
             onClick={() => item.enabled && onSelect(item.key)}
             aria-current={isActive ? 'page' : undefined}
             className={[
-              'flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 text-start text-sm transition-colors',
+              'flex min-h-10 items-center gap-2.5 rounded-lg text-start text-sm transition-colors',
+              horizontal ? 'shrink-0 px-3' : 'w-full px-3',
               isActive
                 ? 'bg-brand-500 font-semibold text-white hover:bg-brand-600'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-graydark-700 dark:hover:bg-white/5 dark:hover:text-white',
@@ -76,8 +90,10 @@ export function AdminNav({ section, onSelect }: AdminNavProps) {
             <span className="flex w-4.5 shrink-0 justify-center [&_svg]:size-[18px]">
               <item.icon />
             </span>
-            <span className="min-w-0 flex-1 truncate">{t(`admin.nav.${item.key}`)}</span>
-            {!item.enabled && (
+            <span className="min-w-0 flex-1 truncate whitespace-nowrap">
+              {t(`admin.nav.${item.key}`)}
+            </span>
+            {!item.enabled && !horizontal && (
               <span className="shrink-0 text-[0.6rem] text-gray-400 dark:text-graydark-600">
                 {t('admin.upcoming')}
               </span>

@@ -4,18 +4,21 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
+import { ErrorState } from '@/components/common/ErrorState';
 import {
   Badge,
   Card,
   DataTable,
   EmptyState,
   PageHeader,
+  SegmentedControl,
+  type SegmentedOption,
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
-/** Status → Badge color (cell) / chip tone (filter). */
+/** Status → Badge color (cell). */
 const STATUS_COLOR: Record<TripStatus, 'success' | 'info' | 'gray' | 'danger'> = {
   completed: 'success',
   in_progress: 'info',
@@ -23,32 +26,23 @@ const STATUS_COLOR: Record<TripStatus, 'success' | 'info' | 'gray' | 'danger'> =
   cancelled: 'danger',
 };
 
-/** Active filter-chip fill per status (inactive chips share one neutral style). */
-const CHIP_ACTIVE: Record<TripStatus | 'all', string> = {
-  all: 'bg-gray-600 text-white',
-  completed: 'bg-success-500 text-white',
-  in_progress: 'bg-info-500 text-white',
-  planned: 'bg-gray-400 text-white',
-  cancelled: 'bg-danger-500 text-white',
-};
-
 const STATUSES: TripStatus[] = ['completed', 'in_progress', 'planned', 'cancelled'];
 
 /**
  * TripsPage — the fleet trip roster (TailAdmin port).
  *
- * A filterable table of trips (search by vehicle/driver + status chips). Row
- * click → trip detail with replay. Backed by `useTrips`: in REAL mode the
- * backend exposes no trips API yet, so the page honestly shows its
- * "not available yet" empty state (§22 — no fabricated rows); the deterministic
- * fixtures still load in explicit dev/demo mock mode (`?useMock=true`) so the
- * replay UX stays demoable.
+ * A filterable table of trips (search by vehicle/driver + status segmented
+ * control). Row click → trip detail with replay. Backed by `useTrips`: fetch
+ * failures surface as ErrorState with retry, and an absent roster keeps the
+ * toolbar mounted with its honest "not available yet" empty state (§22 — no
+ * fabricated rows); the deterministic fixtures still load in explicit dev/demo
+ * mock mode (`?useMock=true`) so the replay UX stays demoable.
  */
 export function TripsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { data, isLoading } = useTrips();
+  const { data, isLoading, isError, error, refetch } = useTrips();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TripStatus | 'all'>('all');
 
@@ -142,45 +136,30 @@ export function TripsPage() {
       id: 'open',
       width: 32,
       render: () => (
-        <ArrowRight size={16} aria-hidden className="text-gray-400 dark:text-graydark-600" />
+        <ArrowRight
+          size={16}
+          aria-hidden
+          className="text-gray-400 rtl:rotate-180 dark:text-graydark-600"
+        />
       ),
     },
   ];
 
-  /** A status filter chip — toggle button styled as a pill. */
-  const chip = (value: TripStatus | 'all', label: string) => {
-    const active = statusFilter === value;
-    return (
-      <button
-        key={value}
-        type="button"
-        aria-pressed={active}
-        onClick={() => setStatusFilter(value)}
-        className={`inline-flex cursor-pointer items-center rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-          active
-            ? CHIP_ACTIVE[value]
-            : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-700 dark:hover:bg-graydark-400'
-        }`}
-      >
-        {label}
-      </button>
-    );
-  };
+  /** Status filter segments (All + the four lifecycle states). */
+  const statusOptions: Array<SegmentedOption<TripStatus | 'all'>> = [
+    { value: 'all', label: t('trips.status.all') },
+    ...STATUSES.map((s) => ({ value: s as TripStatus | 'all', label: t(`trips.status.${s}`) })),
+  ];
 
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
       <PageHeader title={t('trips.title')} description={t('trips.subtitle')} />
 
-      {!isLoading && trips.length === 0 ? (
-        /* REAL mode: no trips API yet — honest empty state, never fake rows. */
-        <Card>
-          <EmptyState
-            icon={<Route />}
-            title={t('trips.empty.title')}
-            description={t('trips.empty.notAvailable')}
-            className="py-10"
-          />
+      {isError ? (
+        /* Failed fetch — surfaced honestly with a retry, never a fake roster. */
+        <Card flush className="p-2">
+          <ErrorState error={error} onRetry={() => void refetch()} />
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
@@ -196,16 +175,21 @@ export function TripsPage() {
               </button>
             </div>
           )}
+          {/* Toolbar stays mounted even when the roster is empty so the search
+              and status filter remain usable (e.g. before the API ships). */}
           <Toolbar
             search
             searchValue={query}
             onSearchChange={setQuery}
             searchPlaceholder={t('trips.list.searchPlaceholder')}
             right={
-              <div className="flex flex-wrap items-center gap-1.5">
-                {chip('all', t('trips.status.all'))}
-                {STATUSES.map((s) => chip(s, t(`trips.status.${s}`)))}
-              </div>
+              <SegmentedControl
+                options={statusOptions}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                aria-label={t('trips.list.filterByStatus')}
+                size="sm"
+              />
             }
           />
           <DataTable
@@ -216,11 +200,21 @@ export function TripsPage() {
             onRowClick={(trip) => navigate(`/trips/${trip.id}`)}
             maxHeight="calc(100vh - 280px)"
             emptyState={
-              <EmptyState
-                icon={<Route />}
-                title={t('trips.empty.title')}
-                description={t('trips.list.noResults')}
-              />
+              trips.length === 0 ? (
+                /* REAL mode: no trips API yet — honest empty state, never fake rows. */
+                <EmptyState
+                  icon={<Route />}
+                  title={t('trips.empty.title')}
+                  description={t('trips.empty.notAvailable')}
+                  className="py-10"
+                />
+              ) : (
+                <EmptyState
+                  icon={<Route />}
+                  title={t('trips.empty.title')}
+                  description={t('trips.list.noResults')}
+                />
+              )
             }
           />
         </div>

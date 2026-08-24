@@ -104,6 +104,13 @@ vi.mock('maplibre-gl', () => {
   const StubMap = class {
     on() {}
     off() {}
+    addControl() {}
+    getLayer() {
+      return undefined;
+    }
+    removeLayer() {}
+    removeSource() {}
+
     once(_ev: string, cb: (...a: never[]) => void) {
       cb();
     }
@@ -153,6 +160,7 @@ vi.mock('maplibre-gl', () => {
     Map: StubMap,
     Marker: StubMarker,
     Popup: StubPopup,
+    NavigationControl: class {},
     LngLatBounds: class {
       extend() {
         return this;

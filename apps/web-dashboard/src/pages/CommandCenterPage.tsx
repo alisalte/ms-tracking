@@ -12,6 +12,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { useDevices } from '@/api/asset.api';
 import { useCommandCatalog, useCommandHistory, useSendDeviceCommand } from '@/api/command.api';
@@ -20,6 +21,7 @@ import { PERMISSIONS } from '@/auth/permissions';
 import { CommandCatalogPanel } from '@/components/commands/CommandCatalogPanel';
 import { CommandHistoryTable } from '@/components/commands/CommandHistoryTable';
 import { CommandParamDialog } from '@/components/commands/CommandParamDialog';
+import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Card, PageHeader, Select } from '@/components/tailwind-ui';
@@ -32,25 +34,53 @@ export function CommandCenterPage() {
   const { t } = useTranslation();
   const toast = useToast();
 
-  // Deep link: /commands?device=<id> (device-popup "message") preselects the device.
-  const [deviceId, setDeviceId] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get('device'),
-  );
+  // Deep link: /commands?device=<id> (device-popup "message") preselects the
+  // device. Derived from react-router search params (not a one-shot
+  // window.location read) so in-SPA navigation to a new ?device= stays live.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deviceId = searchParams.get('device');
   const [statusFilter, setStatusFilter] = useState<CommandStatus | ''>('');
   const [configuring, setConfiguring] = useState<CommandDef | null>(null);
   const [confirming, setConfirming] = useState<CommandDef | null>(null);
 
-  const devicesQuery = useDevices();
-  const catalogQuery = useCommandCatalog();
-  const historyQuery = useCommandHistory(deviceId, statusFilter || undefined);
+  const {
+    data: devices,
+    isLoading: devicesLoading,
+    isError: devicesIsError,
+    error: devicesError,
+    refetch: refetchDevices,
+  } = useDevices();
+  const {
+    data: catalog,
+    isLoading: catalogLoading,
+    isError: catalogIsError,
+    error: catalogError,
+    refetch: refetchCatalog,
+  } = useCommandCatalog();
+  const {
+    data: history,
+    isLoading: historyLoading,
+    isError: historyIsError,
+    error: historyError,
+    refetch: refetchHistory,
+  } = useCommandHistory(deviceId, statusFilter || undefined);
   const sendMutation = useSendDeviceCommand(deviceId);
 
   // Only meitrack devices speak the MDVR command set (backend rejects others).
   const meitrackDevices = useMemo(
-    () => (devicesQuery.data ?? []).filter((d) => d.protocol === 'meitrack'),
-    [devicesQuery.data],
+    () => (devices ?? []).filter((d) => d.protocol === 'meitrack'),
+    [devices],
   );
   const selectedDevice: Device | null = meitrackDevices.find((d) => d.id === deviceId) ?? null;
+
+  // Picker writes back to the URL (replace, not push) so the selection is
+  // shareable and survives reloads without polluting history.
+  const selectDevice = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (next) params.set('device', next);
+    else params.delete('device');
+    setSearchParams(params, { replace: true });
+  };
 
   const dispatch = async (command: CommandDef, params: Record<string, string | number>) => {
     await sendMutation.mutateAsync({ commandCode: command.code, params });
@@ -58,9 +88,9 @@ export function CommandCenterPage() {
 
   // Native-select replacement for the old Autocomplete: while devices load (or
   // none are Meitrack) the placeholder slot carries the same messaging.
-  const deviceOptions = devicesQuery.isLoading
+  const deviceOptions = devicesLoading
     ? [{ value: '', label: t('common.loading', { defaultValue: 'Loading…' }) }]
-    : devicesQuery.data && meitrackDevices.length === 0
+    : devices && meitrackDevices.length === 0
       ? [
           {
             value: '',
@@ -89,14 +119,21 @@ export function CommandCenterPage() {
         actions={
           <Select
             value={deviceId ?? ''}
-            onChange={(e) => setDeviceId(e.target.value || null)}
+            onChange={(e) => selectDevice(e.target.value)}
             wrapperClassName="w-72 max-w-full"
-            disabled={devicesQuery.isLoading}
+            disabled={devicesLoading || devicesIsError}
             aria-label={t('commands.selectDevice', { defaultValue: 'Device (IMEI)' })}
             options={deviceOptions}
           />
         }
       />
+
+      {/* Device list failed → picker region error with retry. */}
+      {devicesIsError && (
+        <Card flush className="p-3">
+          <ErrorState error={devicesError} onRetry={() => void refetchDevices()} />
+        </Card>
+      )}
 
       {selectedDevice && (
         <Card flush className="flex flex-wrap items-center gap-3 p-3">
@@ -123,29 +160,39 @@ export function CommandCenterPage() {
       )}
 
       <Card flush className="p-3">
-        <PermissionGate
-          requires={PERMISSIONS.commandSend}
-          fallback={
-            <p className="p-4 text-sm text-gray-500 dark:text-graydark-600">
-              {t('commands.noSendPermission', {
-                defaultValue: 'You lack permission to send commands (read-only).',
-              })}
-            </p>
-          }
-        >
-          <CommandCatalogPanel
-            catalog={catalogQuery.data ?? []}
-            loading={catalogQuery.isLoading}
-            disabled={!selectedDevice}
-            onConfigure={(cmd) => setConfiguring(cmd)}
-            onDispatch={(cmd) => setConfirming(cmd)}
-          />
-        </PermissionGate>
+        {catalogIsError ? (
+          /* Catalog failed → catalog grid region error with retry. */
+          <ErrorState error={catalogError} onRetry={() => void refetchCatalog()} />
+        ) : (
+          <PermissionGate
+            requires={PERMISSIONS.commandSend}
+            fallback={
+              <p className="p-4 text-sm text-gray-500 dark:text-graydark-600">
+                {t('commands.noSendPermission', {
+                  defaultValue: 'You lack permission to send commands (read-only).',
+                })}
+              </p>
+            }
+          >
+            <CommandCatalogPanel
+              catalog={catalog ?? []}
+              loading={catalogLoading}
+              disabled={!selectedDevice}
+              onConfigure={(cmd) => setConfiguring(cmd)}
+              onDispatch={(cmd) => setConfirming(cmd)}
+            />
+          </PermissionGate>
+        )}
       </Card>
 
       {selectedDevice && (
         <Card flush className="p-3">
-          <CommandHistoryTable rows={historyQuery.data ?? []} loading={historyQuery.isLoading} />
+          {historyIsError ? (
+            /* History failed → history table region error with retry. */
+            <ErrorState error={historyError} onRetry={() => void refetchHistory()} />
+          ) : (
+            <CommandHistoryTable rows={history ?? []} loading={historyLoading} />
+          )}
         </Card>
       )}
 

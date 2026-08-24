@@ -5,10 +5,12 @@ import {
   Map as MaplibreMap,
   Marker as MaplibreMarker,
   Popup as MaplibrePopup,
+  NavigationControl,
 } from 'maplibre-gl';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { circleToPolygonRing } from '@/components/geofences/GeofenceDrawMap';
 import { type BasemapId, basemapById } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
 import {
@@ -21,6 +23,7 @@ import {
 import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
+import type { Geofence } from '@/types/geofence.types';
 
 /** A prepared historical track (already gap-split by track-utils). */
 export interface HistoryTrack {
@@ -67,6 +70,12 @@ interface FleetMapProps {
    * overlay so an active track never disappears under the new tiles.
    */
   basemap?: BasemapId;
+  /**
+   * Active tenant geofences rendered as dashed brand outlines on the live map
+   * (context for enter/exit alarms). Polygons pass through; circles are
+   * converted to polygon rings.
+   */
+  geofences?: ReadonlyArray<Geofence>;
 }
 
 /** Freshness "age" of the last position fix, locale-aware. */
@@ -113,6 +122,7 @@ export function FleetMap({
   playbackHead = null,
   followId = null,
   basemap = 'streets',
+  geofences = [],
 }: FleetMapProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -166,6 +176,9 @@ export function FleetMap({
       zoom: 11,
       attributionControl: { compact: true },
     });
+    // Zoom + compass controls (bottom-end; CSS lifts them above the history
+    // playback bar on the tracking map container).
+    map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right');
     mapRef.current = map;
     appliedBasemapRef.current = basemap;
     // Clicking empty map clears the selection (§2.5 Esc/backdrop closes).
@@ -208,11 +221,16 @@ export function FleetMap({
         tileSize: 256,
         attribution: bm.attribution,
       });
-      // Insert beneath the track line when it exists; otherwise append (the
-      // vehicle/cluster markers are DOM overlays and always render on top).
+      // Insert beneath the geofence + track lines when they exist; otherwise
+      // append (the vehicle/cluster markers are DOM overlays and always
+      // render on top).
       map.addLayer(
         { id: 'basemap', type: 'raster', source: 'basemap' },
-        map.getLayer('history-track-line') ? 'history-track-line' : undefined,
+        map.getLayer('geofence-fill')
+          ? 'geofence-fill'
+          : map.getLayer('history-track-line')
+            ? 'history-track-line'
+            : undefined,
       );
     };
     if (map.isStyleLoaded()) {
@@ -221,6 +239,74 @@ export function FleetMap({
       map.once('styledata', swap);
     }
   }, [basemap]);
+
+  // ── Geofence context layer ──
+  // Active tenant fences as a dashed brand outline + faint fill: operators see
+  // WHY enter/exit alarms fire without leaving the live map. Circles convert
+  // to polygon rings; layers sit above the basemap, beneath the history track.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const features = geofences
+      .filter((g) => g.status === 'ACTIVE')
+      .map((g) => {
+        let ring: number[][] | null = null;
+        if (g.boundaryGeoJson?.coordinates?.[0]) {
+          ring = g.boundaryGeoJson.coordinates[0] as number[][];
+        } else if (
+          g.centerLat != null &&
+          g.centerLng != null &&
+          g.radiusM != null &&
+          g.radiusM > 0
+        ) {
+          ring = circleToPolygonRing(g.centerLat, g.centerLng, g.radiusM);
+        }
+        return ring ? { id: g.id, name: g.name, ring } : null;
+      })
+      .filter((f): f is { id: string; name: string; ring: number[][] } => f !== null);
+
+    const apply = () => {
+      for (const layerId of ['geofence-fill', 'geofence-line']) {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+      }
+      if (map.getSource('geofences')) map.removeSource('geofences');
+      if (features.length === 0) return;
+      map.addSource('geofences', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: features.map((f) => ({
+            type: 'Feature' as const,
+            id: f.id,
+            properties: { name: f.name },
+            geometry: { type: 'Polygon' as const, coordinates: [f.ring] },
+          })),
+        },
+      });
+      const before = map.getLayer('history-track-line') ? 'history-track-line' : undefined;
+      map.addLayer(
+        {
+          id: 'geofence-fill',
+          type: 'fill',
+          source: 'geofences',
+          paint: { 'fill-color': mapAccents.geofence, 'fill-opacity': 0.06 },
+        },
+        before,
+      );
+      map.addLayer({
+        id: 'geofence-line',
+        type: 'line',
+        source: 'geofences',
+        paint: {
+          'line-color': mapAccents.geofence,
+          'line-width': 1.5,
+          'line-opacity': 0.75,
+          'line-dasharray': [2, 2],
+        },
+      });
+    };
+    runWhenStyleReady(map, apply);
+  }, [geofences]);
 
   // Re-render markers whenever the fleet / selection changes. When paused, the
   // map stops re-clustering on pan/zoom so the operator can inspect a frozen
@@ -287,9 +373,15 @@ export function FleetMap({
         applyVehicleIcon(el, v, v.id === selectedId);
         el.alt = v.label;
         el.style.cursor = 'pointer';
-        const popup = new MaplibrePopup({ offset: 14, closeButton: false }).setHTML(
+        // Colors come from the .fv-map-popup CSS (light + dark aware) — inline
+        // hexes would win over the dark-mode overrides.
+        const popup = new MaplibrePopup({
+          offset: 14,
+          closeButton: false,
+          className: 'fv-map-popup',
+        }).setHTML(
           `<div style="font-weight:600">${v.label}</div>` +
-            `<div style="color:#64748B;font-size:11px">${v.driver ? `${v.driver} · ` : ''}${v.speed} km/h · ${ageLabel(v.updatedAt, t)}</div>`,
+            `<div class="fv-map-popup-meta">${v.driver ? `${v.driver} · ` : ''}${v.speed} km/h · ${ageLabel(v.updatedAt, t)}</div>`,
         );
         const marker = new MaplibreMarker({ element: el, anchor: 'center' })
           .setLngLat([v.lng, v.lat])
@@ -445,7 +537,9 @@ export function FleetMap({
     map.panTo([v.lng, v.lat], { duration: 800 });
   }, [followId, vehicles]);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+  return (
+    <div ref={containerRef} className="fv-tracking-map" style={{ width: '100%', height: '100%' }} />
+  );
 }
 
 /** Set the marker image for a vehicle (color by status, heading arrow when moving). */

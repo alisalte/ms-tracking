@@ -133,7 +133,12 @@
     "clear": "Clear",
     "loadMore": "Load more",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "selectAll": "Select all",
+    "selectedCount": "{{count}} selected",
+    "discardChangesTitle": "Discard unsaved changes?",
+    "discardChangesMessage": "You have unsaved changes. Closing this form will discard them.",
+    "discard": "Discard"
   },
   "errors": {
     "retry": "Retry",
@@ -458,7 +463,11 @@
       "tooltip": "Snap the track to roads via OSRM (falls back to raw GPS when unavailable)",
       "unavailable": "Map matching unavailable — showing raw GPS"
     },
-    "emptyCta": "Go to Asset Management"
+    "emptyCta": "Go to Asset Management",
+    "roster": {
+      "open": "Show fleet list",
+      "close": "Hide fleet list"
+    }
   },
   "trips": {
     "title": "Trips",
@@ -481,7 +490,8 @@
       "colDuration": "Duration",
       "colStatus": "Status",
       "noResults": "No trips match your filters.",
-      "vehicleFilter": "Filter: this vehicle ✕"
+      "vehicleFilter": "Filter: this vehicle ✕",
+      "filterByStatus": "Filter by status"
     },
     "detail": {
       "back": "Back to trips",
@@ -808,7 +818,8 @@
     "views": {
       "list": "List",
       "timeline": "Timeline",
-      "map": "Map"
+      "map": "Map",
+      "label": "Alarm view"
     },
     "filters": {
       "type": "Type",
@@ -838,12 +849,18 @@
       "sourceEvents": "Source events",
       "linked": "Linked artifacts",
       "viewClip": "View clip",
-      "viewTrip": "View trip"
+      "viewTrip": "View trip",
+      "heading": "Alarm detail",
+      "actionFailed": "The action failed — please try again."
     },
     "actions": {
       "ack": "Acknowledge",
       "resolve": "Resolve",
       "contest": "Contest (false positive)"
+    },
+    "toast": {
+      "acked": "Alarm acknowledged",
+      "resolved": "Alarm resolved"
     }
   },
   "assets": {
@@ -878,7 +895,8 @@
       },
       "colName": "Name",
       "colCode": "Code",
-      "colStatus": "Status"
+      "colStatus": "Status",
+      "emptyDescription": "No fleets yet — create your first fleet to group vehicles."
     },
     "vehicle": {
       "notFound": "Vehicle not found.",
@@ -901,7 +919,8 @@
       "colCode": "Code",
       "colFleet": "Fleet",
       "colVin": "VIN",
-      "colStatus": "Status"
+      "colStatus": "Status",
+      "emptyDescription": "No vehicles yet — register a vehicle to see it here."
     },
     "device": {
       "notFound": "Device not found.",
@@ -958,7 +977,8 @@
       "unassignConfirmBody": "The device will be detached from this vehicle.",
       "alreadyBound": "This device is already bound to a vehicle.",
       "noUnbound": "No unbound devices available.",
-      "colStatus": "Status"
+      "colStatus": "Status",
+      "emptyDescription": "No devices yet — register a tracker to see it here."
     },
     "actions": {
       "archive": "Archive",
@@ -1088,6 +1108,19 @@
       "exits": "EXIT",
       "dwells": "DWELL",
       "timeInside": "Time inside"
+    },
+    "labels": {
+      "distance": "Distance (km)",
+      "trips": "Trips",
+      "km": "km",
+      "speeding": "Speeding",
+      "geofence": "Geofence",
+      "offline": "Offline",
+      "other": "Other",
+      "moving": "Moving",
+      "idle": "Idle",
+      "parked": "Parked",
+      "noTelemetry": "No telemetry"
     }
   },
   "admin": {
@@ -1140,6 +1173,18 @@
         "suspended": "Suspended",
         "deactivated": "Deactivated",
         "locked": "Locked"
+      },
+      "emptyDescription": "Users will appear here once they are added to this tenant.",
+      "confirmSuspendTitle": "Suspend user?",
+      "confirmSuspendMessage": "Suspend {{name}}? They will be unable to sign in until reactivated.",
+      "confirmActivateTitle": "Activate user?",
+      "confirmActivateMessage": "Restore access for {{name}}?",
+      "confirmDeactivateTitle": "Deactivate user?",
+      "confirmDeactivateMessage": "Permanently deactivate {{name}}? This cannot be undone and their history is retained.",
+      "toastStatus": {
+        "active": "User activated",
+        "suspended": "User suspended",
+        "deactivated": "User deactivated"
       }
     },
     "roles": {
@@ -1148,7 +1193,8 @@
       "permissions": "Permissions",
       "members": "Members",
       "type": "Type",
-      "permissionMatrix": "Permission matrix"
+      "permissionMatrix": "Permission matrix",
+      "empty": "No roles to display"
     },
     "permissions": {
       "subtitle": "The canonical permission catalog by domain (02_Domain_Model §6.1).",
@@ -1188,7 +1234,12 @@
       "lang": {
         "en": "English",
         "fa": "فارسی"
-      }
+      },
+      "save": "Save changes",
+      "reset": "Reset",
+      "unsaved": "You have unsaved changes",
+      "toastSaved": "Settings saved",
+      "saveFailed": "Saving failed — your changes were not applied. Please try again."
     },
     "audit": {
       "allActions": "All actions",
@@ -1234,8 +1285,13 @@
         "analytics": "Analytics",
         "asset": "Asset",
         "system": "System"
-      }
-    }
+      },
+      "chainLabel": "Hash-chained",
+      "chainTooltip": "Every entry carries a hash-chained integrity hash; a live chain verification endpoint is not available yet.",
+      "emptyDescription": "Audit entries will appear here as platform activity happens."
+    },
+    "eyebrow": "Administration",
+    "description": "Tenant users, roles, permissions, settings and the audit trail."
   },
   "geofences": {
     "title": "Geofences",
@@ -1467,5 +1523,10 @@
     "search": "Search events…",
     "empty": "No events yet",
     "emptyHelp": "Fleet events will appear here as they happen."
+  },
+  "notFound": {
+    "title": "404 — Page not found",
+    "description": "The page you're looking for doesn't exist or has been moved.",
+    "backToDashboard": "Back to dashboard"
   }
 }

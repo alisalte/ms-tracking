@@ -1,9 +1,11 @@
 /**
  * AlarmStatusBadge — a colored chip rendering an alarm's lifecycle state
- * (12_Alarm_Engine.md §6.2: raised / acked / escalated / resolved).
+ * (12_Alarm_Engine.md §6.2: raised / acked / escalated / resolved), built on
+ * the shared Badge primitive with the semantic status palette.
  */
+import { Badge } from '@/components/tailwind-ui';
 import type { AlarmStatus } from '@/types/alarm.types';
-import { statusColor } from './AlarmTypeIcon';
+import { statusBadgeColor } from './AlarmTypeIcon';
 
 interface AlarmStatusBadgeProps {
   status: AlarmStatus;
@@ -14,13 +16,11 @@ interface AlarmStatusBadgeProps {
 
 export function AlarmStatusBadge({ status, label, size = 'small' }: AlarmStatusBadgeProps) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full font-semibold text-white ${
-        size === 'small' ? 'h-5 px-2 text-[0.7rem]' : 'h-6 px-2.5 text-xs'
-      }`}
-      style={{ backgroundColor: statusColor(status) }}
+    <Badge
+      color={statusBadgeColor(status)}
+      className={size === 'medium' ? 'px-2.5 font-semibold' : 'font-semibold'}
     >
       {label}
-    </span>
+    </Badge>
   );
 }

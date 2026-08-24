@@ -94,13 +94,16 @@ export function KpiTile({
       onKeyDown={
         onClick
           ? (e: React.KeyboardEvent<HTMLElement>) => {
-              if (e.key === 'Enter' || e.key === ' ') onClick();
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault(); // Space must activate, not scroll
+                onClick();
+              }
             }
           : undefined
       }
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
-      className={`group relative flex min-h-[104px] flex-col overflow-hidden p-4 transition-all duration-300 ${
+      className={`group relative flex min-h-[104px] flex-col overflow-hidden p-4 transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
         onClick ? 'cursor-pointer' : ''
       } hover:shadow-lg hover:shadow-gray-900/6 dark:hover:shadow-black/30 hover:-translate-y-0.5`}
     >
@@ -112,7 +115,7 @@ export function KpiTile({
       />
       {/* Row 1: label (full width) + circular tone icon at the far end. */}
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate pt-1 text-[0.68rem] leading-snug font-bold tracking-[0.03em] text-gray-500 dark:text-graydark-600">
+        <p className="min-w-0 truncate pt-1 text-xs leading-snug font-bold tracking-[0.03em] text-gray-500 dark:text-graydark-600">
           {t(labelKey)}
         </p>
         <span
@@ -122,12 +125,13 @@ export function KpiTile({
           <Icon strokeWidth={2.1} />
         </span>
       </div>
-      {/* Row 2: the value — the DOMINANT element of the card. */}
+      {/* Row 2: the value — the DOMINANT element of the card (TailAdmin 30px
+          display scale). */}
       <div className="mt-1 min-w-0">
         {loading ? (
           <Skeleton className="h-8 w-16" />
         ) : (
-          <p className="flex items-baseline gap-1 text-[1.7rem] leading-none font-black tabular-nums tracking-tight text-gray-950 dark:text-white">
+          <p className="flex items-baseline gap-1 text-3xl leading-none font-black tabular-nums tracking-tight text-gray-950 dark:text-white">
             {/* null post-load = genuinely no data — never shown as a fabricated 0. */}
             {value === null || value === undefined ? (
               '—'
@@ -167,7 +171,7 @@ export function KpiChip({
   }[tone];
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-px text-[0.64rem] leading-4 font-semibold tabular-nums ${cls}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-px text-xs leading-4 font-semibold tabular-nums ${cls}`}
     >
       {children}
     </span>

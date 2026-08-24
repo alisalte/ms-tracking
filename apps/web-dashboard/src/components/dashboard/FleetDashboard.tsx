@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveAlarms, useDeviceStatuses, useFleetStats, useMapVehicles } from '@/api/fleet.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
+import { Card } from '@/components/tailwind-ui';
 import { LiveBadge } from './LiveBadge';
 
 import { ActivityStatusChart, countStates } from './ActivityStatusChart';
@@ -113,11 +114,11 @@ export function FleetDashboard() {
 
       {/* ── 1. LIVE KPI row ── */}
       {stats.isError ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/5 dark:bg-graydark-300">
+        <Card flush className="p-2">
           <ErrorState error={stats.error} onRetry={() => void stats.refetch()} />
-        </div>
+        </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
           <KpiTile
             labelKey="dashboard.stats.totalVehicles"
             value={stats.data?.totalVehicles}

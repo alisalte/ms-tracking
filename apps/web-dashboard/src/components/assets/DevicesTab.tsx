@@ -22,6 +22,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { relativeTime } from '@/lib/relative-time';
 import type { Device, DeviceProtocol, DeviceStatus, Vehicle } from '@/types/asset.types';
 import { Cpu } from 'lucide-react';
 
@@ -148,7 +149,7 @@ export function DevicesTab({
           className="text-xs text-gray-500 dark:text-graydark-600"
           title={d.lastSeenAt ?? undefined}
         >
-          {d.lastSeenAt ? relTime(d.lastSeenAt) : t('assets.device.never')}
+          {d.lastSeenAt ? relativeTime(d.lastSeenAt, t) : t('assets.device.never')}
         </span>
       ),
     },
@@ -221,19 +222,10 @@ export function DevicesTab({
           <EmptyState
             icon={<Cpu />}
             title={t('assets.empty')}
-            description={t('assets.device.search')}
+            description={t('assets.device.emptyDescription')}
           />
         }
       />
     </div>
   );
-}
-
-/** Compact relative time for the Last-seen column ("now" / "5m" / "3h" / "2d"). */
-export function relTime(iso: string): string {
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (min < 1) return 'now';
-  if (min < 60) return `${min}m`;
-  if (min < 60 * 24) return `${Math.round(min / 60)}h`;
-  return `${Math.round(min / (60 * 24))}d`;
 }

@@ -42,6 +42,8 @@ export const status = {
 
   danger: '#F04438',
   dangerLight: '#FB7185',
+  /** Deep shade for emphasis on dark surfaces (severity "critical" center labels). */
+  dangerDeep: '#912018',
   dangerBg: 'rgba(240, 68, 56, 0.12)',
   red: '#F04438',
 

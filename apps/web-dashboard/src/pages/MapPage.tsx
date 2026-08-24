@@ -1,10 +1,11 @@
-import { Map as MapIcon } from 'lucide-react';
+import { List, Map as MapIcon, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
 import { useMapVehicles } from '@/api/fleet.api';
+import { useGeofences } from '@/api/geofence.api';
 import { type HistoryPresetId, fetchMapMatch, presetRange, useVehicleTrack } from '@/api/map.api';
 import { useAuthStore } from '@/auth/auth.store';
 import { ErrorState } from '@/components/common/ErrorState';
@@ -21,7 +22,6 @@ import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
 import { type BasemapId, loadPersistedBasemap, persistBasemap } from '@/lib/basemaps';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
-import { MuiProvider } from '@/theme/MuiProvider';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
 function wsChip(connectionState: string): {
@@ -166,10 +166,17 @@ export function MapPage() {
   const [historyPreset, setHistoryPreset] = useState<HistoryPresetId | 'custom'>('24h');
   const [customRange, setCustomRange] = useState<CustomRange | null>(null);
   const [routePlannerOpen, setRoutePlannerOpen] = useState(false);
+  // Mobile roster: below md the roster becomes a slide-in overlay (§ responsive).
+  const [rosterOpen, setRosterOpen] = useState(false);
   const [routeGeometry, setRouteGeometry] = useState<ReadonlyArray<{
     lat: number;
     lng: number;
   }> | null>(null);
+
+  // Active tenant geofences — context overlay on the live map (dashed brand
+  // outlines). Optional context: a failed fetch renders no fences (the map
+  // itself still errors honestly through its own queries).
+  const { data: geofencesData } = useGeofences();
 
   // Deep-link preselection (?vehicle=…&from=…&to=…) — trip → map (§37).
   useEffect(() => {
@@ -324,161 +331,190 @@ export function MapPage() {
   const chip = wsChip(connectionState);
 
   return (
-    // MUI scope for the map's side surfaces (device roster, settings) — the
-    // theme mirrors the app's brand palette, color mode, and direction.
-    <MuiProvider>
-      <div
-        // Full-bleed: break out of <main>'s padding by going absolute.
-        // The AppLayout <main> is position:relative, so inset:0 covers the
-        // padding box edge-to-edge regardless of box-sizing quirks.
-        className="absolute inset-0 overflow-hidden"
-      >
-        {/* ── Background: the map fills the whole viewport; the roster floats
+    // Tailwind-only scope — the map's side surfaces (device roster, settings)
+    // are ported onto the shared design system with the app's brand palette,
+    // color mode, and direction handled by ThemeRegistry + logical utilities.
+    <div
+      // Full-bleed: break out of <main>'s padding by going absolute.
+      // The AppLayout <main> is position:relative, so inset:0 covers the
+      // padding box edge-to-edge regardless of box-sizing quirks.
+      className="absolute inset-0 overflow-hidden"
+    >
+      {/* ── Background: the map fills the whole viewport; the roster floats
             over it as a frosted glass column (start side) so the fleet is
-            never cut off from the map canvas. ── */}
-        <div className="absolute inset-y-3 start-3 z-20 hidden w-[300px] md:flex">
-          <DeviceListPanel
-            vehicles={filtered}
-            total={vehicles.length}
-            query={query}
-            presence={presence}
-            counts={counts}
-            fleets={fleetsData ?? []}
-            fleetId={fleetId}
-            fleetNameOf={fleetNameOf}
-            selectedId={selectedId}
-            onQueryChange={setQuery}
-            onPresenceChange={setPresence}
-            onFleetChange={setFleetId}
-            onSelect={selectFromList}
-          />
-        </div>
-
-        {/* ── Center: map + toolbar overlay (full background) ── */}
-        <div className="absolute inset-0">
-          <MapToolbar
-            visibleCount={filtered.length}
-            total={vehicles.length}
-            paused={paused}
-            onTogglePause={() => setPaused((p) => !p)}
-            mode={mode}
-            onModeChange={setMode}
-            historyPreset={historyPreset}
-            onHistoryPresetChange={setHistoryPreset}
-            customRange={customRange}
-            onCustomRangeChange={setCustomRange}
-            hasSelection={selectedId !== null}
-            onOpenRoutePlanner={() => setRoutePlannerOpen(true)}
-            mapMatching={mapMatching}
-            onMapMatchingChange={setMapMatching}
-          />
-          {/* History mode states (§22/§24): loading / error / no data. */}
-          {mode === 'history' && selectedId && trackQuery.isLoading && (
-            <MapChip style={{ top: 92 }}>{t('map.history.loading')}</MapChip>
-          )}
-          {mode === 'history' && selectedId && trackQuery.isError && (
-            <MapChip tone="danger" onClick={() => trackQuery.refetch()} style={{ top: 92 }}>
-              {t('map.history.error')}
-            </MapChip>
-          )}
-          {mode === 'history' && selectedId && !trackQuery.isLoading && !trackQuery.isError && (
-            <MapChip style={{ top: 92 }}>
-              {t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
-            </MapChip>
-          )}
-          {/* Sprint I §39 — explicit fallback indicator; the raw track is NOT
-            presented as map-matched. */}
-          {mode === 'history' && mapMatching && matchingUnavailable && (
-            <MapChip tone="warning" testid="map-matching-unavailable" style={{ top: 120 }}>
-              {t('map.matching.unavailable')}
-            </MapChip>
-          )}
-          {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
-          <MapChip tone={chip.tone} style={{ top: 60 }} onClick={undefined}>
-            {t(chip.labelKey)}
-          </MapChip>
-          <div className="absolute inset-0">
-            <FleetMap
-              vehicles={filtered}
-              selectedId={selectedId}
-              onSelect={(id) => {
-                setSelectedId(id);
-                setFollowing(false);
-                setPopupOpen(true);
-              }}
-              onDeselect={() => {
-                setSelectedId(null);
-                setPopupOpen(false);
-              }}
-              paused={paused || mode === 'history'}
-              focus={focus}
-              track={
-                track ??
-                (routeGeometry
-                  ? {
-                      segments: [routeGeometry.map((p) => [p.lng, p.lat] as [number, number])],
-                      key: 1,
-                    }
-                  : null)
-              }
-              playbackHead={playbackHead}
-              followId={following && selectedId ? selectedId : null}
-              basemap={basemap}
-            />
-          </div>
-          {/* Map display settings (basemap modes) — a control SEPARATE from the
-           * tracking toolbar: floating button + popover at the bottom-start. */}
-          <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} />
-          {/* Always-on-map state overlays (loading / error / no vehicles yet).
-           * The wrapper is pointer-transparent so pan/zoom keep working; only
-           * the card itself captures clicks (retry button, CTA link). */}
-          {(showLoadingOverlay || showErrorOverlay || showEmptyOverlay) && (
-            <div
-              data-testid="map-state-overlay"
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6"
-            >
-              <div className="pointer-events-auto max-w-sm rounded-2xl border border-gray-200 bg-white/95 px-6 py-4 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-graydark-300/95">
-                {showLoadingOverlay && <Spinner size="lg" label={t('common.loading')} />}
-                {showErrorOverlay && <ErrorState error={error} onRetry={() => refetch()} />}
-                {showEmptyOverlay && (
-                  <EmptyState
-                    icon={<MapIcon />}
-                    title={t('map.emptyTitle')}
-                    description={t('map.emptyHelp')}
-                    action={
-                      <Link to="/assets">
-                        <Button variant="primary" size="sm" data-testid="map-empty-cta">
-                          {t('map.emptyCta')}
-                        </Button>
-                      </Link>
-                    }
-                  />
-                )}
-              </div>
-            </div>
-          )}
-          {/* Sprint I §32/§33 — playback transport + timeline (history mode only). */}
-          {mode === 'history' && displayPoints && displayPoints.length >= 2 && (
-            <PlaybackControls playback={playback} />
-          )}
-        </div>
-
-        {/* ── Route planner (Sprint F §12) ── */}
-        <RoutePlannerDialog
-          open={routePlannerOpen}
-          onClose={() => setRoutePlannerOpen(false)}
-          onRoute={(geometry) => setRouteGeometry(geometry)}
+            never cut off from the map canvas. Below md it becomes a slide-in
+            overlay toggled by the floating roster button (§ responsive). ── */}
+      {rosterOpen && (
+        <button
+          type="button"
+          aria-label={t('map.roster.close')}
+          onClick={() => setRosterOpen(false)}
+          className="absolute inset-0 z-[19] bg-black/30 md:hidden"
         />
-
-        {/* ── Right: device popup drawer ── */}
-        <DevicePopup
-          vehicleId={popupOpen ? selectedId : null}
-          onClose={() => setPopupOpen(false)}
-          onShowHistory={() => setMode('history')}
-          following={following}
-          onToggleFollow={() => setFollowing((f) => !f)}
+      )}
+      <div
+        className={`absolute inset-y-3 start-3 z-20 flex w-[86vw] max-w-[300px] flex-col transition-transform duration-200 md:w-[300px] md:translate-x-0 ${
+          rosterOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'
+        }`}
+      >
+        <DeviceListPanel
+          vehicles={filtered}
+          total={vehicles.length}
+          query={query}
+          presence={presence}
+          counts={counts}
+          fleets={fleetsData ?? []}
+          fleetId={fleetId}
+          fleetNameOf={fleetNameOf}
+          selectedId={selectedId}
+          onQueryChange={setQuery}
+          onPresenceChange={setPresence}
+          onFleetChange={setFleetId}
+          onSelect={selectFromList}
         />
       </div>
-    </MuiProvider>
+
+      {/* ── Center: map + toolbar overlay (full background) ── */}
+      <div className="absolute inset-0">
+        <MapToolbar
+          visibleCount={filtered.length}
+          total={vehicles.length}
+          paused={paused}
+          onTogglePause={() => setPaused((p) => !p)}
+          mode={mode}
+          onModeChange={setMode}
+          historyPreset={historyPreset}
+          onHistoryPresetChange={setHistoryPreset}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+          hasSelection={selectedId !== null}
+          onOpenRoutePlanner={() => setRoutePlannerOpen(true)}
+          mapMatching={mapMatching}
+          onMapMatchingChange={setMapMatching}
+        />
+        {/* History mode states (§22/§24): loading / error / no data. */}
+        {mode === 'history' && selectedId && trackQuery.isLoading && (
+          <MapChip style={{ top: 92 }}>{t('map.history.loading')}</MapChip>
+        )}
+        {mode === 'history' && selectedId && trackQuery.isError && (
+          <MapChip tone="danger" onClick={() => trackQuery.refetch()} style={{ top: 92 }}>
+            {t('map.history.error')}
+          </MapChip>
+        )}
+        {mode === 'history' && selectedId && !trackQuery.isLoading && !trackQuery.isError && (
+          <MapChip style={{ top: 92 }}>
+            {t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
+          </MapChip>
+        )}
+        {/* Sprint I §39 — explicit fallback indicator; the raw track is NOT
+            presented as map-matched. */}
+        {mode === 'history' && mapMatching && matchingUnavailable && (
+          <MapChip tone="warning" testid="map-matching-unavailable" style={{ top: 120 }}>
+            {t('map.matching.unavailable')}
+          </MapChip>
+        )}
+        {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
+        <MapChip tone={chip.tone} style={{ top: 60 }} onClick={undefined}>
+          {t(chip.labelKey)}
+        </MapChip>
+        <div className="absolute inset-0">
+          <FleetMap
+            vehicles={filtered}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setFollowing(false);
+              setPopupOpen(true);
+            }}
+            onDeselect={() => {
+              setSelectedId(null);
+              setPopupOpen(false);
+            }}
+            paused={paused || mode === 'history'}
+            focus={focus}
+            track={
+              track ??
+              (routeGeometry
+                ? {
+                    segments: [routeGeometry.map((p) => [p.lng, p.lat] as [number, number])],
+                    key: 1,
+                  }
+                : null)
+            }
+            playbackHead={playbackHead}
+            followId={following && selectedId ? selectedId : null}
+            basemap={basemap}
+            geofences={geofencesData ?? []}
+          />
+        </div>
+        {/* Map display settings (basemap modes) — a control SEPARATE from the
+         * tracking toolbar: floating button + popover at the bottom-start,
+         * lifted above the playback transport while history playback runs. */}
+        <MapSettingsPanel
+          basemap={basemap}
+          onBasemapChange={setBasemap}
+          raised={mode === 'history' && displayPoints != null && displayPoints.length >= 2}
+        />
+        {/* Mobile roster toggle (below md the roster is a slide-in overlay). */}
+        <button
+          type="button"
+          onClick={() => setRosterOpen((o) => !o)}
+          aria-label={rosterOpen ? t('map.roster.close') : t('map.roster.open')}
+          aria-expanded={rosterOpen}
+          data-testid="map-roster-toggle"
+          className="absolute bottom-3 end-3 z-30 inline-flex size-10 cursor-pointer items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-lg transition-colors hover:bg-gray-50 md:hidden dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-700 dark:hover:bg-white/10"
+        >
+          {rosterOpen ? <X size={18} aria-hidden /> : <List size={18} aria-hidden />}
+        </button>
+        {/* Always-on-map state overlays (loading / error / no vehicles yet).
+         * The wrapper is pointer-transparent so pan/zoom keep working; only
+         * the card itself captures clicks (retry button, CTA link). */}
+        {(showLoadingOverlay || showErrorOverlay || showEmptyOverlay) && (
+          <div
+            data-testid="map-state-overlay"
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6"
+          >
+            <div className="pointer-events-auto max-w-sm rounded-2xl border border-gray-200 bg-white/95 px-6 py-4 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-graydark-300/95">
+              {showLoadingOverlay && <Spinner size="lg" label={t('common.loading')} />}
+              {showErrorOverlay && <ErrorState error={error} onRetry={() => refetch()} />}
+              {showEmptyOverlay && (
+                <EmptyState
+                  icon={<MapIcon />}
+                  title={t('map.emptyTitle')}
+                  description={t('map.emptyHelp')}
+                  action={
+                    <Link to="/assets">
+                      <Button variant="primary" size="sm" data-testid="map-empty-cta">
+                        {t('map.emptyCta')}
+                      </Button>
+                    </Link>
+                  }
+                />
+              )}
+            </div>
+          </div>
+        )}
+        {/* Sprint I §32/§33 — playback transport + timeline (history mode only). */}
+        {mode === 'history' && displayPoints && displayPoints.length >= 2 && (
+          <PlaybackControls playback={playback} />
+        )}
+      </div>
+
+      {/* ── Route planner (Sprint F §12) ── */}
+      <RoutePlannerDialog
+        open={routePlannerOpen}
+        onClose={() => setRoutePlannerOpen(false)}
+        onRoute={(geometry) => setRouteGeometry(geometry)}
+      />
+
+      {/* ── Right: device popup drawer ── */}
+      <DevicePopup
+        vehicleId={popupOpen ? selectedId : null}
+        onClose={() => setPopupOpen(false)}
+        onShowHistory={() => setMode('history')}
+        following={following}
+        onToggleFollow={() => setFollowing((f) => !f)}
+      />
+    </div>
   );
 }

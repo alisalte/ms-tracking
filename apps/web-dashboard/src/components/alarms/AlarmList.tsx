@@ -8,8 +8,12 @@
 import { useTranslation } from 'react-i18next';
 
 import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
-import { alarmTypeIcon, severityColor } from '@/components/alarms/AlarmTypeIcon';
-import { Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
+import {
+  alarmTypeIcon,
+  severityBadgeColor,
+  severityColor,
+} from '@/components/alarms/AlarmTypeIcon';
+import { Badge, Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmListProps {
@@ -79,7 +83,7 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') onSelect(a.id);
                 }}
-                className={`cursor-pointer transition-colors ${
+                className={`cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/50 ${
                   isSel
                     ? 'bg-brand-50 dark:bg-brand-500/10'
                     : 'hover:bg-gray-50 dark:hover:bg-white/5'
@@ -111,12 +115,9 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
                   )}
                 </TD>
                 <TD>
-                  <span
-                    className="inline-flex h-5 items-center rounded-full px-2 text-[0.7rem] font-semibold text-white"
-                    style={{ backgroundColor: severityColor(a.severity) }}
-                  >
+                  <Badge color={severityBadgeColor(a.severity)} className="font-semibold">
                     {t(`alarms.severity.${a.severity}`)}
-                  </span>
+                  </Badge>
                 </TD>
                 <TD>
                   <AlarmStatusBadge status={a.status} label={t(`alarms.status.${a.status}`)} />

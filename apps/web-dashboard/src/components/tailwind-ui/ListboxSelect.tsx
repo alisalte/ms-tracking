@@ -45,10 +45,16 @@ function usePopover(open: boolean, onClose: () => void) {
 
 const POPOVER =
   'absolute z-50 mt-1.5 max-h-60 w-full min-w-44 overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-graydark-300';
+const POPOVER_GLASS =
+  'absolute z-50 mt-1.5 max-h-60 w-full min-w-44 overflow-auto rounded-lg border border-white/15 bg-graydark-200/95 py-1 shadow-xl backdrop-blur-xl';
 const OPTION =
   'flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-start text-sm text-gray-700 transition-colors hover:bg-gray-100 focus:bg-gray-100 focus:outline-none dark:text-graydark-700 dark:hover:bg-white/5 dark:focus:bg-white/5';
+const OPTION_GLASS =
+  'flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-start text-sm text-white/90 transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none';
 const TRIGGER_BASE =
   'flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 transition-colors focus:outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-graydark-300 dark:text-white';
+const TRIGGER_GLASS =
+  'flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-white/14 bg-white/6 px-3 text-sm text-white/90 transition-colors hover:border-white/25 focus:outline-none focus-visible:border-white/40 focus-visible:ring-2 focus-visible:ring-white/20 disabled:cursor-not-allowed disabled:opacity-60';
 
 // ── Single-select ────────────────────────────────────────────────────────────
 
@@ -60,6 +66,8 @@ export interface ListboxSelectProps {
   label?: ReactNode;
   placeholder?: ReactNode;
   disabled?: boolean;
+  /** `onGlass` matches the dark-glass map panels (white-on-dark surfaces). */
+  tone?: 'default' | 'onGlass';
   className?: string;
   wrapperClassName?: string;
   'aria-label'?: string;
@@ -73,6 +81,7 @@ export function ListboxSelect({
   label,
   placeholder,
   disabled = false,
+  tone = 'default',
   className = '',
   wrapperClassName = '',
   'aria-label': ariaLabel,
@@ -148,24 +157,24 @@ export function ListboxSelect({
           disabled={disabled}
           onClick={() => (open ? setOpen(false) : openMenu())}
           onKeyDown={onKeyDown}
-          className={TRIGGER_BASE}
+          className={tone === 'onGlass' ? TRIGGER_GLASS : TRIGGER_BASE}
         >
           <span
-            className={`min-w-0 flex-1 truncate ${selected ? '' : 'text-gray-400 dark:text-graydark-600'}`}
+            className={`min-w-0 flex-1 truncate ${selected ? '' : tone === 'onGlass' ? 'text-white/45' : 'text-gray-400 dark:text-graydark-600'}`}
           >
             {selected ? selected.label : (placeholder ?? '—')}
           </span>
           <ChevronDown
             size={15}
             aria-hidden
-            className={`shrink-0 text-gray-400 transition-transform rtl:rotate-180 dark:text-graydark-600 ${open ? 'rotate-180 rtl:-rotate-180' : ''}`}
+            className={`shrink-0 transition-transform rtl:rotate-180 ${tone === 'onGlass' ? 'text-white/55' : 'text-gray-400 dark:text-graydark-600'} ${open ? 'rotate-180 rtl:-rotate-180' : ''}`}
           />
         </button>
         {open && (
           <ul
             id={listboxId}
             aria-labelledby={label ? `${listboxId}-label` : undefined}
-            className={POPOVER}
+            className={tone === 'onGlass' ? POPOVER_GLASS : POPOVER}
             tabIndex={-1}
             // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA 1.2 combobox pattern — <ul role="listbox"> has no single native equivalent.
             // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <ul role="listbox"> is the WAI-ARIA authoring pattern for combobox popups.
@@ -183,15 +192,21 @@ export function ListboxSelect({
                 tabIndex={-1}
                 onClick={() => select(option)}
                 onMouseEnter={() => !option.disabled && setActiveIndex(i)}
-                className={`${OPTION} ${option.disabled ? 'cursor-not-allowed opacity-50' : ''} ${
+                className={`${tone === 'onGlass' ? OPTION_GLASS : OPTION} ${option.disabled ? 'cursor-not-allowed opacity-50' : ''} ${
                   option.value === activeValue && option.value !== value
-                    ? 'bg-gray-100 dark:bg-white/5'
+                    ? tone === 'onGlass'
+                      ? 'bg-white/10'
+                      : 'bg-gray-100 dark:bg-white/5'
                     : ''
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate">{option.label}</span>
                 {option.value === value && (
-                  <Check size={15} aria-hidden className="shrink-0 text-brand-500" />
+                  <Check
+                    size={15}
+                    aria-hidden
+                    className={`shrink-0 ${tone === 'onGlass' ? 'text-white' : 'text-brand-500'}`}
+                  />
                 )}
               </li>
             ))}

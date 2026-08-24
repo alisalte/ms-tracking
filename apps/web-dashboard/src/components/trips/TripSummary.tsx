@@ -1,4 +1,4 @@
-import { Clock, Fuel, Gauge, MapPin, PauseCircle, Timer } from 'lucide-react';
+import { CircleStop, Clock, Fuel, Gauge, PauseCircle, Route, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,14 +21,14 @@ export function TripSummary({ trip }: TripSummaryProps) {
 
   const tiles: Array<{ icon: LucideIcon; label: string; value: string }> = [
     {
-      icon: MapPin,
+      icon: Route,
       label: t('trips.summary.distance'),
       value: `${trip.distanceKm.toLocaleString('en-US')} km`,
     },
     { icon: Clock, label: t('trips.summary.duration'), value: formatDuration(trip.durationMin) },
     { icon: Gauge, label: t('trips.summary.maxSpeed'), value: `${trip.maxSpeed} km/h` },
     { icon: Timer, label: t('trips.summary.avgSpeed'), value: `${trip.avgSpeed} km/h` },
-    { icon: MapPin, label: t('trips.summary.stops'), value: String(trip.stopCount) },
+    { icon: CircleStop, label: t('trips.summary.stops'), value: String(trip.stopCount) },
     {
       icon: PauseCircle,
       label: t('trips.summary.idleTime'),

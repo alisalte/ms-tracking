@@ -3,60 +3,9 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDeviceStatuses, useFleetStats } from '@/api/fleet.api';
+import { Meter } from '@/components/tailwind-ui';
 import type { MapVehicle } from '@/types/fleet.types';
 import { DashboardCard } from './DashboardCard';
-
-/** A labeled meter row — label left, count + bar right. */
-function Meter({
-  label,
-  value,
-  total,
-  tone,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  tone: 'success' | 'warning' | 'danger' | 'gray' | 'info';
-}) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  const bar =
-    tone === 'success'
-      ? 'bg-success-500'
-      : tone === 'warning'
-        ? 'bg-warning-500'
-        : tone === 'danger'
-          ? 'bg-danger-500'
-          : tone === 'info'
-            ? 'bg-info-500'
-            : 'bg-gray-400 dark:bg-graydark-500';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-sm text-gray-600 dark:text-graydark-700">{label}</span>
-        <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-white">
-          {value.toLocaleString()}
-          <span className="ms-1 text-xs font-normal text-gray-400 dark:text-graydark-600">
-            / {total.toLocaleString()}
-          </span>
-        </span>
-      </div>
-      <div
-        className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10"
-        role="progressbar"
-        tabIndex={0}
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={label}
-      >
-        <div
-          className={`h-full rounded-full transition-[width] duration-300 ${bar}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
 
 export interface FleetHealthPanelProps {
   vehicles: readonly MapVehicle[];
@@ -71,12 +20,18 @@ export interface FleetHealthPanelProps {
  * All real sources: device connection states (`/tracking/devices/status`),
  * position coverage (the map join's `updatedAt`), and the fleet summary's
  * stale count. Each metric renders as a labeled meter — counts pair with
- * labels, never color alone.
+ * labels, never color alone. A failure of ANY of the three sources surfaces
+ * as the card's error state — never as fabricated 0/0 meters.
  */
 export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHealthPanelProps) {
   const { t } = useTranslation();
-  const { data: statuses, isLoading: statusesLoading } = useDeviceStatuses();
-  const { data: stats } = useFleetStats();
+  const {
+    data: statuses,
+    isLoading: statusesLoading,
+    error: statusesError,
+    refetch: refetchStatuses,
+  } = useDeviceStatuses();
+  const { data: stats, refetch: refetchStats } = useFleetStats();
 
   const metrics = useMemo(() => {
     const list = statuses ?? [];
@@ -88,6 +43,16 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
   }, [statuses, vehicles]);
 
   const busy = loading || statusesLoading;
+  // The stale-positions tile has a REAL fallback (the statuses projection's
+  // STALE count), so a fleet-stats failure is not this card's failure — only
+  // a statuses failure (or the caller's) renders the error state. The stats
+  // query itself is surfaced honestly by the KPI row above.
+  const anyError = error ?? statusesError ?? null;
+  const retryAll = () => {
+    onRetry?.();
+    void refetchStatuses();
+    void refetchStats();
+  };
 
   return (
     <DashboardCard
@@ -95,21 +60,23 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
       accent="brand"
       icon={HeartPulse}
       loading={busy}
-      error={error}
-      onRetry={onRetry}
+      error={anyError}
+      onRetry={retryAll}
     >
       <div className="flex flex-col gap-4">
         <Meter
           label={t('dashboard.health.connectivity')}
           value={metrics.online}
-          total={metrics.total}
+          max={metrics.total}
           tone="success"
+          showMax
         />
         <Meter
           label={t('dashboard.health.gpsReporting')}
           value={metrics.reporting}
-          total={vehicles.length}
+          max={vehicles.length}
           tone="info"
+          showMax
         />
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg border border-gray-200 p-3 dark:border-white/5">

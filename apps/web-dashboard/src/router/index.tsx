@@ -17,12 +17,14 @@ import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MaintenancePage } from '@/pages/MaintenancePage';
 import { MfaVerifyPage } from '@/pages/MfaVerifyPage';
+import { NotFoundPage } from '@/pages/NotFoundPage';
 import { NotificationCenterPage } from '@/pages/NotificationCenterPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TripDetailPage } from '@/pages/TripDetailPage';
 import { TripsPage } from '@/pages/TripsPage';
+import { UiGalleryPage } from '@/pages/UiGalleryPage';
 
 const GeofencePage = lazy(() =>
   import('@/pages/GeofencePage').then((m) => ({ default: m.GeofencePage })),
@@ -40,20 +42,6 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
     <Suspense fallback={<div className="flex h-screen items-center justify-center" />}>
       {children}
     </Suspense>
-  );
-}
-
-/**
- * Not-found page rendered inside the authenticated AppLayout shell.
- */
-function NotFoundPage() {
-  return (
-    <div className="flex h-[50vh] flex-col items-center justify-center text-center">
-      <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-500 dark:text-graydark-600">
-        404
-      </h1>
-      <p className="text-sm text-gray-500 dark:text-graydark-600">Page not found</p>
-    </div>
   );
 }
 
@@ -104,6 +92,13 @@ export const router = createBrowserRouter([
       {
         path: '/mfa/verify',
         element: <MfaVerifyPage />,
+      },
+      {
+        // Design-system gallery (Storybook-equivalent) — PUBLIC and
+        // backend-free so visual-regression baselines can be captured with
+        // only the dev server. Not linked in the app navigation.
+        path: '/dev/ui-gallery',
+        element: <UiGalleryPage />,
       },
     ],
   },

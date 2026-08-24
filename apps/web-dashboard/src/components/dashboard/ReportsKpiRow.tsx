@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAlarmReport, useFleetOverview, useSpeed } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
+import { Card } from '@/components/tailwind-ui';
 
 import { KpiChip, KpiTile } from './KpiTile';
 
@@ -15,7 +16,9 @@ const RANGE = { preset: '7d' } as const;
  * Six tiles: distance, trips, avg utilization, geofence events, fleet average
  * speed (from /reports/speed) and critical alarms (from /reports/alarms
  * summary) — each with a REAL footer chip for secondary context. Rendered only
- * for users holding `report.read` (gated by FleetDashboard).
+ * for users holding `report.read` (gated by FleetDashboard). A failure of ANY
+ * of the three sources surfaces as the row's error state — a broken speed or
+ * alarms query never renders "—" tiles that read as real zeros.
  */
 export function ReportsKpiRow() {
   const { t } = useTranslation();
@@ -24,11 +27,19 @@ export function ReportsKpiRow() {
   const alarms = useAlarmReport(RANGE);
   const o = overview.data;
 
-  if (overview.isError) {
+  const anyError = overview.error ?? speed.error ?? alarms.error ?? null;
+  if (anyError) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/5 dark:bg-graydark-300">
-        <ErrorState error={overview.error} onRetry={() => void overview.refetch()} />
-      </div>
+      <Card flush className="p-2">
+        <ErrorState
+          error={anyError}
+          onRetry={() => {
+            void overview.refetch();
+            void speed.refetch();
+            void alarms.refetch();
+          }}
+        />
+      </Card>
     );
   }
 
@@ -95,9 +106,13 @@ export function ReportsKpiRow() {
         suffix="km/h"
         icon={Gauge}
         tone="teal"
-        loading={speed.isLoading && !speed.isError}
+        loading={speed.isLoading}
         footer={
-          <KpiChip tone="gray">{t('dashboard.vehiclesCount', { count: speedRows.length })}</KpiChip>
+          speed.data && (
+            <KpiChip tone="gray">
+              {t('dashboard.vehiclesCount', { count: speedRows.length })}
+            </KpiChip>
+          )
         }
       />
       <KpiTile
@@ -112,7 +127,7 @@ export function ReportsKpiRow() {
         value={criticalAlarms}
         icon={criticalAlarms && criticalAlarms > 0 ? AlertTriangle : Fence}
         tone={criticalAlarms && criticalAlarms > 0 ? 'danger' : 'gray'}
-        loading={alarms.isLoading && !alarms.isError}
+        loading={alarms.isLoading}
         footer={
           summary && (
             <KpiChip tone={summary.open > 0 ? 'danger' : 'success'}>

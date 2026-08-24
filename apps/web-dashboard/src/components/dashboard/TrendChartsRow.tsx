@@ -120,7 +120,7 @@ export function TrendChartsRow() {
           onRetry={() => void trend.refetch()}
           flush
         >
-          <div className="w-full px-4 pb-3">
+          <div className="w-full px-4 pb-3 sm:px-5">
             <EChart option={distanceTripsOption} height={240} />
           </div>
         </DashboardCard>
@@ -137,7 +137,7 @@ export function TrendChartsRow() {
           onRetry={() => void trend.refetch()}
           flush
         >
-          <div className="w-full px-4 pb-3">
+          <div className="w-full px-4 pb-3 sm:px-5">
             <EChart option={alarmTrendOption} height={240} />
           </div>
         </DashboardCard>

@@ -11,6 +11,8 @@ export interface TabItem<Value extends string> {
   count?: number;
   /** Disable this tab. */
   disabled?: boolean;
+  /** Optional data-testid for the tab button (test contracts). */
+  testid?: string;
 }
 
 /**
@@ -50,6 +52,7 @@ export function Tabs<Value extends string>({
             aria-controls={`panel-${tab.value}`}
             id={`tab-${tab.value}`}
             disabled={tab.disabled}
+            data-testid={tab.testid}
             onClick={() => !active && onChange(tab.value)}
             className={`-mb-px inline-flex cursor-pointer items-center gap-2 border-b-2 border-transparent px-3.5 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               active

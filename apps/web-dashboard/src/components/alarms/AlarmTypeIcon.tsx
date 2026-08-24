@@ -69,3 +69,47 @@ export function statusColor(s: AlarmStatus): string {
       return status.slate;
   }
 }
+
+/** Severity → Badge color name (§2.11, semantic palette). */
+export function severityBadgeColor(
+  severity: AlarmSeverity,
+): 'danger' | 'warning' | 'info' | 'gray' {
+  switch (severity) {
+    case 'critical':
+      return 'danger';
+    case 'major':
+      return 'warning';
+    case 'minor':
+      return 'info';
+    default:
+      return 'gray';
+  }
+}
+
+/** Status → Badge color name (§6.2, semantic palette). */
+export function statusBadgeColor(s: AlarmStatus): 'warning' | 'info' | 'danger' | 'success' {
+  switch (s) {
+    case 'raised':
+      return 'warning';
+    case 'acked':
+      return 'info';
+    case 'escalated':
+      return 'danger';
+    default:
+      return 'success';
+  }
+}
+
+/** Severity → solid semantic background class (filled icon chips). */
+export function severityBg(severity: AlarmSeverity): string {
+  switch (severity) {
+    case 'critical':
+      return 'bg-danger-500';
+    case 'major':
+      return 'bg-warning-500';
+    case 'minor':
+      return 'bg-info-500';
+    default:
+      return 'bg-gray-400 dark:bg-white/25';
+  }
+}

@@ -42,7 +42,7 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
 
   return (
     <div
-      className="absolute bottom-2 left-2 right-2 z-10 rounded-xl bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md dark:bg-graydark-300/90"
+      className="absolute bottom-2 start-2 end-2 z-10 rounded-xl bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md dark:bg-graydark-300/90"
       data-testid="playback-controls"
     >
       <div className="flex flex-wrap items-center gap-1.5">
@@ -52,7 +52,8 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
           aria-label={t('map.playback.prev')}
           data-testid="playback-prev"
         >
-          <ChevronLeft size={17} />
+          {/* Physical prev/next glyphs mirror in RTL (the slider mirrors). */}
+          <ChevronLeft size={17} className="rtl:rotate-180" />
         </IconButton>
         <IconButton
           size="sm"
@@ -76,7 +77,7 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
           aria-label={t('map.playback.next')}
           data-testid="playback-next"
         >
-          <ChevronRight size={17} />
+          <ChevronRight size={17} className="rtl:rotate-180" />
         </IconButton>
 
         <input

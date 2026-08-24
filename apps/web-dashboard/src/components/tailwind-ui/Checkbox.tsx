@@ -16,6 +16,14 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
   className?: string;
 }
 
+/**
+ * Shared visual class for the raw checkbox input — also used by DataTable's
+ * selection cells (which need `indeterminate` control without the label
+ * wrapper). Keep in sync with the input below.
+ */
+export const CHECKBOX_INPUT_CLASS =
+  'size-4 shrink-0 cursor-pointer appearance-none rounded border border-gray-300 bg-white transition-colors checked:border-brand-500 checked:bg-brand-500 indeterminate:border-brand-500 indeterminate:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-graydark-300';
+
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
   { label, error, hint, className = '', id, ...rest },
   ref,
@@ -35,7 +43,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           id={inputId}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className="size-4 shrink-0 cursor-pointer appearance-none rounded border border-gray-300 bg-white transition-colors checked:border-brand-500 checked:bg-brand-500 indeterminate:border-brand-500 indeterminate:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-graydark-300"
+          className={CHECKBOX_INPUT_CLASS}
           {...rest}
         />
         {label && (

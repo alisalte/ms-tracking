@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuditEntries, useExportAudit } from '@/api/admin.api';
 import { auditActionColor } from '@/components/admin/admin-meta';
+import { ErrorState } from '@/components/common/ErrorState';
 import {
   Badge,
   Button,
@@ -53,7 +54,7 @@ const CATEGORIES: Array<AuditCategory | 'all'> = [
 
 export function AuditSection() {
   const { t } = useTranslation();
-  const { data: entries, isLoading } = useAuditEntries();
+  const { data: entries, isLoading, error, refetch } = useAuditEntries();
   const exportAudit = useExportAudit();
   const [action, setAction] = useState<AuditAction | 'all'>('all');
   const [category, setCategory] = useState<AuditCategory | 'all'>('all');
@@ -172,10 +173,15 @@ export function AuditSection() {
         }
         right={
           <>
-            <Badge color="success">
-              <ShieldCheck size={12} aria-hidden />
-              {t('admin.audit.integrityOk')}
-            </Badge>
+            {/* Honest chain label — every row carries a hash-chained integrity
+                hash; a live /integrity/status verdict does not exist yet, so
+                we state what is true instead of a fabricated "verified ✓". */}
+            <Tooltip label={t('admin.audit.chainTooltip')}>
+              <Badge color="gray">
+                <ShieldCheck size={12} aria-hidden />
+                {t('admin.audit.chainLabel')}
+              </Badge>
+            </Tooltip>
             <Button
               size="sm"
               variant="secondary"
@@ -189,18 +195,19 @@ export function AuditSection() {
         }
       />
 
-      {/* Table */}
+      {/* Table — a failed fetch renders the error state, never an empty table */}
       <DataTable
         rows={filtered}
         columns={columns}
         rowKey={(e) => e.id}
         loading={isLoading}
         maxHeight="calc(100vh - 280px)"
+        errorState={error ? <ErrorState error={error} onRetry={() => void refetch()} /> : undefined}
         emptyState={
           <EmptyState
             icon={<ScrollText />}
             title={t('admin.empty')}
-            description={t('admin.audit.search')}
+            description={t('admin.audit.emptyDescription')}
           />
         }
       />

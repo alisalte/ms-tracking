@@ -4,7 +4,7 @@
  * Columns: name, email, role, MFA, last-login. Filter by status + search.
  * Row click opens the user detail drawer (selection → detail, UI_UX §0.6).
  */
-import { Users } from 'lucide-react';
+import { Check, Users } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +17,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { relativeTime } from '@/lib/relative-time';
 import type { AdminUser, AdminUserStatus } from '@/types/admin.types';
 
 interface UsersSectionProps {
@@ -88,7 +89,10 @@ export function UsersSection({
       headerKey: 'admin.users.colMfa',
       render: (u) =>
         u.mfaEnabled ? (
-          <Badge color="success">✓</Badge>
+          <Badge color="success">
+            <Check size={12} aria-hidden />
+            <span className="sr-only">{t('admin.users.mfaOn')}</span>
+          </Badge>
         ) : (
           <span className="text-gray-400 dark:text-graydark-600">—</span>
         ),
@@ -110,7 +114,7 @@ export function UsersSection({
       sortBy: (u) => u.lastLoginAt ?? '',
       render: (u) => (
         <span className="text-xs text-gray-500 dark:text-graydark-600">
-          {u.lastLoginAt ? rel(u.lastLoginAt) : '—'}
+          {u.lastLoginAt ? relativeTime(u.lastLoginAt, t) : '—'}
         </span>
       ),
     },
@@ -153,20 +157,10 @@ export function UsersSection({
           <EmptyState
             icon={<Users />}
             title={t('admin.empty')}
-            description={t('admin.users.search')}
+            description={t('admin.users.emptyDescription')}
           />
         }
       />
     </div>
   );
-}
-
-/** Compact relative time. */
-function rel(iso: string): string {
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (min < 1) return 'now';
-  if (min < 60) return `${min}m`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h`;
-  return `${Math.round(hr / 24)}d`;
 }

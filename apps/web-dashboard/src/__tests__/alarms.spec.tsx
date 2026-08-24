@@ -16,6 +16,12 @@ vi.mock('maplibre-gl', () => {
   const StubMap = class {
     on() {}
     off() {}
+    addControl() {}
+    getLayer() {
+      return undefined;
+    }
+    removeLayer() {}
+    removeSource() {}
     once(_ev: string, cb: (...a: never[]) => void) {
       cb();
     }
@@ -39,7 +45,7 @@ vi.mock('maplibre-gl', () => {
     }
     remove() {}
   };
-  return { Map: StubMap, Marker };
+  return { Map: StubMap, Marker, NavigationControl: class {} };
 });
 
 function makeClient() {
@@ -141,8 +147,9 @@ describe('AlarmCenterPage', () => {
     renderAlarms();
     await screen.findByText('Alarm Center');
 
-    // Click the timeline view button (aria-label from alarms.views.timeline).
-    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    // The view switcher is the SegmentedControl primitive — WAI-ARIA
+    // radiogroup semantics (role=radio), so query radios, not buttons.
+    fireEvent.click(screen.getByRole('radio', { name: 'Timeline' }));
 
     // The timeline renders hour labels (HH:00). At least one is present.
     await waitFor(() => {
@@ -155,7 +162,7 @@ describe('AlarmCenterPage', () => {
     renderAlarms();
     await screen.findByText('Alarm Center');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Map' }));
 
     // The map view is active: the list table header (column "Severity") is
     // gone, confirming we switched away from the list without crashing.
@@ -207,7 +214,8 @@ describe('AlarmCenterPage', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
     });
-    const drawer = screen.getByRole('presentation', { hidden: false });
+    // The shared Drawer primitive renders role="dialog" (aria-modal).
+    const drawer = screen.getByRole('dialog', { hidden: false });
     expect(within(drawer).getByText('Acknowledged')).toBeInTheDocument();
   });
 });

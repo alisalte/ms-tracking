@@ -36,6 +36,7 @@ import {
   Button,
   Drawer,
   Input,
+  Modal,
   Select,
   type SelectOption,
   Textarea,
@@ -205,7 +206,7 @@ export function AssetFormDrawer({
     control,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
     // Form values are dynamic across entities (fleet/vehicle/device), so the
     // values type is intentionally loose; payloads are cast at the call site.
     // biome-ignore lint/suspicious/noExplicitAny: entity form shape varies
@@ -221,6 +222,24 @@ export function AssetFormDrawer({
   }, [entity, record, isEdit, reset]);
 
   const [serverError, setServerError] = useState<string | null>(null);
+  // Dirty guard: unsaved edits must not vanish on an accidental backdrop/Esc/
+  // close. Backdrop-close is disabled while dirty (Drawer prop); deliberate
+  // close paths route through a confirm dialog first.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const requestClose = () => {
+    if (isDirty && !isPending) {
+      setConfirmDiscard(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const discardAndClose = () => {
+    setConfirmDiscard(false);
+    reset(defaultValues); // clear the dirty flag so reopening starts clean
+    onClose();
+  };
 
   const isPending =
     entity === 'fleets'
@@ -291,6 +310,7 @@ export function AssetFormDrawer({
           name: t(entityLabelKey),
         }),
       );
+      reset(defaultValues); // saved — clear the dirty flag before closing
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -304,49 +324,76 @@ export function AssetFormDrawer({
   };
 
   return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title={`${t(isEdit ? 'common.edit' : 'common.add')} ${t(entityLabelKey)}`}
-      subtitle={t(entityLabelKey)}
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" form="asset-form" loading={isPending}>
-            {isPending ? t('common.submitting') : t(isEdit ? 'common.save' : 'common.create')}
-          </Button>
-        </>
-      }
-    >
-      <form
-        id="asset-form"
-        onSubmit={handleSubmit(onSubmit)}
-        noValidate
-        className="flex flex-col gap-4"
+    <>
+      <Drawer
+        open={open}
+        onClose={requestClose}
+        closeOnBackdrop={!isDirty}
+        title={`${t(isEdit ? 'common.edit' : 'common.add')} ${t(entityLabelKey)}`}
+        subtitle={t(entityLabelKey)}
+        footer={
+          <>
+            <Button variant="outline" onClick={requestClose} disabled={isPending}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" form="asset-form" loading={isPending}>
+              {isPending ? t('common.submitting') : t(isEdit ? 'common.save' : 'common.create')}
+            </Button>
+          </>
+        }
       >
-        {serverError && <Alert variant="danger">{serverError}</Alert>}
+        <form
+          id="asset-form"
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          className="flex flex-col gap-4"
+        >
+          {serverError && <Alert variant="danger">{serverError}</Alert>}
 
-        {entity === 'fleets' && <FleetFields control={control} errors={errors} t={t} />}
-        {entity === 'vehicles' && (
-          <VehicleFields control={control} errors={errors} fleets={fleets} t={t} />
-        )}
-        {entity === 'devices' && (
-          <DeviceFields
-            control={control}
-            errors={errors}
-            isEdit={isEdit}
-            imei={record && entity === 'devices' ? (record as Device).imei : undefined}
-            t={t}
-          />
-        )}
+          {entity === 'fleets' && <FleetFields control={control} errors={errors} t={t} />}
+          {entity === 'vehicles' && (
+            <VehicleFields control={control} errors={errors} fleets={fleets} t={t} />
+          )}
+          {entity === 'devices' && (
+            <DeviceFields
+              control={control}
+              errors={errors}
+              isEdit={isEdit}
+              imei={record && entity === 'devices' ? (record as Device).imei : undefined}
+              t={t}
+            />
+          )}
 
-        <p className="mt-2 text-xs text-gray-500 dark:text-graydark-600">
-          {t('validation.asteriskHelp', { defaultValue: '* = required field' })}
+          <p className="mt-2 text-xs text-gray-500 dark:text-graydark-600">
+            {t('validation.asteriskHelp', { defaultValue: '* = required field' })}
+          </p>
+        </form>
+      </Drawer>
+
+      {/* Discard-unsaved-changes guard (Esc / X / Cancel while dirty). */}
+      <Modal
+        open={confirmDiscard}
+        onClose={() => setConfirmDiscard(false)}
+        title={t('common.discardChangesTitle', { defaultValue: 'Discard unsaved changes?' })}
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDiscard(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" className="flex-1" onClick={discardAndClose}>
+              {t('common.discard', { defaultValue: 'Discard' })}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600 dark:text-graydark-700">
+          {t('common.discardChangesMessage', {
+            defaultValue: 'You have unsaved changes. Closing this form will discard them.',
+          })}
         </p>
-      </form>
-    </Drawer>
+      </Modal>
+    </>
   );
 }
 
