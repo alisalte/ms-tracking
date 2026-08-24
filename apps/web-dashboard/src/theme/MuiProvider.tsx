@@ -1,11 +1,11 @@
-import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { prefixer } from 'stylis';
-import rtlPlugin from 'stylis-plugin-rtl';
+import { CacheProvider } from '@emotion/react';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { prefixer } from 'stylis';
+import rtlPlugin from 'stylis-plugin-rtl';
 
 import { useThemeContext } from '@/theme/ThemeRegistry';
 

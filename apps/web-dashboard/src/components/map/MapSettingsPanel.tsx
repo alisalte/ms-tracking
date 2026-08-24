@@ -41,10 +41,7 @@ export function MapSettingsPanel({ basemap, onBasemapChange }: MapSettingsPanelP
   }, [open]);
 
   return (
-    <Box
-      ref={rootRef}
-      sx={{ position: 'absolute', bottom: 12, insetInlineStart: 12, zIndex: 20 }}
-    >
+    <Box ref={rootRef} sx={{ position: 'absolute', bottom: 12, insetInlineStart: 12, zIndex: 20 }}>
       <Fab
         size="small"
         color="default"
@@ -92,8 +89,11 @@ export function MapSettingsPanel({ basemap, onBasemapChange }: MapSettingsPanelP
           {BASEMAPS.map((bm) => {
             const active = bm.id === basemap;
             return (
+              // ARIA radio pattern on MUI MenuItem: a native <input type="radio">
+              // would break the menu's keyboard interaction and visual style.
               <MenuItem
                 key={bm.id}
+                // biome-ignore lint/a11y/useSemanticElements: menu-styled radio group
                 role="radio"
                 aria-checked={active}
                 data-testid={`basemap-option-${bm.id}`}
