@@ -107,6 +107,9 @@ export interface VehicleDetail extends MapVehicle {
   ignitionOn: boolean;
   /** ISO timestamp of the last position fix (filled). */
   updatedAt: string;
+  /** Last device contact (device_status last_seen, falling back to the fix);
+   *  null = the device never reported. */
+  lastSeenAt?: string;
   /** Last ~5 events (overspeed / idle / geofence / DTC / AI). */
   events: VehicleEvent[];
 }

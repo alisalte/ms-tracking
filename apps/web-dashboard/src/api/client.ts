@@ -1,9 +1,9 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
-import { clearTokens, getStoredTokens, getTenantId, saveTokens } from '@/auth/token.storage';
+import { getStoredTokens, getTenantId } from '@/auth/token.storage';
 import type { ApiResponse } from '@/types/api.types';
-import type { RefreshResponseWire, TokenPair } from '@/types/auth.types';
 import { normalizeApiError } from './errors';
+import { refreshTokensSingleFlight } from './token-refresh';
 
 /**
  * Pre-configured Axios instance for FleetVision API calls.
@@ -26,41 +26,11 @@ const apiClient = axios.create({
 
 /**
  * Queue to prevent multiple token refresh attempts when several 401s arrive
- * simultaneously.
+ * simultaneously. The actual rotation lives in `token-refresh.ts` — the app's
+ * SINGLE flight path, shared with the silent refresh and the auth store, so
+ * two racing refreshes can never replay a rotated token (which revoked the
+ * token family and logged users out).
  */
-let refreshPromise: Promise<string | null> | null = null;
-
-/**
- * Attempt to refresh the access token using the stored refresh token.
- * The refresh endpoint returns snake_case on the wire; we map it to the
- * camelCase `TokenPair` we persist.
- */
-async function refreshAccessToken(): Promise<string | null> {
-  const stored = getStoredTokens();
-  if (!stored?.refreshToken) return null;
-
-  try {
-    const response = await axios.post<ApiResponse<RefreshResponseWire>>(
-      `${apiClient.defaults.baseURL}/auth/refresh`,
-      { refresh_token: stored.refreshToken },
-      { headers: { 'X-Tenant-Id': stored.tenantId } },
-    );
-
-    const wire = response.data.data;
-    const tokens: TokenPair = {
-      accessToken: wire.access_token,
-      refreshToken: wire.refresh_token,
-      tenantId: stored.tenantId,
-    };
-    saveTokens(tokens);
-
-    return tokens.accessToken;
-  } catch {
-    // Refresh failed — clear tokens
-    clearTokens();
-    return null;
-  }
-}
 
 /**
  * Request interceptor: attach Authorization and X-Tenant-Id headers.
@@ -99,16 +69,10 @@ apiClient.interceptors.response.use(
       if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
         originalRequest._retry = true;
 
-        // Use shared refresh promise to prevent concurrent refreshes
-        if (!refreshPromise) {
-          refreshPromise = refreshAccessToken().finally(() => {
-            refreshPromise = null;
-          });
-        }
-
-        const newToken = await refreshPromise;
-        if (newToken) {
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        // App-wide single-flight rotation (shared with the silent refresh).
+        const tokens = await refreshTokensSingleFlight();
+        if (tokens) {
+          originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
           return apiClient(originalRequest);
         }
 

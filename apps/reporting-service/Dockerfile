@@ -48,8 +48,9 @@ WORKDIR /app
 COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/.npmrc ./
 COPY --from=builder /app/apps/reporting-service/package.json ./apps/reporting-service/
 COPY --from=builder /app/packages ./packages
-ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate \
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" \
+    npm_config_fetch_retries=5 npm_config_fetch_timeout=120000
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store corepack enable && corepack prepare pnpm@9.15.0 --activate \
     && pnpm install --prod --frozen-lockfile --ignore-scripts \
     && chown -R node:node /app
 

@@ -32,6 +32,8 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
   private readonly kafka: Kafka;
   private readonly consumer: Consumer;
   private started = false;
+  private shutDown = false;
+  private startAttempts = 0;
 
   constructor(
     private readonly config: FleetManagementConfig,
@@ -49,16 +51,32 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
   }
 
   public async onApplicationBootstrap(): Promise<void> {
-    try {
-      await this.start();
-    } catch (err) {
-      this.logger.error(
-        `Failed to start Kafka consumer — connection-state projection paused: ${(err as Error).message}`,
-      );
-    }
+    // Non-fatal with retry: Kafka may briefly refuse connections while the
+    // broker binds its advertised listener. A boot-time outage must not leave
+    // the connection-state projection dead until a manual restart.
+    this.scheduleStart();
+  }
+
+  private scheduleStart(): void {
+    void this.start()
+      .then(() => {
+        if (this.started) this.startAttempts = 0;
+      })
+      .catch((err: Error) => {
+        if (this.shutDown) return;
+        this.startAttempts += 1;
+        const backoffMs = Math.min(5_000 * 2 ** Math.min(this.startAttempts - 1, 4), 60_000);
+        this.logger.warn(
+          `Failed to start Kafka consumer (attempt ${this.startAttempts}) — connection-state projection paused, retrying in ${backoffMs}ms: ${err.message}`,
+        );
+        setTimeout(() => {
+          if (!this.shutDown) this.scheduleStart();
+        }, backoffMs).unref?.();
+      });
   }
 
   public async onApplicationShutdown(): Promise<void> {
+    this.shutDown = true;
     if (!this.started) return;
     try {
       await this.consumer.disconnect();

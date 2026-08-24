@@ -34,6 +34,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Geofence } from '@/types/geofence.types';
+import { runWhenStyleReady } from '@/lib/map-ready';
 
 export type DrawMode = 'polygon' | 'circle' | null;
 
@@ -337,7 +338,7 @@ export function GeofenceDrawMap({
     if (!map) return;
     const sync = () => {
       if (!map.isStyleLoaded() && !map.getSource('geofence-draw')) {
-        map.once('load', sync);
+        runWhenStyleReady(map, sync);
         return;
       }
       for (const m of vertexMarkersRef.current) m.remove();
@@ -389,7 +390,7 @@ export function GeofenceDrawMap({
     if (!map) return;
     const sync = () => {
       if (!map.isStyleLoaded() && !map.getSource('geofence-draw')) {
-        map.once('load', sync);
+        runWhenStyleReady(map, sync);
         return;
       }
       centerMarkerRef.current?.remove();
@@ -461,7 +462,7 @@ export function GeofenceDrawMap({
       }
     };
     if (map.isStyleLoaded()) redraw();
-    else map.once('load', redraw);
+    else runWhenStyleReady(map, redraw);
     // mapRef is a stable ref; listed for the exhaustive-deps contract.
   }, [mode, polygonVertices, circleCenter, circleRadiusM]);
 
@@ -494,7 +495,7 @@ export function GeofenceDrawMap({
       src.setData({ type: 'FeatureCollection', features });
     };
     if (map.isStyleLoaded()) render();
-    else map.once('load', render);
+    else runWhenStyleReady(map, render);
   }, [geofences]);
 
   const areaM2 = useMemo(

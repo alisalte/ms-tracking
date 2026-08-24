@@ -26,7 +26,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Typography,
-  useTheme,
 } from '@mui/material';
 import type { ChipProps } from '@mui/material';
 import { useEffect, useMemo, useRef } from 'react';
@@ -130,8 +129,6 @@ export function DeviceListPanel({
   onSelect,
 }: DeviceListPanelProps) {
   const { t } = useTranslation();
-  const muiTheme = useTheme();
-  const dark = muiTheme.palette.mode === 'dark';
   const listRef = useRef<HTMLUListElement | null>(null);
 
   // Keep the selected row visible as the selection changes.
@@ -146,13 +143,17 @@ export function DeviceListPanel({
 
   return (
     <Box
+      className="fv-dark-glass"
       sx={{
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        borderInlineEnd: 1,
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
+        overflow: 'hidden',
+        borderRadius: 3,
+        bgcolor: 'rgba(17,24,39,0.80)',
+        backdropFilter: 'blur(28px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(28px) saturate(1.4)',
+        color: 'rgba(255,255,255,0.92)',
       }}
     >
       {/* ── Search ── */}
@@ -169,7 +170,7 @@ export function DeviceListPanel({
               <Search fontSize="small" />
             </InputAdornment>
           }
-          sx={{ borderRadius: 2, bgcolor: 'action.hover' }}
+          sx={{ borderRadius: 999, bgcolor: 'action.hover' }}
         />
       </Box>
 
@@ -205,7 +206,7 @@ export function DeviceListPanel({
             if (v !== null) onPresenceChange(v as PresenceFilter);
           }}
           aria-label={t('map.filters.all')}
-          sx={{ flexWrap: 'wrap', gap: 0.5, '& .MuiToggleButton-root': { border: 0, borderRadius: 2, px: 1, py: 0.25, fontSize: 12 } }}
+          sx={{ flexWrap: 'wrap', gap: 0.5, '& .MuiToggleButton-root': { border: 0, borderRadius: 999, px: 1.25, py: 0.25, fontSize: 12, fontWeight: 600 } }}
         >
           {PRESENCE_FILTERS.map((s) => (
             <ToggleButton
@@ -239,7 +240,7 @@ export function DeviceListPanel({
         ) : (
           cards.map(({ v, p }) => {
             const selected = v.id === selectedId;
-            const tone = stateTone(v.state, dark);
+            const tone = stateTone(v.state, true);
             return (
               <ListItem
                 key={v.id}
@@ -252,7 +253,7 @@ export function DeviceListPanel({
                     color={tone.chip}
                     variant={tone.chipVariant}
                     size="small"
-                    sx={{ fontSize: 11, height: 22, fontWeight: 600 }}
+                    sx={{ fontSize: 11, height: 22, fontWeight: 600, borderRadius: 999 }}
                   />
                 }
               >
@@ -263,11 +264,23 @@ export function DeviceListPanel({
                   selected={selected}
                   onClick={() => onSelect(v.id)}
                   aria-pressed={selected}
-                  sx={{ borderRadius: 2, pr: 9, alignItems: 'flex-start', textAlign: 'start' }}
+                  sx={{
+                    borderRadius: 999,
+                    pr: 9,
+                    alignItems: 'flex-start',
+                    textAlign: 'start',
+                    py: 0.75,
+                    // Material Dashboard signature: the active list item is a
+                    // soft brand-tinted pill.
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
+                    '&.Mui-selected': {
+                      bgcolor: 'rgba(255,255,255,0.13)',
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.17)' },
+                    },
+                  }}
                 >
                   <ListItemAvatar sx={{ minWidth: 44 }}>
                     <Avatar
-                      variant="rounded"
                       sx={{
                         width: 34,
                         height: 34,

@@ -215,6 +215,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         speed: position?.speedKph ?? 0,
         ignitionOn: position?.ignitionOn ?? false,
         updatedAt: position?.capturedAt ?? '',
+        lastSeenAt: status?.lastSeenAt ?? position?.capturedAt ?? undefined,
         presence,
         deviceId: primary?.deviceId,
         odometer: 0, // Not exposed by the backend yet — never fabricated.

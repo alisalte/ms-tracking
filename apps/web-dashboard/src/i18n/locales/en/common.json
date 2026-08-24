@@ -177,7 +177,10 @@
       "distance7d": "Distance (last 7 days)",
       "trips7d": "Trips (last 7 days)",
       "utilization": "Avg utilization",
-      "geofenceEvents": "Geofence events"
+      "geofenceEvents": "Geofence events",
+      "avgSpeed": "Avg speed (7d)",
+      "criticalAlarms": "Critical alarms",
+      "openAlarmsCount": "{{count}} open"
     },
     "states": {
       "driving": "Driving",
@@ -257,7 +260,11 @@
       "distanceTripsTrend": "Distance & trips trend",
       "alarmTrend": "Daily alarms by type",
       "topVehicles": "Top vehicles by distance",
-      "alarmStatus": "Alarm status & severity"
+      "alarmStatus": "Alarm status & severity",
+      "fleetComparison": "Fleet comparison (live)",
+      "speedLeaders": "Fastest vehicles (7d)",
+      "alarmSeverity": "Alarm severity (7d)",
+      "hourlyActivity": "Hourly trip rhythm (today)"
     },
     "empty": {
       "alerts": "No active alerts — fleet is quiet.",
@@ -285,7 +292,10 @@
     "severities": {
       "critical": "Critical",
       "warning": "Warning",
-      "info": "Info"
+      "info": "Info",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
     },
     "charts": {
       "distance": "Distance (km)",
@@ -301,8 +311,23 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "info": "Info"
-    }
+      "info": "Info",
+      "unassigned": "Unassigned",
+      "maxSpeed": "Max speed",
+      "avgSpeed": "Avg speed",
+      "speedingAlarms": "Speeding alarms",
+      "totalAlarms": "Total alarms",
+      "tripStarts": "Trip starts",
+      "peak": "Peak",
+      "peakHour": "Peak hour: {{hour}}:00 with {{count}} trips"
+    },
+    "heroConnectivity": "device connectivity",
+    "heroActiveShare": "moving of active",
+    "ofActive": "of active",
+    "kmPerDay": "km/day",
+    "perDay": "day",
+    "withTelemetry": "{{count}} vehicles with telemetry",
+    "vehiclesCount": "{{count}} vehicles"
   },
   "map": {
     "title": "Live Tracking",
@@ -366,7 +391,9 @@
       "history": "History",
       "recentEvents": "Recent events",
       "noEvents": "No recent events",
-      "addressUnavailable": "Address unavailable"
+      "addressUnavailable": "Address unavailable",
+      "offlineAction": "Device is offline",
+      "playbackToday": "Play this vehicle's track today"
     },
     "presence": {
       "ONLINE": "Online",
@@ -453,7 +480,8 @@
       "colDistance": "Distance",
       "colDuration": "Duration",
       "colStatus": "Status",
-      "noResults": "No trips match your filters."
+      "noResults": "No trips match your filters.",
+      "vehicleFilter": "Filter: this vehicle ✕"
     },
     "detail": {
       "back": "Back to trips",

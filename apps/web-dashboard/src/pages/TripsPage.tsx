@@ -1,7 +1,7 @@
-import { ArrowRight, Route } from 'lucide-react';
+import { ArrowRight, Route, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useTrips } from '@/api/fleet.api';
 import {
@@ -47,15 +47,25 @@ const STATUSES: TripStatus[] = ['completed', 'in_progress', 'planned', 'cancelle
 export function TripsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { data, isLoading } = useTrips();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TripStatus | 'all'>('all');
+
+  // Deep link: /trips?vehicle=<id> (device-popup "trip timeline") pre-filters
+  // the roster to one vehicle until the operator clears the chip.
+  const vehicleFilter = params.get('vehicle');
+  const clearVehicleFilter = () => {
+    params.delete('vehicle');
+    setParams(params, { replace: true });
+  };
 
   const trips = data ?? [];
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return trips.filter((trip) => {
+      if (vehicleFilter && trip.vehicleId !== vehicleFilter) return false;
       if (statusFilter !== 'all' && trip.status !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -174,6 +184,18 @@ export function TripsPage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
+          {vehicleFilter && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearVehicleFilter}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand-500/40 bg-brand-500/10 px-2.5 py-1 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-500/15 dark:text-brand-300"
+              >
+                {t('trips.list.vehicleFilter')}
+                <X size={13} aria-hidden />
+              </button>
+            </div>
+          )}
           <Toolbar
             search
             searchValue={query}

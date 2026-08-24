@@ -106,10 +106,11 @@ export function parsePositionEnvelope(raw: Buffer | string): PositionEvent {
 
   return new PositionEvent({
     messageId,
-    // Sprint 7: deviceId is the entity key; the registry-sourced vehicleId
-    // (Sprint D §5) overrides it when the gateway provides one.
+    // The registry-sourced vehicleId (Sprint D §5) is the entity key; the raw
+    // deviceId rides along to keep device_status last-seen fresh (D §9).
     vehicleId:
       typeof env.vehicleId === 'string' && env.vehicleId.length > 0 ? env.vehicleId : deviceId,
+    deviceId,
     tenantId,
     latitude: pos.latitude,
     longitude: pos.longitude,

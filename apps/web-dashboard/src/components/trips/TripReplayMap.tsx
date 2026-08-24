@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { headingArrowDataUrl, markerDataUrl } from '@/lib/map-markers';
 import { mapAccents, status } from '@/theme/palette';
 import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
+import { runWhenStyleReady } from '@/lib/map-ready';
 
 interface TripReplayMapProps {
   /** Ordered position samples of the trip track. */
@@ -114,7 +115,7 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
     };
 
     if (map.loaded()) draw();
-    else map.once('load', draw);
+    else runWhenStyleReady(map, draw);
 
     return () => {
       for (const m of eventMarkersRef.current) m.remove();
@@ -149,7 +150,7 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
     };
 
     if (map.loaded()) place();
-    else map.once('load', place);
+    else runWhenStyleReady(map, place);
   }, [index, waypoints, t]);
 
   return (

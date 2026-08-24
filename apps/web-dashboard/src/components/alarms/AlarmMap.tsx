@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { severityColor } from '@/components/alarms/AlarmTypeIcon';
 import { markerDataUrl, selectedMarkerDataUrl } from '@/lib/map-markers';
 import type { Alarm } from '@/types/alarm.types';
+import { runWhenStyleReady } from '@/lib/map-ready';
 
 interface AlarmMapProps {
   /** The (already-filtered) alarms to render. */
@@ -92,7 +93,7 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
     };
 
     if (map.loaded()) render();
-    else map.once('load', render);
+    else runWhenStyleReady(map, render);
   }, [alarms, selectedId]);
 
   if (alarms.length === 0) {

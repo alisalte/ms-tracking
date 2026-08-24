@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 
 import type { Geofence } from '@/types/geofence.types';
 import { circleToPolygonRing } from './GeofenceDrawMap';
+import { runWhenStyleReady } from '@/lib/map-ready';
 
 export function GeofencePreviewMap({
   geofence,
@@ -108,7 +109,7 @@ export function GeofencePreviewMap({
       }
     };
     if (map.isStyleLoaded()) render();
-    else map.once('load', render);
+    else runWhenStyleReady(map, render);
   }, [geofence]);
 
   return (

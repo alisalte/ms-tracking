@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import * as loginApi from '@/api/auth.api';
+import { refreshTokensSingleFlight, subscribeTokensRefreshed } from '@/api/token-refresh';
 import type { User } from '@/types/auth.types';
 import { clearTokens, getStoredTokens, saveTenantId, saveTokens } from './token.storage';
 
@@ -66,14 +67,13 @@ export type AuthStore = AuthState & AuthActions;
  * Manages authentication state: tokens, user profile, and loading/error states.
  * Actions call the auth API layer and persist tokens via token.storage.
  */
-export const useAuthStore = create<AuthStore>((set, get) => ({
+export const useAuthStore = create<AuthStore>((set) => ({
   // State — synchronously hydrated from localStorage so a page refresh doesn't
   // bounce through /login before the stored session is restored.
   ...readInitialAuth(),
   user: null,
   isLoading: false,
   error: null,
-
   // Actions
   login: async (email, password, tenantId) => {
     set({ isLoading: true, error: null });
@@ -135,25 +135,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   refreshTokens: async () => {
-    const { refreshToken } = get();
-    if (!refreshToken) return;
-
-    try {
-      const response = await loginApi.refreshToken(refreshToken);
-      const tenantId = get().tenantId;
-
-      saveTokens({
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        tenantId: tenantId ?? '',
-      });
-
-      set({
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-      });
-    } catch {
-      // Refresh failed — clear state
+    // Route through the app-wide single-flight rotation (shared with the axios
+    // 401 interceptor). A store-local refresh once raced the interceptor's,
+    // replaying an already-rotated refresh token — identity's reuse detection
+    // revoked the token family and forced a logout every ~15 min.
+    const tokens = await refreshTokensSingleFlight();
+    if (!tokens) {
       set({
         accessToken: null,
         refreshToken: null,
@@ -161,8 +148,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         tenantId: null,
         isAuthenticated: false,
       });
-      clearTokens();
     }
+    // Success case is handled by the subscription below (keeps store == storage).
   },
 
   fetchUser: async () => {
@@ -205,3 +192,23 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ error: null });
   },
 }));
+
+// Keep the store in lockstep with every token rotation driven by the shared
+// single-flight path (axios 401 interceptor / silent refresh): storage is the
+// source of truth, the store mirrors it. A null rotation = session over.
+subscribeTokensRefreshed((tokens) => {
+  if (tokens) {
+    useAuthStore.setState({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
+  } else {
+    useAuthStore.setState({
+      accessToken: null,
+      refreshToken: null,
+      user: null,
+      tenantId: null,
+      isAuthenticated: false,
+    });
+  }
+});

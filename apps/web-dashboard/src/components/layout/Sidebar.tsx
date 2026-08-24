@@ -59,10 +59,14 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
 
   // Shared inner content between the desktop rail and the mobile drawer.
   const content = (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#111827_0%,#182231_48%,#0f1722_100%)] text-graydark-700 dark:bg-[linear-gradient(180deg,#0d1420_0%,#141b24_55%,#0b111b_100%)]">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(195deg,#1c2450_0%,#1a2350_42%,#141b3d_100%)] text-graydark-700 dark:bg-[linear-gradient(195deg,#161c3e_0%,#141a38_48%,#0f142e_100%)]">
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-24 start-8 size-56 rounded-full bg-brand-500/18 blur-3xl"
+        className="pointer-events-none absolute -top-24 start-8 size-56 rounded-full bg-brand-500/25 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-20 -end-10 size-52 rounded-full bg-info-500/12 blur-3xl"
       />
       {/* Brand + collapse toggle */}
       <div

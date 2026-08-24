@@ -32,6 +32,26 @@ const loginApi = vi.hoisted(() => ({
 
 vi.mock('@/api/auth.api', () => loginApi);
 
+// Single-flight token rotation mock — the store refresh path goes through it.
+const tokenRefresh = vi.hoisted(() => {
+  const subscribers: Array<(tokens: unknown) => void> = [];
+  return {
+    __subscribers: subscribers,
+    refreshTokensSingleFlight: vi.fn(),
+    subscribeTokensRefreshed: vi.fn((cb: (tokens: unknown) => void) => {
+      subscribers.push(cb);
+      return () => {
+        const i = subscribers.indexOf(cb);
+        if (i >= 0) subscribers.splice(i, 1);
+      };
+    }),
+  };
+});
+
+const tokenRefreshSubscribers = tokenRefresh.__subscribers;
+
+vi.mock('@/api/token-refresh', () => tokenRefresh);
+
 const LOGIN_OK = {
   accessToken: 'access-1',
   refreshToken: 'refresh-1',
@@ -157,10 +177,18 @@ describe('LoginPage — TailAdmin sign-in', () => {
 describe('session — refresh, restore, logout', () => {
   it('refreshTokens() persists the new pair', async () => {
     signInAs(['tracking.read']);
-    loginApi.refreshToken.mockResolvedValue({
-      accessToken: 'access-2',
-      refreshToken: 'refresh-2',
-      expiresIn: 900,
+    // Emulate the real single-flight module: persist + notify (the store syncs
+    // through the subscription, not the return value).
+    tokenRefresh.refreshTokensSingleFlight.mockImplementation(async () => {
+      const tokens = {
+        accessToken: 'access-2',
+        refreshToken: 'refresh-2',
+        tenantId: 'tenant-uuid-1',
+      };
+      const { saveTokens } = await import('@/auth/token.storage');
+      saveTokens(tokens);
+      for (const cb of tokenRefreshSubscribers) cb(tokens);
+      return tokens;
     });
     await useAuthStore.getState().refreshTokens();
     expect(useAuthStore.getState().accessToken).toBe('access-2');
@@ -169,7 +197,12 @@ describe('session — refresh, restore, logout', () => {
 
   it('refreshTokens() failure clears the whole session', async () => {
     signInAs(['tracking.read']);
-    loginApi.refreshToken.mockRejectedValue(new Error('expired'));
+    tokenRefresh.refreshTokensSingleFlight.mockImplementation(async () => {
+      const { clearTokens } = await import('@/auth/token.storage');
+      clearTokens();
+      for (const cb of tokenRefreshSubscribers) cb(null);
+      return null;
+    });
     await useAuthStore.getState().refreshTokens();
     const s = useAuthStore.getState();
     expect(s.accessToken).toBeNull();

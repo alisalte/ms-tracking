@@ -92,6 +92,7 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
   return (
     <DashboardCard
       titleKey="dashboard.sections.health"
+      accent="brand"
       icon={HeartPulse}
       loading={busy}
       error={error}

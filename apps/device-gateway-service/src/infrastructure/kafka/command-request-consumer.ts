@@ -40,6 +40,8 @@ export class CommandRequestConsumer implements OnApplicationBootstrap, OnApplica
   private readonly logger = new Logger(CommandRequestConsumer.name);
   private consumer: Consumer | null = null;
   private started = false;
+  private shutDown = false;
+  private startAttempts = 0;
 
   constructor(
     private readonly options: CommandRequestConsumerOptions,
@@ -47,9 +49,28 @@ export class CommandRequestConsumer implements OnApplicationBootstrap, OnApplica
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
-    await this.start().catch((err) => {
-      this.logger.warn(`Command-request consumer not started: ${(err as Error).message}`);
-    });
+    // Non-fatal: Kafka may still be binding its advertised listener when the
+    // gateway boots. Retry with capped backoff instead of leaving the command
+    // path dead until a manual restart (same resilience model as gps-engine).
+    this.scheduleStart();
+  }
+
+  private scheduleStart(): void {
+    void this.start()
+      .then(() => {
+        if (this.started) this.startAttempts = 0;
+      })
+      .catch((err: Error) => {
+        if (this.shutDown) return;
+        this.startAttempts += 1;
+        const backoffMs = Math.min(5_000 * 2 ** Math.min(this.startAttempts - 1, 4), 60_000);
+        this.logger.warn(
+          `Command-request consumer not started (attempt ${this.startAttempts}) — retrying in ${backoffMs}ms: ${err.message}`,
+        );
+        setTimeout(() => {
+          if (!this.shutDown) this.scheduleStart();
+        }, backoffMs).unref?.();
+      });
   }
 
   public async start(): Promise<void> {
@@ -108,6 +129,7 @@ export class CommandRequestConsumer implements OnApplicationBootstrap, OnApplica
   }
 
   public async onApplicationShutdown(): Promise<void> {
+    this.shutDown = true;
     if (this.consumer) {
       await this.consumer.disconnect().catch(() => {
         /* best-effort */

@@ -14,8 +14,11 @@ import type { Quality } from './quality.js';
 export interface PositionEventProps {
   /** CloudEvents id / UUIDv7 — the idempotency key (dedupe on vehicleId+messageId). */
   readonly messageId: string;
-  /** Entity key — deviceId for Sprint 7 (see module doc). */
+  /** Entity key — the bound vehicle the position attributes to (binding-resolved). */
   readonly vehicleId: string;
+  /** Source device id (envelope deviceId) — keys device_status last-seen.
+   *  Optional for legacy constructors; falls back to vehicleId. */
+  readonly deviceId?: string;
   readonly tenantId: string;
   readonly latitude: number;
   readonly longitude: number;
@@ -36,6 +39,7 @@ export interface PositionEventProps {
 export class PositionEvent {
   public readonly messageId: string;
   public readonly vehicleId: string;
+  public readonly deviceId: string;
   public readonly tenantId: string;
   public readonly latitude: number;
   public readonly longitude: number;
@@ -52,6 +56,7 @@ export class PositionEvent {
   constructor(props: PositionEventProps) {
     this.messageId = props.messageId;
     this.vehicleId = props.vehicleId;
+    this.deviceId = props.deviceId ?? props.vehicleId;
     this.tenantId = props.tenantId;
     this.latitude = props.latitude;
     this.longitude = props.longitude;

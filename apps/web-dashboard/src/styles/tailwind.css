@@ -119,7 +119,8 @@
   width: 100%;
   padding-block: 0.625rem;
   padding-inline: 0.875rem;
-  border-radius: 0.875rem;
+  /* Material Dashboard signature: full-pill nav items on the dark rail. */
+  border-radius: 999px;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-graydark-700);
@@ -143,7 +144,7 @@ html[dir="rtl"] .fv-sidebar-link:hover {
   background: linear-gradient(135deg, var(--color-brand-500), var(--color-brand-800));
   border-color: rgba(255, 255, 255, 0.12);
   color: #ffffff;
-  box-shadow: 0 12px 28px rgba(70, 95, 251, 0.28);
+  box-shadow: 0 12px 28px rgba(70, 95, 251, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 }
 
 /* Subtle focus ring for keyboard nav (a11y). */
@@ -186,4 +187,63 @@ html[dir="rtl"] .fv-sidebar-link:hover {
   background: var(--color-success-500);
   box-shadow: 0 0 6px rgba(76, 175, 80, 0.7);
   animation: fv-pulse 1.8s ease-in-out infinite;
+}
+
+/* ── Dark glass map panel (Uber-Fleet style) ─────────────────────────────
+   Plain CSS (NOT Emotion) so the RTL stylis plugin never processes these
+   descendant overrides — complex nested sx selectors crashed it in tests. */
+.fv-dark-glass {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 60px rgba(8, 12, 24, 0.45);
+}
+.fv-dark-glass .MuiTypography-root {
+  color: rgba(255, 255, 255, 0.92);
+}
+.fv-dark-glass .MuiInputBase-root {
+  color: rgba(255, 255, 255, 0.92);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.fv-dark-glass .MuiInputBase-root .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.fv-dark-glass .MuiInputBase-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.fv-dark-glass .MuiInputBase-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+  opacity: 1;
+}
+.fv-dark-glass .MuiSvgIcon-root {
+  color: rgba(255, 255, 255, 0.6);
+}
+.fv-dark-glass .MuiSelect-select {
+  color: rgba(255, 255, 255, 0.92);
+}
+.fv-dark-glass .MuiSelect-icon {
+  color: rgba(255, 255, 255, 0.6);
+}
+.fv-dark-glass .MuiToggleButton-root {
+  color: rgba(255, 255, 255, 0.65);
+}
+.fv-dark-glass .MuiToggleButton-root:hover {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+.fv-dark-glass .MuiToggleButton-root.Mui-selected {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
+}
+.fv-dark-glass .MuiToggleButton-root.Mui-selected:hover {
+  background-color: rgba(255, 255, 255, 0.19);
+}
+.fv-dark-glass .MuiDivider-root {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.fv-dark-glass .MuiChip-root.MuiChip-outlined,
+.fv-dark-glass .MuiChip-root.MuiChip-colorDefault {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.fv-dark-glass .MuiListItemText-secondary .MuiTypography-root {
+  color: rgba(255, 255, 255, 0.55);
 }

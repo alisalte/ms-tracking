@@ -80,6 +80,7 @@ export function AlertTypeBreakdownChart() {
   return (
     <DashboardCard
       titleKey="dashboard.widgets.alertTypes"
+      accent="purple"
       icon={PieChartIcon}
       loading={isLoading && !isError}
       empty={alerts.length === 0 && !isLoading && !isError}

@@ -106,7 +106,7 @@ export function MapToolbar({
   };
 
   return (
-    <div className="pointer-events-auto absolute top-2 start-2 end-2 z-[1] flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-md dark:bg-graydark-300/90">
+    <div className="pointer-events-auto absolute top-2 start-2 end-2 z-[5] flex flex-wrap items-center justify-between gap-2 rounded-full border border-white/50 bg-white/80 px-4 py-1.5 shadow-lg shadow-gray-900/8 backdrop-blur-xl md:start-[316px] dark:border-white/8 dark:bg-graydark-300/80 dark:shadow-black/25">
       <div className="flex items-center gap-2">
         <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('map.title')}</h1>
         {mode === 'live' && paused ? (
@@ -171,7 +171,7 @@ export function MapToolbar({
               value={fromInput}
               onChange={(e) => setFromInput(e.target.value)}
               aria-label={t('map.history.from')}
-              className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+              className="h-8 rounded-full border border-gray-300 bg-white px-3.5 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
             />
             <span className="text-xs text-gray-400">→</span>
             <input
@@ -179,7 +179,7 @@ export function MapToolbar({
               value={toInput}
               onChange={(e) => setToInput(e.target.value)}
               aria-label={t('map.history.to')}
-              className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+              className="h-8 rounded-full border border-gray-300 bg-white px-3.5 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
             />
             <Button
               size="sm"

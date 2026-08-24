@@ -28,7 +28,24 @@ export { PAGE_PADDING } from '@/components/layout/MainContent';
  */
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Desktop collapse persists across sessions (operator preference).
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('fv:sidebar-collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapse = () => {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem('fv:sidebar-collapsed', c ? '0' : '1');
+      } catch {
+        /* storage unavailable — state still works for the session */
+      }
+      return !c;
+    });
+  };
 
   useSilentRefresh();
 
@@ -38,7 +55,7 @@ export function AppLayout() {
         mobileOpen={mobileOpen}
         collapsed={collapsed}
         onMobileClose={() => setMobileOpen(false)}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
+        onToggleCollapse={toggleCollapse}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

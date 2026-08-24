@@ -40,11 +40,30 @@ interface ApiKeyRow {
 }
 
 /**
- * Default verifier backed by the shared `iam.api_keys` table. Cross-tenant
- * lookup (no tenant predicate) — the tenant is taken from the resolved key row,
- * never from the request.
+ * TTL for remembering a SUCCESSFULLY verified key (prefix → identity).
+ *
+ * Argon2id verification is deliberately expensive (tens of ms to seconds
+ * depending on the identity-service hash parameters) and runs on the libuv
+ * threadpool. Service-to-service callers (e.g. the device-gateway resolving
+ * IMEIs per packet) present the SAME key on every request — without this
+ * cache a reconnect storm multiplies into a threadpool-saturating Argon2
+ * storm that starves the whole process. Negative results are NOT cached
+ * (brute-force keys must pay full cost every time); a revoke takes effect
+ * within this TTL at the latest.
  */
+const VERIFIED_CACHE_TTL_MS = 30_000;
+const VERIFIED_CACHE_MAX = 128;
+
+interface CacheEntry {
+  readonly identity: VerifiedApiKey;
+  readonly expiresAtMs: number;
+  /** Negative-expiry bookkeeping: row expires_at snapshot for early eviction. */
+  readonly keyExpiresAt: Date | null;
+}
+
 export class KnexApiKeyVerifier extends ApiKeyVerifier {
+  private readonly verified = new Map<string, CacheEntry>();
+
   constructor(private readonly knex: Knex) {
     super();
   }
@@ -52,6 +71,17 @@ export class KnexApiKeyVerifier extends ApiKeyVerifier {
   public async verify(presentedKey: string): Promise<VerifiedApiKey | null> {
     if (!presentedKey.startsWith('fv_') || presentedKey.length < 12) return null;
     const prefix = presentedKey.slice(0, 11);
+
+    // Fast path: recently verified, still ACTIVE, not expired.
+    const cached = this.verified.get(presentedKey);
+    if (
+      cached &&
+      Date.now() < cached.expiresAtMs &&
+      (!cached.keyExpiresAt || new Date(cached.keyExpiresAt) > new Date())
+    ) {
+      return cached.identity;
+    }
+    if (cached) this.verified.delete(presentedKey);
 
     let rows: ApiKeyRow[];
     try {
@@ -82,13 +112,32 @@ export class KnexApiKeyVerifier extends ApiKeyVerifier {
       if (!matches) continue;
       if (row.status !== 'ACTIVE') return null;
       if (row.expires_at && new Date(row.expires_at) <= new Date()) return null;
-      return {
+      const identity: VerifiedApiKey = {
         keyId: row.id,
         tenantId: row.tenant_id,
         scopes: [...(row.scopes ?? [])],
         assignedUserId: row.assigned_user_id,
       };
+      this.rememberVerified(presentedKey, identity, row.expires_at);
+      return identity;
     }
     return null;
+  }
+
+  /** Bounded remember: oldest entry is evicted at capacity. */
+  private rememberVerified(
+    presentedKey: string,
+    identity: VerifiedApiKey,
+    keyExpiresAt: Date | null,
+  ): void {
+    if (this.verified.size >= VERIFIED_CACHE_MAX) {
+      const oldest = this.verified.keys().next().value;
+      if (oldest !== undefined) this.verified.delete(oldest);
+    }
+    this.verified.set(presentedKey, {
+      identity,
+      expiresAtMs: Date.now() + VERIFIED_CACHE_TTL_MS,
+      keyExpiresAt,
+    });
   }
 }

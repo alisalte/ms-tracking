@@ -109,6 +109,7 @@ export function ActivityStatusChart({
   return (
     <DashboardCard
       titleKey="dashboard.sections.activity"
+      accent="success"
       icon={PieChartIcon}
       loading={loading}
       empty={!loading && counts.driving + counts.idle + counts.stopped + counts.offline === 0}

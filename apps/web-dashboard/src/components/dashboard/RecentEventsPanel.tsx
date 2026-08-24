@@ -81,6 +81,7 @@ export function RecentEventsPanel() {
   return (
     <DashboardCard
       titleKey="dashboard.sections.events"
+      accent="danger"
       icon={AlertOctagon}
       live
       loading={isLoading && !isError}

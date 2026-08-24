@@ -177,7 +177,10 @@
       "distance7d": "مسافت (۷ روز اخیر)",
       "trips7d": "سفرها (۷ روز اخیر)",
       "utilization": "میانگین بهره‌وری",
-      "geofenceEvents": "رویدادهای گئوفنس"
+      "geofenceEvents": "رویدادهای گئوفنس",
+      "avgSpeed": "سرعت متوسط (۷ روز)",
+      "criticalAlarms": "هشدار بحرانی",
+      "openAlarmsCount": "{{count}} فعال"
     },
     "states": {
       "driving": "در حرکت",
@@ -257,7 +260,11 @@
       "distanceTripsTrend": "روند مسافت و سفرها",
       "alarmTrend": "هشدارهای روزانه به تفکیک نوع",
       "topVehicles": "خودروهای برتر بر اساس مسافت",
-      "alarmStatus": "وضعیت و شدت هشدارها"
+      "alarmStatus": "وضعیت و شدت هشدارها",
+      "fleetComparison": "مقایسه‌ی ناوگان‌ها (لحظه‌ای)",
+      "speedLeaders": "سریع‌ترین خودروها (۷ روز)",
+      "alarmSeverity": "شدت هشدارها (۷ روز)",
+      "hourlyActivity": "ریتم ساعتی سفرها (امروز)"
     },
     "empty": {
       "alerts": "هیچ هشدار فعلی وجود ندارد — ناوگان آرام است.",
@@ -285,7 +292,10 @@
     "severities": {
       "critical": "بحرانی",
       "warning": "هشدار",
-      "info": "اطلاع"
+      "info": "اطلاع",
+      "high": "بالا",
+      "medium": "متوسط",
+      "low": "پایین"
     },
     "charts": {
       "distance": "مسافت (کیلومتر)",
@@ -301,8 +311,23 @@
       "high": "بالا",
       "medium": "متوسط",
       "low": "پایین",
-      "info": "اطلاع‌رسانی"
-    }
+      "info": "اطلاع‌رسانی",
+      "unassigned": "بدون ناوگان",
+      "maxSpeed": "حداکثر سرعت",
+      "avgSpeed": "میانگین سرعت",
+      "speedingAlarms": "هشدار سرعت",
+      "totalAlarms": "کل هشدارها",
+      "tripStarts": "شروع سفر",
+      "peak": "اوج",
+      "peakHour": "اوج فعالیت: ساعت {{hour}} با {{count}} سفر"
+    },
+    "heroConnectivity": "اتصال دستگاه‌ها",
+    "heroActiveShare": "سهم درحرکت از فعال",
+    "ofActive": "از فعال",
+    "kmPerDay": "کیلومتر/روز",
+    "perDay": "روز",
+    "withTelemetry": "{{count}} خودرو با تله‌متری",
+    "vehiclesCount": "{{count}} خودرو"
   },
   "map": {
     "title": "رهگیری زنده",
@@ -366,7 +391,9 @@
       "history": "تاریخچه",
       "recentEvents": "رویدادهای اخیر",
       "noEvents": "رویداد اخیری نیست",
-      "addressUnavailable": "نشانی در دسترس نیست"
+      "addressUnavailable": "نشانی در دسترس نیست",
+      "offlineAction": "دستگاه آفلاین است",
+      "playbackToday": "پخش مسیر امروز این خودرو"
     },
     "presence": {
       "ONLINE": "آنلاین",
@@ -453,7 +480,8 @@
       "colDistance": "مسافت",
       "colDuration": "مدت",
       "colStatus": "وضعیت",
-      "noResults": "هیچ سفری با فیلترهای شما مطابقت ندارد."
+      "noResults": "هیچ سفری با فیلترهای شما مطابقت ندارد.",
+      "vehicleFilter": "فیلتر: این خودرو ✕"
     },
     "detail": {
       "back": "بازگشت به سفرها",

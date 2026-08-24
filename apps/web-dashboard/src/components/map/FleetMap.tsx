@@ -9,7 +9,7 @@ import {
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { basemapById, type BasemapId } from '@/lib/basemaps';
+import { type BasemapId, basemapById } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
 import {
   clusterMarkerDataUrl,
@@ -18,6 +18,7 @@ import {
   selectedMarkerDataUrl,
   vehicleColor,
 } from '@/lib/map-markers';
+import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
 
@@ -53,6 +54,12 @@ interface FleetMapProps {
    * imperatively (setLngLat + CSS rotation) — never a map re-creation.
    */
   playbackHead?: { lat: number; lng: number; heading: number | null } | null;
+  /**
+   * Live follow target (vehicle id): when set and present in `vehicles`, the
+   * camera pans to the vehicle on every position update. Cleared by the owner
+   * (null/undefined) to stop following.
+   */
+  followId?: string | null;
   /**
    * Basemap style (streets / satellite / dark / topo). Switching swaps the
    * raster source's tiles in place of a full setStyle: DOM markers survive,
@@ -104,6 +111,7 @@ export function FleetMap({
   focus = null,
   track = null,
   playbackHead = null,
+  followId = null,
   basemap = 'streets',
 }: FleetMapProps) {
   const { t } = useTranslation();
@@ -302,8 +310,8 @@ export function FleetMap({
       }
     };
 
-    if (map.loaded()) sync();
-    else map.once('load', sync);
+    if (map.loaded() || map.isStyleLoaded()) sync();
+    else runWhenStyleReady(map, sync);
 
     // When not paused, re-cluster on pan/zoom so the viewport reflects the fleet.
     if (paused) return;
@@ -369,8 +377,8 @@ export function FleetMap({
       }
     };
 
-    if (map.loaded()) render();
-    else map.once('load', render);
+    if (map.loaded() || map.isStyleLoaded()) render();
+    else runWhenStyleReady(map, render);
   }, [track]);
 
   // Playback head marker (Sprint I §34): one marker, imperative updates only.
@@ -405,8 +413,8 @@ export function FleetMap({
         img.style.transform = `rotate(${playbackHead.heading ?? 0}deg)`;
       }
     };
-    if (map.loaded()) sync();
-    else map.once('load', sync);
+    if (map.loaded() || map.isStyleLoaded()) sync();
+    else runWhenStyleReady(map, sync);
     return () => {
       playbackMarkerRef.current?.remove();
       playbackMarkerRef.current = null;
@@ -422,6 +430,20 @@ export function FleetMap({
     if (!v || (v.lat === 0 && v.lng === 0)) return; // no fix yet — nothing to focus
     map.flyTo({ center: [v.lng, v.lat], zoom: Math.max(map.getZoom(), 14) });
   }, [focus]);
+
+  // Live follow (§2.5 دنبال‌کردن): pan the camera to the followed vehicle on
+  // every position update. Gentle `panTo` (no zoom change, animated) so the
+  // operator keeps their zoom level while the marker moves under the crosshair.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !followId) return;
+    const v = vehicles.find((veh) => veh.id === followId);
+    if (!v || (v.lat === 0 && v.lng === 0)) return;
+    const center = map.getCenter();
+    // Skip when already centered (subsequent deltas re-run this effect).
+    if (Math.abs(center.lng - v.lng) < 1e-5 && Math.abs(center.lat - v.lat) < 1e-5) return;
+    map.panTo([v.lng, v.lat], { duration: 800 });
+  }, [followId, vehicles]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }

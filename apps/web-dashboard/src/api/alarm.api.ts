@@ -39,10 +39,29 @@ function mapSeverity(raw: string | undefined): Alarm['severity'] {
   }
 }
 
+/**
+ * Backend rule types (uppercase snake — OVERSPEED, GEOFENCE_EXIT, DMS_*…) →
+ * the 8-type alarm catalog (12_Alarm_Engine.md §2.1) the UI filters/icons and
+ * `alarms.type.*` translations are keyed on. Unmapped types → 'other'.
+ */
+function mapAlarmType(raw: string | undefined): Alarm['type'] {
+  const t = (raw ?? 'other').toUpperCase();
+  if (t === 'SOS') return 'sos';
+  if (t === 'OVERSPEED') return 'overspeed';
+  if (t.startsWith('GEOFENCE')) return 'geofence';
+  if (t === 'DEVICE_OFFLINE') return 'offline';
+  if (t === 'FUEL_THEFT') return 'fuel-theft';
+  if (t === 'TEMPERATURE_HIGH' || t === 'TEMPERATURE_LOW') return 'temperature';
+  if (t === 'ACCIDENT' || t === 'COLLISION') return 'collision';
+  if (t.startsWith('VIDEO') || t.startsWith('STORAGE')) return 'camera';
+  if (t.startsWith('ADAS') || t.startsWith('DMS')) return 'dms';
+  return 'other';
+}
+
 function mapAlarm(raw: Record<string, unknown>): Alarm {
   return {
     id: raw.id as string,
-    type: (raw.type as string) ?? 'other',
+    type: mapAlarmType(raw.type as string | undefined),
     severity: mapSeverity(raw.severity as string | undefined),
     status: mapStatus(raw.status as string),
     vehicleId: (raw.vehicle_id as string) ?? '',

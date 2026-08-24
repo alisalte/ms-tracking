@@ -147,7 +147,10 @@ export class PositionPipeline {
     if (!repo) return;
     const now = Date.now();
     const windowMs = this.deps.config.GPS_LAST_SEEN_FLUSH_SECONDS * 1000;
-    const key = `${position.tenantId}:${position.vehicleId}`;
+    // device_status is keyed by DEVICE id — use the envelope's deviceId, NOT
+    // vehicleId (distinct entities since the Sprint D binding resolution; a
+    // vehicleId here matched 0 rows and the stale sweeper flapped devices).
+    const key = `${position.tenantId}:${position.deviceId}`;
     const last = this.lastSeenFlushedAt.get(key) ?? 0;
     if (now - last < windowMs) return;
     this.lastSeenFlushedAt.set(key, now);
@@ -159,7 +162,7 @@ export class PositionPipeline {
       }
     }
     void repo
-      .touchLastSeen(position.tenantId, position.vehicleId, position.capturedAt)
+      .touchLastSeen(position.tenantId, position.deviceId, position.capturedAt)
       .catch((err) => {
         this.logger.debug(`last-seen flush failed: ${(err as Error).message}`);
       });

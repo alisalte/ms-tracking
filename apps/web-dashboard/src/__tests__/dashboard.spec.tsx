@@ -135,6 +135,16 @@ const fleetApi = vi.hoisted(() => ({
   useDeviceStatuses: vi.fn(),
 }));
 
+
+/**
+ * KpiTile v3: the label <p> and the value live in separate rows of the SAME
+ * card — walk up to the card element (rounded-2xl) for text assertions.
+ */
+function tileCardText(labelEl: HTMLElement): string {
+  const card = labelEl.closest('.rounded-2xl');
+  return (card ?? labelEl.parentElement)?.textContent ?? '';
+}
+
 vi.mock('@/api/fleet.api', () => fleetApi);
 
 // ── Reporting fixtures (reporting-service wire shapes, Sprint J) ────────────
@@ -240,9 +250,18 @@ const reportApi = vi.hoisted(() => ({
   useTrend: vi.fn(),
   useDistance: vi.fn(),
   useAlarmReport: vi.fn(),
+  useSpeed: vi.fn(),
+  useTrips: vi.fn(),
 }));
 
 vi.mock('@/api/report.api', () => reportApi);
+
+const assetApi = vi.hoisted(() => ({
+  useFleets: vi.fn(),
+  useVehicles: vi.fn(),
+}));
+
+vi.mock('@/api/asset.api', () => assetApi);
 
 const maplibre = vi.hoisted(() => ({ Marker: vi.fn() }));
 
@@ -332,6 +351,34 @@ function setQueryResults() {
     error: null,
     refetch: vi.fn(),
   });
+  reportApi.useSpeed.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  reportApi.useTrips.mockReturnValue({
+    data: { items: [], nextCursor: null },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  assetApi.useFleets.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  assetApi.useVehicles.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
 }
 
 function renderDashboard() {
@@ -377,19 +424,19 @@ describe('FleetDashboard — rendering + KPIs', () => {
     renderDashboard();
     // KPI labels are the only <p> elements with these texts.
     expect(
-      screen.getByText('Total Vehicles', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Total Vehicles', { selector: 'p' })),
     ).toContain('312');
-    expect(screen.getByText('Moving', { selector: 'p' }).parentElement?.textContent).toContain('1');
-    expect(screen.getByText('Idle', { selector: 'p' }).parentElement?.textContent).toContain('1');
-    expect(screen.getByText('Parked', { selector: 'p' }).parentElement?.textContent).toContain('1');
-    expect(screen.getByText('Offline', { selector: 'p' }).parentElement?.textContent).toContain(
+    expect(tileCardText(screen.getByText('Moving', { selector: 'p' }))).toContain('1');
+    expect(tileCardText(screen.getByText('Idle', { selector: 'p' }))).toContain('1');
+    expect(tileCardText(screen.getByText('Parked', { selector: 'p' }))).toContain('1');
+    expect(tileCardText(screen.getByText('Offline', { selector: 'p' }))).toContain(
       '87',
     );
     expect(
-      screen.getByText('Active Alarms', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Active Alarms', { selector: 'p' })),
     ).toContain('3');
     expect(
-      screen.getByText('Active Devices', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Active Devices', { selector: 'p' })),
     ).toContain('3');
   });
 
@@ -554,16 +601,16 @@ describe('FleetDashboard — report widgets (report.read)', () => {
 
     // Period KPI tiles (7-day aggregates from the reporting service).
     expect(
-      screen.getByText('Distance (last 7 days)', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Distance (last 7 days)', { selector: 'p' })),
     ).toContain('2,451');
     expect(
-      screen.getByText('Trips (last 7 days)', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Trips (last 7 days)', { selector: 'p' })),
     ).toContain('82');
     expect(
-      screen.getByText('Avg utilization', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Avg utilization', { selector: 'p' })),
     ).toContain('62%');
     expect(
-      screen.getByText('Geofence events', { selector: 'p' }).parentElement?.textContent,
+      tileCardText(screen.getByText('Geofence events', { selector: 'p' })),
     ).toContain('9');
 
     // Chart cards: two trend cards, leaderboard, alarm lifecycle.

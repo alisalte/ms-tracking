@@ -32,7 +32,10 @@ export function CommandCenterPage() {
   const { t } = useTranslation();
   const toast = useToast();
 
-  const [deviceId, setDeviceId] = useState<string | null>(null);
+  // Deep link: /commands?device=<id> (device-popup "message") preselects the device.
+  const [deviceId, setDeviceId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('device'),
+  );
   const [statusFilter, setStatusFilter] = useState<CommandStatus | ''>('');
   const [configuring, setConfiguring] = useState<CommandDef | null>(null);
   const [confirming, setConfirming] = useState<CommandDef | null>(null);

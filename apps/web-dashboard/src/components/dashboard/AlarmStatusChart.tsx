@@ -82,6 +82,7 @@ export function AlarmStatusChart() {
   return (
     <DashboardCard
       titleKey="dashboard.widgets.alarmStatus"
+      accent="warning"
       icon={BellRing}
       loading={report.isLoading && !report.isError}
       empty={!report.isLoading && !report.isError && total === 0}

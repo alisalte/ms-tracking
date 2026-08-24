@@ -110,6 +110,7 @@ export function TrendChartsRow() {
       <div className="lg:col-span-8">
         <DashboardCard
           titleKey="dashboard.widgets.distanceTripsTrend"
+          accent="brand"
           icon={BarChart3}
           action={presetSwitch}
           loading={trend.isLoading && !trend.isError}
@@ -127,6 +128,7 @@ export function TrendChartsRow() {
       <div className="lg:col-span-4">
         <DashboardCard
           titleKey="dashboard.widgets.alarmTrend"
+          accent="danger"
           icon={Siren}
           loading={trend.isLoading && !trend.isError}
           empty={empty}

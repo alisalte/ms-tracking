@@ -104,6 +104,7 @@ export function FleetMapPreviewCard() {
   return (
     <DashboardCard
       titleKey="dashboard.widgets.mapPreview"
+      accent="teal"
       icon={MapPin}
       flush
       action={
