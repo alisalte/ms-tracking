@@ -241,7 +241,7 @@ async function main() {
     }
   }
 
-  console.log(`→ binding devices to vehicles (1:1, TRACKER, primary)`);
+  console.log('→ binding devices to vehicles (1:1, TRACKER, primary)');
   for (let i = 0; i < COUNT; i++) {
     // Already-bound from a partial run → list returns the binding; skip.
     const bound = await api('GET', `/vehicles/${vehicles[i].id}/devices`);

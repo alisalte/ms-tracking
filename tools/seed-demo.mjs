@@ -143,7 +143,19 @@ function importHistory(tenantId) {
   log('→ importing CSVs into Postgres');
   const r = spawnSync(
     'docker',
-    ['exec', PG, 'psql', '-U', 'fleetvision', '-d', 'fleetvision', '-v', 'ON_ERROR_STOP=1', '-f', '/tmp/import-history.sql'],
+    [
+      'exec',
+      PG,
+      'psql',
+      '-U',
+      'fleetvision',
+      '-d',
+      'fleetvision',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-f',
+      '/tmp/import-history.sql',
+    ],
     { stdio: 'inherit' },
   );
   if (r.status !== 0) fail('import-history.sql failed');
@@ -199,7 +211,7 @@ async function main() {
 
   log(`\n✓ done — ${summary}`);
   log(`  Login: tenant=${TENANT_NAME}  email=${EMAIL}`);
-  log(`  UI:    http://localhost:5173  or  http://localhost:8080\n`);
+  log('  UI:    http://localhost:5173  or  http://localhost:8080\n');
 }
 
 main().catch((err) => {
