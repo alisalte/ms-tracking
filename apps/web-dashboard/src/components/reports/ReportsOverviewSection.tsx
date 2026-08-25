@@ -14,9 +14,11 @@ import {
   MapPin,
   Radio,
   Route,
+  Timer,
   TrendingUp,
   Truck,
   WifiOff,
+  Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { type ReportRange, useFleetOverview, useTrend } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { EChart } from '@/components/dashboard/EChart';
+import { hoursFromSec } from '@/components/dashboard/DurationMixChart';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
 import type { EChartsOption } from 'echarts';
@@ -41,7 +44,7 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
       <div className="flex flex-col gap-4" role="status" aria-label={t('common.loading')}>
         <Skeleton className="h-4 w-56" />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {Array.from({ length: 8 }, (_, i) => (
+          {Array.from({ length: 12 }, (_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows never reorder.
             <Skeleton key={i} className="h-[104px] rounded-2xl" />
           ))}
@@ -180,6 +183,41 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
                 <KpiChip tone="gray">{t('reports.noData')}</KpiChip>
               ) : undefined
             }
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="dashboard.stats.movingHours"
+            value={hoursFromSec(o.movingDurationSec ?? 0)}
+            suffix="h"
+            icon={Timer}
+            tone="success"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="dashboard.stats.avgSpeed"
+            value={o.avgSpeedKmh === null || o.avgSpeedKmh === undefined ? null : Math.round(o.avgSpeedKmh)}
+            suffix="km/h"
+            icon={Gauge}
+            tone="teal"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="dashboard.stats.maxSpeed"
+            value={o.maxSpeedKmh === null || o.maxSpeedKmh === undefined ? null : Math.round(o.maxSpeedKmh)}
+            suffix="km/h"
+            icon={Zap}
+            tone="info"
+          />
+        </div>
+        <div data-testid="report-kpi">
+          <KpiTile
+            labelKey="dashboard.stats.speedingEvents"
+            value={o.speedingEventCount ?? 0}
+            icon={AlertTriangle}
+            tone={(o.speedingEventCount ?? 0) > 0 ? 'danger' : 'gray'}
           />
         </div>
       </div>

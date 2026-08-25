@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,8 +7,8 @@ import { useActiveAlarms } from '@/api/fleet.api';
 import { status } from '@/theme/palette';
 import type { AlertType } from '@/types/fleet.types';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /** Alert type → semantic color (§0.2). */
 const TYPE_COLOR: Record<AlertType, string> = {
@@ -24,63 +24,47 @@ const TYPE_COLOR: Record<AlertType, string> = {
 const TYPE_ORDER: AlertType[] = ['overspeed', 'fcw', 'idle', 'geofence', 'dtc', 'lowBattery'];
 
 /**
- * AlertTypeBreakdownChart — rose/donut of active alerts grouped by type.
+ * AlertTypeBreakdownChart — polar-area of active alerts grouped by type.
  *
- * Counts the REAL active-alarm feed (notification-service, via useActiveAlarms)
- * by category and renders an ECharts rose chart (radius scaled to count) so the
- * dominant alert types stand out at a glance. When the notification service is
- * unreachable the chart shows an honest error state (§22) — no fabricated data.
+ * Counts the REAL active-alarm feed (notification-service) by category.
  */
 export function AlertTypeBreakdownChart() {
   const { t } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useActiveAlarms();
   const alerts = data ?? [];
 
-  const option = useMemo(() => {
+  const { labels, series, colors } = useMemo(() => {
     const counts = new Map<AlertType, number>();
     for (const a of alerts) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
-    const series = TYPE_ORDER.filter((type) => counts.has(type)).map((type) => ({
-      name: t(`dashboard.alerts.${type}`),
-      value: counts.get(type) ?? 0,
-      itemStyle: { color: TYPE_COLOR[type] },
-    }));
-
+    const ordered = TYPE_ORDER.filter((type) => counts.has(type));
     return {
-      tooltip: {
-        trigger: 'item',
-        formatter: (p: { name: string; value: number; percent: number }) =>
-          `${p.name}: ${p.value} (${p.percent}%)`,
-      },
-      legend: {
-        orient: 'vertical',
-        right: 0,
-        top: 'center',
-        icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-        textStyle: { fontSize: 11 },
-      },
-      series: [
-        {
-          type: 'pie',
-          roseType: 'radius',
-          radius: ['28%', '72%'],
-          center: ['38%', '50%'],
-          avoidLabelOverlap: true,
-          itemStyle: { borderRadius: 5, borderColor: 'transparent', borderWidth: 2 },
-          label: { show: false },
-          labelLine: { show: false },
-          emphasis: { scale: true, scaleSize: 6 },
-          data: series,
-        },
-      ],
-    } as EChartsOption;
+      labels: ordered.map((type) => t(`dashboard.alerts.${type}`)),
+      series: ordered.map((type) => counts.get(type) ?? 0),
+      colors: ordered.map((type) => TYPE_COLOR[type]),
+    };
   }, [alerts, t]);
+
+  const options = useMemo<ApexOptions>(
+    () => ({
+      labels,
+      colors,
+      legend: { position: 'right', offsetY: 12 },
+      stroke: { width: 1, colors: ['transparent'] },
+      fill: { opacity: 0.9 },
+      plotOptions: {
+        polarArea: {
+          rings: { strokeWidth: 0 },
+          spokes: { strokeWidth: 0 },
+        },
+      },
+    }),
+    [labels, colors],
+  );
 
   return (
     <DashboardCard
       titleKey="dashboard.widgets.alertTypes"
-      accent="purple"
+      accent="info"
       icon={PieChartIcon}
       loading={isLoading && !isError}
       empty={alerts.length === 0 && !isLoading && !isError}
@@ -90,7 +74,7 @@ export function AlertTypeBreakdownChart() {
       flush
     >
       <div className="w-full px-4 pb-3 sm:px-5">
-        <EChart option={option} height={220} />
+        <ApexChart type="polarArea" series={series} options={options} height={220} />
       </div>
     </DashboardCard>
   );

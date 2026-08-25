@@ -1,9 +1,9 @@
 /**
  * FleetVision Design System — Color palette (v6 — TailAdmin-faithful, Phase 2.6).
  *
- * The ONLY raw-color registry in the app. ECharts, MapLibre, and generated
- * SVG markers import from here; component UI reads the matching Tailwind
- * tokens from `src/styles/tailwind.css` (brand/gray/graydark/semantic/meta
+ * The ONLY raw-color registry in the app. ApexCharts, ECharts, MapLibre, and
+ * generated SVG markers import from here; component UI reads the matching
+ * Tailwind tokens from `src/styles/tailwind.css` (brand/gray/graydark/semantic/meta
  * families). Never hardcode hex values in components — add or reuse a token.
  *
  * Phase 2.6: legacy v5 exports with no remaining consumers (primary, sidebar,

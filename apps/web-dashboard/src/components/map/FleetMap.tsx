@@ -16,9 +16,8 @@ import { cluster, expandZoom } from '@/lib/map-cluster';
 import {
   clusterMarkerDataUrl,
   headingArrowDataUrl,
-  markerDataUrl,
-  selectedMarkerDataUrl,
   vehicleColor,
+  vehicleMarkerDataUrl,
 } from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents } from '@/theme/palette';
@@ -91,8 +90,8 @@ function ageLabel(updatedAt: string | undefined, t: TFunction) {
 
 /** Icon identity: rebuild the marker image only when this changes. */
 function iconKey(v: MapVehicle, selected: boolean): string {
-  const moving = v.state === 'driving' || v.state === 'overspeed';
-  return `${vehicleColor(v)}|${selected ? 'sel' : moving ? `h${Math.round(v.heading / 5) * 5}` : 'dot'}`;
+  const headingBucket = Math.round(v.heading / 5) * 5;
+  return `${v.type ?? 'car'}|${vehicleColor(v)}|${selected ? 'sel' : 'n'}|h${headingBucket}`;
 }
 
 /**
@@ -542,17 +541,15 @@ export function FleetMap({
   );
 }
 
-/** Set the marker image for a vehicle (color by status, heading arrow when moving). */
+/** Set the marker image: body silhouette by type, tint by status, rotate by heading. */
 function applyVehicleIcon(el: HTMLElement, v: MapVehicle, selected: boolean) {
-  const moving = v.state === 'driving' || v.state === 'overspeed';
   el.setAttribute(
     'src',
-    selected
-      ? selectedMarkerDataUrl(vehicleColor(v))
-      : moving
-        ? headingArrowDataUrl(vehicleColor(v), v.heading)
-        : markerDataUrl(vehicleColor(v)),
+    vehicleMarkerDataUrl(v.type, vehicleColor(v), {
+      heading: v.heading,
+      selected,
+    }),
   );
-  el.style.width = selected ? '30px' : '24px';
-  el.style.height = selected ? '30px' : '24px';
+  el.style.width = selected ? '48px' : '40px';
+  el.style.height = selected ? '48px' : '40px';
 }

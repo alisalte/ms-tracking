@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { Gauge } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { type SpeedRowWire, useSpeed } from '@/api/report.api';
 import { status } from '@/theme/palette';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /** How many vehicles make the speed leaderboard. */
 const TOP_N = 8;
@@ -23,74 +23,72 @@ function speedColor(maxSpeedKph: number): string {
 /**
  * SpeedLeadersChart — fastest vehicles of the period (last 7 days).
  *
- * From the reporting service's per-vehicle speed rows (`GET /reports/speed`):
- * top N by max speed as horizontal bars (heat-ramped by speed), with the
- * vehicle's average speed and speeding-alarm count surfaced in the tooltip —
- * the fleet's aggressive drivers at a glance.
+ * From `GET /reports/speed`: top N by max speed as horizontal bars.
  */
 export function SpeedLeadersChart() {
   const { t } = useTranslation();
   const speed = useSpeed(RANGE);
 
-  // ECharts draws category axes bottom-up — reverse so #1 sits on top.
   const rows = useMemo(
     () =>
       [...(speed.data?.items ?? [])]
         .filter((r) => r.maxSpeedKph !== null && r.maxSpeedKph > 0)
         .sort((a, b) => (b.maxSpeedKph ?? 0) - (a.maxSpeedKph ?? 0))
-        .slice(0, TOP_N)
-        .reverse(),
+        .slice(0, TOP_N),
     [speed.data],
   );
   const empty = !speed.isLoading && !speed.isError && rows.length === 0;
 
-  const option = useMemo<EChartsOption>(() => {
-    const tooltipFormatter = (params: unknown): string => {
-      const point = Array.isArray(params) ? params[0] : params;
-      const dataIndex = Number((point as { dataIndex?: number }).dataIndex ?? 0);
-      const row: SpeedRowWire | undefined = rows[dataIndex];
-      if (!row) return '';
-      const avg = row.avgSpeedKph !== null ? Math.round(row.avgSpeedKph) : '—';
-      const lines = [
-        `<b>${row.label}</b>`,
-        `${t('dashboard.charts.maxSpeed')}: <b>${Math.round(row.maxSpeedKph ?? 0)}</b> km/h`,
-        `${t('dashboard.charts.avgSpeed')}: ${avg} km/h`,
-        `${t('dashboard.charts.speedingAlarms')}: <b>${row.speedingAlarms}</b>`,
-      ];
-      return lines.join('<br/>');
-    };
+  const series = useMemo(
+    () => [
+      {
+        name: t('dashboard.charts.maxSpeed'),
+        data: rows.map((r) => Math.round(r.maxSpeedKph ?? 0)),
+      },
+    ],
+    [rows, t],
+  );
+
+  const options = useMemo<ApexOptions>(() => {
+    const colors = rows.map((r) => speedColor(r.maxSpeedKph ?? 0));
     return {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: tooltipFormatter,
-      },
-      grid: { left: 8, right: 42, top: 8, bottom: 0, containLabel: true },
-      xAxis: { type: 'value', name: 'km/h', splitNumber: 4 },
-      yAxis: {
-        type: 'category',
-        data: rows.map((r) => r.label),
-        axisLabel: { width: 96, overflow: 'truncate' },
-      },
-      series: [
-        {
-          name: t('dashboard.charts.maxSpeed'),
-          type: 'bar',
-          barMaxWidth: 16,
-          itemStyle: {
-            borderRadius: [0, 4, 4, 0] as [number, number, number, number],
-            color: (p: { dataIndex: number }) => speedColor(rows[p.dataIndex]?.maxSpeedKph ?? 0),
-          },
-          label: {
-            show: true,
-            position: 'right',
-            formatter: (p: { value: number }) => `${Math.round(p.value)}`,
-            textStyle: { fontSize: 10, fontWeight: 700 },
-          },
-          data: rows.map((r) => Math.round(r.maxSpeedKph ?? 0)),
+      chart: { type: 'bar' },
+      colors,
+      plotOptions: {
+        bar: {
+          horizontal: true,
+          distributed: true,
+          barHeight: '58%',
+          borderRadius: 4,
+          dataLabels: { position: 'top' },
         },
-      ] as EChartsOption['series'],
-    } as EChartsOption;
+      },
+      legend: { show: false },
+      dataLabels: {
+        enabled: true,
+        formatter: (v: number) => `${Math.round(v)}`,
+        offsetX: 18,
+        style: { fontSize: '10px', fontWeight: 700, colors: undefined },
+      },
+      xaxis: {
+        categories: rows.map((r) => r.label),
+        title: { text: 'km/h' },
+      },
+      yaxis: { labels: { maxWidth: 96 } },
+      tooltip: {
+        custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+          const row: SpeedRowWire | undefined = rows[dataPointIndex];
+          if (!row) return '';
+          const avg = row.avgSpeedKph !== null ? Math.round(row.avgSpeedKph) : '—';
+          return `<div class="px-3 py-2 text-xs">
+            <div class="font-bold mb-1">${row.label}</div>
+            <div>${t('dashboard.charts.maxSpeed')}: <b>${Math.round(row.maxSpeedKph ?? 0)}</b> km/h</div>
+            <div>${t('dashboard.charts.avgSpeed')}: ${avg} km/h</div>
+            <div>${t('dashboard.charts.speedingAlarms')}: <b>${row.speedingAlarms}</b></div>
+          </div>`;
+        },
+      },
+    };
   }, [rows, t]);
 
   return (
@@ -106,7 +104,12 @@ export function SpeedLeadersChart() {
       flush
     >
       <div className="w-full px-4 pb-3 sm:px-5">
-        <EChart option={option} height={Math.max(200, rows.length * 34 + 40)} />
+        <ApexChart
+          type="bar"
+          series={series}
+          options={options}
+          height={Math.max(200, rows.length * 34 + 40)}
+        />
       </div>
     </DashboardCard>
   );

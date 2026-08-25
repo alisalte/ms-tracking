@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { BellRing } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAlarmReport } from '@/api/report.api';
 import { status } from '@/theme/palette';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 const RANGE = { preset: '7d' } as const;
 
@@ -20,62 +20,50 @@ const STATUS_COLOR = {
 
 /** Severity bars — ordered most-severe first. */
 const SEVERITY_LEVELS = [
-  { key: 'critical', color: status.red },
-  { key: 'high', color: status.warning },
-  { key: 'medium', color: status.amber },
-  { key: 'low', color: status.blue },
-  { key: 'info', color: status.slate },
-] as const;
+  { key: 'critical' as const, color: status.red },
+  { key: 'high' as const, color: status.warning },
+  { key: 'medium' as const, color: status.amber },
+  { key: 'low' as const, color: status.blue },
+  { key: 'info' as const, color: status.slate },
+];
 
 /**
  * AlarmStatusChart — alarm lifecycle donut + severity breakdown (last 7 days).
  *
- * Left: ECharts donut of the reporting summary's open/acknowledged/resolved
- * counts. Right: per-severity mini bars (critical…info) as labeled Tailwind
- * meters. All from `GET /reports/alarms` (summary block) — no client-side
- * fabrication. Rendered only for users holding `report.read`.
+ * Left: donut of open/acknowledged/resolved. Right: per-severity meters.
+ * All from `GET /reports/alarms` summary — no client-side fabrication.
  */
 export function AlarmStatusChart() {
   const { t } = useTranslation();
   const report = useAlarmReport(RANGE);
   const summary = report.data?.summary;
 
-  const option = useMemo(() => {
+  const slices = useMemo(() => {
     const s = summary ?? { open: 0, acknowledged: 0, resolved: 0 };
-    return {
-      tooltip: {
-        trigger: 'item',
-        formatter: (p: { name: string; value: number; percent: number }) =>
-          `${p.name}: ${p.value} (${p.percent}%)`,
-      },
-      legend: {
-        orient: 'vertical',
-        right: 0,
-        top: 'center',
-        icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-        textStyle: { fontSize: 11 },
-      },
-      series: [
-        {
-          type: 'pie',
-          radius: ['58%', '80%'],
-          center: ['36%', '50%'],
-          avoidLabelOverlap: true,
-          itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
-          label: { show: false },
-          labelLine: { show: false },
-          emphasis: { scale: true, scaleSize: 4 },
-          data: (Object.keys(STATUS_COLOR) as Array<keyof typeof STATUS_COLOR>).map((k) => ({
-            name: t(`dashboard.charts.${k}`),
-            value: s[k],
-            itemStyle: { color: STATUS_COLOR[k] },
-          })),
-        },
-      ],
-    } as EChartsOption;
+    return (Object.keys(STATUS_COLOR) as Array<keyof typeof STATUS_COLOR>).map((k) => ({
+      label: t(`dashboard.charts.${k}`),
+      value: s[k],
+      color: STATUS_COLOR[k],
+    }));
   }, [summary, t]);
+
+  const options = useMemo<ApexOptions>(
+    () => ({
+      labels: slices.map((s) => s.label),
+      colors: slices.map((s) => s.color),
+      legend: { position: 'right', offsetY: 20 },
+      stroke: { width: 2, colors: ['transparent'] },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '68%',
+            labels: { show: false },
+          },
+        },
+      },
+    }),
+    [slices],
+  );
 
   const total = summary?.total ?? 0;
 
@@ -91,9 +79,14 @@ export function AlarmStatusChart() {
       onRetry={() => void report.refetch()}
       flush
     >
-      <div className="flex w-full flex-col gap-2 px-4 pb-3 sm:px-5 sm:flex-row sm:items-center">
+      <div className="flex w-full flex-col gap-2 px-4 pb-3 sm:flex-row sm:items-center sm:px-5">
         <div className="min-w-0 flex-1">
-          <EChart option={option} height={220} />
+          <ApexChart
+            type="donut"
+            series={slices.map((s) => s.value)}
+            options={options}
+            height={220}
+          />
         </div>
         <div className="flex shrink-0 flex-col gap-2.5 sm:w-40">
           {SEVERITY_LEVELS.map(({ key, color }) => {

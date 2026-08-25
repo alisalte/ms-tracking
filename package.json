@@ -22,10 +22,12 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "clean": "pnpm -r exec rimraf dist tsconfig.tsbuildinfo",
-    "stack:up": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml --env-file infra/docker/.env up -d",
+    "stack:up": "node tools/stack-up.mjs",
     "stack:down": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml down",
+    "stack:reset": "node tools/stack-reset.mjs",
     "stack:logs": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml logs -f --tail=50",
     "stack:ps": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml ps",
+    "seed:demo": "node tools/seed-demo.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

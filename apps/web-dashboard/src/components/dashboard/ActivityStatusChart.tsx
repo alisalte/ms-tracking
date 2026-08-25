@@ -1,12 +1,12 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { PieChart as PieChartIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { mapAccents, neutral, status } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /** Movement state → (i18n label key, semantic palette color). Labels pair with
  *  colors — the legend never relies on color alone (§0.7). */
@@ -41,12 +41,10 @@ export function countStates(vehicles: readonly MapVehicle[]): StateCounts {
 }
 
 /**
- * ActivityStatusChart — live distribution of fleet movement states (Phase 4).
+ * ActivityStatusChart — live distribution of fleet movement states.
  *
- * A donut over the SAME real join the live map uses (registry × status ×
- * position via useMapVehicles) — driving / idle / stopped / offline, with the
- * fleet total in the center. No 24h backend series exists, so this is the
- * honest "activity" view rather than a fabricated timeline.
+ * Donut over the SAME real join the live map uses (registry × status ×
+ * position via useMapVehicles) — driving / idle / stopped / offline.
  */
 export function ActivityStatusChart({
   counts,
@@ -61,50 +59,34 @@ export function ActivityStatusChart({
 }) {
   const { t } = useTranslation();
 
-  const option = useMemo(() => {
-    const total = counts.driving + counts.idle + counts.stopped + counts.offline;
-    return {
-      tooltip: {
-        trigger: 'item',
-        formatter: (p: { name: string; value: number; percent: number }) =>
-          `${p.name}: ${p.value} (${p.percent}%)`,
-      },
-      legend: {
-        orient: 'vertical',
-        right: 0,
-        top: 'center',
-        icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-        textStyle: { fontSize: 11 },
-      },
-      title: {
-        text: total.toLocaleString(),
-        subtext: t('dashboard.stats.totalVehicles'),
-        left: '30%',
-        top: 'center',
-        textStyle: { fontSize: 22, fontWeight: 700 },
-        subtextStyle: { fontSize: 10 },
-      },
-      series: [
-        {
-          type: 'pie',
-          radius: ['58%', '80%'],
-          center: ['30%', '50%'],
-          avoidLabelOverlap: true,
-          itemStyle: { borderRadius: 5, borderColor: 'transparent', borderWidth: 2 },
-          label: { show: false },
-          labelLine: { show: false },
-          emphasis: { scale: true, scaleSize: 5 },
-          data: STATES.map((s) => ({
-            name: t(s.key),
-            value: counts[s.state],
-            itemStyle: { color: s.color },
-          })),
+  const labels = useMemo(() => STATES.map((s) => t(s.key)), [t]);
+  const series = useMemo(() => STATES.map((s) => counts[s.state]), [counts]);
+  const colors = useMemo(() => STATES.map((s) => s.color), []);
+
+  const options = useMemo<ApexOptions>(
+    () => ({
+      labels,
+      colors,
+      legend: { position: 'right', offsetY: 20 },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '72%',
+            labels: {
+              show: true,
+              total: {
+                show: true,
+                label: t('dashboard.stats.totalVehicles'),
+                formatter: () => series.reduce((a, b) => a + b, 0).toLocaleString(),
+              },
+            },
+          },
         },
-      ],
-    } as EChartsOption;
-  }, [counts, t]);
+      },
+      stroke: { width: 2, colors: ['transparent'] },
+    }),
+    [labels, colors, series, t],
+  );
 
   return (
     <DashboardCard
@@ -119,7 +101,7 @@ export function ActivityStatusChart({
       flush
     >
       <div className="w-full px-4 pb-3 sm:px-5">
-        <EChart option={option} height={220} />
+        <ApexChart type="donut" series={series} options={options} height={220} />
       </div>
     </DashboardCard>
   );

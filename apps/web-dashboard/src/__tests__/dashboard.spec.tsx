@@ -160,6 +160,13 @@ const overviewFixture = {
   openAlarms: 5,
   geofenceEvents: 9,
   avgUtilizationPct: 62.4,
+  movingDurationSec: 48_000,
+  idleDurationSec: 12_600,
+  parkingDurationSec: 86_400,
+  avgSpeedKmh: 52.3,
+  maxSpeedKmh: 118,
+  speedingEventCount: 4,
+  discardedTrips: 2,
   from: '2026-08-17T00:00:00Z',
   to: '2026-08-23T00:00:00Z',
   dataAsOf: '2026-08-23T10:00:00Z',
@@ -288,7 +295,13 @@ vi.mock('maplibre-gl', () => {
   };
 });
 
-// ECharts renders SVG — stub the wrapper (its theming has its own coverage).
+// ApexCharts mounts a canvas — stub the wrapper (theming covered separately).
+vi.mock('@/components/dashboard/ApexChart', () => ({
+  ApexChart: (props: { height: number }) =>
+    createElement('div', { 'data-testid': 'apex-chart', 'data-height': props.height }),
+}));
+
+// Legacy ECharts stub kept for Reports / SpeedGraph consumers outside the dashboard.
 vi.mock('@/components/dashboard/EChart', () => ({
   EChart: (props: { option: unknown; height: number }) =>
     createElement('div', { 'data-testid': 'echart', 'data-height': props.height }),
@@ -469,7 +482,7 @@ describe('FleetDashboard — activity + fleet health', () => {
   it('renders the activity donut and health meters from the map join', () => {
     renderDashboard();
     // Two ECharts panels (activity donut + alert-type rose).
-    expect(screen.getAllByTestId('echart').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(2);
     // Health meters: connectivity 3/5 devices online; GPS 3/4 vehicles reporting.
     expect(screen.getByText('Device connectivity').closest('div')?.textContent).toContain('3');
     expect(screen.getByText('GPS reporting').closest('div')?.textContent).toContain('3');
@@ -610,8 +623,8 @@ describe('FleetDashboard — report widgets (report.read)', () => {
     expect(screen.getByText('Daily alarms by type')).toBeTruthy();
     expect(screen.getByText('Top vehicles by distance')).toBeTruthy();
     expect(screen.getByText('Alarm status & severity')).toBeTruthy();
-    // EChart stubs: activity + alert-type + 2 trends + leaderboard + lifecycle.
-    expect(screen.getAllByTestId('echart').length).toBeGreaterThanOrEqual(6);
+    // ApexChart stubs: activity + duration + alert-type + 2 trends + leaderboard + lifecycle (+ more).
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(6);
   });
 });
 

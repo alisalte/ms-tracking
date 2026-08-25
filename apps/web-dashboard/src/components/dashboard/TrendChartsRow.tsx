@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { BarChart3, Siren } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,20 +6,15 @@ import { useTranslation } from 'react-i18next';
 import { type ReportPresetId, useTrend } from '@/api/report.api';
 import { status } from '@/theme/palette';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /** Trend presets offered on the dashboard (compact 7d/30d switch). */
 const PRESETS: ReportPresetId[] = ['7d', '30d'];
 
 /**
  * TrendChartsRow — daily distance/trips combo + stacked daily alarms, fed by
- * the reporting service's `GET /reports/trend` (Sprint J §13 formulas).
- *
- * The left card pairs a smoothed distance line (km, left axis) with trip bars
- * (right axis); the right card stacks the trend's alarm buckets
- * (speeding/geofence/offline/other). A compact preset switch (7d/30d) drives
- * both queries. Rendered only for users holding `report.read`.
+ * the reporting service's `GET /reports/trend` (Sprint J KPI formulas).
  */
 export function TrendChartsRow() {
   const { t } = useTranslation();
@@ -27,63 +22,81 @@ export function TrendChartsRow() {
   const trend = useTrend({ preset });
   const points = useMemo(() => trend.data?.points ?? [], [trend.data]);
   const empty = !trend.isLoading && !trend.isError && points.length === 0;
+  const categories = useMemo(() => points.map((p) => p.day.slice(5)), [points]);
 
-  const distanceTripsOption = useMemo<EChartsOption>(
+  const distanceTripsOptions = useMemo<ApexOptions>(
     () => ({
-      tooltip: { trigger: 'axis' },
-      legend: { data: [t('dashboard.charts.distance'), t('dashboard.charts.trips')], top: 0 },
-      grid: { left: 8, right: 8, top: 32, bottom: 0, containLabel: true },
-      xAxis: { type: 'category', data: points.map((p) => p.day.slice(5)) },
-      yAxis: [
-        { type: 'value', name: 'km', splitNumber: 4 },
-        { type: 'value', name: t('dashboard.charts.trips'), splitNumber: 4 },
+      chart: { stacked: false },
+      colors: [status.blue, status.teal],
+      stroke: { width: [3, 0] },
+      fill: { type: ['gradient', 'solid'], opacity: [0.25, 1] },
+      legend: { position: 'top', horizontalAlign: 'left' },
+      xaxis: { categories },
+      yaxis: [
+        { title: { text: 'km' }, decimalsInFloat: 0 },
+        { opposite: true, title: { text: t('dashboard.charts.trips') }, decimalsInFloat: 0 },
       ],
-      series: [
-        {
-          name: t('dashboard.charts.distance'),
-          type: 'line',
-          smooth: true,
-          symbolSize: 4,
-          areaStyle: { opacity: 0.15 },
-          itemStyle: { color: status.blue },
-          data: points.map((p) => Number(p.distanceKm.toFixed(1))),
-        },
-        {
-          name: t('dashboard.charts.trips'),
-          type: 'bar',
-          yAxisIndex: 1,
-          barMaxWidth: 18,
-          itemStyle: { color: status.teal, borderRadius: [3, 3, 0, 0] },
-          data: points.map((p) => p.trips),
-        },
-      ],
+      plotOptions: { bar: { columnWidth: '42%', borderRadius: 3 } },
     }),
+    [categories, t],
+  );
+
+  const distanceTripsSeries = useMemo(
+    () => [
+      {
+        name: t('dashboard.charts.distance'),
+        type: 'area' as const,
+        data: points.map((p) => Number(p.distanceKm.toFixed(1))),
+      },
+      {
+        name: t('dashboard.charts.trips'),
+        type: 'column' as const,
+        data: points.map((p) => p.trips),
+      },
+    ],
     [points, t],
   );
 
-  const alarmTrendOption = useMemo<EChartsOption>(() => {
-    const buckets = [
-      { key: 'alarmSpeeding', label: t('dashboard.charts.speeding'), color: status.red },
-      { key: 'alarmGeofence', label: t('dashboard.charts.geofence'), color: status.indigo },
-      { key: 'alarmOffline', label: t('dashboard.charts.offline'), color: status.slate },
-      { key: 'alarmOther', label: t('dashboard.charts.other'), color: status.amber },
-    ] as const;
-    return {
-      tooltip: { trigger: 'axis' },
-      legend: { top: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, textStyle: { fontSize: 11 } },
-      grid: { left: 8, right: 8, top: 32, bottom: 0, containLabel: true },
-      xAxis: { type: 'category', data: points.map((p) => p.day.slice(5)) },
-      yAxis: { type: 'value', splitNumber: 4 },
-      series: buckets.map((b) => ({
+  const alarmBuckets = useMemo(
+    () =>
+      [
+        { key: 'alarmSpeeding' as const, label: t('dashboard.charts.speeding'), color: status.red },
+        {
+          key: 'alarmGeofence' as const,
+          label: t('dashboard.charts.geofence'),
+          color: status.indigo,
+        },
+        {
+          key: 'alarmOffline' as const,
+          label: t('dashboard.charts.offline'),
+          color: status.slate,
+        },
+        { key: 'alarmOther' as const, label: t('dashboard.charts.other'), color: status.amber },
+      ] as const,
+    [t],
+  );
+
+  const alarmOptions = useMemo<ApexOptions>(
+    () => ({
+      chart: { stacked: true },
+      colors: alarmBuckets.map((b) => b.color),
+      legend: { position: 'top', horizontalAlign: 'left' },
+      xaxis: { categories },
+      yaxis: { decimalsInFloat: 0 },
+      plotOptions: { bar: { columnWidth: '48%', borderRadius: 2 } },
+      fill: { opacity: 1 },
+    }),
+    [alarmBuckets, categories],
+  );
+
+  const alarmSeries = useMemo(
+    () =>
+      alarmBuckets.map((b) => ({
         name: b.label,
-        type: 'bar' as const,
-        stack: 'alarms',
-        barMaxWidth: 18,
-        itemStyle: { color: b.color },
         data: points.map((p) => p[b.key]),
       })),
-    };
-  }, [points, t]);
+    [alarmBuckets, points],
+  );
 
   const presetSwitch = (
     <div className="flex items-center gap-1" data-testid="trend-preset-switch">
@@ -121,7 +134,12 @@ export function TrendChartsRow() {
           flush
         >
           <div className="w-full px-4 pb-3 sm:px-5">
-            <EChart option={distanceTripsOption} height={240} />
+            <ApexChart
+              type="line"
+              series={distanceTripsSeries}
+              options={distanceTripsOptions}
+              height={240}
+            />
           </div>
         </DashboardCard>
       </div>
@@ -138,7 +156,7 @@ export function TrendChartsRow() {
           flush
         >
           <div className="w-full px-4 pb-3 sm:px-5">
-            <EChart option={alarmTrendOption} height={240} />
+            <ApexChart type="bar" series={alarmSeries} options={alarmOptions} height={240} />
           </div>
         </DashboardCard>
       </div>

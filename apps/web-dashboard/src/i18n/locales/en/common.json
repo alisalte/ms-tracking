@@ -184,6 +184,12 @@
       "utilization": "Avg utilization",
       "geofenceEvents": "Geofence events",
       "avgSpeed": "Avg speed (7d)",
+      "maxSpeed": "Max speed (7d)",
+      "movingHours": "Moving hours (7d)",
+      "idleHours": "Idle hours (7d)",
+      "speedingEvents": "Speeding events",
+      "discardedTrips": "{{count}} micro-trips discarded",
+      "maxSpeedChip": "max {{value}} km/h",
       "criticalAlarms": "Critical alarms",
       "openAlarmsCount": "{{count}} open"
     },
@@ -269,7 +275,14 @@
       "fleetComparison": "Fleet comparison (live)",
       "speedLeaders": "Fastest vehicles (7d)",
       "alarmSeverity": "Alarm severity (7d)",
-      "hourlyActivity": "Hourly trip rhythm (today)"
+      "hourlyActivity": "Hourly trip rhythm (today)",
+      "durationMix": "Moving / idle / parking (7d)"
+    },
+    "sectionLabels": {
+      "live": "Live fleet status",
+      "liveHint": "Point-in-time from map join + device presence",
+      "period": "Period performance",
+      "periodHint": "Last 7 days · reporting KPIs (UTC)"
     },
     "empty": {
       "alerts": "No active alerts — fleet is quiet.",
@@ -324,7 +337,11 @@
       "totalAlarms": "Total alarms",
       "tripStarts": "Trip starts",
       "peak": "Peak",
-      "peakHour": "Peak hour: {{hour}}:00 with {{count}} trips"
+      "peakHour": "Peak hour: {{hour}}:00 with {{count}} trips",
+      "movingHours": "Moving",
+      "idleHours": "Idle",
+      "parkingHours": "Parking",
+      "totalHours": "Total hours"
     },
     "heroConnectivity": "device connectivity",
     "heroActiveShare": "moving of active",

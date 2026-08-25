@@ -141,8 +141,9 @@ Breakpoints follow Tailwind. Verified widths: 1440 / 1280 / 1024 / 768 / 390.
 
 ## 14. Charts & maps
 
-- echarts via the theme-aware `EChart` wrapper (reads `useThemeContext`).
-  Series colors from `@/theme/palette` (`status`/`mapAccents`/`meta`).
+- echarts via the theme-aware `EChart` wrapper (reports / trip speed graph)
+  and ApexCharts via `ApexChart` on the fleet dashboard. Series colors from
+  `@/theme/palette` (`status`/`mapAccents`/`meta`).
 - MapLibre dark style in dark mode; markers generated from the same palette
   (`lib/map-markers.ts`). Map overlays use translucent surfaces
   (`bg-white/90 dark:bg-graydark-300/90` + `backdrop-blur`).

@@ -12,7 +12,7 @@ export interface VehicleLabel {
   readonly fleetName: string | null;
 }
 
-/** Fleet overview (§6). */
+/** Fleet overview (§6 + KPI expansions from REPORTING-KPI-DEFINITIONS). */
 export interface FleetOverview {
   readonly totalVehicles: number;
   readonly vehiclesWithTelemetry: number;
@@ -26,6 +26,20 @@ export interface FleetOverview {
   readonly openAlarms: number;
   readonly geofenceEvents: number;
   readonly avgUtilizationPct: number | null;
+  /** SUM(COMPLETED trip duration_s) — KPI "Moving duration". */
+  readonly movingDurationSec: number;
+  /** SUM(closed idle_periods.duration_s) — KPI "Idle duration". */
+  readonly idleDurationSec: number;
+  /** SUM(ENDED parking_periods.duration_s, excl. TAMPER) — KPI "Parking duration". */
+  readonly parkingDurationSec: number;
+  /** distance / (moving hours); null when no completed trips. */
+  readonly avgSpeedKmh: number | null;
+  /** MAX(trip_events.max_speed_kmh) over COMPLETED trips; null when none. */
+  readonly maxSpeedKmh: number | null;
+  /** Count of notification.alerts with type='overspeed'. */
+  readonly speedingEventCount: number;
+  /** DISCARDED micro-trips in range (informational). */
+  readonly discardedTrips: number;
 }
 
 /** Daily trend point (§13 + overview charts). */

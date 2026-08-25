@@ -22,6 +22,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { inferVehicleType } from '@/lib/map-markers';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
 import type { Alarm } from '@/types/alarm.types';
 import type { BoundDevice, FleetSummary } from '@/types/asset.types';
@@ -70,6 +71,8 @@ function toMapVehicle(
     lng: pos?.longitude ?? 0,
     heading: pos?.headingDeg ?? 0,
     speed: pos?.speedKph ?? 0,
+    // Body type for map silhouettes — inferred from registry name until API exposes it.
+    type: inferVehicleType(vehicle.name),
     ignitionOn: pos?.ignitionOn ?? undefined,
     updatedAt: pos?.capturedAt,
     deviceId,

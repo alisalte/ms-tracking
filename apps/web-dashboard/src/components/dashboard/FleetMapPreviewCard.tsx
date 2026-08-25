@@ -6,7 +6,7 @@ import { Link } from 'react-router';
 
 import { useMapVehicles } from '@/api/fleet.api';
 import { Skeleton } from '@/components/tailwind-ui';
-import { PRESENCE_COLORS, markerDataUrl, vehicleColor } from '@/lib/map-markers';
+import { PRESENCE_COLORS, vehicleColor, vehicleMarkerDataUrl } from '@/lib/map-markers';
 import type { VehiclePresence } from '@/types/fleet.types';
 
 import { DashboardCard } from './DashboardCard';
@@ -79,10 +79,10 @@ export function FleetMapPreviewCard() {
       for (const m of markersRef.current) m.remove();
       markersRef.current = vehicles.map((v) => {
         const el = document.createElement('img');
-        el.src = markerDataUrl(vehicleColor(v));
+        el.src = vehicleMarkerDataUrl(v.type, vehicleColor(v), { heading: v.heading });
         el.alt = v.label;
-        el.style.width = '20px';
-        el.style.height = '20px';
+        el.style.width = '40px';
+        el.style.height = '40px';
         el.style.cursor = 'pointer';
         const presence = v.presence ?? 'UNKNOWN';
         const marker = new MaplibreMarker({ element: el, anchor: 'center' })

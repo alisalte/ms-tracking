@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { Layers } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,16 +7,15 @@ import { useFleets, useVehicles } from '@/api/asset.api';
 import { useDeviceStatuses, useMapVehicles } from '@/api/fleet.api';
 import { status } from '@/theme/palette';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /**
  * FleetComparisonChart — per-fleet activity breakdown (live).
  *
  * Joins the live map-vehicles view with the registry (vehicle → fleet) and the
  * device-status projection, then renders each fleet as a horizontal stacked
- * bar: moving / idle / parked / offline. The "unassigned" bucket covers live
- * vehicles missing from the registry join.
+ * bar: moving / idle / parked / offline.
  */
 export function FleetComparisonChart() {
   const { t } = useTranslation();
@@ -28,8 +27,6 @@ export function FleetComparisonChart() {
   const loading =
     fleets.isLoading || vehicles.isLoading || mapVehicles.isLoading || deviceStatuses.isLoading;
 
-  // A failure of ANY joined source is a failed comparison — never render
-  // fabricated zeros (empty fleets, swollen "unassigned") as if they were data.
   const anyError =
     mapVehicles.error ?? fleets.error ?? vehicles.error ?? deviceStatuses.error ?? null;
   const retryAll = () => {
@@ -70,7 +67,6 @@ export function FleetComparisonChart() {
       else if (v.ignitionOn) b.idle += 1;
       else b.parked += 1;
     }
-    // Fleets with no live vehicles still show an (empty) row for context.
     const out = (fleets.data ?? [])
       .filter((f) => f.status !== 'ARCHIVED')
       .map((f) => ({
@@ -86,58 +82,37 @@ export function FleetComparisonChart() {
 
   const empty = !loading && !anyError && rows.length === 0;
 
-  const option = useMemo<EChartsOption>(
-    () => ({
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: {
-        bottom: 0,
-        itemWidth: 10,
-        itemHeight: 10,
-        textStyle: { fontSize: 11 },
-      },
-      grid: { left: 8, right: 16, top: 8, bottom: 34, containLabel: true },
-      xAxis: { type: 'value', splitNumber: 4 },
-      yAxis: {
-        type: 'category',
-        data: rows.map((r) => r.name).reverse(),
-        axisLabel: { width: 110, overflow: 'truncate' },
-      },
-      series: [
-        {
-          name: t('dashboard.stats.moving'),
-          type: 'bar',
-          stack: 'fleet',
-          barMaxWidth: 18,
-          itemStyle: { color: status.success, borderRadius: 0 },
-          data: rows.map((r) => r.moving).reverse(),
-        },
-        {
-          name: t('dashboard.stats.idle'),
-          type: 'bar',
-          stack: 'fleet',
-          barMaxWidth: 18,
-          itemStyle: { color: status.warning },
-          data: rows.map((r) => r.idle).reverse(),
-        },
-        {
-          name: t('dashboard.stats.parked'),
-          type: 'bar',
-          stack: 'fleet',
-          barMaxWidth: 18,
-          itemStyle: { color: status.slate, opacity: 0.55 },
-          data: rows.map((r) => r.parked).reverse(),
-        },
-        {
-          name: t('dashboard.stats.offline'),
-          type: 'bar',
-          stack: 'fleet',
-          barMaxWidth: 18,
-          itemStyle: { color: status.danger, opacity: 0.75, borderRadius: [0, 3, 3, 0] },
-          data: rows.map((r) => r.offline).reverse(),
-        },
-      ],
-    }),
+  const categories = useMemo(() => rows.map((r) => r.name), [rows]);
+
+  const series = useMemo(
+    () => [
+      { name: t('dashboard.stats.moving'), data: rows.map((r) => r.moving) },
+      { name: t('dashboard.stats.idle'), data: rows.map((r) => r.idle) },
+      { name: t('dashboard.stats.parked'), data: rows.map((r) => r.parked) },
+      { name: t('dashboard.stats.offline'), data: rows.map((r) => r.offline) },
+    ],
     [rows, t],
+  );
+
+  const options = useMemo<ApexOptions>(
+    () => ({
+      chart: { stacked: true },
+      colors: [status.success, status.warning, status.slate, status.danger],
+      plotOptions: {
+        bar: {
+          horizontal: true,
+          barHeight: '62%',
+          borderRadius: 3,
+          borderRadiusApplication: 'end',
+        },
+      },
+      legend: { position: 'bottom' },
+      xaxis: { categories, labels: { trim: true } },
+      yaxis: { labels: { maxWidth: 110 } },
+      fill: { opacity: 1 },
+      dataLabels: { enabled: false },
+    }),
+    [categories],
   );
 
   return (
@@ -153,7 +128,12 @@ export function FleetComparisonChart() {
       flush
     >
       <div className="w-full px-4 pb-2 sm:px-5">
-        <EChart option={option} height={Math.max(220, rows.length * 44 + 60)} />
+        <ApexChart
+          type="bar"
+          series={series}
+          options={options}
+          height={Math.max(220, rows.length * 44 + 60)}
+        />
       </div>
     </DashboardCard>
   );

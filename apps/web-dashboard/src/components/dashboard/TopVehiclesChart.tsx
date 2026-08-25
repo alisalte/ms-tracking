@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { Truck } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useDistance } from '@/api/report.api';
 import { status } from '@/theme/palette';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /** How many vehicles make the "top" list. */
 const TOP_N = 8;
@@ -16,10 +16,7 @@ const RANGE = { preset: '7d' } as const;
 /**
  * TopVehiclesChart — horizontal distance leaderboard (last 7 days).
  *
- * Sorts the reporting service's per-vehicle distance rows
- * (`GET /reports/distance`) descending and renders the top N as horizontal
- * bars — the heaviest movers at a glance. Rendered only for users holding
- * `report.read` (gated by FleetDashboard).
+ * Sorts `GET /reports/distance` descending and renders the top N as bars.
  */
 export function TopVehiclesChart() {
   const { t } = useTranslation();
@@ -34,38 +31,43 @@ export function TopVehiclesChart() {
   );
   const empty = !distance.isLoading && !distance.isError && rows.length === 0;
 
-  const option = useMemo<EChartsOption>(
-    () => ({
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        valueFormatter: (v) => `${Number(v).toLocaleString()} km`,
+  const series = useMemo(
+    () => [
+      {
+        name: t('dashboard.charts.distance'),
+        data: rows.map((r) => Number(r.distanceKm.toFixed(1))),
       },
-      grid: { left: 8, right: 32, top: 8, bottom: 0, containLabel: true },
-      xAxis: { type: 'value', name: 'km', splitNumber: 4 },
-      yAxis: {
-        type: 'category',
-        // ECharts draws category axes bottom-up — reverse so #1 sits on top.
-        data: rows.map((r) => r.label).reverse(),
-        axisLabel: { width: 96, overflow: 'truncate' },
-      },
-      series: [
-        {
-          name: t('dashboard.charts.distance'),
-          type: 'bar',
-          barMaxWidth: 16,
-          itemStyle: { color: status.blue, borderRadius: [0, 3, 3, 0] },
-          label: {
-            show: true,
-            position: 'right',
-            formatter: (p) => `${Number(p.value).toLocaleString()}`,
-            textStyle: { fontSize: 10 },
-          },
-          data: rows.map((r) => Number(r.distanceKm.toFixed(1))).reverse(),
-        },
-      ],
-    }),
+    ],
     [rows, t],
+  );
+
+  const options = useMemo<ApexOptions>(
+    () => ({
+      colors: [status.blue],
+      plotOptions: {
+        bar: {
+          horizontal: true,
+          barHeight: '58%',
+          borderRadius: 3,
+          dataLabels: { position: 'top' },
+        },
+      },
+      dataLabels: {
+        enabled: true,
+        formatter: (v: number) => `${Number(v).toLocaleString()}`,
+        offsetX: 18,
+        style: { fontSize: '10px', fontWeight: 600 },
+      },
+      xaxis: {
+        categories: rows.map((r) => r.label),
+        title: { text: 'km' },
+      },
+      yaxis: { labels: { maxWidth: 96 } },
+      tooltip: {
+        y: { formatter: (v: number) => `${Number(v).toLocaleString()} km` },
+      },
+    }),
+    [rows],
   );
 
   return (
@@ -80,7 +82,12 @@ export function TopVehiclesChart() {
       flush
     >
       <div className="w-full px-4 pb-3 sm:px-5">
-        <EChart option={option} height={Math.max(200, rows.length * 34 + 40)} />
+        <ApexChart
+          type="bar"
+          series={series}
+          options={options}
+          height={Math.max(200, rows.length * 34 + 40)}
+        />
       </div>
     </DashboardCard>
   );

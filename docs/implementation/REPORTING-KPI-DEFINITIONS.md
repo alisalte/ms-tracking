@@ -123,6 +123,14 @@ omitted rather than synthesized.
   period in range.
 - `activeVehicles` — fleet-management's own notion is registry-status based;
   the overview reports `vehiclesWithTelemetry` and labels it exactly that.
+- `movingDurationSec` / `idleDurationSec` / `parkingDurationSec` — period
+  duration totals (Moving / Idle / Parking KPIs above).
+- `avgSpeedKmh` — `totalDistanceKm / (movingDurationSec / 3600)`; `null` when
+  no completed trips.
+- `maxSpeedKmh` — `MAX(trip_events.max_speed_kmh)` over COMPLETED trips; `null`
+  when none.
+- `speedingEventCount` — Speeding event count (`type='overspeed'` alerts).
+- `discardedTrips` — DISCARDED micro-trips in range.
 
 ## Cache
 Fleet overview + trends: Redis, key `report:<report>:<tenantId>:<sha(filters)>`

@@ -2,16 +2,17 @@
 /**
  * Seed a realistic 100-vehicle fleet through the public REST APIs.
  *
- * Creates: 5 fleets → 100 devices (Luhn-valid IMEIs, meitrack) → 100 vehicles
+ * Creates: 5 fleets → N devices (Luhn-valid IMEIs, meitrack) → N vehicles
  * (Persian names, Iranian plates) → 1:1 vehicle↔device bindings.
  *
- * Usage: node tools/seed-fleet.mjs
+ * Usage: SEED_COUNT=10 SEED_TENANT_ID=<uuid> node tools/seed-fleet.mjs
  */
 const API = process.env.SEED_API_BASE ?? 'http://localhost:3006/api/v1';
 const IDENTITY = process.env.SEED_IDENTITY_BASE ?? 'http://localhost:3000/api/v1';
 const TENANT = process.env.SEED_TENANT_ID ?? 'c6213758-9f71-460e-a66e-1da2ba6b25b4';
 const EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@fleetvision.local';
 const PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe!StrongPass123';
+const COUNT = Math.max(1, Number(process.env.SEED_COUNT ?? 100) || 100);
 
 async function login() {
   const res = await fetch(`${IDENTITY}/auth/login`, {
@@ -72,7 +73,7 @@ const VEHICLE_TYPES = [
   { type: 'بنز آکتروس', models: ['Actros 1845', 'Actros 2545'], weight: 12 },
   { type: 'ایسوزو NPR', models: ['Isuzu NPR 75', 'Isuzu NQR'], weight: 12 },
   { type: 'ولوو FH', models: ['Volvo FH440', 'Volvo FM'], weight: 8 },
-  { type: 'مینibus ایسوزو', models: ['Isuzu Journey', 'Isuzu Novo'], weight: 6 },
+  { type: 'مینی‌بوس ایسوزو', models: ['Isuzu Journey', 'Isuzu Novo'], weight: 6 },
   { type: 'کامیونت فوتون', models: ['Foton Aumark', 'Foton ETX'], weight: 8 },
   { type: 'سواری سازمانی پژو ۲۰۶', models: ['Peugeot 206 SD'], weight: 10 },
 ];
@@ -156,15 +157,16 @@ async function main() {
     }
   }
 
-  // Expand vehicle types into a per-vehicle plan.
+  // Expand vehicle types into a per-vehicle plan (spread across fleets).
+  const perFleet = Math.max(1, Math.ceil(COUNT / fleets.length));
   const plan = [];
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < COUNT; i++) {
     const vt = weightedPick(VEHICLE_TYPES);
-    const fleet = fleets[Math.min(Math.floor(i / 20), fleets.length - 1)];
+    const fleet = fleets[Math.min(Math.floor(i / perFleet), fleets.length - 1)];
     plan.push({ idx: i, vt, fleet });
   }
 
-  console.log('→ creating 100 devices');
+  console.log(`→ creating ${COUNT} devices`);
   const devices = [];
   const usedImeis = new Set();
   for (const p of plan) {
@@ -191,10 +193,12 @@ async function main() {
       model: dm.model,
     });
     devices.push(created.data);
-    if ((p.idx + 1) % 20 === 0) console.log(`  ${p.idx + 1}/100 devices`);
+    if ((p.idx + 1) % 10 === 0 || p.idx + 1 === COUNT) {
+      console.log(`  ${p.idx + 1}/${COUNT} devices`);
+    }
   }
 
-  console.log('→ creating 100 vehicles');
+  console.log(`→ creating ${COUNT} vehicles`);
   const vehicles = [];
   const usedPlates = new Set();
   const usedCodes = new Set();
@@ -232,11 +236,13 @@ async function main() {
       vin,
     });
     vehicles.push(created.data);
-    if ((p.idx + 1) % 20 === 0) console.log(`  ${p.idx + 1}/100 vehicles`);
+    if ((p.idx + 1) % 10 === 0 || p.idx + 1 === COUNT) {
+      console.log(`  ${p.idx + 1}/${COUNT} vehicles`);
+    }
   }
 
-  console.log('→ binding devices to vehicles (1:1, TRACKER, primary)');
-  for (let i = 0; i < 100; i++) {
+  console.log(`→ binding devices to vehicles (1:1, TRACKER, primary)`);
+  for (let i = 0; i < COUNT; i++) {
     // Already-bound from a partial run → list returns the binding; skip.
     const bound = await api('GET', `/vehicles/${vehicles[i].id}/devices`);
     if ((bound.data ?? []).some((d) => d.deviceId === devices[i].id || d.id === devices[i].id)) {
@@ -246,7 +252,7 @@ async function main() {
       role: 'TRACKER',
       isPrimary: true,
     });
-    if ((i + 1) % 20 === 0) console.log(`  ${i + 1}/100 bound`);
+    if ((i + 1) % 10 === 0 || i + 1 === COUNT) console.log(`  ${i + 1}/${COUNT} bound`);
   }
 
   const summary = await api('GET', '/summary');

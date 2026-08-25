@@ -1,33 +1,41 @@
-import { AlertTriangle, ArrowRightLeft, Fence, Gauge, Route, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRightLeft,
+  Clock,
+  Fence,
+  Gauge,
+  Route,
+  Timer,
+  TrendingUp,
+  Zap,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlarmReport, useFleetOverview, useSpeed } from '@/api/report.api';
+import { useAlarmReport, useFleetOverview } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Card } from '@/components/tailwind-ui';
 
+import { hoursFromSec } from './DurationMixChart';
 import { KpiChip, KpiTile } from './KpiTile';
 
 /** Period fixed at the trailing week — the dashboard's "at a glance" window. */
 const RANGE = { preset: '7d' } as const;
 
 /**
- * ReportsKpiRow — period KPI tiles from the reporting service (last 7 days).
+ * ReportsKpiRow — period KPI tiles from reporting-service (last 7 days).
  *
- * Six tiles: distance, trips, avg utilization, geofence events, fleet average
- * speed (from /reports/speed) and critical alarms (from /reports/alarms
- * summary) — each with a REAL footer chip for secondary context. Rendered only
- * for users holding `report.read` (gated by FleetDashboard). A failure of ANY
- * of the three sources surfaces as the row's error state — a broken speed or
- * alarms query never renders "—" tiles that read as real zeros.
+ * Grounded in REPORTING-KPI-DEFINITIONS: distance, trips, utilization,
+ * moving/idle hours, trip-derived avg + max speed, geofence events,
+ * speeding events, critical alarms. Uses fleet-overview expansions so
+ * speed/duration are authoritative (not client-mean of rows).
  */
 export function ReportsKpiRow() {
   const { t } = useTranslation();
   const overview = useFleetOverview(RANGE);
-  const speed = useSpeed(RANGE);
   const alarms = useAlarmReport(RANGE);
   const o = overview.data;
 
-  const anyError = overview.error ?? speed.error ?? alarms.error ?? null;
+  const anyError = overview.error ?? alarms.error ?? null;
   if (anyError) {
     return (
       <Card flush className="p-2">
@@ -35,7 +43,6 @@ export function ReportsKpiRow() {
           error={anyError}
           onRetry={() => {
             void overview.refetch();
-            void speed.refetch();
             void alarms.refetch();
           }}
         />
@@ -45,18 +52,21 @@ export function ReportsKpiRow() {
 
   const loading = overview.isLoading;
   const utilization = o?.avgUtilizationPct ?? null;
-
-  // Fleet-wide average speed: mean of per-vehicle averages (weighted by rows).
-  const speedRows = (speed.data?.items ?? []).filter((r) => r.avgSpeedKph !== null);
   const avgSpeed =
-    speedRows.length > 0
-      ? Math.round(speedRows.reduce((s, r) => s + (r.avgSpeedKph ?? 0), 0) / speedRows.length)
+    o?.avgSpeedKmh !== null && o?.avgSpeedKmh !== undefined
+      ? Math.round(o.avgSpeedKmh)
+      : null;
+  const maxSpeed =
+    o?.maxSpeedKmh !== null && o?.maxSpeedKmh !== undefined
+      ? Math.round(o.maxSpeedKmh)
       : null;
   const summary = alarms.data?.summary;
   const criticalAlarms = summary?.critical ?? null;
+  const movingH = o ? hoursFromSec(o.movingDurationSec ?? 0) : null;
+  const idleH = o ? hoursFromSec(o.idleDurationSec ?? 0) : null;
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-10">
       <KpiTile
         labelKey="dashboard.stats.distance7d"
         value={Math.round(o?.totalDistanceKm ?? 0)}
@@ -101,19 +111,50 @@ export function ReportsKpiRow() {
         }
       />
       <KpiTile
+        labelKey="dashboard.stats.movingHours"
+        value={movingH}
+        suffix="h"
+        icon={Timer}
+        tone="success"
+        loading={loading}
+        footer={
+          o && o.discardedTrips > 0 ? (
+            <KpiChip tone="gray">
+              {t('dashboard.stats.discardedTrips', { count: o.discardedTrips })}
+            </KpiChip>
+          ) : undefined
+        }
+      />
+      <KpiTile
+        labelKey="dashboard.stats.idleHours"
+        value={idleH}
+        suffix="h"
+        icon={Clock}
+        tone="warning"
+        loading={loading}
+      />
+      <KpiTile
         labelKey="dashboard.stats.avgSpeed"
         value={avgSpeed}
         suffix="km/h"
         icon={Gauge}
         tone="teal"
-        loading={speed.isLoading}
+        loading={loading}
         footer={
-          speed.data && (
+          maxSpeed !== null && (
             <KpiChip tone="gray">
-              {t('dashboard.vehiclesCount', { count: speedRows.length })}
+              {t('dashboard.stats.maxSpeedChip', { value: maxSpeed })}
             </KpiChip>
           )
         }
+      />
+      <KpiTile
+        labelKey="dashboard.stats.maxSpeed"
+        value={maxSpeed}
+        suffix="km/h"
+        icon={Zap}
+        tone={maxSpeed !== null && maxSpeed >= 110 ? 'danger' : 'info'}
+        loading={loading}
       />
       <KpiTile
         labelKey="dashboard.stats.geofenceEvents"
@@ -123,9 +164,16 @@ export function ReportsKpiRow() {
         loading={loading}
       />
       <KpiTile
+        labelKey="dashboard.stats.speedingEvents"
+        value={o?.speedingEventCount ?? 0}
+        icon={AlertTriangle}
+        tone={o && o.speedingEventCount > 0 ? 'danger' : 'gray'}
+        loading={loading}
+      />
+      <KpiTile
         labelKey="dashboard.stats.criticalAlarms"
         value={criticalAlarms}
-        icon={criticalAlarms && criticalAlarms > 0 ? AlertTriangle : Fence}
+        icon={AlertTriangle}
         tone={criticalAlarms && criticalAlarms > 0 ? 'danger' : 'gray'}
         loading={alarms.isLoading}
         footer={

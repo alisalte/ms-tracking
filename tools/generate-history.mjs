@@ -481,7 +481,7 @@ for (const v of fleet) {
     aggressive,
   });
   process.stdout.write(
-    `\r  vehicle ${v.idx + 1}/100 (${vehiclePositions.length.toLocaleString()} pos)`,
+    `\r  vehicle ${v.idx + 1}/${fleet.length} (${vehiclePositions.length.toLocaleString()} pos)`,
   );
 }
 console.log('');

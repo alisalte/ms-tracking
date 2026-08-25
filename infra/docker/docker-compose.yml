@@ -1,8 +1,9 @@
 # FleetVision local lean stack (docs/specs/01_Master_Architecture.md §4.2, TDR §0/§2/§4/§5/§6).
 # Brings up the shared infrastructure every service depends on for local dev.
 #
-#   pnpm stack:up     # docker compose -f infra/docker/docker-compose.yml up -d
-#   pnpm stack:down
+#   pnpm stack:up      # docker compose -f infra/docker/docker-compose.yml up -d
+#   pnpm stack:down    # stops containers — volumes KEPT (data preserved)
+#   pnpm stack:reset   # down --volumes + up + seed:demo (full wipe — dev only)
 #
 # Named volumes (no host bind) keep the DB/MinIO data portable across Windows/Linux
 # (Sprint 1 plan risk note). Ports are exposed on the host only for local dev.
@@ -31,7 +32,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./init/postgres.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleetvision} -d ${POSTGRES_DB:-fleetvision}"]
+      # pg_isready alone can pass before Timescale accepts app connections on cold boot.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleetvision} -d ${POSTGRES_DB:-fleetvision} && psql -U ${POSTGRES_USER:-fleetvision} -d ${POSTGRES_DB:-fleetvision} -tAc 'SELECT 1' | grep -q 1"]
       interval: 5s
       timeout: 10s
       retries: 20
@@ -200,8 +202,8 @@ services:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
-      retries: 18
-      start_period: 90s
+      retries: 24
+      start_period: 120s
 
   # fleet-management-service — Fleet/Vehicle/Device registry + commands.
   fleet-management-service:

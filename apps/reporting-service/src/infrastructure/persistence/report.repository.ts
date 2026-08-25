@@ -83,23 +83,36 @@ export class ReportRepository {
           ),
           moving AS (
             SELECT t.vehicle_id, SUM(t.duration_s)::bigint AS moving_sec,
-                   SUM(t.distance_km) AS distance_km, COUNT(*)::bigint AS trips
+                   SUM(t.distance_km) AS distance_km, COUNT(*)::bigint AS trips,
+                   MAX(t.max_speed_kmh) AS max_speed_kmh
             FROM tracking.trip_events t
             JOIN scope s ON s.vehicle_id = t.vehicle_id
             WHERE t.tenant_id = ?::uuid AND t.status = 'COMPLETED'
               AND t.started_at >= ? AND t.started_at < ?
             GROUP BY t.vehicle_id
           ),
+          discarded AS (
+            SELECT COUNT(*)::bigint AS total
+            FROM tracking.trip_events t
+            JOIN scope s ON s.vehicle_id = t.vehicle_id
+            WHERE t.tenant_id = ?::uuid AND t.status = 'DISCARDED'
+              AND t.started_at >= ? AND t.started_at < ?
+          ),
           idling AS (
-            SELECT DISTINCT i.vehicle_id FROM tracking.idle_periods i
+            SELECT i.vehicle_id, SUM(i.duration_s)::bigint AS idle_sec
+            FROM tracking.idle_periods i
             JOIN scope s ON s.vehicle_id = i.vehicle_id
-            WHERE i.tenant_id = ?::uuid AND i.ended_at >= ? AND i.ended_at < ?
+            WHERE i.tenant_id = ?::uuid AND i.ended_at IS NOT NULL
+              AND i.ended_at >= ? AND i.ended_at < ?
+            GROUP BY i.vehicle_id
           ),
           parked AS (
-            SELECT DISTINCT p.vehicle_id FROM tracking.parking_periods p
+            SELECT p.vehicle_id, SUM(p.duration_s)::bigint AS parking_sec
+            FROM tracking.parking_periods p
             JOIN scope s ON s.vehicle_id = p.vehicle_id
             WHERE p.tenant_id = ?::uuid AND p.status = 'ENDED'
               AND p.ended_at >= ? AND p.ended_at < ?
+            GROUP BY p.vehicle_id
           ),
           observed AS (
             SELECT pos.vehicle_id,
@@ -113,7 +126,8 @@ export class ReportRepository {
           ),
           alarms AS (
             SELECT COUNT(*)::bigint AS total,
-                   COUNT(*) FILTER (WHERE a.status = 'OPEN')::bigint AS open
+                   COUNT(*) FILTER (WHERE a.status = 'OPEN')::bigint AS open,
+                   COUNT(*) FILTER (WHERE a.type = 'overspeed')::bigint AS speeding
             FROM notification.alerts a
             WHERE a.tenant_id = ?::uuid AND a.raised_at >= ? AND a.raised_at < ?
           ),
@@ -131,8 +145,14 @@ export class ReportRepository {
             (SELECT COUNT(*) FROM parked)::bigint AS parked_vehicles,
             COALESCE((SELECT SUM(distance_km) FROM moving), 0) AS total_distance_km,
             COALESCE((SELECT SUM(trips) FROM moving), 0) AS total_trips,
+            COALESCE((SELECT SUM(moving_sec) FROM moving), 0) AS moving_duration_sec,
+            COALESCE((SELECT SUM(idle_sec) FROM idling), 0) AS idle_duration_sec,
+            COALESCE((SELECT SUM(parking_sec) FROM parked), 0) AS parking_duration_sec,
+            (SELECT MAX(max_speed_kmh) FROM moving) AS max_speed_kmh,
+            COALESCE((SELECT total FROM discarded), 0) AS discarded_trips,
             COALESCE((SELECT total FROM alarms), 0) AS total_alarms,
             COALESCE((SELECT open FROM alarms), 0) AS open_alarms,
+            COALESCE((SELECT speeding FROM alarms), 0) AS speeding_events,
             COALESCE((SELECT total FROM geo), 0) AS geofence_events,
             (SELECT AVG(m.moving_sec / o.observed_sec * 100) FROM moving m
               JOIN observed o ON o.vehicle_id = m.vehicle_id
@@ -141,6 +161,9 @@ export class ReportRepository {
           [
             tenantId,
             ...vf.binds,
+            tenantId,
+            win.from,
+            win.to,
             tenantId,
             win.from,
             win.to,
@@ -167,6 +190,12 @@ export class ReportRepository {
       const r = row ?? {};
       const total = Number(r.total_vehicles ?? 0);
       const withTel = Number(r.with_telemetry ?? 0);
+      const movingSec = Number(r.moving_duration_sec ?? 0);
+      const distanceKm = Number(r.total_distance_km ?? 0);
+      // Avg speed = distance / moving-hours (KPI doc); null when no completed trips.
+      const avgSpeedKmh =
+        movingSec > 0 ? distanceKm / (movingSec / 3600) : null;
+      const maxSpeedRaw = r.max_speed_kmh;
       return {
         totalVehicles: total,
         vehiclesWithTelemetry: withTel,
@@ -174,12 +203,19 @@ export class ReportRepository {
         movingVehicles: Number(r.moving_vehicles ?? 0),
         idleVehicles: Number(r.idle_vehicles ?? 0),
         parkedVehicles: Number(r.parked_vehicles ?? 0),
-        totalDistanceKm: Number(r.total_distance_km ?? 0),
+        totalDistanceKm: distanceKm,
         totalTrips: Number(r.total_trips ?? 0),
         totalAlarms: Number(r.total_alarms ?? 0),
         openAlarms: Number(r.open_alarms ?? 0),
         geofenceEvents: Number(r.geofence_events ?? 0),
         avgUtilizationPct: r.avg_utilization === null ? null : Number(r.avg_utilization),
+        movingDurationSec: movingSec,
+        idleDurationSec: Number(r.idle_duration_sec ?? 0),
+        parkingDurationSec: Number(r.parking_duration_sec ?? 0),
+        avgSpeedKmh,
+        maxSpeedKmh: maxSpeedRaw === null || maxSpeedRaw === undefined ? null : Number(maxSpeedRaw),
+        speedingEventCount: Number(r.speeding_events ?? 0),
+        discardedTrips: Number(r.discarded_trips ?? 0),
       } satisfies FleetOverview;
     });
   }

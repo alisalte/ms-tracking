@@ -1,4 +1,4 @@
-import type { EChartsOption } from 'echarts';
+import type { ApexOptions } from 'apexcharts';
 import { Clock } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useTrips } from '@/api/report.api';
 import { status } from '@/theme/palette';
 
+import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
-import { EChart } from './EChart';
 
 /** Today only — the "rush hours" panel is intrinsically a single-day view. */
 const RANGE = { preset: 'today' } as const;
@@ -15,18 +15,15 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 /**
  * The VIEWER's local UTC offset (minutes, as getTimezoneOffset() returns it
- * with the opposite sign) — hour buckets match the clock the operator sees,
- * whatever their timezone (was hardcoded to Tehran's +3:30).
+ * with the opposite sign) — hour buckets match the clock the operator sees.
  */
 const TZ_OFFSET_MIN = -new Date().getTimezoneOffset();
 
 /**
  * HourlyActivityChart — trip starts per local hour (today).
  *
- * Buckets the reporting service's trip rows (`GET /reports/trips`, preset 1d)
- * by their start hour in the fleet's local timezone, as a soft-gradient area
- * bar — the day's dispatch peaks (morning departures, afternoon returns) at a
- * glance. The peak hour is highlighted.
+ * Buckets reporting-service trip rows by start hour in the operator's local
+ * timezone as a soft column chart — dispatch peaks at a glance.
  */
 export function HourlyActivityChart() {
   const { t } = useTranslation();
@@ -54,65 +51,48 @@ export function HourlyActivityChart() {
 
   const empty = !trips.isLoading && !trips.isError && rows.length === 0;
 
-  const option = useMemo<EChartsOption>(
+  const options = useMemo<ApexOptions>(
     () => ({
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (p) => {
-          const point = Array.isArray(p) ? p[0] : p;
-          const h = Number(point.name);
-          return `<b>${String(h).padStart(2, '0')}:00 – ${String((h + 1) % 24).padStart(2, '0')}:00</b><br/>${t(
-            'dashboard.charts.tripStarts',
-          )}: <b>${point.value}</b>`;
+      colors: [status.teal],
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shadeIntensity: 0.4,
+          opacityFrom: 0.95,
+          opacityTo: 0.35,
+          stops: [0, 100],
         },
       },
-      grid: { left: 8, right: 12, top: 22, bottom: 4, containLabel: true },
-      xAxis: {
-        type: 'category',
-        data: HOURS.map((h) => String(h)),
-        axisLabel: { interval: 2, formatter: (v: string) => `${v.padStart(2, '0')}` },
-      },
-      yAxis: { type: 'value', minInterval: 1, splitNumber: 3 },
-      series: [
-        {
-          name: t('dashboard.charts.tripStarts'),
-          type: 'bar',
-          barMaxWidth: 14,
-          itemStyle: {
-            borderRadius: [3, 3, 0, 0],
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: status.teal },
-                { offset: 1, color: 'rgba(6, 182, 212, 0.25)' },
-              ],
-            },
+      plotOptions: {
+        bar: {
+          columnWidth: '58%',
+          borderRadius: 3,
+          colors: {
+            ranges:
+              peak >= 0
+                ? [{ from: counts[peak], to: counts[peak], color: status.warning }]
+                : [],
           },
-          markPoint:
-            peak >= 0 && counts[peak] > 0
-              ? {
-                  symbolSize: 44,
-                  itemStyle: { color: status.warning },
-                  label: { fontSize: 10, fontWeight: 800, color: '#fff' },
-                  data: [
-                    {
-                      coord: [String(peak), counts[peak]],
-                      value: counts[peak],
-                      name: t('dashboard.charts.peak'),
-                    },
-                  ],
-                }
-              : undefined,
-          data: counts,
         },
-      ],
+      },
+      xaxis: {
+        categories: HOURS.map((h) => String(h).padStart(2, '0')),
+        tickAmount: 8,
+      },
+      yaxis: { decimalsInFloat: 0, min: 0, forceNiceScale: true },
+      tooltip: {
+        y: {
+          formatter: (v: number) => `${v}`,
+          title: { formatter: () => t('dashboard.charts.tripStarts') },
+        },
+      },
     }),
     [counts, peak, t],
+  );
+
+  const series = useMemo(
+    () => [{ name: t('dashboard.charts.tripStarts'), data: counts }],
+    [counts, t],
   );
 
   return (
@@ -128,7 +108,7 @@ export function HourlyActivityChart() {
       flush
     >
       <div className="w-full px-4 pb-3 sm:px-5">
-        <EChart option={option} height={230} />
+        <ApexChart type="bar" series={series} options={options} height={230} />
         {peak >= 0 && counts[peak] > 0 && (
           <p className="-mt-1 pb-1 text-center text-[0.7rem] font-semibold text-gray-500 dark:text-graydark-600">
             {t('dashboard.charts.peakHour', {

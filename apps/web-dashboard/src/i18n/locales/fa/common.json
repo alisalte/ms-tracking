@@ -184,6 +184,12 @@
       "utilization": "میانگین بهره‌وری",
       "geofenceEvents": "رویدادهای گئوفنس",
       "avgSpeed": "سرعت متوسط (۷ روز)",
+      "maxSpeed": "حداکثر سرعت (۷ روز)",
+      "movingHours": "ساعات حرکت (۷ روز)",
+      "idleHours": "ساعات درجا (۷ روز)",
+      "speedingEvents": "رویدادهای سرعت غیرمجاز",
+      "discardedTrips": "{{count}} سفر خرد حذف‌شده",
+      "maxSpeedChip": "حداکثر {{value}} km/h",
       "criticalAlarms": "هشدار بحرانی",
       "openAlarmsCount": "{{count}} فعال"
     },
@@ -269,7 +275,14 @@
       "fleetComparison": "مقایسه‌ی ناوگان‌ها (لحظه‌ای)",
       "speedLeaders": "سریع‌ترین خودروها (۷ روز)",
       "alarmSeverity": "شدت هشدارها (۷ روز)",
-      "hourlyActivity": "ریتم ساعتی سفرها (امروز)"
+      "hourlyActivity": "ریتم ساعتی سفرها (امروز)",
+      "durationMix": "حرکت / درجا / پارک (۷ روز)"
+    },
+    "sectionLabels": {
+      "live": "وضعیت زنده‌ی ناوگان",
+      "liveHint": "لحظه‌ای از نقشه و وضعیت دستگاه",
+      "period": "عملکرد بازه",
+      "periodHint": "۷ روز اخیر · شاخص‌های گزارش‌گیری (UTC)"
     },
     "empty": {
       "alerts": "هیچ هشدار فعلی وجود ندارد — ناوگان آرام است.",
@@ -324,7 +337,11 @@
       "totalAlarms": "کل هشدارها",
       "tripStarts": "شروع سفر",
       "peak": "اوج",
-      "peakHour": "اوج فعالیت: ساعت {{hour}} با {{count}} سفر"
+      "peakHour": "اوج فعالیت: ساعت {{hour}} با {{count}} سفر",
+      "movingHours": "حرکت",
+      "idleHours": "درجا",
+      "parkingHours": "پارک",
+      "totalHours": "مجموع ساعات"
     },
     "heroConnectivity": "اتصال دستگاه‌ها",
     "heroActiveShare": "سهم درحرکت از فعال",

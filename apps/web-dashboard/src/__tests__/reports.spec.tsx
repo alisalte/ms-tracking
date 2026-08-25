@@ -132,6 +132,13 @@ const overview: FleetOverviewResponse = {
   openAlarms: 2,
   geofenceEvents: 15,
   avgUtilizationPct: null,
+  movingDurationSec: 0,
+  idleDurationSec: 0,
+  parkingDurationSec: 0,
+  avgSpeedKmh: null,
+  maxSpeedKmh: null,
+  speedingEventCount: 0,
+  discardedTrips: 0,
   from: '2026-08-09T00:00:00Z',
   to: '2026-08-16T00:00:00Z',
   dataAsOf: '2026-08-16T14:00:00Z',
@@ -161,7 +168,7 @@ describe('ReportsOverviewSection (backend KPIs only)', () => {
     );
     render(<ReportsOverviewSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
 
-    await waitFor(() => expect(screen.getAllByTestId('report-kpi')).toHaveLength(11));
+    await waitFor(() => expect(screen.getAllByTestId('report-kpi')).toHaveLength(15));
     // Backend values surface verbatim. KPI tiles render the value via
     // toLocaleString (locale digit grouping may render 1,500 / 1 500 / 1500
     // depending on the runner's ICU) with the unit as a suffix node.
@@ -183,7 +190,8 @@ describe('ReportsOverviewSection (backend KPIs only)', () => {
     );
     render(<ReportsOverviewSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
     await waitFor(() => expect(screen.getAllByTestId('report-kpi').length).toBeGreaterThan(0));
-    expect(screen.getByText('—')).toBeInTheDocument();
+    // Utilization + avg/max speed are null in the fixture → several honest "—" tiles.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/no telemetry in range/i)).toBeInTheDocument();
   });
 

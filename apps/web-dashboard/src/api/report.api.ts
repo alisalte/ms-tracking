@@ -35,6 +35,19 @@ export interface FleetOverviewResponse {
   openAlarms: number;
   geofenceEvents: number;
   avgUtilizationPct: number | null;
+  /** SUM completed trip duration (KPI: Moving duration). */
+  movingDurationSec: number;
+  /** SUM closed idle periods (KPI: Idle duration). */
+  idleDurationSec: number;
+  /** SUM ENDED parking periods (KPI: Parking duration). */
+  parkingDurationSec: number;
+  /** distance / moving-hours; null when no completed trips. */
+  avgSpeedKmh: number | null;
+  /** MAX trip max_speed; null when no completed trips. */
+  maxSpeedKmh: number | null;
+  /** Count of overspeed alerts in range. */
+  speedingEventCount: number;
+  discardedTrips: number;
   from: string;
   to: string;
   dataAsOf: string;
