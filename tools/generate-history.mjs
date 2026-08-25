@@ -22,7 +22,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const TENANT = 'c6213758-9f71-460e-a66e-1da2ba6b25b4';
+const TENANT = process.env.SEED_TENANT_ID ?? '4193ef68-74c6-4d2d-8ce5-06dc2e06febf';
 const DAYS = Number(
   process.argv.includes('--days') ? process.argv[process.argv.indexOf('--days') + 1] : 30,
 );

@@ -28,8 +28,8 @@ RUN pnpm --filter @fleetvision/meitrack-media-protocol build \
 
 # ---- Stage 2: runtime (node + ffmpeg, non-root) ------------------------------
 FROM node:22-bookworm-slim
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
+  && for i in 1 2 3; do apt-get install -y --no-install-recommends ffmpeg ca-certificates && break || sleep 5; done \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app

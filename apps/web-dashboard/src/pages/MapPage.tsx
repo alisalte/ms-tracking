@@ -167,7 +167,10 @@ export function MapPage() {
   const [customRange, setCustomRange] = useState<CustomRange | null>(null);
   const [routePlannerOpen, setRoutePlannerOpen] = useState(false);
   // Mobile roster: below md the roster becomes a slide-in overlay (§ responsive).
-  const [rosterOpen, setRosterOpen] = useState(false);
+  // Defaults OPEN so the vehicle list is visible on first load at any viewport
+  // width — narrow/zoomed windows were landing with the roster off-canvas and
+  // no visible affordance pointing at the toggle button.
+  const [rosterOpen, setRosterOpen] = useState(true);
   const [routeGeometry, setRouteGeometry] = useState<ReadonlyArray<{
     lat: number;
     lng: number;
