@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router';
 import type { ReportRange } from '@/api/report.api';
 import { ActivitySection } from '@/components/reports/ActivitySection';
 import { AlarmsSection } from '@/components/reports/AlarmsSection';
+import { AnalyticsSection } from '@/components/reports/AnalyticsSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
@@ -20,7 +21,7 @@ import { TripsSection } from '@/components/reports/TripsSection';
 import { VehiclesSection } from '@/components/reports/VehiclesSection';
 import { PageHeader, Tabs } from '@/components/tailwind-ui';
 
-const SECTIONS = ['overview', 'vehicles', 'trips', 'alarms', 'geofences', 'activity'] as const;
+const SECTIONS = ['overview', 'analytics', 'vehicles', 'trips', 'alarms', 'geofences', 'activity'] as const;
 type Section = (typeof SECTIONS)[number];
 
 function isSection(v: string | null): v is Section {
@@ -63,6 +64,7 @@ export function ReportsPage() {
       />
 
       {section === 'overview' && <ReportsOverviewSection range={range} />}
+      {section === 'analytics' && <AnalyticsSection range={range} />}
       {section === 'vehicles' && <VehiclesSection range={range} />}
       {section === 'trips' && <TripsSection range={range} />}
       {section === 'alarms' && <AlarmsSection range={range} />}

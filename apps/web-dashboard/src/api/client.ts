@@ -1,4 +1,4 @@
-import axios, { type InternalAxiosRequestConfig } from 'axios';
+import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 
 import { getStoredTokens, getTenantId } from '@/auth/token.storage';
 import type { ApiResponse } from '@/types/api.types';
@@ -37,14 +37,25 @@ const apiClient = axios.create({
  */
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const stored = getStoredTokens();
-  if (stored?.accessToken) {
+  const isLogin = typeof config.url === 'string' && config.url.includes('/auth/login');
+
+  // Login is public. A leftover session after a DB re-seed would otherwise
+  // attach a dead JWT *and* its stale tenant UUID, which identity treats as
+  // "Invalid credentials" even when the form has the live org name.
+  if (stored?.accessToken && !isLogin) {
     config.headers.set('Authorization', `Bearer ${stored.accessToken}`);
   }
-  // Tenant ID: prefer the token pair, fall back to the standalone key so the
-  // header is present on the login request itself (tokens don't exist yet).
-  const tenantId = stored?.tenantId ?? getTenantId();
-  if (tenantId) {
-    config.headers.set('X-Tenant-Id', tenantId);
+  if (isLogin) {
+    config.headers.delete('Authorization');
+  }
+
+  // Prefer a header already set on this request (the login form). Otherwise
+  // fall back to the stored session tenant, then the standalone key.
+  if (!config.headers.get('X-Tenant-Id')) {
+    const tenantId = isLogin ? getTenantId() : (stored?.tenantId ?? getTenantId());
+    if (tenantId) {
+      config.headers.set('X-Tenant-Id', tenantId);
+    }
   }
   return config;
 });
@@ -125,8 +136,12 @@ export async function apiPutRaw<TRes>(url: string, body?: unknown): Promise<TRes
 /**
  * Typed POST request that unwraps the { data: T } envelope.
  */
-export async function apiPost<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {
-  const response = await apiClient.post<ApiResponse<TRes>>(url, body);
+export async function apiPost<TReq, TRes>(
+  url: string,
+  body?: TReq,
+  config?: AxiosRequestConfig,
+): Promise<TRes> {
+  const response = await apiClient.post<ApiResponse<TRes>>(url, body, config);
   return response.data.data;
 }
 

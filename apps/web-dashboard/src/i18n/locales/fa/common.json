@@ -1041,6 +1041,7 @@
     },
     "sections": {
       "overview": "نمای کلی",
+      "analytics": "شاخص‌ها و تحلیل",
       "vehicles": "خودروها",
       "trips": "سفرها",
       "alarms": "هشدارها",
@@ -1077,10 +1078,37 @@
       "geofenceEvents": "رویدادهای محدوده",
       "utilization": "میانگین بهره‌وری"
     },
+    "analytics": {
+      "kpiTitle": "کارت امتیاز شاخص‌ها نسبت به دوره قبل",
+      "kpiNote": "هر شاخص از تعریف بک‌اند است. تراشه درصد تغییر نسبت به پنجرهٔ هم‌طول قبلی است (نه هدف).",
+      "safetyTitle": "شاخص‌های ایمنی",
+      "fleetTitle": "مقایسه ناوگان",
+      "noDelta": "دوره قبل نیست",
+      "indicator": {
+        "distanceKm": "مسافت",
+        "trips": "سفرها",
+        "utilizationPct": "بهره‌وری",
+        "movingHours": "ساعت حرکت",
+        "idleHours": "ساعت درجا",
+        "avgSpeedKmh": "سرعت میانگین",
+        "alarms": "هشدارها",
+        "openAlarms": "هشدار باز",
+        "speedingEvents": "سرعت غیرمجاز",
+        "geofenceEvents": "رویدادهای محدوده"
+      },
+      "safety": {
+        "totalAlarms": "هشدارها",
+        "openAlarms": "باز",
+        "speedingEvents": "سرعت غیرمجاز",
+        "highSeverityAlarms": "بالا / بحرانی",
+        "geofenceEvents": "رویدادهای محدوده"
+      }
+    },
     "charts": {
       "distanceTrips": "مسافت و سفرها در زمان (روزهای UTC)",
       "alarmTrend": "هشدارهای روزانه بر اساس نوع",
       "stateDistribution": "توزیع وضعیت خودروها (بازه)",
+      "fleetComparison": "مسافت و سفرها بر اساس ناوگان",
       "empty": "در این بازه داده‌ای نیست"
     },
     "export": {
@@ -1121,6 +1149,7 @@
       "acknowledged": "تأییدشده",
       "resolved": "حل‌شده",
       "geofence": "محدوده",
+      "fleet": "ناوگان",
       "enters": "ورود",
       "exits": "خروج",
       "dwells": "توقف",
@@ -1148,6 +1177,8 @@
     "nav": {
       "organization": "سازمان",
       "users": "کاربران و نقش‌ها",
+      "roles": "دسترسی و نقش‌ها",
+      "permissions": "مجوزها",
       "fleets": "ناوگان‌ها و خودروها",
       "devices": "دستگاه‌ها",
       "geofences": "محدوده‌های جغرافیایی",
@@ -1157,8 +1188,7 @@
       "apikeys": "کلیدهای API",
       "billing": "صورتحساب",
       "audit": "گزارش ممیزی",
-      "settings": "تنظیمات",
-      "permissions": "مجوزها"
+      "settings": "تنظیمات"
     },
     "users": {
       "notFound": "کاربر یافت نشد.",
@@ -1211,7 +1241,14 @@
       "members": "اعضا",
       "type": "نوع",
       "permissionMatrix": "ماتریس مجوزها",
-      "empty": "نقشی برای نمایش وجود ندارد"
+      "empty": "نقش سفارشی نیست — یکی بسازید تا زیرمجموعه‌ای از مجوزها را بدهید.",
+      "create": "ایجاد نقش سفارشی",
+      "createTitle": "نقش سفارشی جدید",
+      "name": "نام نقش",
+      "description": "توضیح",
+      "createSubmit": "ایجاد نقش",
+      "toastCreated": "نقش ساخته شد — مجوزها را از ماتریس بدهید",
+      "nameHint": "۲ تا ۶۴ نویسه. نام نقش‌های سیستمی قابل تکرار نیست."
     },
     "permissions": {
       "subtitle": "کاتالوگ رسمی مجوزها به تفکیک دامنه (۰۲_Domain_Model §6.1).",
@@ -1230,7 +1267,11 @@
         "analytics": "تحلیل‌ها",
         "notification": "اعلان‌ها",
         "billing": "صورتحساب",
-        "audit": "ممیزی"
+        "audit": "ممیزی",
+        "maps": "نقشه",
+        "vehicle": "خودروها",
+        "device": "دستگاه‌ها",
+        "report": "گزارش‌گیری"
       }
     },
     "settings": {

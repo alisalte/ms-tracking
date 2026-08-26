@@ -15,7 +15,7 @@ import { useAlarmReport, useFleetOverview } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Card } from '@/components/tailwind-ui';
 
-import { hoursFromSec } from './DurationMixChart';
+import { hoursFromSec } from '@/lib/hours-from-sec';
 import { KpiChip, KpiTile } from './KpiTile';
 
 /** Period fixed at the trailing week — the dashboard's "at a glance" window. */

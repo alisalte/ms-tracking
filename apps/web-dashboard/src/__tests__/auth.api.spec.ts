@@ -48,9 +48,13 @@ describe('auth.api (snake_case → camelCase boundary mapping)', () => {
   it('login() maps the snake_case wire response to camelCase', async () => {
     apiPostMock.mockResolvedValueOnce(loginWire);
 
-    const result = await login('a@b.io', 'pw');
+    const result = await login('a@b.io', 'pw', 'FleetVision');
 
-    expect(apiPostMock).toHaveBeenCalledWith('/auth/login', { email: 'a@b.io', password: 'pw' });
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/auth/login',
+      { email: 'a@b.io', password: 'pw' },
+      { headers: { 'X-Tenant-Id': 'FleetVision' } },
+    );
     expect(result).toEqual({
       accessToken: 'access-1',
       refreshToken: 'refresh-1',

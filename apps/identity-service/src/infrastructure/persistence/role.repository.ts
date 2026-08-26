@@ -2,7 +2,7 @@
  * Role repository — maps the Role aggregate to `iam.roles` + `iam.role_permissions`.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
-import { type Role, Role as RoleClass, type RoleProps } from '../../domain/index.js';
+import { Role as RoleClass, type Role, type RoleProps } from '../../domain/index.js';
 import { withTenantContext } from './tenant-context.js';
 
 export interface RoleRow {
@@ -66,6 +66,54 @@ export class RoleRepository {
           return this.toDomain(r, perms);
         }),
       );
+    });
+  }
+
+  public async listWithMemberCounts(
+    tenantId: string,
+  ): Promise<Array<{ role: Role; memberCount: number }>> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = (await trx('iam.roles')
+        .where({ tenant_id: tenantId })
+        .orderBy('name')) as RoleRow[];
+      const counts = (await trx('iam.user_roles')
+        .where({ tenant_id: tenantId })
+        .groupBy('role_id')
+        .select('role_id')
+        .count('* as n')) as Array<{ role_id: string; n: string | number }>;
+      const countMap = new Map(counts.map((c) => [c.role_id, Number(c.n)]));
+      return Promise.all(
+        rows.map(async (r) => {
+          const perms = (
+            (await trx('iam.role_permissions')
+              .where({ role_id: r.id })
+              .select('permission')) as PermissionRow[]
+          ).map((p) => p.permission);
+          return { role: this.toDomain(r, perms), memberCount: countMap.get(r.id) ?? 0 };
+        }),
+      );
+    });
+  }
+
+  /** Replace the permission set of a custom (non-system) role. */
+  public async replacePermissions(
+    tenantId: string,
+    roleId: string,
+    permissions: readonly string[],
+  ): Promise<Role> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = (await trx('iam.roles')
+        .where({ id: roleId, tenant_id: tenantId })
+        .first()) as RoleRow | undefined;
+      if (!row) throw new Error('Role not found');
+      if (row.is_system) throw new Error('System roles are immutable.');
+      await trx('iam.role_permissions').where({ role_id: roleId }).delete();
+      if (permissions.length > 0) {
+        await trx('iam.role_permissions').insert(
+          permissions.map((permission) => ({ role_id: roleId, permission })),
+        );
+      }
+      return this.toDomain(row, [...permissions]);
     });
   }
 

@@ -53,19 +53,19 @@ async function waitPostgres(maxSec = 120) {
   process.stdout.write('→ waiting for postgres');
   const deadline = Date.now() + maxSec * 1000;
   while (Date.now() < deadline) {
-    const ready = dockerOk(['exec', PG, 'pg_isready', '-U', 'fleetvision', '-d', 'fleetvision']);
-    const probe = dockerOk([
+    // TCP probe — Unix-socket pg_isready can pass while :5432 is still down.
+    const ready = dockerOk([
       'exec',
       PG,
-      'psql',
+      'pg_isready',
+      '-h',
+      '127.0.0.1',
       '-U',
       'fleetvision',
       '-d',
       'fleetvision',
-      '-tAc',
-      'SELECT 1',
     ]);
-    if (ready !== null && probe === '1') {
+    if (ready !== null) {
       console.log('\n✓ postgres ready');
       return;
     }

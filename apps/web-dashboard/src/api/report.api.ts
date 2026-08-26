@@ -322,6 +322,78 @@ export function useActivity(range: ReportRange, filters: { vehicleId?: string } 
   });
 }
 
+export interface KpiIndicatorWire {
+  key: string;
+  value: number | null;
+  previousValue: number | null;
+  deltaPct: number | null;
+  unit: 'count' | 'km' | 'pct' | 'kmh' | 'hours';
+}
+
+export interface KpiScorecardResponse {
+  current: { indicators: KpiIndicatorWire[] };
+  from: string;
+  to: string;
+  previousFrom: string;
+  previousTo: string;
+  dataAsOf: string;
+  freshness: 'AGGREGATED';
+}
+
+export interface FleetComparisonRowWire {
+  fleetId: string | null;
+  fleetName: string;
+  vehicleCount: number;
+  distanceKm: number;
+  trips: number;
+  movingDurationSec: number;
+  utilizationPct: number | null;
+  alarms: number;
+}
+
+export interface SafetyScorecardResponse {
+  current: {
+    totalAlarms: number;
+    openAlarms: number;
+    speedingEvents: number;
+    highSeverityAlarms: number;
+    geofenceEvents: number;
+    previous: {
+      totalAlarms: number;
+      openAlarms: number;
+      speedingEvents: number;
+      highSeverityAlarms: number;
+      geofenceEvents: number;
+    };
+  };
+  from: string;
+  to: string;
+  dataAsOf: string;
+  freshness: 'AGGREGATED';
+}
+
+export function useKpiScorecard(range: ReportRange) {
+  return useQuery({
+    queryKey: ['reports', 'kpis', range],
+    queryFn: () => apiGetRaw<KpiScorecardResponse>('/reports/kpis', rangeParams(range)),
+  });
+}
+
+export function useFleetComparison(range: ReportRange) {
+  return useQuery({
+    queryKey: ['reports', 'fleet-comparison', range],
+    queryFn: () =>
+      apiGetRaw<{ items: FleetComparisonRowWire[] }>('/reports/fleet-comparison', rangeParams(range)),
+  });
+}
+
+export function useSafetyScorecard(range: ReportRange) {
+  return useQuery({
+    queryKey: ['reports', 'safety', range],
+    queryFn: () => apiGetRaw<SafetyScorecardResponse>('/reports/safety', rangeParams(range)),
+  });
+}
+
 /** CSV export (§31): authenticated blob download from the reporting service. */
 export async function exportReportCsv(
   report: 'trips' | 'vehicle-utilization' | 'alarms',

@@ -3,7 +3,7 @@
  * reactivate. Provisioning is a platform-SaaS-Ops operation
  * (`billing.tenant.manage`); self-view is any authenticated user (own tenant).
  */
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { ProvisionTenantUseCase } from '../../application/index.js';
@@ -11,6 +11,8 @@ import { ProvisionTenantUseCase } from '../../application/index.js';
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
+import { tenantSettingsPatchSchema } from '../../domain/tenant-settings.js';
+import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 
 /** Tenant provisioning + self-view. Authentication + RBAC are global (Sprint B). */
 @Controller('api/v1')
@@ -66,6 +68,28 @@ export class TenantsController {
         status: tenant.status,
       },
     };
+  }
+
+  @Get('tenant/settings')
+  @RequirePermissions('iam.org.read')
+  public async getSettings(@Req() req: Request) {
+    const p = getPrincipal(req);
+    const settings = await this.tenants.readSettings(p.tenantId);
+    if (!settings) throw new HttpException('Tenant not found', HttpStatus.NOT_FOUND);
+    return { data: settings };
+  }
+
+  @Put('tenant/settings')
+  @RequirePermissions('iam.org.update')
+  public async putSettings(
+    @Body(new ZodValidationPipe(tenantSettingsPatchSchema))
+    body: import('../../domain/tenant-settings.js').TenantSettingsPatch,
+    @Req() req: Request,
+  ) {
+    const p = getPrincipal(req);
+    const settings = await this.tenants.saveSettings(p.tenantId, body);
+    if (!settings) throw new HttpException('Tenant not found', HttpStatus.NOT_FOUND);
+    return { data: settings };
   }
 
   @Get('tenants/:id')

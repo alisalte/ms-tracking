@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { type ReportRange, useFleetOverview, useTrend } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { EChart } from '@/components/dashboard/EChart';
-import { hoursFromSec } from '@/components/dashboard/DurationMixChart';
+import { hoursFromSec } from '@/lib/hours-from-sec';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
 import type { EChartsOption } from 'echarts';

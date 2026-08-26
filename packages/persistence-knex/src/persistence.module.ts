@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import type { Knex } from './knex.factory.js';
 import { type KnexFactoryOptions, createKnex } from './knex.factory.js';
-import { type MigrationsOptions, runMigrations } from './migrations.js';
+import { type MigrationsOptions, runMigrations, waitForDatabase } from './migrations.js';
 
 export const KNEX_TOKEN = 'FLEETVISION_KNEX';
 /**
@@ -84,8 +84,9 @@ export class PersistenceModule implements OnApplicationShutdown {
       useFactory: async () => {
         if (options.migrations) {
           try {
-            const applied = await runMigrations(migrationsKnex, options.migrations);
             const log = new Logger(PersistenceModule.name);
+            await waitForDatabase(migrationsKnex, { logger: log });
+            const applied = await runMigrations(migrationsKnex, options.migrations);
             if (applied.length > 0) {
               log.log(`Applied ${applied.length} migration(s): ${applied.join(', ')}`);
             } else {

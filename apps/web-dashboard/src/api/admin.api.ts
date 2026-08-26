@@ -10,16 +10,19 @@
  * - GET    /auth/api-keys — list API keys
  * - POST   /auth/api-keys — create API key
  * - DELETE /auth/api-keys/:id — revoke API key
- * - GET    /tenant — self-view tenant info
+ * - GET    /iam/roles — list roles
+ * - PUT    /iam/roles/:id — update custom role permissions
+ * - GET    /iam/permissions — permission catalog
+ * - GET    /tenant/settings — tenant settings
+ * - PUT    /tenant/settings — update tenant settings
  *
  * **Mock-only** (no backend exists yet):
- * - Roles, permissions catalog, settings, audit entries
+ * - Audit entries
  *
  * Mock-gated via `withMockFallback` — production builds never call mocks.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { NotImplementedError } from '@/lib/errors';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import { downloadBlob } from '@/lib/video-stream';
@@ -74,6 +77,42 @@ function mapUser(wire: UserWire): AdminUser {
   };
 }
 
+interface RoleWire {
+  id: string;
+  name: string;
+  description: string;
+  is_system: boolean;
+  permission_keys: string[];
+  member_count: number;
+  mfa_required: boolean;
+}
+
+function mapRole(wire: RoleWire): Role {
+  return {
+    id: wire.id,
+    name: wire.name,
+    description: wire.description,
+    isSystem: wire.is_system,
+    permissionKeys: wire.permission_keys ?? [],
+    memberCount: wire.member_count ?? 0,
+    mfaRequired: wire.mfa_required ?? false,
+  };
+}
+
+interface PermissionGroupWire {
+  domain: string;
+  label_key: string;
+  permissions: string[];
+}
+
+function mapPermissionGroup(wire: PermissionGroupWire): PermissionGroup {
+  return {
+    domain: wire.domain,
+    labelKey: wire.label_key,
+    permissions: wire.permissions,
+  };
+}
+
 // ── Fetchers (real backend with mock fallback) ───────────────────────────────
 
 /** GET /iam/users — real identity-service; mock fallback in dev. */
@@ -100,26 +139,34 @@ async function fetchUserDetail(id: string): Promise<AdminUser | undefined> {
   );
 }
 
-/** GET /iam/roles — no backend; mock-only (gated). */
+/** GET /iam/roles — identity-service. */
 async function fetchRoles(): Promise<Role[]> {
-  if (!shouldUseMock()) return [];
-  return resolveMock(mockRoles);
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<RoleWire[]>('/iam/roles');
+      return (Array.isArray(rows) ? rows : []).map(mapRole);
+    },
+    () => resolveMock(mockRoles),
+  );
 }
 
-/** The permission catalog — static (02_Domain_Model §6.1). */
+/** GET /iam/permissions — canonical catalog grouped by domain. */
 async function fetchPermissions(): Promise<PermissionGroup[]> {
-  if (!shouldUseMock()) return PERMISSION_CATALOG;
-  return resolveMock(PERMISSION_CATALOG);
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<PermissionGroupWire[]>('/iam/permissions');
+      return (Array.isArray(rows) ? rows : []).map(mapPermissionGroup);
+    },
+    () => resolveMock(PERMISSION_CATALOG),
+  );
 }
 
-/** GET /settings — no backend; mock-only (gated). */
+/** GET /tenant/settings — identity-service. */
 async function fetchSettings(): Promise<TenantSettings> {
-  // No settings backend exists yet — real mode must fail honestly (§22) so the
-  // Settings section shows its error state instead of fabricated settings.
-  if (!shouldUseMock()) {
-    throw new NotImplementedError('Tenant settings API is not implemented yet');
-  }
-  return resolveMock(mockSettings);
+  return withMockFallback(
+    async () => apiGet<TenantSettings>('/tenant/settings'),
+    () => resolveMock(mockSettings),
+  );
 }
 
 /** GET /audit/entries — no backend; mock-only (gated). */
@@ -293,9 +340,7 @@ export function useUserStatusAction() {
 }
 
 /**
- * Update tenant settings → `PUT /settings`.
- * No backend yet — mock optimistic update. In REAL mode the mutation REJECTS
- * honestly instead of fabricating a persisted "Saved".
+ * Update tenant settings → `PUT /tenant/settings` (identity-service).
  */
 export function useUpdateSettings() {
   const qc = useQueryClient();
@@ -306,10 +351,10 @@ export function useUpdateSettings() {
     { prev: TenantSettings | undefined }
   >({
     mutationFn: async (patch) => {
-      if (!shouldUseMock()) {
-        throw new Error('Settings changes are not available (settings backend not implemented).');
-      }
-      return resolveMock({ ...mockSettings, ...patch } satisfies TenantSettings);
+      return withMockFallback(
+        async () => apiPut<Partial<TenantSettings>, TenantSettings>('/tenant/settings', patch),
+        () => resolveMock({ ...mockSettings, ...patch } satisfies TenantSettings),
+      );
     },
     onMutate: async (patch) => {
       const key = queryKeys.admin.settings();
@@ -322,6 +367,62 @@ export function useUpdateSettings() {
       if (ctx?.prev) qc.setQueryData(queryKeys.admin.settings(), ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.admin.all }),
+  });
+}
+
+/**
+ * Create a custom role → `POST /iam/roles` (identity-service).
+ * System roles cannot be created this way; wildcard `*` is rejected by the API.
+ */
+export function useCreateRole() {
+  const qc = useQueryClient();
+  return useMutation<Role, Error, { name: string; description?: string }>({
+    mutationFn: async (input) => {
+      return withMockFallback(
+        async () => {
+          const wire = await apiPost<{ name: string; description?: string; permissions: string[] }, RoleWire>(
+            '/iam/roles',
+            { name: input.name, description: input.description, permissions: [] },
+          );
+          return mapRole(wire);
+        },
+        () =>
+          resolveMock({
+            id: `custom-${Date.now()}`,
+            name: input.name,
+            description: input.description ?? '',
+            isSystem: false,
+            permissionKeys: [],
+            memberCount: 0,
+            mfaRequired: false,
+          } satisfies Role),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.roles() }),
+  });
+}
+
+/**
+ * Replace a custom role's permission set → `PUT /iam/roles/:id`.
+ */
+export function useUpdateRolePermissions() {
+  const qc = useQueryClient();
+  return useMutation<Role, Error, { id: string; permissions: string[] }>({
+    mutationFn: async ({ id, permissions }) => {
+      return withMockFallback(
+        async () => {
+          const wire = await apiPut<{ permissions: string[] }, RoleWire>(`/iam/roles/${id}`, {
+            permissions,
+          });
+          return mapRole(wire);
+        },
+        () => {
+          const base = mockRoles.find((r) => r.id === id) ?? mockRoles[0];
+          return resolveMock({ ...base, permissionKeys: permissions } as Role);
+        },
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.roles() }),
   });
 }
 

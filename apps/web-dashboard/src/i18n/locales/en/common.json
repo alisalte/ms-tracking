@@ -1041,6 +1041,7 @@
     },
     "sections": {
       "overview": "Overview",
+      "analytics": "KPIs & Analytics",
       "vehicles": "Vehicles",
       "trips": "Trips",
       "alarms": "Alarms",
@@ -1077,10 +1078,37 @@
       "geofenceEvents": "Geofence events",
       "utilization": "Avg utilization"
     },
+    "analytics": {
+      "kpiTitle": "KPI scorecard vs previous period",
+      "kpiNote": "Each indicator is the documented backend KPI. The chip is the change versus the immediately previous window of the same length (not a target).",
+      "safetyTitle": "Safety indicators",
+      "fleetTitle": "Fleet comparison",
+      "noDelta": "no prior data",
+      "indicator": {
+        "distanceKm": "Distance",
+        "trips": "Trips",
+        "utilizationPct": "Utilization",
+        "movingHours": "Moving hours",
+        "idleHours": "Idle hours",
+        "avgSpeedKmh": "Avg speed",
+        "alarms": "Alarms",
+        "openAlarms": "Open alarms",
+        "speedingEvents": "Speeding events",
+        "geofenceEvents": "Geofence events"
+      },
+      "safety": {
+        "totalAlarms": "Alarms",
+        "openAlarms": "Open",
+        "speedingEvents": "Speeding",
+        "highSeverityAlarms": "High / critical",
+        "geofenceEvents": "Geofence events"
+      }
+    },
     "charts": {
       "distanceTrips": "Distance & trips over time (UTC days)",
       "alarmTrend": "Daily alarms by type",
       "stateDistribution": "Vehicle state distribution (period)",
+      "fleetComparison": "Distance & trips by fleet",
       "empty": "No data in range"
     },
     "export": {
@@ -1121,6 +1149,7 @@
       "acknowledged": "Ack",
       "resolved": "Resolved",
       "geofence": "Geofence",
+      "fleet": "Fleet",
       "enters": "ENTER",
       "exits": "EXIT",
       "dwells": "DWELL",
@@ -1148,6 +1177,8 @@
     "nav": {
       "organization": "Organization",
       "users": "Users & Roles",
+      "roles": "Access & Roles",
+      "permissions": "Permissions",
       "fleets": "Fleets & Vehicles",
       "devices": "Devices",
       "geofences": "Geofences",
@@ -1157,8 +1188,7 @@
       "apikeys": "API Keys",
       "billing": "Billing",
       "audit": "Audit Log",
-      "settings": "Settings",
-      "permissions": "Permissions"
+      "settings": "Settings"
     },
     "users": {
       "notFound": "User not found.",
@@ -1211,7 +1241,14 @@
       "members": "Members",
       "type": "Type",
       "permissionMatrix": "Permission matrix",
-      "empty": "No roles to display"
+      "empty": "No custom roles yet — create one to grant a subset of permissions.",
+      "create": "Create custom role",
+      "createTitle": "New custom role",
+      "name": "Role name",
+      "description": "Description",
+      "createSubmit": "Create role",
+      "toastCreated": "Role created — assign permissions from the matrix",
+      "nameHint": "2–64 characters. System role names cannot be reused."
     },
     "permissions": {
       "subtitle": "The canonical permission catalog by domain (02_Domain_Model §6.1).",
@@ -1230,7 +1267,11 @@
         "analytics": "Analytics",
         "notification": "Notification",
         "billing": "Billing",
-        "audit": "Audit"
+        "audit": "Audit",
+        "maps": "Maps",
+        "vehicle": "Vehicles",
+        "device": "Devices",
+        "report": "Reporting"
       }
     },
     "settings": {

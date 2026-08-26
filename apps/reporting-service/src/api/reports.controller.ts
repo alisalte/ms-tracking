@@ -12,6 +12,9 @@
  *   GET /api/v1/reports/alarm-trend          — daily alarm buckets (§13)
  *   GET /api/v1/reports/geofences            — geofence event aggregates (§14)
  *   GET /api/v1/reports/activity             — activity timeline (§15)
+ *   GET /api/v1/reports/kpis                 — executive KPI scorecard vs prior window
+ *   GET /api/v1/reports/fleet-comparison     — per-fleet distance/trips/utilization
+ *   GET /api/v1/reports/safety               — safety indicators from the alarm engine
  *   GET /api/v1/reports/export/:report       — CSV export (§31; report.export)
  *
  * Reads require `report.read`; export requires `report.export`. Tenant ALWAYS
@@ -239,6 +242,43 @@ export class ReportsController {
     return this.guard(async () =>
       this.reports.activity(tenantId, { preset, from, to, vehicleId, limit, cursor }),
     );
+  }
+
+  @Get('kpis')
+  @RequirePermissions('report.read')
+  public async kpis(
+    @CurrentTenant() tenantId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('fleetId') fleetId?: string,
+  ) {
+    return this.guard(async () =>
+      this.reports.kpiScorecard(tenantId, { preset, from, to, vehicleId, fleetId }),
+    );
+  }
+
+  @Get('fleet-comparison')
+  @RequirePermissions('report.read')
+  public async fleetComparison(
+    @CurrentTenant() tenantId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.guard(async () => this.reports.fleetComparison(tenantId, { preset, from, to }));
+  }
+
+  @Get('safety')
+  @RequirePermissions('report.read')
+  public async safety(
+    @CurrentTenant() tenantId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.guard(async () => this.reports.safetyScorecard(tenantId, { preset, from, to }));
   }
 
   /** CSV export (§31/§32) — rate-limited, audited, streaming-friendly body. */

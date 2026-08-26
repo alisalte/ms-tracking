@@ -18,7 +18,14 @@ export {
   type Knex,
 } from './knex.factory.js';
 export { BaseRepository, type Row, type BaseRepositoryOptions } from './base.repository.js';
-export { runMigrations, rollbackLastBatch, type MigrationsOptions } from './migrations.js';
+export {
+  runMigrations,
+  rollbackLastBatch,
+  waitForDatabase,
+  isTransientPgError,
+  type MigrationsOptions,
+  type WaitForDatabaseOptions,
+} from './migrations.js';
 export {
   assertUuid,
   withTenantContext,

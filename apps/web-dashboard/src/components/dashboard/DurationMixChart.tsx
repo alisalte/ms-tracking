@@ -4,17 +4,13 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFleetOverview } from '@/api/report.api';
+import { hoursFromSec } from '@/lib/hours-from-sec';
 import { status } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
 
 const RANGE = { preset: '7d' } as const;
-
-/** Format seconds as whole hours for KPI display. */
-export function hoursFromSec(sec: number): number {
-  return Math.round(sec / 3600);
-}
 
 /**
  * DurationMixChart — moving / idle / parking duration mix (last 7 days).

@@ -13,6 +13,7 @@ import {
   type TenantTier,
 } from '../../domain/index.js';
 import { withoutTenantContext } from './tenant-context.js';
+import { mergeTenantSettings, type TenantSettings, type TenantSettingsPatch } from '../../domain/tenant-settings.js';
 
 export interface TenantRow {
   id: string;
@@ -24,6 +25,7 @@ export interface TenantRow {
   feature_flags: Record<string, unknown>;
   kek_ref: string | null;
   root_org_id: string | null;
+  settings: Record<string, unknown> | null;
   version: number;
   created_at: Date;
   updated_at: Date;
@@ -89,6 +91,31 @@ export class TenantRepository {
       }
     });
     tenant.markEventsCommitted();
+  }
+
+  public async readSettings(id: string): Promise<TenantSettings | null> {
+    return withoutTenantContext(this.knex, async (trx) => {
+      const row = await trx<TenantRow>('iam.tenants').where({ id }).first();
+      if (!row) return null;
+      return mergeTenantSettings(row.settings, row.name);
+    });
+  }
+
+  public async saveSettings(id: string, patch: TenantSettingsPatch): Promise<TenantSettings | null> {
+    return withoutTenantContext(this.knex, async (trx) => {
+      const row = await trx<TenantRow>('iam.tenants').where({ id }).first();
+      if (!row) return null;
+      const next = mergeTenantSettings(row.settings, row.name, patch);
+      const updated = await trx('iam.tenants')
+        .where({ id, version: row.version })
+        .update({
+          settings: JSON.stringify(next),
+          updated_at: this.knex.fn.now(),
+          version: this.knex.raw('version + 1'),
+        });
+      if (updated === 0) throw new Error('Optimistic concurrency conflict on tenant settings.');
+      return next;
+    });
   }
 
   private toRow(tenant: Tenant): Record<string, unknown> {

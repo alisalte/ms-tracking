@@ -65,11 +65,16 @@ function mapMeResponse(wire: MeResponseWire): User {
  *
  * Authenticate with email + password. Requires X-Tenant-Id header.
  */
-export async function login(email: string, password: string): Promise<LoginResponse> {
-  const wire = await apiPost<unknown, LoginResponseWire>('/auth/login', {
-    email,
-    password,
-  });
+export async function login(
+  email: string,
+  password: string,
+  tenantId: string,
+): Promise<LoginResponse> {
+  const wire = await apiPost<unknown, LoginResponseWire>(
+    '/auth/login',
+    { email, password },
+    { headers: { 'X-Tenant-Id': tenantId } },
+  );
   return mapLoginResponse(wire);
 }
 

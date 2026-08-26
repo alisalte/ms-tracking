@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from '@jest/globals';
 import { csvCell, csvDocument } from '../domain/csv.js';
-import { TRIP_SORT_FIELDS, UTILIZATION_SORT_FIELDS, resolveSort } from '../domain/report-types.js';
+import { TRIP_SORT_FIELDS, UTILIZATION_SORT_FIELDS, periodDeltaPct, resolveSort } from '../domain/report-types.js';
 import {
   parseReportWindow,
   reportWindowErrorMessage,
@@ -184,6 +184,19 @@ describe('Utilization semantics (§7/§60/§61 — missing ≠ zero)', () => {
     expect(utilization(3600, 14400)).toBeCloseTo(25);
     expect(utilization(3600, null)).toBeNull();
     expect(utilization(3600, 0)).toBeNull();
+  });
+});
+
+describe('periodDeltaPct (KPI scorecard vs prior window)', () => {
+  it('returns the percent change when the previous value is a usable base', () => {
+    expect(periodDeltaPct(120, 100)).toBeCloseTo(20);
+    expect(periodDeltaPct(80, 100)).toBeCloseTo(-20);
+  });
+
+  it('returns null when previous is missing or zero (never a fake 0%)', () => {
+    expect(periodDeltaPct(10, null)).toBeNull();
+    expect(periodDeltaPct(null, 10)).toBeNull();
+    expect(periodDeltaPct(10, 0)).toBeNull();
   });
 });
 

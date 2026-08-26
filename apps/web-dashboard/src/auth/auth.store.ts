@@ -78,8 +78,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   login: async (email, password, tenantId) => {
     set({ isLoading: true, error: null });
     try {
+      // Drop any previous session first. After a stack/DB re-seed the stored
+      // tenant is a dead UUID; the interceptor prefers that over the org name
+      // typed in the form, and identity returns generic "Invalid credentials".
+      clearTokens();
       saveTenantId(tenantId);
-      const response = await loginApi.login(email, password);
+      const response = await loginApi.login(email, password, tenantId);
 
       // Persist tokens. Sprint I E2E fix: the login form accepts a tenant
       // NAME ("FleetVision") — persist the server-resolved canonical UUID from

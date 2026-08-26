@@ -27,8 +27,10 @@ import type {
   AlarmAggregateRow,
   AlarmTrendPoint,
   DistanceRow,
+  FleetComparisonRow,
   FleetOverview,
   GeofenceReportRow,
+  SafetyScorecard,
   SpeedRow,
   TrendPoint,
   TripReportRow,
@@ -1037,7 +1039,143 @@ export class ReportRepository {
     });
   }
 
-  // ── helpers ──────────────────────────────────────────────────────────────
+  // ── Fleet comparison (Reporting.md §1.3 Executive) ───────────────────────
+
+  public async fleetComparison(
+    tenantId: string,
+    win: TimeWindow,
+  ): Promise<FleetComparisonRow[]> {
+    return this.query(async (trx) => {
+      const { rows } = await trx.raw(
+        `
+        WITH scope AS (
+          SELECT v.id AS vehicle_id, v.fleet_id,
+                 COALESCE(f.name, f.code, 'Unassigned') AS fleet_name
+          FROM fleet.vehicles v
+          LEFT JOIN fleet.fleets f ON f.id = v.fleet_id AND f.tenant_id = v.tenant_id
+          WHERE v.tenant_id = ?::uuid AND v.status = 'ACTIVE'
+        ),
+        moving AS (
+          SELECT s.fleet_id,
+                 SUM(t.duration_s)::bigint AS moving_sec,
+                 SUM(t.distance_km) AS distance_km,
+                 COUNT(*)::bigint AS trips
+          FROM tracking.trip_events t
+          JOIN scope s ON s.vehicle_id = t.vehicle_id
+          WHERE t.tenant_id = ?::uuid AND t.status = 'COMPLETED'
+            AND t.started_at >= ? AND t.started_at < ?
+          GROUP BY s.fleet_id
+        ),
+        observed_vehicle AS (
+          SELECT s.fleet_id, pos.vehicle_id,
+                 EXTRACT(EPOCH FROM (LEAST(?::timestamptz, MAX(pos.captured_at))
+                                   - GREATEST(?::timestamptz, MIN(pos.captured_at))))::double precision AS observed_sec
+          FROM tracking.vehicle_positions pos
+          JOIN scope s ON s.vehicle_id = pos.vehicle_id
+          WHERE pos.tenant_id = ?::uuid AND pos.quality = 1
+            AND pos.captured_at >= ? AND pos.captured_at < ?
+          GROUP BY s.fleet_id, pos.vehicle_id
+        ),
+        observed_fleet AS (
+          SELECT fleet_id, SUM(observed_sec) AS observed_sec
+          FROM observed_vehicle
+          GROUP BY fleet_id
+        ),
+        alarms AS (
+          SELECT v.fleet_id, COUNT(*)::bigint AS total
+          FROM notification.alerts a
+          JOIN fleet.vehicles v ON v.id = a.vehicle_id AND v.tenant_id = a.tenant_id
+          WHERE a.tenant_id = ?::uuid AND a.raised_at >= ? AND a.raised_at < ?
+          GROUP BY v.fleet_id
+        )
+        SELECT
+          s.fleet_id,
+          MAX(s.fleet_name) AS fleet_name,
+          COUNT(*)::bigint AS vehicle_count,
+          COALESCE(MAX(m.distance_km), 0) AS distance_km,
+          COALESCE(MAX(m.trips), 0) AS trips,
+          COALESCE(MAX(m.moving_sec), 0) AS moving_duration_sec,
+          CASE WHEN COALESCE(MAX(o.observed_sec), 0) > 0
+            THEN MAX(m.moving_sec)::double precision / MAX(o.observed_sec) * 100
+            ELSE NULL END AS utilization_pct,
+          COALESCE(MAX(a.total), 0) AS alarms
+        FROM scope s
+        LEFT JOIN moving m ON m.fleet_id IS NOT DISTINCT FROM s.fleet_id
+        LEFT JOIN observed_fleet o ON o.fleet_id IS NOT DISTINCT FROM s.fleet_id
+        LEFT JOIN alarms a ON a.fleet_id IS NOT DISTINCT FROM s.fleet_id
+        GROUP BY s.fleet_id
+        ORDER BY COALESCE(MAX(m.distance_km), 0) DESC
+        `,
+        [
+          tenantId,
+          tenantId,
+          win.from,
+          win.to,
+          win.to,
+          win.from,
+          tenantId,
+          win.from,
+          win.to,
+          tenantId,
+          win.from,
+          win.to,
+        ],
+      );
+      return (rows as Record<string, unknown>[]).map((r) => ({
+        fleetId: r.fleet_id ? String(r.fleet_id) : null,
+        fleetName: String(r.fleet_name ?? 'Unassigned'),
+        vehicleCount: Number(r.vehicle_count ?? 0),
+        distanceKm: Number(r.distance_km ?? 0),
+        trips: Number(r.trips ?? 0),
+        movingDurationSec: Number(r.moving_duration_sec ?? 0),
+        utilizationPct: r.utilization_pct === null || r.utilization_pct === undefined
+          ? null
+          : Number(r.utilization_pct),
+        alarms: Number(r.alarms ?? 0),
+      }));
+    });
+  }
+
+  /** Alarm-engine safety counts for a window (no composite score — counts only). */
+  public async safetyCounts(
+    tenantId: string,
+    win: TimeWindow,
+  ): Promise<Omit<SafetyScorecard, 'previous'>> {
+    return this.query(async (trx) => {
+      const [{ rows: alarmRows }, { rows: geoRows }] = await Promise.all([
+        trx.raw(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE a.status = 'OPEN')::bigint AS open,
+            COUNT(*) FILTER (WHERE a.type = 'overspeed')::bigint AS speeding,
+            COUNT(*) FILTER (WHERE a.severity IN ('HIGH', 'CRITICAL'))::bigint AS high_severity
+          FROM notification.alerts a
+          WHERE a.tenant_id = ?::uuid AND a.raised_at >= ? AND a.raised_at < ?
+          `,
+          [tenantId, win.from, win.to],
+        ),
+        trx.raw(
+          `
+          SELECT COUNT(*)::bigint AS total
+          FROM notification.fleet_events fe
+          WHERE fe.tenant_id = ?::uuid AND fe.event_type LIKE 'geofence.%'
+            AND fe.occurred_at >= ? AND fe.occurred_at < ?
+          `,
+          [tenantId, win.from, win.to],
+        ),
+      ]);
+      const a = (alarmRows as Record<string, unknown>[])[0] ?? {};
+      const g = (geoRows as Record<string, unknown>[])[0] ?? {};
+      return {
+        totalAlarms: Number(a.total ?? 0),
+        openAlarms: Number(a.open ?? 0),
+        speedingEvents: Number(a.speeding ?? 0),
+        highSeverityAlarms: Number(a.high_severity ?? 0),
+        geofenceEvents: Number(g.total ?? 0),
+      };
+    });
+  }
 }
 
 /** Build the shared vehicle-filter fragment (pure — tenant bound explicitly).

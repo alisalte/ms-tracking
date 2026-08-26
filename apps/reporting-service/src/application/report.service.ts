@@ -15,8 +15,10 @@ import {
   type CursorPage,
   TRIP_SORT_FIELDS,
   UTILIZATION_SORT_FIELDS,
+  periodDeltaPct,
   resolveSort,
 } from '../domain/report-types.js';
+import type { FleetOverview, KpiIndicator, KpiScorecard, SafetyScorecard } from '../domain/report-types.js';
 import {
   type ReportWindowError,
   parseReportWindow,
@@ -159,6 +161,72 @@ export class ReportService {
     };
     await this.deps.cache?.set(key, payload);
     return payload;
+  }
+
+  /** Executive KPI scorecard — current window vs the immediately previous equal-length window. */
+  public async kpiScorecard(tenantId: string, q: ReportQueryBase): Promise<{
+    current: KpiScorecard;
+    from: string;
+    to: string;
+    previousFrom: string;
+    previousTo: string;
+    dataAsOf: string;
+    freshness: 'AGGREGATED';
+  }> {
+    const win = this.window(q);
+    const durationMs = win.to.getTime() - win.from.getTime();
+    const prev = { from: new Date(win.from.getTime() - durationMs), to: win.from };
+    const filter = { vehicleId: q.vehicleId, fleetId: q.fleetId };
+    const [cur, prior] = await Promise.all([
+      this.timed('kpi-scorecard', () => this.deps.repository.fleetOverview(tenantId, win, filter)),
+      this.timed('kpi-scorecard', () => this.deps.repository.fleetOverview(tenantId, prev, filter)),
+    ]);
+    return {
+      current: { indicators: scorecardIndicators(cur, prior) },
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      previousFrom: prev.from.toISOString(),
+      previousTo: prev.to.toISOString(),
+      dataAsOf: new Date().toISOString(),
+      freshness: 'AGGREGATED',
+    };
+  }
+
+  public async fleetComparison(tenantId: string, q: ReportQueryBase) {
+    const win = this.window(q);
+    const items = await this.timed('fleet-comparison', () =>
+      this.deps.repository.fleetComparison(tenantId, win),
+    );
+    return {
+      items,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      dataAsOf: new Date().toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
+  }
+
+  public async safetyScorecard(tenantId: string, q: ReportQueryBase): Promise<{
+    current: SafetyScorecard;
+    from: string;
+    to: string;
+    dataAsOf: string;
+    freshness: 'AGGREGATED';
+  }> {
+    const win = this.window(q);
+    const durationMs = win.to.getTime() - win.from.getTime();
+    const prev = { from: new Date(win.from.getTime() - durationMs), to: win.from };
+    const [cur, prior] = await Promise.all([
+      this.timed('safety-scorecard', () => this.deps.repository.safetyCounts(tenantId, win)),
+      this.timed('safety-scorecard', () => this.deps.repository.safetyCounts(tenantId, prev)),
+    ]);
+    return {
+      current: { ...cur, previous: prior },
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      dataAsOf: new Date().toISOString(),
+      freshness: 'AGGREGATED',
+    };
   }
 
   public async trend(tenantId: string, q: ReportQueryBase) {
@@ -534,4 +602,32 @@ export class ReportService {
       throw err;
     }
   }
+}
+
+function scorecardIndicators(cur: FleetOverview, prior: FleetOverview): KpiIndicator[] {
+  const hours = (sec: number) => sec / 3600;
+  const pair = (
+    key: string,
+    value: number | null,
+    previousValue: number | null,
+    unit: KpiIndicator['unit'],
+  ): KpiIndicator => ({
+    key,
+    value,
+    previousValue,
+    deltaPct: periodDeltaPct(value, previousValue),
+    unit,
+  });
+  return [
+    pair('distanceKm', cur.totalDistanceKm, prior.totalDistanceKm, 'km'),
+    pair('trips', cur.totalTrips, prior.totalTrips, 'count'),
+    pair('utilizationPct', cur.avgUtilizationPct, prior.avgUtilizationPct, 'pct'),
+    pair('movingHours', hours(cur.movingDurationSec), hours(prior.movingDurationSec), 'hours'),
+    pair('idleHours', hours(cur.idleDurationSec), hours(prior.idleDurationSec), 'hours'),
+    pair('avgSpeedKmh', cur.avgSpeedKmh, prior.avgSpeedKmh, 'kmh'),
+    pair('alarms', cur.totalAlarms, prior.totalAlarms, 'count'),
+    pair('openAlarms', cur.openAlarms, prior.openAlarms, 'count'),
+    pair('speedingEvents', cur.speedingEventCount, prior.speedingEventCount, 'count'),
+    pair('geofenceEvents', cur.geofenceEvents, prior.geofenceEvents, 'count'),
+  ];
 }

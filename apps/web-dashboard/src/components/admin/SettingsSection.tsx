@@ -73,7 +73,6 @@ export function SettingsSection() {
     );
   }
 
-  // No settings backend exists yet — fail honestly instead of fabricating (§22).
   if (isError || !draft || !saved) {
     return (
       <ErrorState

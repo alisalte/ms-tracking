@@ -37,6 +37,7 @@ import {
 } from '../../infrastructure/index.js';
 import { KafkaOutboxRelay } from '../../infrastructure/index.js';
 import { UsersController } from '../iam/users.controller.js';
+import { RolesController } from '../iam/roles.controller.js';
 import { BootstrapSeed } from '../shared/bootstrap-seed.js';
 import { TenantsController } from '../tenants/tenants.controller.js';
 import { ApiKeysController } from './api-keys.controller.js';
@@ -68,7 +69,7 @@ export class AuthModule {
           enableApiKeys: true,
         }),
       ],
-      controllers: [AuthController, ApiKeysController, UsersController, TenantsController],
+      controllers: [AuthController, ApiKeysController, UsersController, RolesController, TenantsController],
       providers: [
         // Repositories (constructed from the global knex token).
         {

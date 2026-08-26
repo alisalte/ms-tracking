@@ -136,3 +136,25 @@ omitted rather than synthesized.
 Fleet overview + trends: Redis, key `report:<report>:<tenantId>:<sha(filters)>`
 (bounded 30 s TTL, includes tenant+filters). Cache = stale ≤ 30 s, documented;
 everything else is computed on demand (AGGREGATED freshness).
+
+## KPI scorecard (`GET /reports/kpis`)
+Same formulas as Fleet overview. Each indicator also carries the value from the
+**immediately previous window of equal length** (`[from − (to−from), from)`) and
+`deltaPct = (current − previous) / |previous| × 100`. `deltaPct` is `null` when
+previous is missing or 0 — never a fabricated 0%. No business *targets* are
+invented; the comparison is period-over-period only (Reporting.md §1.3 Executive
+KPI scorecard).
+
+## Fleet comparison (`GET /reports/fleet-comparison`)
+Per `fleet.fleets` row (ACTIVE vehicles): `SUM` completed-trip distance/trips/
+moving duration, fleet-level utilization = fleet moving-sec / fleet observed-sec
+(same observed-duration definition as above, summed then divided — not the mean
+of per-vehicle %), alarm count from `notification.alerts` joined to vehicles.
+
+## Safety scorecard (`GET /reports/safety`)
+Counts from the Alarm Engine only (never re-derived):
+- `totalAlarms` / `openAlarms` / `speedingEvents` (`type='overspeed'`) /
+  `highSeverityAlarms` (`severity IN ('HIGH','CRITICAL')`)
+- `geofenceEvents` from `notification.fleet_events` (`geofence.*`)
+Previous-window counts included for the same period-over-period chip as the KPI
+scorecard. No composite 0–100 “safety score” is computed (no documented formula).

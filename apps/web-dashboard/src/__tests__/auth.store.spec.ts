@@ -132,6 +132,25 @@ describe('auth.store', () => {
     expect(state.error).toBeNull();
   });
 
+  it('login sends the form org name even when a stale tenant UUID is stored', async () => {
+    localStorageMock.setItem(
+      'fleetvision_tokens',
+      JSON.stringify({
+        accessToken: 'dead-access',
+        refreshToken: 'dead-refresh',
+        tenantId: '00000000-0000-0000-0000-000000000000',
+      }),
+    );
+    localStorageMock.setItem('fleetvision_tenant_id', '00000000-0000-0000-0000-000000000000');
+    vi.mocked(loginApi.login).mockResolvedValueOnce(loginResponse);
+    vi.mocked(loginApi.getMe).mockResolvedValueOnce(fullUser);
+
+    await useAuthStore.getState().login('test@fleetvision.io', 'pw', 'FleetVision');
+
+    expect(loginApi.login).toHaveBeenCalledWith('test@fleetvision.io', 'pw', 'FleetVision');
+    expect(useAuthStore.getState().tenantId).toBe('tenant-789');
+  });
+
   it('login resolves false and clears tokens on failure', async () => {
     vi.mocked(loginApi.login).mockRejectedValueOnce(new Error('Invalid credentials'));
 

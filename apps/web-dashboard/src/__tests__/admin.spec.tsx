@@ -5,7 +5,7 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PERMISSION_CATALOG, mockAuditEntries, mockRoles, mockUsers } from '@/mock/admin-data';
+import { PERMISSION_CATALOG, mockAuditEntries, mockRoles, mockSettings, mockUsers } from '@/mock/admin-data';
 import { AdminPage } from '@/pages/AdminPage';
 
 import { i18n } from '@/i18n';
@@ -24,6 +24,27 @@ vi.mock('@/api/client', () => ({
   // apiGet returns the UNWRAPPED payload (the { data } envelope is stripped),
   // so the list branch returns the rows array directly, not the wire body.
   apiGet: vi.fn(async (url: string) => {
+    if (url === '/iam/roles') {
+      return mockRoles.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        is_system: r.isSystem,
+        permission_keys: r.permissionKeys,
+        member_count: r.memberCount,
+        mfa_required: r.mfaRequired,
+      }));
+    }
+    if (url === '/iam/permissions') {
+      return PERMISSION_CATALOG.map((g) => ({
+        domain: g.domain,
+        label_key: g.labelKey,
+        permissions: g.permissions,
+      }));
+    }
+    if (url === '/tenant/settings') {
+      return mockSettings;
+    }
     if (url === '/iam/users') {
       // List endpoint — the real wire body is { data: rows, meta }, which the
       // client unwraps to the rows array.
@@ -143,6 +164,18 @@ describe('AdminPage', () => {
     renderAdmin('/admin?section=roles');
     await waitFor(() => {
       expect(screen.getByText(mockRoles[0].name)).toBeInTheDocument();
+    });
+  });
+
+  it('opens the create-role dialog from the custom roles header', async () => {
+    renderAdmin('/admin?section=roles');
+    await waitFor(() => {
+      expect(screen.getByTestId('admin-create-role')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('admin-create-role'));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByLabelText('Role name')).toBeInTheDocument();
     });
   });
 

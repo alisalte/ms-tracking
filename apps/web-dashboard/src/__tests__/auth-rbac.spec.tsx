@@ -148,7 +148,7 @@ describe('LoginPage — TailAdmin sign-in', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() => expect(screen.getByTestId('page').textContent).toBe('map'));
-    expect(loginApi.login).toHaveBeenCalledWith('op@fleet.test', 'Secret123!');
+    expect(loginApi.login).toHaveBeenCalledWith('op@fleet.test', 'Secret123!', 'FleetVision');
     // Session persisted + canonical tenant resolved from the response.
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(useAuthStore.getState().tenantId).toBe('tenant-uuid-1');

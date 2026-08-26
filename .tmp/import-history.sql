@@ -2,7 +2,7 @@
 -- Run inside the fleetvision-postgres container:
 --   docker exec -i fleetvision-postgres psql -U fleetvision -d fleetvision \
 --     -v ON_ERROR_STOP=1 < tools/import-history.sql  < /tmp/csv/*.csv handled via \copy below
-SET app.current_tenant_id = '50096a74-3a5d-4c9f-a5ed-4895fa19e8ae';
+SET app.current_tenant_id = '03d612d9-ebba-44e5-a29e-7b12b9523418';
 
 BEGIN;
 

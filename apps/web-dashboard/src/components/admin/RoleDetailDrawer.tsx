@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePermissions } from '@/api/admin.api';
+import { usePermissions, useUpdateRolePermissions } from '@/api/admin.api';
 import { Badge, Checkbox, Drawer, Spinner } from '@/components/tailwind-ui';
 import type { Role } from '@/types/admin.types';
 
@@ -21,6 +21,7 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
   // Live catalog — the same source PermissionsSection renders, so the matrix
   // can never disagree with the catalog page (the old mock import could).
   const { data: permissionCatalog } = usePermissions();
+  const updatePerms = useUpdateRolePermissions();
   const open = Boolean(role);
 
   return (
@@ -82,15 +83,28 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
                       </Badge>
                     </div>
                     <div className="mt-1 grid grid-cols-1 gap-0.5 sm:grid-cols-2">
-                      {group.permissions.map((p) => (
-                        <Checkbox
-                          key={p}
-                          checked={role.permissionKeys.includes(p)}
-                          // Read-only in this sprint (role edit is a follow-up).
-                          readOnly
-                          label={<span className="font-mono text-[0.65rem]">{p}</span>}
-                        />
-                      ))}
+                      {group.permissions.map((p) => {
+                        const granted = role.permissionKeys.includes(p) || role.permissionKeys.includes('*');
+                        return (
+                          <Checkbox
+                            key={p}
+                            checked={granted}
+                            readOnly={role.isSystem}
+                            disabled={role.isSystem || updatePerms.isPending}
+                            onChange={
+                              role.isSystem
+                                ? undefined
+                                : () => {
+                                    const next = granted
+                                      ? role.permissionKeys.filter((k) => k !== p)
+                                      : [...role.permissionKeys, p];
+                                    updatePerms.mutate({ id: role.id, permissions: next });
+                                  }
+                            }
+                            label={<span className="font-mono text-[0.65rem]">{p}</span>}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 );

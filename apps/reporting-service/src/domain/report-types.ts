@@ -199,6 +199,55 @@ export const UTILIZATION_SORT_FIELDS = {
 } as const;
 export type UtilizationSortField = keyof typeof UTILIZATION_SORT_FIELDS;
 
+/** Period-over-period delta. `null` when the previous value cannot be a base (missing or 0). */
+export function periodDeltaPct(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null || previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+export type KpiUnit = 'count' | 'km' | 'pct' | 'kmh' | 'hours';
+
+/** One indicator on the executive KPI scorecard (Reporting.md §1.3 Executive). */
+export interface KpiIndicator {
+  readonly key: string;
+  readonly value: number | null;
+  readonly previousValue: number | null;
+  readonly deltaPct: number | null;
+  readonly unit: KpiUnit;
+}
+
+export interface KpiScorecard {
+  readonly indicators: readonly KpiIndicator[];
+}
+
+/** Per-fleet analytical row (Reporting.md §1.3 Executive — fleet comparison). */
+export interface FleetComparisonRow {
+  readonly fleetId: string | null;
+  readonly fleetName: string;
+  readonly vehicleCount: number;
+  readonly distanceKm: number;
+  readonly trips: number;
+  readonly movingDurationSec: number;
+  readonly utilizationPct: number | null;
+  readonly alarms: number;
+}
+
+/** Safety indicators from the alarm engine (Reporting.md §1.3 Safety scorecard). */
+export interface SafetyScorecard {
+  readonly totalAlarms: number;
+  readonly openAlarms: number;
+  readonly speedingEvents: number;
+  readonly highSeverityAlarms: number;
+  readonly geofenceEvents: number;
+  readonly previous: {
+    readonly totalAlarms: number;
+    readonly openAlarms: number;
+    readonly speedingEvents: number;
+    readonly highSeverityAlarms: number;
+    readonly geofenceEvents: number;
+  };
+}
+
 export function resolveSort<K extends string>(
   value: string | undefined,
   whitelist: Record<K, string>,
