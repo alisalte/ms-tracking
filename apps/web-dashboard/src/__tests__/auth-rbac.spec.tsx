@@ -125,8 +125,19 @@ describe('LoginPage — TailAdmin sign-in', () => {
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeTruthy();
   });
 
+  it('prefills the local seed admin so docker compose sign-in works without guessing', () => {
+    renderLoginAt();
+    expect((screen.getByLabelText('Organization') as HTMLInputElement).value).toBe('FleetVision');
+    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe(
+      'admin@fleetvision.local',
+    );
+  });
+
   it('blocks submit and shows zod validation errors when empty', async () => {
     renderLoginAt();
+    fireEvent.change(screen.getByLabelText('Organization'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
     await waitFor(() => {
       // All three required-field messages surface under the inputs.

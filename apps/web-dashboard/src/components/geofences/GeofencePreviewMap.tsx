@@ -54,13 +54,13 @@ export function GeofencePreviewMap({
         id: 'geofence-preview-fill',
         type: 'fill',
         source: 'geofence-preview',
-        paint: { 'fill-color': '#465FFB', 'fill-opacity': 0.12 },
+        paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.38 },
       });
       map.addLayer({
         id: 'geofence-preview-line',
         type: 'line',
         source: 'geofence-preview',
-        paint: { 'line-color': '#465FFB', 'line-width': 2 },
+        paint: { 'line-color': '#2563eb', 'line-width': 3 },
       });
     });
     return () => {
@@ -74,7 +74,12 @@ export function GeofencePreviewMap({
     if (!map) return;
     const render = () => {
       const src = map.getSource('geofence-preview') as GeoJSONSource | undefined;
-      if (!src) return;
+      if (!src) {
+        runWhenStyleReady(map, () => {
+          if (map.getSource('geofence-preview')) render();
+        });
+        return;
+      }
       let geometry: GeoJSON.Polygon | null = null;
       if (geofence.boundaryGeoJson) {
         geometry = geofence.boundaryGeoJson as GeoJSON.Polygon;
@@ -91,6 +96,7 @@ export function GeofencePreviewMap({
         };
       }
       if (!geometry) return;
+      map.resize();
       src.setData({
         type: 'FeatureCollection',
         features: [{ type: 'Feature', geometry, properties: { name: geofence.name } }],
@@ -99,17 +105,17 @@ export function GeofencePreviewMap({
       if (ring.length >= 3) {
         const lngs = ring.map((r) => r[0] ?? 0);
         const lats = ring.map((r) => r[1] ?? 0);
+        map.stop();
         map.fitBounds(
           [
             [Math.min(...lngs), Math.min(...lats)],
             [Math.max(...lngs), Math.max(...lats)],
           ],
-          { padding: 40, maxZoom: 16, duration: 400 },
+          { padding: 48, maxZoom: 16, duration: 0 },
         );
       }
     };
-    if (map.isStyleLoaded()) render();
-    else runWhenStyleReady(map, render);
+    render();
   }, [geofence]);
 
   return (

@@ -1,9 +1,9 @@
 /**
  * AdminNav — the left settings navigation (UI_UX §5.2 IA, §5.5 two-column shell).
  *
- * Renders the full 12-item Admin Panel IA. The keyword sections (users, roles,
- * permissions, settings, audit) are functional; the rest render an "upcoming"
- * placeholder so the IA reads complete. The active section is highlighted.
+ * Renders the full 12-item Admin Panel IA. Every section is wired to a real
+ * backend (or an honest empty/unavailable state when that domain has no
+ * service yet). The active section is highlighted.
  */
 import {
   Bell,
@@ -32,18 +32,18 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'organization', icon: Building2, enabled: false },
+  { key: 'organization', icon: Building2, enabled: true },
   { key: 'users', icon: Users, enabled: true },
   { key: 'roles', icon: Lock, enabled: true },
   { key: 'permissions', icon: ShieldCheck, enabled: true },
-  { key: 'fleets', icon: Truck, enabled: false },
-  { key: 'devices', icon: Layers, enabled: false },
-  { key: 'geofences', icon: MapPin, enabled: false },
-  { key: 'policies', icon: ShieldCheck, enabled: false },
-  { key: 'notifications', icon: Bell, enabled: false },
-  { key: 'integrations', icon: Plug, enabled: false },
-  { key: 'apikeys', icon: KeyRound, enabled: false },
-  { key: 'billing', icon: CreditCard, enabled: false },
+  { key: 'fleets', icon: Truck, enabled: true },
+  { key: 'devices', icon: Layers, enabled: true },
+  { key: 'geofences', icon: MapPin, enabled: true },
+  { key: 'policies', icon: ShieldCheck, enabled: true },
+  { key: 'notifications', icon: Bell, enabled: true },
+  { key: 'integrations', icon: Plug, enabled: true },
+  { key: 'apikeys', icon: KeyRound, enabled: true },
+  { key: 'billing', icon: CreditCard, enabled: true },
   { key: 'audit', icon: ScrollText, enabled: true },
   { key: 'settings', icon: Settings, enabled: true },
 ];

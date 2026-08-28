@@ -374,13 +374,17 @@ export function FleetMap({
         el.style.cursor = 'pointer';
         // Colors come from the .fv-map-popup CSS (light + dark aware) — inline
         // hexes would win over the dark-mode overrides.
+        const title = v.name?.trim() || v.label;
+        const plate = v.plate?.trim();
+        const plateLine =
+          plate && plate !== title ? `<div class="fv-map-popup-meta">${plate}</div>` : '';
+        const driver = v.driver ? `${v.driver} · ` : '';
         const popup = new MaplibrePopup({
           offset: 14,
           closeButton: false,
           className: 'fv-map-popup',
         }).setHTML(
-          `<div style="font-weight:600">${v.label}</div>` +
-            `<div class="fv-map-popup-meta">${v.driver ? `${v.driver} · ` : ''}${v.speed} km/h · ${ageLabel(v.updatedAt, t)}</div>`,
+          `<div style="font-weight:600">${title}</div>${plateLine}<div class="fv-map-popup-meta">${driver}${v.speed} km/h · ${ageLabel(v.updatedAt, t)}</div>`,
         );
         const marker = new MaplibreMarker({ element: el, anchor: 'center' })
           .setLngLat([v.lng, v.lat])
@@ -487,9 +491,9 @@ export function FleetMap({
         const el = document.createElement('div');
         el.className = 'fv-playback-marker';
         const img = document.createElement('img');
-        img.src = headingArrowDataUrl(mapAccents.vehicleOverspeed, 0);
-        img.style.width = '30px';
-        img.style.height = '30px';
+        img.src = headingArrowDataUrl(mapAccents.vehicleActive, 0);
+        img.style.width = '48px';
+        img.style.height = '48px';
         img.alt = '';
         el.appendChild(img);
         playbackMarkerRef.current = new MaplibreMarker({ element: el, anchor: 'center' })
@@ -550,6 +554,6 @@ function applyVehicleIcon(el: HTMLElement, v: MapVehicle, selected: boolean) {
       selected,
     }),
   );
-  el.style.width = selected ? '48px' : '40px';
-  el.style.height = selected ? '48px' : '40px';
+  el.style.width = selected ? '56px' : '48px';
+  el.style.height = selected ? '56px' : '48px';
 }

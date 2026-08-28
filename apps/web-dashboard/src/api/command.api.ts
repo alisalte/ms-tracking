@@ -19,6 +19,8 @@ import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { mockCommandCatalog, mockCommandHistory } from '@/mock/command-data';
 import type { Page } from '@/types/api.types';
 import type {
+  BulkCommandResult,
+  BulkSendCommandPayload,
   CommandDef,
   CommandStatus,
   DeviceCommandRecord,
@@ -62,6 +64,36 @@ async function sendCommand(
   return apiPost<SendCommandPayload, DeviceCommandRecord>(`/devices/${deviceId}/commands`, payload);
 }
 
+async function sendCommandBulk(payload: BulkSendCommandPayload): Promise<BulkCommandResult> {
+  return apiPost<BulkSendCommandPayload, BulkCommandResult>('/device-commands/bulk', payload, {
+    timeout: 120_000,
+  });
+}
+
+function mockQueued(deviceId: string, payload: SendCommandPayload): DeviceCommandRecord {
+  return {
+    id: `mock-cmd-${deviceId}-${Date.now()}`,
+    tenantId: 'mock-tenant',
+    deviceId,
+    commandCode: payload.commandCode,
+    category: 'system',
+    params: payload.params ?? null,
+    payloadText: null,
+    payloadHex: null,
+    status: 'QUEUED' as CommandStatus,
+    responseText: null,
+    error: null,
+    issuedBy: 'mock-user',
+    issuedAt: new Date().toISOString(),
+    sentAt: null,
+    ackedAt: null,
+    expiresAt: new Date(Date.now() + 120_000).toISOString(),
+    version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 /** The Meitrack MDVR command catalog (UI form source of truth). */
@@ -96,30 +128,37 @@ export function useSendDeviceCommand(deviceId: string | null) {
   return useMutation<DeviceCommandRecord, Error, SendCommandPayload>({
     mutationFn: (payload) => {
       if (!deviceId) return Promise.reject(new Error('No device selected.'));
+      if (shouldUseMock()) return resolveMock(mockQueued(deviceId, payload));
+      return sendCommand(deviceId, payload);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.commands.all });
+    },
+  });
+}
+
+/**
+ * Issue one catalog command to one or many devices. A single target uses the
+ * existing per-device POST; two or more go through POST /device-commands/bulk
+ * (partial success: queued + failed).
+ */
+export function useIssueCommands() {
+  const qc = useQueryClient();
+  return useMutation<BulkCommandResult, Error, BulkSendCommandPayload>({
+    mutationFn: async (payload) => {
+      const deviceIds = [...new Set(payload.deviceIds)];
+      if (deviceIds.length === 0) return Promise.reject(new Error('No device selected.'));
       if (shouldUseMock()) {
         return resolveMock({
-          id: `mock-cmd-${Date.now()}`,
-          tenantId: 'mock-tenant',
-          deviceId,
-          commandCode: payload.commandCode,
-          category: 'system',
-          params: payload.params ?? null,
-          payloadText: null,
-          payloadHex: null,
-          status: 'QUEUED' as CommandStatus,
-          responseText: null,
-          error: null,
-          issuedBy: 'mock-user',
-          issuedAt: new Date().toISOString(),
-          sentAt: null,
-          ackedAt: null,
-          expiresAt: new Date(Date.now() + 120_000).toISOString(),
-          version: 1,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          queued: deviceIds.map((id) => mockQueued(id, payload)),
+          failed: [],
         });
       }
-      return sendCommand(deviceId, payload);
+      if (deviceIds.length === 1) {
+        const queued = await sendCommand(deviceIds[0] as string, payload);
+        return { queued: [queued], failed: [] };
+      }
+      return sendCommandBulk({ ...payload, deviceIds });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.commands.all });

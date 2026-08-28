@@ -70,6 +70,8 @@ export const queryKeys = {
     permissions: () => [...queryKeys.admin.all, 'permissions'] as const,
     settings: () => [...queryKeys.admin.all, 'settings'] as const,
     audit: () => [...queryKeys.admin.all, 'audit'] as const,
+    apiKeys: () => [...queryKeys.admin.all, 'api-keys'] as const,
+    tenant: () => [...queryKeys.admin.all, 'tenant'] as const,
   },
   notifications: {
     all: ['notifications'] as const,

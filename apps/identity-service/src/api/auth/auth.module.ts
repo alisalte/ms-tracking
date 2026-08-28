@@ -12,6 +12,7 @@ import { Module } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   AssignRoleUseCase,
+  ChangeUserStatusUseCase,
   CreateApiKeyUseCase,
   CreateUserUseCase,
   LoginUseCase,
@@ -36,8 +37,9 @@ import {
   UserRepository,
 } from '../../infrastructure/index.js';
 import { KafkaOutboxRelay } from '../../infrastructure/index.js';
-import { UsersController } from '../iam/users.controller.js';
+import { AuditController } from '../audit/audit.controller.js';
 import { RolesController } from '../iam/roles.controller.js';
+import { UsersController } from '../iam/users.controller.js';
 import { BootstrapSeed } from '../shared/bootstrap-seed.js';
 import { TenantsController } from '../tenants/tenants.controller.js';
 import { ApiKeysController } from './api-keys.controller.js';
@@ -69,7 +71,14 @@ export class AuthModule {
           enableApiKeys: true,
         }),
       ],
-      controllers: [AuthController, ApiKeysController, UsersController, RolesController, TenantsController],
+      controllers: [
+        AuthController,
+        ApiKeysController,
+        UsersController,
+        RolesController,
+        TenantsController,
+        AuditController,
+      ],
       providers: [
         // Repositories (constructed from the global knex token).
         {
@@ -227,6 +236,12 @@ export class AuthModule {
           inject: [UserRepository, RevocationStore],
           useFactory: (u: UserRepository, revocation: RevocationStore) =>
             new AssignRoleUseCase(u, revocation, { accessTtlSeconds: accessTtl }),
+        },
+        {
+          provide: ChangeUserStatusUseCase,
+          inject: [UserRepository, RevocationStore],
+          useFactory: (u: UserRepository, revocation: RevocationStore) =>
+            new ChangeUserStatusUseCase(u, revocation, { accessTtlSeconds: accessTtl }),
         },
         {
           provide: CreateApiKeyUseCase,

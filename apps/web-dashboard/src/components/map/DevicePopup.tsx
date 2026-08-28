@@ -117,9 +117,17 @@ export function DevicePopup({
               <Skeleton className="h-6 w-28" />
             ) : (
               <>
-                <h2 className="truncate text-lg font-bold text-gray-900 dark:text-white">
-                  {data.label}
-                </h2>
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-bold text-gray-900 dark:text-white">
+                    {data.name?.trim() || data.label}
+                  </h2>
+                  {data.plate?.trim() &&
+                    data.plate.trim() !== (data.name?.trim() || data.label) && (
+                      <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
+                        {data.plate}
+                      </p>
+                    )}
+                </div>
                 {data.state === 'driving' && <LiveBadge />}
               </>
             )}

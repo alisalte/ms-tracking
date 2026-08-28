@@ -3,6 +3,9 @@
  * shared by the Users and Audit sections. Values are tailwind `Badge` color
  * names so the UI never hardcodes hex values.
  */
+import { ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router';
+
 import type { BadgeProps } from '@/components/tailwind-ui';
 import type { AdminUserStatus, AuditAction } from '@/types/admin.types';
 
@@ -38,4 +41,17 @@ export function auditActionColor(a: AuditAction): BadgeProps['color'] {
     default:
       return 'gray';
   }
+}
+
+/** Jump from an admin registry table to the full working page. */
+export function AdminPageLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+    >
+      {label}
+      <ArrowUpRight size={14} aria-hidden />
+    </Link>
+  );
 }

@@ -69,6 +69,7 @@ function commandRow(overrides: Partial<DeviceCommandRow> = {}): DeviceCommandRow
 /** Capture-based transaction stub — withTenantContext hands the same object. */
 function makeDeps(overrides?: {
   device?: DeviceRow | null;
+  deviceFor?: (id: string) => DeviceRow | null;
   producerError?: Error;
   published?: unknown[];
 }) {
@@ -77,11 +78,18 @@ function makeDeps(overrides?: {
   const audits: unknown[] = [];
 
   const devices = {
-    findById: async () => (overrides?.device === undefined ? deviceRow() : overrides.device),
+    findById: async (_tenant: string, id: string) => {
+      if (overrides?.deviceFor) return overrides.deviceFor(id);
+      return overrides?.device === undefined ? deviceRow() : overrides.device;
+    },
   };
   const commands = {
-    create: async (_trx: unknown, _tenant: string, input: { commandCode: string }) => {
-      const row = commandRow({ command_code: input.commandCode });
+    create: async (
+      _trx: unknown,
+      _tenant: string,
+      input: { commandCode: string; deviceId: string },
+    ) => {
+      const row = commandRow({ command_code: input.commandCode, device_id: input.deviceId });
       created.push(row);
       return row;
     },
@@ -179,6 +187,38 @@ describe('DeviceCommandService', () => {
       service.create(CTX, DEVICE_ID, { commandCode: 'A12', params: { interval: 6 } }),
     ).rejects.toThrow(/unavailable/i);
     expect(failed).toEqual(['cmd-1']);
+  });
+
+  it('queues the same command on every eligible device and isolates failures', async () => {
+    const otherId = '33333333-3333-3333-3333-333333333333';
+    const missingId = '44444444-4444-4444-4444-444444444444';
+    const { service, published } = makeDeps({
+      deviceFor: (id) => {
+        if (id === DEVICE_ID) return deviceRow();
+        if (id === otherId) return { ...deviceRow(), id: otherId, imei: '866854036516452' };
+        if (id === missingId) return null;
+        return { ...deviceRow('gt06'), id };
+      },
+    });
+
+    const result = await service.createMany(CTX, {
+      deviceIds: [DEVICE_ID, otherId, missingId, DEVICE_ID],
+      commandCode: 'A12',
+      params: { interval: 6 },
+    });
+
+    expect(result.queued.map((r) => r.deviceId).sort()).toEqual([DEVICE_ID, otherId].sort());
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.deviceId).toBe(missingId);
+    expect(published).toHaveLength(2);
+  });
+
+  it('rejects an unknown bulk command code before touching devices', async () => {
+    const { service, published } = makeDeps();
+    await expect(
+      service.createMany(CTX, { deviceIds: [DEVICE_ID], commandCode: 'ZZZ' }),
+    ).rejects.toThrow(BadRequestException);
+    expect(published).toHaveLength(0);
   });
 });
 

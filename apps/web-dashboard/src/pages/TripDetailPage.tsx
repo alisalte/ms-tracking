@@ -216,7 +216,7 @@ export function TripDetailPage() {
 
       {/* Replay: map (left) + speed graph (right) */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card flush className="h-90 overflow-hidden">
+        <Card flush className="overflow-hidden">
           <TripReplayMap waypoints={waypoints} events={events} index={playback.index} />
         </Card>
         <Card className="flex h-90 flex-col">

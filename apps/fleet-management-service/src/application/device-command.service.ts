@@ -42,7 +42,20 @@ import {
 } from '../infrastructure/persistence/device-command.repository.js';
 import type { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import type { ActorContext } from './service-context.js';
-import type { CreateDeviceCommandInput } from './validation/schemas.js';
+import type {
+  BulkCreateDeviceCommandInput,
+  CreateDeviceCommandInput,
+} from './validation/schemas.js';
+
+export interface BulkCommandFailure {
+  readonly deviceId: string;
+  readonly error: string;
+}
+
+export interface BulkCommandResult {
+  readonly queued: DeviceCommandRecord[];
+  readonly failed: BulkCommandFailure[];
+}
 
 export interface DeviceCommandServiceOptions {
   /** Default TTL (seconds) applied when the request doesn't override it. */
@@ -165,6 +178,51 @@ export class DeviceCommandService {
       throw new ServiceUnavailableException('Command queue unavailable — try again.');
     }
     return record;
+  }
+
+  /**
+   * Apply one catalog command to many devices. Catalog/params are validated
+   * once; each device is issued independently so a suspended unit does not
+   * roll back the rest. Partial success is the contract (queued + failed).
+   */
+  public async createMany(
+    ctx: ActorContext,
+    input: BulkCreateDeviceCommandInput,
+  ): Promise<BulkCommandResult> {
+    const commandCode = input.commandCode.toUpperCase();
+    const def = getCommandDef(commandCode);
+    if (!def) {
+      throw new BadRequestException(`Unknown command code '${input.commandCode}'.`);
+    }
+    try {
+      validateParams(def, input.params ?? {});
+    } catch (err) {
+      if (err instanceof CommandValidationError) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
+
+    const deviceIds = [...new Set(input.deviceIds)];
+    const queued: DeviceCommandRecord[] = [];
+    const failed: BulkCommandFailure[] = [];
+    for (const deviceId of deviceIds) {
+      try {
+        queued.push(
+          await this.create(ctx, deviceId, {
+            commandCode,
+            params: input.params,
+            ttlSec: input.ttlSec,
+          }),
+        );
+      } catch (err) {
+        failed.push({
+          deviceId,
+          error: err instanceof Error ? err.message : 'Command failed.',
+        });
+      }
+    }
+    return { queued, failed };
   }
 
   public async list(

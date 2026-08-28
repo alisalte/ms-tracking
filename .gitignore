@@ -49,3 +49,5 @@ pnpm-debug.log*
 
 # ZCode session artifacts (plans scratch, tokens — never commit)
 .zcode/
+.tmp/
+.tmp/

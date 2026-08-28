@@ -7,23 +7,27 @@
  * - POST   /iam/users — create user
  * - PUT    /iam/users/:id — update user (email only; display_name not persisted backend-side)
  * - POST   /iam/users/:id/roles — assign role
+ * - PATCH  /iam/users/:id/status — suspend / deactivate / activate
  * - GET    /auth/api-keys — list API keys
  * - POST   /auth/api-keys — create API key
  * - DELETE /auth/api-keys/:id — revoke API key
  * - GET    /iam/roles — list roles
  * - PUT    /iam/roles/:id — update custom role permissions
  * - GET    /iam/permissions — permission catalog
+ * - GET    /tenant — tenant self-view
  * - GET    /tenant/settings — tenant settings
  * - PUT    /tenant/settings — update tenant settings
+ * - GET    /audit/entries — hash-chained identity audit log
  *
- * **Mock-only** (no backend exists yet):
- * - Audit entries
+ * Fleets/vehicles/devices/geofences/notifications reuse their own API modules.
+ * Billing invoices, SSO, and SCIM have no service in this stack — the UI
+ * states that honestly instead of fabricating records.
  *
  * Mock-gated via `withMockFallback` — production builds never call mocks.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { resolveMock, withMockFallback } from '@/lib/mock-gate';
 import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import { downloadBlob } from '@/lib/video-stream';
 import {
@@ -34,15 +38,17 @@ import {
   mockUsers,
 } from '@/mock/admin-data';
 import type {
+  AdminApiKey,
   AdminUser,
   AdminUserStatus,
   AuditAction,
   AuditCategory,
   PermissionGroup,
   Role,
+  TenantInfo,
   TenantSettings,
 } from '@/types/admin.types';
-import { apiGet, apiPost, apiPostNoContent, apiPut } from './client';
+import { apiDeleteNoContent, apiGet, apiPatch, apiPost, apiPostNoContent, apiPut } from './client';
 import { queryKeys } from './query-keys';
 
 // ── identity-service wire format → UI type ───────────────────────────────────
@@ -113,6 +119,111 @@ function mapPermissionGroup(wire: PermissionGroupWire): PermissionGroup {
   };
 }
 
+interface TenantWire {
+  id: string;
+  name: string;
+  tier: string;
+  region: string;
+  status: string;
+}
+
+function mapTenant(wire: TenantWire): TenantInfo {
+  return {
+    id: wire.id,
+    name: wire.name,
+    tier: wire.tier,
+    region: wire.region,
+    status: wire.status,
+  };
+}
+
+interface ApiKeyWire {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  status: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+}
+
+function mapApiKey(wire: ApiKeyWire): AdminApiKey {
+  return {
+    id: wire.id,
+    name: wire.name,
+    keyPrefix: wire.key_prefix,
+    scopes: wire.scopes ?? [],
+    status: wire.status,
+    expiresAt: wire.expires_at,
+    lastUsedAt: wire.last_used_at,
+  };
+}
+
+interface AuditWire {
+  id: string;
+  created_at: string;
+  action: string;
+  actor_type: string;
+  actor_id: string | null;
+  resource_type: string;
+  resource_id: string | null;
+  request_id: string | null;
+  ip_address: string | null;
+  outcome: string;
+  entry_hash: string;
+}
+
+const AUDIT_ACTIONS: AuditAction[] = [
+  'create',
+  'update',
+  'delete',
+  'read',
+  'execute',
+  'login',
+  'logout',
+  'authorize',
+  'deny',
+  'export',
+  'import',
+  'config_change',
+  'system',
+];
+
+function mapAuditAction(raw: string): AuditAction {
+  const key = raw.trim().toLowerCase().replace(/-/g, '_') as AuditAction;
+  return AUDIT_ACTIONS.includes(key) ? key : 'system';
+}
+
+function mapAuditCategory(resourceType: string): AuditCategory {
+  const r = resourceType.toLowerCase();
+  if (r.includes('user') || r.includes('auth') || r.includes('session')) return 'authentication';
+  if (r.includes('role') || r.includes('permission') || r.includes('api_key'))
+    return 'authorization';
+  if (r.includes('tenant')) return 'tenant';
+  return 'system';
+}
+
+function mapAudit(wire: AuditWire): import('@/types/admin.types').AuditEntry {
+  const actorType = wire.actor_type.toLowerCase();
+  return {
+    id: wire.id,
+    timestamp: wire.created_at,
+    action: mapAuditAction(wire.action),
+    category: mapAuditCategory(wire.resource_type),
+    actorName: wire.actor_id ?? wire.actor_type,
+    actorType:
+      actorType === 'user' || actorType === 'service' || actorType === 'system'
+        ? actorType
+        : 'system',
+    targetType: wire.resource_type,
+    targetId: wire.resource_id ?? '',
+    sourceService: 'identity-service',
+    ipAddress: wire.ip_address ?? undefined,
+    correlationId: wire.request_id ?? '',
+    integrityHash: wire.entry_hash,
+  };
+}
+
 // ── Fetchers (real backend with mock fallback) ───────────────────────────────
 
 /** GET /iam/users — real identity-service; mock fallback in dev. */
@@ -169,10 +280,43 @@ async function fetchSettings(): Promise<TenantSettings> {
   );
 }
 
-/** GET /audit/entries — no backend; mock-only (gated). */
+/** GET /tenant — identity-service self-view. */
+async function fetchTenant(): Promise<TenantInfo | null> {
+  return withMockFallback(
+    async () => {
+      const wire = await apiGet<TenantWire | null>('/tenant');
+      return wire ? mapTenant(wire) : null;
+    },
+    async () => ({
+      id: 'mock-tenant',
+      name: mockSettings.orgName,
+      tier: 'STANDARD',
+      region: 'local',
+      status: 'ACTIVE',
+    }),
+  );
+}
+
+/** GET /auth/api-keys — identity-service. */
+async function fetchApiKeys(): Promise<AdminApiKey[]> {
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<ApiKeyWire[]>('/auth/api-keys');
+      return (Array.isArray(rows) ? rows : []).map(mapApiKey);
+    },
+    async () => [],
+  );
+}
+
+/** GET /audit/entries — identity-service hash-chained log. */
 async function fetchAudit(): Promise<import('@/types/admin.types').AuditEntry[]> {
-  if (!shouldUseMock()) return [];
-  return resolveMock(mockAuditEntries);
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<AuditWire[]>('/audit/entries', { limit: 200 });
+      return (Array.isArray(rows) ? rows : []).map(mapAudit);
+    },
+    () => resolveMock(mockAuditEntries),
+  );
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
@@ -219,6 +363,12 @@ export function useSettings() {
 }
 export function useAuditEntries() {
   return useQuery({ queryKey: queryKeys.admin.audit(), queryFn: fetchAudit });
+}
+export function useTenant() {
+  return useQuery({ queryKey: queryKeys.admin.tenant(), queryFn: fetchTenant });
+}
+export function useApiKeys() {
+  return useQuery({ queryKey: queryKeys.admin.apiKeys(), queryFn: fetchApiKeys });
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
@@ -300,8 +450,6 @@ export function useAssignRole() {
 
 /**
  * User status action → `PATCH /iam/users/:id/status`.
- * Backend has no PATCH /status yet — mock optimistic update only. In REAL mode
- * the mutation REJECTS honestly instead of fabricating a persisted change.
  */
 export function useUserStatusAction() {
   const qc = useQueryClient();
@@ -312,13 +460,21 @@ export function useUserStatusAction() {
     { prev: AdminUser[] | undefined }
   >({
     mutationFn: async ({ id, status }) => {
-      if (!shouldUseMock()) {
-        throw new Error('User status changes are not available (backend not implemented).');
-      }
-      const cached = qc.getQueryData<AdminUser[]>(queryKeys.admin.users());
-      const base = cached?.find((u) => u.id === id);
-      if (!base) throw new Error(`user ${id} not found`);
-      return resolveMock({ ...base, status });
+      return withMockFallback(
+        async () => {
+          const wire = await apiPatch<{ status: AdminUserStatus }, UserWire>(
+            `/iam/users/${id}/status`,
+            { status },
+          );
+          return mapUser(wire);
+        },
+        async () => {
+          const cached = qc.getQueryData<AdminUser[]>(queryKeys.admin.users());
+          const base = cached?.find((u) => u.id === id);
+          if (!base) throw new Error(`user ${id} not found`);
+          return resolveMock({ ...base, status });
+        },
+      );
     },
     onMutate: async ({ id, status }) => {
       const listKey = queryKeys.admin.users();
@@ -380,10 +536,10 @@ export function useCreateRole() {
     mutationFn: async (input) => {
       return withMockFallback(
         async () => {
-          const wire = await apiPost<{ name: string; description?: string; permissions: string[] }, RoleWire>(
-            '/iam/roles',
-            { name: input.name, description: input.description, permissions: [] },
-          );
+          const wire = await apiPost<
+            { name: string; description?: string; permissions: string[] },
+            RoleWire
+          >('/iam/roles', { name: input.name, description: input.description, permissions: [] });
           return mapRole(wire);
         },
         () =>
@@ -441,6 +597,52 @@ export function useExportAudit() {
       return new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
     },
     onSuccess: (blob) => downloadBlob(blob, `audit-export-${Date.now()}.csv`),
+  });
+}
+
+/**
+ * Create an API key → `POST /auth/api-keys`. The plaintext is returned once.
+ */
+export function useCreateApiKey() {
+  const qc = useQueryClient();
+  return useMutation<
+    { id: string; key: string; keyPrefix: string },
+    Error,
+    { name: string; scopes: string[] }
+  >({
+    mutationFn: async (input) => {
+      return withMockFallback(
+        async () => {
+          const wire = await apiPost<unknown, { id: string; key: string; key_prefix: string }>(
+            '/auth/api-keys',
+            { name: input.name, scopes: input.scopes },
+          );
+          return { id: wire.id, key: wire.key, keyPrefix: wire.key_prefix };
+        },
+        async () => ({
+          id: `mock-${Date.now()}`,
+          key: 'fv_live_mock-plaintext-once',
+          keyPrefix: 'fv_live_mock',
+        }),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.apiKeys() }),
+  });
+}
+
+/**
+ * Revoke an API key → `DELETE /auth/api-keys/:id`.
+ */
+export function useRevokeApiKey() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      await withMockFallback(
+        () => apiDeleteNoContent(`/auth/api-keys/${id}`),
+        () => resolveMock(undefined),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.apiKeys() }),
   });
 }
 

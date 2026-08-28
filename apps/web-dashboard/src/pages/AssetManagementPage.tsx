@@ -26,6 +26,7 @@ import {
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
 import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
+import { AssetImportDialog } from '@/components/assets/AssetImportDialog';
 import { DevicesTab } from '@/components/assets/DevicesTab';
 import { FleetsTab } from '@/components/assets/FleetsTab';
 import { VehiclesTab } from '@/components/assets/VehiclesTab';
@@ -34,7 +35,7 @@ import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Button, PageHeader, Tabs } from '@/components/tailwind-ui';
 import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
-import { FolderTree, Plus, Truck } from 'lucide-react';
+import { FolderTree, Plus, Truck, Upload } from 'lucide-react';
 import { Cpu } from 'lucide-react';
 
 /** The three real asset-class tabs. */
@@ -92,6 +93,7 @@ export function AssetManagementPage() {
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [editRecord, setEditRecord] = useState<AssetRecord | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Tab counts for the tab badges.
   const counts = useMemo(
@@ -104,6 +106,7 @@ export function AssetManagementPage() {
     p.set('tab', next);
     setParams(p, { replace: true });
     setSelectedId(null);
+    setImportOpen(false);
   };
 
   // ── Create/Edit handlers ──
@@ -146,11 +149,25 @@ export function AssetManagementPage() {
         title={t('assets.title')}
         description={t('assets.subtitle')}
         actions={
-          <PermissionGate requires={WRITE_PERMISSION[tab]}>
-            <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
-              {t('common.add')} {t(`assets.tabs.${tab}`)}
-            </Button>
-          </PermissionGate>
+          <div className="flex flex-wrap items-center gap-2">
+            {tab !== 'fleets' && (
+              <PermissionGate requires={WRITE_PERMISSION[tab]}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<Upload size={15} />}
+                  onClick={() => setImportOpen(true)}
+                >
+                  {t('assets.import.action')}
+                </Button>
+              </PermissionGate>
+            )}
+            <PermissionGate requires={WRITE_PERMISSION[tab]}>
+              <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
+                {t('common.add')} {t(`assets.tabs.${tab}`)}
+              </Button>
+            </PermissionGate>
+          </div>
         }
       />
 
@@ -245,6 +262,14 @@ export function AssetManagementPage() {
         fleets={fleets}
         onClose={() => setFormOpen(false)}
       />
+
+      {tab !== 'fleets' && (
+        <AssetImportDialog
+          open={importOpen}
+          kind={tab === 'devices' ? 'devices' : 'vehicles'}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
 
       {/* Archive / Decommission confirmation (backend is soft-delete). */}
       <ConfirmDialog

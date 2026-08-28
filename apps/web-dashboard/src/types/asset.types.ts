@@ -115,6 +115,40 @@ export interface CreateDevicePayload {
   protocol: DeviceProtocol;
 }
 
+/** One failed (or warning) spreadsheet row from POST /vehicles|devices/import. */
+export interface AssetImportFailure {
+  row: number;
+  error: string;
+}
+
+/** Partial-success envelope from spreadsheet import. */
+export interface AssetImportResult<T> {
+  created: T[];
+  failed: AssetImportFailure[];
+  warnings: AssetImportFailure[];
+}
+
+/** Vehicle row sent to POST /vehicles/import (`fleetCode`, not UUID). */
+export interface ImportVehicleRow {
+  row?: number;
+  name: string;
+  code: string;
+  fleetCode: string;
+  plate?: string;
+  vin?: string;
+}
+
+/** Device row sent to POST /devices/import. Optional `vehicleCode` binds after create. */
+export interface ImportDeviceRow {
+  row?: number;
+  imei: string;
+  protocol: DeviceProtocol;
+  serialNumber?: string;
+  manufacturer?: string;
+  model?: string;
+  vehicleCode?: string;
+}
+
 /** Update a device (PATCH /devices/:id — imei is immutable server-side). */
 export type UpdateDevicePayload = Partial<Omit<CreateDevicePayload, 'imei'>> & {
   status?: DeviceStatus;
@@ -126,6 +160,10 @@ export type UpdateDevicePayload = Partial<Omit<CreateDevicePayload, 'imei'>> & {
 export type DeviceRole = 'TRACKER' | 'MDVR' | 'CAN' | 'SENSOR' | 'OTHER';
 
 /** Bind a device to a vehicle (POST /vehicles/:id/devices/:deviceId). */
+export interface BindDevicePayload {
+  role?: DeviceRole;
+  isPrimary?: boolean;
+}
 export interface BindDevicePayload {
   role?: DeviceRole;
   isPrimary?: boolean;

@@ -1,10 +1,14 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  IMPORT_MAX_ROWS,
   bindBodySchema,
   createDeviceSchema,
   createFleetSchema,
   createVehicleSchema,
   deviceStatusSchema,
+  importDevicesBodySchema,
+  importVehicleRowSchema,
+  importVehiclesBodySchema,
   listQuerySchema,
 } from '../application/validation/schemas.js';
 
@@ -111,5 +115,27 @@ describe('validation schemas (§16, INV-I02)', () => {
       tenant_id: '11111111-1111-1111-1111-111111111111',
     });
     expect((parsed as { tenant_id?: string }).tenant_id).toBeUndefined();
+  });
+
+  it('importVehicleRowSchema requires fleetCode instead of fleetId', () => {
+    const parsed = importVehicleRowSchema.parse({
+      name: 'Truck 1',
+      code: 'TRK-1',
+      fleetCode: 'NORTH',
+    });
+    expect(parsed.fleetCode).toBe('NORTH');
+  });
+
+  it('importVehiclesBodySchema rejects more than IMPORT_MAX_ROWS', () => {
+    const rows = Array.from({ length: IMPORT_MAX_ROWS + 1 }, () => ({ name: 'x' }));
+    const r = importVehiclesBodySchema.safeParse({ rows });
+    expect(r.success).toBe(false);
+  });
+
+  it('importDevicesBodySchema accepts a single row envelope', () => {
+    const parsed = importDevicesBodySchema.parse({
+      rows: [{ imei: validImei('35123456789012'), protocol: 'gt06' }],
+    });
+    expect(parsed.rows).toHaveLength(1);
   });
 });

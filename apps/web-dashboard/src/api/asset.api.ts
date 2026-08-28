@@ -8,10 +8,12 @@
  *   DELETE /fleets/:id                (204 — SOFT ARCHIVE)
  *   GET    /vehicles                  (?cursor&limit&fleetId&status&search)
  *   POST   /vehicles                  { fleetId, name, code, plate?, vin? }
+ *   POST   /vehicles/import           { rows: [{ name, code, fleetCode, plate?, vin? }] }
  *   PATCH  /vehicles/:id              (full replace)
  *   DELETE /vehicles/:id              (204 — SOFT ARCHIVE)
  *   GET    /devices                   (?cursor&limit&status&protocol&vehicleId&imei&search)
  *   POST   /devices                   { imei, serialNumber?, manufacturer?, model?, protocol }
+ *   POST   /devices/import            { rows: [{ imei, protocol, vehicleCode?, ... }] }
  *   PATCH  /devices/:id               (imei immutable; status/manufacturer/… updatable)
  *   DELETE /devices/:id               (204 — DECOMMISSION)
  *   GET    /vehicles/:id/devices      → BoundDevice[] (the vehicle↔device binding)
@@ -31,6 +33,7 @@ import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { mockMapVehicles } from '@/mock/fleet-data';
 import type { Page } from '@/types/api.types';
 import type {
+  AssetImportResult,
   BindDevicePayload,
   BoundDevice,
   CreateDevicePayload,
@@ -41,6 +44,8 @@ import type {
   DeviceStatus,
   Fleet,
   FleetStatus,
+  ImportDeviceRow,
+  ImportVehicleRow,
   UpdateDevicePayload,
   UpdateFleetPayload,
   UpdateVehiclePayload,
@@ -343,6 +348,20 @@ export function useCreateVehicle() {
   });
 }
 
+/** Spreadsheet import (POST /vehicles/import) — partial success. */
+export function useImportVehicles() {
+  const qc = useQueryClient();
+  return useMutation<AssetImportResult<Vehicle>, Error, ImportVehicleRow[]>({
+    mutationFn: (rows) =>
+      apiPost<{ rows: ImportVehicleRow[] }, AssetImportResult<Vehicle>>(
+        '/vehicles/import',
+        { rows },
+        { timeout: 180_000 },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+  });
+}
+
 /** Update a vehicle (PATCH /vehicles/:id — full replace). */
 export function useUpdateVehicle() {
   const qc = useQueryClient();
@@ -374,6 +393,20 @@ export function useCreateDevice() {
   const qc = useQueryClient();
   return useMutation<Device, Error, CreateDevicePayload>({
     mutationFn: (payload) => apiPost<CreateDevicePayload, Device>('/devices', payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+  });
+}
+
+/** Spreadsheet import (POST /devices/import) — partial success. */
+export function useImportDevices() {
+  const qc = useQueryClient();
+  return useMutation<AssetImportResult<Device>, Error, ImportDeviceRow[]>({
+    mutationFn: (rows) =>
+      apiPost<{ rows: ImportDeviceRow[] }, AssetImportResult<Device>>(
+        '/devices/import',
+        { rows },
+        { timeout: 180_000 },
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }

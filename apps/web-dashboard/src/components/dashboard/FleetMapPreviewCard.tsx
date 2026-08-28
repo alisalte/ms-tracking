@@ -81,15 +81,18 @@ export function FleetMapPreviewCard() {
         const el = document.createElement('img');
         el.src = vehicleMarkerDataUrl(v.type, vehicleColor(v), { heading: v.heading });
         el.alt = v.label;
-        el.style.width = '40px';
-        el.style.height = '40px';
+        el.style.width = '48px';
+        el.style.height = '48px';
         el.style.cursor = 'pointer';
         const presence = v.presence ?? 'UNKNOWN';
+        const title = v.name?.trim() || v.label;
+        const plate = v.plate?.trim();
+        const plateLine = plate && plate !== title ? `<br/>${plate}` : '';
         const marker = new MaplibreMarker({ element: el, anchor: 'center' })
           .setLngLat([v.lng, v.lat])
           .setPopup(
             new MaplibrePopup({ offset: 12 }).setHTML(
-              `<b>${v.label}</b><br/>${t(`map.presence.${presence}`)} · ${v.speed} km/h`,
+              `<b>${title}</b>${plateLine}<br/>${t(`map.presence.${presence}`)} · ${v.speed} km/h`,
             ),
           );
         marker.addTo(map);

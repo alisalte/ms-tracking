@@ -164,3 +164,23 @@ export type AdminSection =
   | 'audit'
   | 'settings'
   | 'permissions';
+
+/** Tenant self-view (`GET /tenant`). */
+export interface TenantInfo {
+  id: string;
+  name: string;
+  tier: string;
+  region: string;
+  status: string;
+}
+
+/** API key list row (`GET /auth/api-keys`). The plaintext is never listed. */
+export interface AdminApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  status: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+}

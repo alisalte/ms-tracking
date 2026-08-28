@@ -318,8 +318,12 @@ export function MapPage() {
       if (presence !== 'all' && presenceOf(v) !== presence) return false;
       if (fleetId !== 'all' && fleetOfVehicle.get(v.id) !== fleetId) return false;
       if (!q) return true;
-      // Search over label/plate (label IS the plate when one exists).
-      return v.label.toLowerCase().includes(q);
+      // Search over name, plate, and the combined caption.
+      return (
+        v.label.toLowerCase().includes(q) ||
+        (v.name?.toLowerCase().includes(q) ?? false) ||
+        (v.plate?.toLowerCase().includes(q) ?? false)
+      );
     });
   }, [vehicles, query, presence, fleetId, fleetOfVehicle]);
 

@@ -79,6 +79,36 @@ export const createVehicleSchema = z.object({
 });
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 
+/** Max rows accepted by vehicle/device spreadsheet import. */
+export const IMPORT_MAX_ROWS = 500;
+
+/**
+ * One spreadsheet vehicle row. `fleetCode` is the tenant-visible fleet code
+ * (Excel users never have UUIDs). `row` is the 1-based sheet row for errors.
+ */
+export const importVehicleRowSchema = z.object({
+  row: z.coerce.number().int().min(1).optional(),
+  name,
+  code,
+  /** Tenant-visible fleet code or name (Excel); resolved in the service. */
+  fleetCode: z.string().trim().min(1).max(200),
+  plate: z.string().trim().min(1).max(32).optional(),
+  vin: z
+    .string()
+    .trim()
+    .min(1)
+    .max(17)
+    .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
+    .optional(),
+});
+export type ImportVehicleRowInput = z.infer<typeof importVehicleRowSchema>;
+
+/** Loose envelope — per-row validation happens in the service (partial success). */
+export const importVehiclesBodySchema = z.object({
+  rows: z.array(z.record(z.unknown())).min(1).max(IMPORT_MAX_ROWS),
+});
+export type ImportVehiclesBody = z.infer<typeof importVehiclesBodySchema>;
+
 export const updateVehicleSchema = z.object({
   fleetId: uuid.optional(),
   name,
@@ -112,6 +142,26 @@ export const createDeviceSchema = z.object({
   status: deviceStatusSchema.optional(),
 });
 export type CreateDeviceInput = z.infer<typeof createDeviceSchema>;
+
+/**
+ * One spreadsheet device row. Optional `vehicleCode` binds the new device
+ * after create (TRACKER; primary when the vehicle has none).
+ */
+export const importDeviceRowSchema = z.object({
+  row: z.coerce.number().int().min(1).optional(),
+  imei: imeiField,
+  serialNumber: z.string().trim().min(1).max(128).optional(),
+  manufacturer: z.string().trim().min(1).max(128).optional(),
+  model: z.string().trim().min(1).max(128).optional(),
+  protocol: z.enum(PROTOCOLS),
+  vehicleCode: z.string().trim().min(1).max(200).optional(),
+});
+export type ImportDeviceRowInput = z.infer<typeof importDeviceRowSchema>;
+
+export const importDevicesBodySchema = z.object({
+  rows: z.array(z.record(z.unknown())).min(1).max(IMPORT_MAX_ROWS),
+});
+export type ImportDevicesBody = z.infer<typeof importDevicesBodySchema>;
 
 export const updateDeviceSchema = z.object({
   serialNumber: z.string().trim().min(1).max(128).optional(),
@@ -156,6 +206,13 @@ export const createDeviceCommandSchema = z.object({
   ttlSec: z.coerce.number().int().min(5).max(600).optional(),
 });
 export type CreateDeviceCommandInput = z.infer<typeof createDeviceCommandSchema>;
+
+/** Same command + params applied to many devices (partial success). */
+export const BULK_COMMAND_MAX_DEVICES = 200;
+export const bulkCreateDeviceCommandSchema = createDeviceCommandSchema.extend({
+  deviceIds: z.array(z.string().uuid()).min(1).max(BULK_COMMAND_MAX_DEVICES),
+});
+export type BulkCreateDeviceCommandInput = z.infer<typeof bulkCreateDeviceCommandSchema>;
 
 export const deviceCommandListQuerySchema = listQuerySchema.extend({
   status: deviceCommandStatusSchema.optional(),

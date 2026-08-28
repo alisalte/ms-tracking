@@ -27,6 +27,15 @@ const loginSchema = z.object({
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
+/** Compose bootstrap seed (`SEED_*` in infra/docker). Prefill so local sign-in
+ *  isn't blocked by an empty org field or the browser autofilling a stale UUID. */
+const LOCAL_SEED_LOGIN: LoginForm = {
+  tenantId: 'FleetVision',
+  email: 'admin@fleetvision.local',
+  password: 'ChangeMe!StrongPass123',
+  rememberDevice: false,
+};
+
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -41,7 +50,7 @@ export function LoginPage() {
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { tenantId: '', email: '', password: '', rememberDevice: false },
+    defaultValues: LOCAL_SEED_LOGIN,
     mode: 'onSubmit',
   });
 
@@ -72,7 +81,17 @@ export function LoginPage() {
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+      <Alert variant="info" className="mb-4">
+        {t('auth.localSeedHint')}
+      </Alert>
+
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        method="post"
+        autoComplete="off"
+        className="flex flex-col gap-4"
+      >
         <Controller
           name="tenantId"
           control={control}
@@ -82,7 +101,7 @@ export function LoginPage() {
               value={field.value ?? ''}
               id="tenantId"
               label={t('auth.tenantId')}
-              autoComplete="organization"
+              autoComplete="off"
               autoFocus
               disabled={isLoading}
               error={errors.tenantId ? t(errors.tenantId.message ?? '') : null}
@@ -101,7 +120,7 @@ export function LoginPage() {
               id="email"
               type="email"
               label={t('auth.email')}
-              autoComplete="email"
+              autoComplete="off"
               disabled={isLoading}
               error={errors.email ? t(errors.email.message ?? '') : null}
             />
@@ -117,7 +136,7 @@ export function LoginPage() {
               value={field.value ?? ''}
               id="password"
               label={t('auth.password')}
-              autoCompleteValue="current-password"
+              autoCompleteValue="off"
               disabled={isLoading}
               error={errors.password ? t(errors.password.message ?? '') : null}
             />

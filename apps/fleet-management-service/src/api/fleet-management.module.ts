@@ -116,21 +116,6 @@ export class FleetManagementModule {
           ) => new VehicleService(knex as never, vehicles, fleets, audit),
         },
         {
-          provide: DEVICE_SERVICE,
-          inject: [
-            KNEX_TOKEN,
-            DeviceRepository,
-            AuditRepository,
-            'REGISTRY_INVALIDATION_PUBLISHER',
-          ],
-          useFactory: (
-            knex: unknown,
-            devices: DeviceRepository,
-            audit: AuditRepository,
-            invalidation: RegistryInvalidationPublisher,
-          ) => new DeviceService(knex as never, devices, audit, invalidation),
-        },
-        {
           provide: BINDING_SERVICE,
           inject: [
             KNEX_TOKEN,
@@ -148,6 +133,25 @@ export class FleetManagementModule {
             audit: AuditRepository,
             invalidation: RegistryInvalidationPublisher,
           ) => new BindingService(knex as never, vehicles, devices, bindings, audit, invalidation),
+        },
+        {
+          provide: DEVICE_SERVICE,
+          inject: [
+            KNEX_TOKEN,
+            DeviceRepository,
+            AuditRepository,
+            'REGISTRY_INVALIDATION_PUBLISHER',
+            VehicleRepository,
+            BINDING_SERVICE,
+          ],
+          useFactory: (
+            knex: unknown,
+            devices: DeviceRepository,
+            audit: AuditRepository,
+            invalidation: RegistryInvalidationPublisher,
+            vehicles: VehicleRepository,
+            bindings: BindingService,
+          ) => new DeviceService(knex as never, devices, audit, invalidation, vehicles, bindings),
         },
         // Dashboard count aggregate (Sprint E §21) — read-only, existing domains.
         {

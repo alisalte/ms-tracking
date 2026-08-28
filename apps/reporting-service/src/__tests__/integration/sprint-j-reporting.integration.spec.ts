@@ -255,7 +255,7 @@ describe('Sprint J — reporting on real PostgreSQL', () => {
     // The 08-12 08:00 2h trip overlaps the 10:00-10:20 idle → 1200 idle sec.
     const first = page2.rows.find((r) => r.startedAt === '2026-08-12T08:00:00.000Z');
     expect(first?.idleSec).toBe(1200);
-    expect(first?.label).toBe('12-A-100');
+    expect(first?.label).toBe(`V-${VEHICLE_A.slice(0, 6)} · 12-A-100`);
   });
 
   it('4. distance report (§8)', async () => {

@@ -43,6 +43,17 @@ export class VehicleRepository {
     return (row as VehicleRow | undefined) ?? null;
   }
 
+  /** Tenant-scoped lookup by the short code (Excel import). */
+  public async findByCode(tenantId: string, code: string): Promise<VehicleRow | null> {
+    const row = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .where('code', code)
+      .first();
+    return (row as VehicleRow | undefined) ?? null;
+  }
+
   public async list(
     tenantId: string,
     filters: VehicleListFilters,

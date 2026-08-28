@@ -21,8 +21,9 @@
  */
 import { useQuery } from '@tanstack/react-query';
 
-import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { inferVehicleType } from '@/lib/map-markers';
+import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
 import type { Alarm } from '@/types/alarm.types';
 import type { BoundDevice, FleetSummary } from '@/types/asset.types';
@@ -65,7 +66,9 @@ function toMapVehicle(
 ): MapVehicle {
   return {
     id: vehicle.id,
-    label: vehicle.plate ?? `${vehicle.name} (${vehicle.code})`,
+    name: vehicle.name,
+    plate: vehicle.plate,
+    label: formatVehicleLabel(vehicle),
     state: movementState(pos, presence),
     lat: pos?.latitude ?? 0,
     lng: pos?.longitude ?? 0,
@@ -210,7 +213,9 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
       const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
       return {
         id: vehicleWire.id,
-        label: vehicleWire.plate ?? `${vehicleWire.name} (${vehicleWire.code})`,
+        name: vehicleWire.name,
+        plate: vehicleWire.plate,
+        label: formatVehicleLabel(vehicleWire),
         state: movementState(position, presence),
         lat: position?.latitude ?? 0,
         lng: position?.longitude ?? 0,
@@ -334,7 +339,7 @@ function fetchTrips(): Promise<Trip[]> {
           vehicles: [] as Array<{ id: string; name: string; code: string; plate: string | null }>,
         })),
       ]);
-      const labelOf = new Map(registry.vehicles.map((v) => [v.id, v.plate ?? v.name ?? v.code]));
+      const labelOf = new Map(registry.vehicles.map((v) => [v.id, formatVehicleLabel(v)]));
       return wires.map((w): Trip => {
         const durationH = w.durationS / 3600;
         return {
@@ -370,14 +375,20 @@ function fetchTrips(): Promise<Trip[]> {
 function fetchTripDetail(id: string): Promise<TripDetail | null> {
   if (!shouldUseMock()) {
     return (async () => {
-      const w = await apiGetRaw<TripDetailWire>(`/trips/${id}`);
+      const [w, registry] = await Promise.all([
+        apiGetRaw<TripDetailWire>(`/trips/${id}`),
+        fetchAllVehiclesAsMap().catch(() => ({
+          vehicles: [] as Array<{ id: string; name: string; code: string; plate: string | null }>,
+        })),
+      ]);
       const idleMin = w.events
         .filter((e) => e.type === 'idle')
         .reduce((sum, e) => sum + e.durationMin, 0);
+      const vehicle = registry.vehicles.find((v) => v.id === w.vehicleId);
       return {
         id: w.id,
         vehicleId: w.vehicleId,
-        vehicleLabel: w.vehicleId.slice(0, 8),
+        vehicleLabel: vehicle ? formatVehicleLabel(vehicle) : w.vehicleId.slice(0, 8),
         status: toTripStatus(w.status),
         originLabel: `${w.startLat.toFixed(4)}, ${w.startLng.toFixed(4)}`,
         destinationLabel:

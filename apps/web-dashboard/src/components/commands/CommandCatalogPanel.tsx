@@ -84,7 +84,7 @@ export function CommandCatalogPanel({
       {disabled && (
         <Alert variant="info">
           {t('commands.selectDeviceFirst', {
-            defaultValue: 'Select a device to enable commands.',
+            defaultValue: 'Select one or more devices to enable commands.',
           })}
         </Alert>
       )}

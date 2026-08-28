@@ -41,6 +41,7 @@ import {
   Table,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mapAccents, status } from '@/theme/palette';
 import type { Geofence, GeofenceStatus, GeofenceType } from '@/types/geofence.types';
 
@@ -310,7 +311,7 @@ function GeofenceDetailDialog({
     let cancelled = false;
     void fetchAllVehiclesAsMap().then(({ vehicles }) => {
       if (cancelled) return;
-      setVehicleLabels(new Map(vehicles.map((v) => [v.id, v.plate ?? v.name ?? v.code] as const)));
+      setVehicleLabels(new Map(vehicles.map((v) => [v.id, formatVehicleLabel(v)] as const)));
     });
     return () => {
       cancelled = true;
@@ -339,7 +340,7 @@ function GeofenceDetailDialog({
     <Modal
       open={geofence !== null}
       onClose={onClose}
-      size="lg"
+      size="xl"
       title={geofence.name || t('geofences.untitled')}
       footer={
         <>
@@ -384,7 +385,7 @@ function GeofenceDetailDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        <GeofencePreviewMap geofence={geofence} height={320} />
+        <GeofencePreviewMap geofence={geofence} height={420} />
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge color="brand">
             {geofence.type === 'CIRCLE'

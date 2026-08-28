@@ -54,6 +54,15 @@ export interface ReportRepositoryDeps {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** "name · plate" when both exist; otherwise name, plate, or code. */
+const VEHICLE_LABEL_SQL = `CASE
+  WHEN NULLIF(BTRIM(v.name), '') IS NOT NULL
+   AND NULLIF(BTRIM(v.plate), '') IS NOT NULL
+   AND BTRIM(v.name) IS DISTINCT FROM BTRIM(v.plate)
+    THEN BTRIM(v.name) || ' · ' || BTRIM(v.plate)
+  ELSE COALESCE(NULLIF(BTRIM(v.name), ''), NULLIF(BTRIM(v.plate), ''), NULLIF(BTRIM(v.code), ''))
+END`;
+
 export class ReportRepository {
   constructor(private readonly deps: ReportRepositoryDeps) {}
 
@@ -195,8 +204,7 @@ export class ReportRepository {
       const movingSec = Number(r.moving_duration_sec ?? 0);
       const distanceKm = Number(r.total_distance_km ?? 0);
       // Avg speed = distance / moving-hours (KPI doc); null when no completed trips.
-      const avgSpeedKmh =
-        movingSec > 0 ? distanceKm / (movingSec / 3600) : null;
+      const avgSpeedKmh = movingSec > 0 ? distanceKm / (movingSec / 3600) : null;
       const maxSpeedRaw = r.max_speed_kmh;
       return {
         totalVehicles: total,
@@ -359,7 +367,7 @@ export class ReportRepository {
           ),
           agg AS (
             SELECT v.id AS vehicle_id,
-                   COALESCE(v.plate, v.name || ' (' || v.code || ')') AS label,
+                   ${VEHICLE_LABEL_SQL} AS label,
                    COALESCE(m.moving_sec, 0) AS moving_sec,
                    COALESCE(i.idle_sec, 0) AS idle_sec,
                    COALESCE(p.parking_sec, 0) AS parking_sec,
@@ -454,7 +462,7 @@ export class ReportRepository {
           ),
           agg AS (
             SELECT v.id AS vehicle_id,
-                   COALESCE(v.plate, v.name || ' (' || v.code || ')') AS label,
+                   ${VEHICLE_LABEL_SQL} AS label,
                    COALESCE(t.distance_km, 0) AS distance_km,
                    COALESCE(t.trips, 0) AS trips,
                    CASE WHEN COALESCE(t.trips, 0) > 0
@@ -520,7 +528,7 @@ export class ReportRepository {
         await trx.raw(
           `
           SELECT t.id, t.vehicle_id,
-                 COALESCE(v.plate, v.name || ' (' || v.code || ')', LEFT(t.vehicle_id::text, 8)) AS label,
+                 COALESCE(${VEHICLE_LABEL_SQL}, LEFT(t.vehicle_id::text, 8)) AS label,
                  t.started_at, t.ended_at, t.duration_s, t.distance_km, t.max_speed_kmh,
                  t.start_lat, t.start_lng, t.end_lat, t.end_lng,
                  COALESCE((SELECT SUM(GREATEST(0, EXTRACT(EPOCH FROM
@@ -632,7 +640,7 @@ export class ReportRepository {
           ),
           agg AS (
             SELECT v.id AS vehicle_id,
-                   COALESCE(v.plate, v.name || ' (' || v.code || ')') AS label,
+                   ${VEHICLE_LABEL_SQL} AS label,
                    CASE WHEN COALESCE(ta.duration_s, 0) > 0
                         THEN ta.distance_km / (ta.duration_s / 3600.0) ELSE NULL END AS avg_speed,
                    ta.max_speed, COALESCE(s.speeding, 0) AS speeding
@@ -695,7 +703,7 @@ export class ReportRepository {
     if (idleSelected) {
       parts.push(`
         SELECT i.id, 'IDLE' AS kind, i.vehicle_id,
-               COALESCE(v.plate, v.name || ' (' || v.code || ')', LEFT(i.vehicle_id::text, 8)) AS label,
+               COALESCE(${VEHICLE_LABEL_SQL}, LEFT(i.vehicle_id::text, 8)) AS label,
                i.started_at, i.ended_at, i.duration_s, NULL::double precision AS lat, NULL::double precision AS lng,
                NULL::text AS status
         FROM tracking.idle_periods i
@@ -705,7 +713,7 @@ export class ReportRepository {
     if (parkingSelected) {
       parts.push(`
         SELECT p.id, 'PARKING' AS kind, p.vehicle_id,
-               COALESCE(v.plate, v.name || ' (' || v.code || ')', LEFT(p.vehicle_id::text, 8)) AS label,
+               COALESCE(${VEHICLE_LABEL_SQL}, LEFT(p.vehicle_id::text, 8)) AS label,
                p.started_at, p.ended_at, p.duration_s, p.lat, p.lng, p.status
         FROM tracking.parking_periods p
         JOIN fleet.vehicles v ON v.id = p.vehicle_id AND v.tenant_id = ?::uuid AND v.status = 'ACTIVE' ${vf.clause}
@@ -794,7 +802,7 @@ export class ReportRepository {
           `
           WITH scoped AS (SELECT a.* FROM notification.alerts a WHERE ${where})
           SELECT s.vehicle_id,
-                 COALESCE(v.plate, v.name || ' (' || v.code || ')', LEFT(s.vehicle_id::text, 8)) AS label,
+                 COALESCE(${VEHICLE_LABEL_SQL}, LEFT(s.vehicle_id::text, 8)) AS label,
                  s.type, s.severity,
                  COUNT(*)::bigint AS total,
                  COUNT(*) FILTER (WHERE s.status = 'OPEN')::bigint AS open,
@@ -901,7 +909,7 @@ export class ReportRepository {
             GROUP BY g.gf_id, g.vehicle_id
           )
           SELECT a.*,
-                 COALESCE(v.plate, v.name || ' (' || v.code || ')') AS label,
+                 ${VEHICLE_LABEL_SQL} AS label,
                  (SELECT COUNT(*) FROM agg)::bigint AS total_rows
           FROM agg a
           LEFT JOIN fleet.vehicles v ON v.id = a.vehicle_id AND v.tenant_id = ?::uuid
@@ -986,7 +994,7 @@ export class ReportRepository {
             WHERE a.tenant_id = ?::uuid AND a.raised_at >= ? AND a.raised_at < ?
           ), x AS (SELECT * FROM u WHERE vehicle_id IS NOT NULL ${vehicleSql ? 'AND u.vehicle_id = ?::uuid' : ''})
           SELECT x.at, x.source, x.kind, x.vehicle_id, x.id AS cursor_id,
-                 COALESCE(v.plate, v.name || ' (' || v.code || ')', LEFT(x.vehicle_id::text, 8)) AS label,
+                 COALESCE(${VEHICLE_LABEL_SQL}, LEFT(x.vehicle_id::text, 8)) AS label,
                  x.detail
           FROM x JOIN fleet.vehicles v ON v.id = x.vehicle_id AND v.tenant_id = ?::uuid
           ${cursorSql}
@@ -1041,10 +1049,7 @@ export class ReportRepository {
 
   // ── Fleet comparison (Reporting.md §1.3 Executive) ───────────────────────
 
-  public async fleetComparison(
-    tenantId: string,
-    win: TimeWindow,
-  ): Promise<FleetComparisonRow[]> {
+  public async fleetComparison(tenantId: string, win: TimeWindow): Promise<FleetComparisonRow[]> {
     return this.query(async (trx) => {
       const { rows } = await trx.raw(
         `
@@ -1128,9 +1133,10 @@ export class ReportRepository {
         distanceKm: Number(r.distance_km ?? 0),
         trips: Number(r.trips ?? 0),
         movingDurationSec: Number(r.moving_duration_sec ?? 0),
-        utilizationPct: r.utilization_pct === null || r.utilization_pct === undefined
-          ? null
-          : Number(r.utilization_pct),
+        utilizationPct:
+          r.utilization_pct === null || r.utilization_pct === undefined
+            ? null
+            : Number(r.utilization_pct),
         alarms: Number(r.alarms ?? 0),
       }));
     });

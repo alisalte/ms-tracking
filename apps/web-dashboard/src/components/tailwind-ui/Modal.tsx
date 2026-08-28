@@ -22,7 +22,7 @@ export interface ModalProps {
   children?: ReactNode;
   /** Action row (buttons) pinned under the body. */
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   /** Disable closing on backdrop click (defaults to enabled). */
   closeOnBackdrop?: boolean;
   className?: string;
@@ -32,6 +32,7 @@ const SIZES: Record<NonNullable<ModalProps['size']>, string> = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  xl: 'max-w-5xl',
 };
 
 export function Modal({
@@ -81,7 +82,9 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={title !== undefined ? titleId : undefined}
         tabIndex={-1}
-        className={`relative flex max-h-[85vh] w-full flex-col rounded-xl border border-gray-200 bg-white shadow-xl outline-none dark:border-white/10 dark:bg-graydark-300 ${SIZES[size]} ${className}`}
+        className={`relative flex w-full flex-col rounded-xl border border-gray-200 bg-white shadow-xl outline-none dark:border-white/10 dark:bg-graydark-300 ${
+          size === 'xl' ? 'max-h-[92vh]' : 'max-h-[85vh]'
+        } ${SIZES[size]} ${className}`}
       >
         {title !== undefined && (
           <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-white/10">

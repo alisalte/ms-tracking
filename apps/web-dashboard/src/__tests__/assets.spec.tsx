@@ -177,6 +177,8 @@ vi.mock('@/api/asset.api', () => {
     useDeleteDevice: mutation,
     useBindDeviceToVehicle: mutation,
     useUnbindDeviceFromVehicle: mutation,
+    useImportVehicles: mutation,
+    useImportDevices: mutation,
   };
 });
 
@@ -375,11 +377,28 @@ describe('AssetManagementPage', () => {
 
     // vehicle.write missing → no "+ Add Vehicles" on the vehicles tab.
     expect(screen.queryByText('Add Vehicles')).not.toBeInTheDocument();
+    expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
 
     // Granting the permission re-renders the gated action.
     setUser(['*']);
     await waitFor(() => {
       expect(screen.getByText('Add Vehicles')).toBeInTheDocument();
     });
+  });
+
+  it('opens the Excel import dialog from the vehicles tab', async () => {
+    renderAssets();
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+    expect(await screen.findByText('Import vehicles')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download template' })).toBeInTheDocument();
+  });
+
+  it('hides import on the fleets tab', async () => {
+    renderAssets('/assets?tab=fleets');
+    await waitFor(() => expect(screen.getByText('North Fleet')).toBeInTheDocument());
+    expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
+    expect(screen.getByText('Add Fleets')).toBeInTheDocument();
   });
 });

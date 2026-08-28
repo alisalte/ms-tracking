@@ -16,6 +16,12 @@ export const refreshSchema = z.object({
 });
 export type RefreshDto = z.infer<typeof refreshSchema>;
 
+export const changeUserStatusSchema = z.object({
+  status: z.enum(['active', 'suspended', 'deactivated']),
+  reason: z.string().max(256).optional(),
+});
+export type ChangeUserStatusDto = z.infer<typeof changeUserStatusSchema>;
+
 export const createUserSchema = z.object({
   email: z.string().email(),
   username: z.string().min(3).max(64),

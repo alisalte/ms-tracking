@@ -166,6 +166,17 @@ export class User extends AggregateRoot<Brand<string, 'UserId'>> {
     this.raise(new UserActivatedEvent(this.eventContext(ctx)));
   }
 
+  /** INV-IAM-05: SUSPENDED or LOCKED → ACTIVE (admin restore). */
+  public activate(ctx: EventContext): void {
+    if (this.props.status === 'LOCKED') {
+      this.unlock(ctx);
+      return;
+    }
+    this.requireTransition(['SUSPENDED'], 'ACTIVE');
+    (this.props as { status: UserStatus }).status = 'ACTIVE';
+    this.raise(new UserActivatedEvent(this.eventContext(ctx)));
+  }
+
   public suspend(reason: string, ctx: EventContext): void {
     this.requireTransition(['ACTIVE', 'LOCKED'], 'SUSPENDED');
     (this.props as { status: UserStatus }).status = 'SUSPENDED';

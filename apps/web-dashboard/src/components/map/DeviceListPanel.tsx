@@ -222,7 +222,7 @@ export function DeviceListPanel({
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex items-center gap-1.5">
                       <span className="min-w-0 truncate text-sm font-semibold text-white/95">
-                        {v.label}
+                        {v.name?.trim() || v.label}
                       </span>
                       <PresenceDot presence={p} />
                       <span
@@ -232,8 +232,15 @@ export function DeviceListPanel({
                       </span>
                     </span>
                     <span className="truncate text-xs text-white/55">
-                      {fleetNameOf(v.id) ?? t('map.list.noFleet')}
-                      {v.driver ? ` · ${v.driver}` : ''}
+                      {[
+                        v.plate?.trim() && v.plate.trim() !== (v.name?.trim() || v.label)
+                          ? v.plate.trim()
+                          : null,
+                        fleetNameOf(v.id) ?? t('map.list.noFleet'),
+                        v.driver,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                     <span className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-white/55 [&_svg]:me-1 [&_svg]:size-3 [&_svg]:align-text-bottom">
                       <span className="inline-flex items-center gap-1">

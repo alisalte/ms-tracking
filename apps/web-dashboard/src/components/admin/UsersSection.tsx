@@ -4,20 +4,28 @@
  * Columns: name, email, role, MFA, last-login. Filter by status + search.
  * Row click opens the user detail drawer (selection → detail, UI_UX §0.6).
  */
-import { Check, Users } from 'lucide-react';
-import { useMemo } from 'react';
+import { Check, Plus, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCreateUser } from '@/api/admin.api';
 import { userStatusColor } from '@/components/admin/admin-meta';
+import { useToast } from '@/components/feedback/ToastProvider';
+import { PasswordTextField } from '@/components/form/PasswordTextField';
 import {
+  Alert,
   Badge,
+  Button,
   DataTable,
   EmptyState,
+  Input,
+  Modal,
   Select,
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
 import { relativeTime } from '@/lib/relative-time';
+import { emailSchema, passwordSchema, usernameSchema } from '@/lib/validation';
 import type { AdminUser, AdminUserStatus } from '@/types/admin.types';
 
 interface UsersSectionProps {
@@ -50,6 +58,58 @@ export function UsersSection({
   onQuery,
 }: UsersSectionProps) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const create = useCreateUser();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [password, setPassword] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const resetForm = () => {
+    setEmail('');
+    setUsername('');
+    setDisplayName('');
+    setPassword('');
+    setFormError(null);
+  };
+
+  const submitCreate = () => {
+    const parsedEmail = emailSchema.safeParse(email);
+    const parsedUser = usernameSchema.safeParse(username);
+    const parsedPass = passwordSchema.safeParse(password);
+    if (!parsedEmail.success) {
+      setFormError(t(parsedEmail.error.issues[0]?.message ?? 'validation.email.invalid'));
+      return;
+    }
+    if (!parsedUser.success) {
+      setFormError(t(parsedUser.error.issues[0]?.message ?? 'validation.username.tooShort'));
+      return;
+    }
+    if (!parsedPass.success) {
+      setFormError(t(parsedPass.error.issues[0]?.message ?? 'validation.password.tooShort'));
+      return;
+    }
+    setFormError(null);
+    create.mutate(
+      {
+        email: parsedEmail.data,
+        username: parsedUser.data,
+        password: parsedPass.data,
+        displayName: displayName.trim() || undefined,
+      },
+      {
+        onSuccess: (user) => {
+          toast.success('admin.users.toastCreated');
+          setOpen(false);
+          resetForm();
+          onSelect(user.id);
+        },
+        onError: (err) => toast.error(err),
+      },
+    );
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -140,9 +200,19 @@ export function UsersSection({
           />
         }
         right={
-          <span className="text-xs text-gray-500 dark:text-graydark-600">
-            {t('admin.count', { count: filtered.length })}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 dark:text-graydark-600">
+              {t('admin.count', { count: filtered.length })}
+            </span>
+            <Button
+              size="sm"
+              leftIcon={<Plus size={14} />}
+              onClick={() => setOpen(true)}
+              data-testid="admin-create-user"
+            >
+              {t('admin.users.create')}
+            </Button>
+          </div>
         }
       />
       <DataTable
@@ -161,6 +231,66 @@ export function UsersSection({
           />
         }
       />
+
+      <Modal
+        open={open}
+        onClose={() => {
+          if (create.isPending) return;
+          setOpen(false);
+          resetForm();
+        }}
+        title={t('admin.users.createTitle')}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setOpen(false);
+                resetForm();
+              }}
+              disabled={create.isPending}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={submitCreate} disabled={create.isPending} loading={create.isPending}>
+              {t('admin.users.createSubmit')}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {(formError || create.isError) && (
+            <Alert variant="danger">{formError ?? create.error?.message}</Alert>
+          )}
+          <Input
+            label={t('auth.email')}
+            type="email"
+            autoComplete="off"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus
+          />
+          <Input
+            label={t('auth.username')}
+            autoComplete="off"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            hint={t('auth.usernameHelp')}
+          />
+          <Input
+            label={t('auth.displayName')}
+            autoComplete="off"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+          <PasswordTextField
+            label={t('auth.password')}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            hint={t('auth.passwordPolicy')}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

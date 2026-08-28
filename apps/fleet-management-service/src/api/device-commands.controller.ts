@@ -4,6 +4,7 @@
  *
  *   GET    /api/v1/device-commands/catalog         ← the Meitrack MDVR command
  *                                                     catalog (UI form source)
+ *   POST   /api/v1/device-commands/bulk            (same command, many devices)
  *   GET    /api/v1/device-commands/:id             (single record)
  *   POST   /api/v1/devices/:deviceId/commands      (issue — QUEUED, async ack)
  *   GET    /api/v1/devices/:deviceId/commands      (?cursor&limit&status&commandCode)
@@ -28,6 +29,7 @@ import {
 import type { Request } from 'express';
 import type { DeviceCommandService } from '../application/device-command.service.js';
 import {
+  bulkCreateDeviceCommandSchema,
   createDeviceCommandSchema,
   deviceCommandListQuerySchema,
 } from '../application/validation/schemas.js';
@@ -44,6 +46,31 @@ export class DeviceCommandsController {
   @RequirePermissions('telemetry.command.read')
   public async catalog() {
     return { data: this.commands.catalog() };
+  }
+
+  /**
+   * Issue the same command to many devices. Partial success: some may queue
+   * while others fail (inactive protocol, unknown id, …).
+   */
+  @Post('bulk')
+  @HttpCode(200)
+  @RequirePermissions('telemetry.command.send')
+  public async createMany(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(bulkCreateDeviceCommandSchema))
+    body: {
+      deviceIds: string[];
+      commandCode: string;
+      params?: Record<string, string | number | boolean>;
+      ttlSec?: number;
+    },
+  ) {
+    const result = await this.commands.createMany(actorFrom(auth, req), {
+      ...body,
+      commandCode: body.commandCode.toUpperCase(),
+    });
+    return { data: result };
   }
 
   @Get(':id')

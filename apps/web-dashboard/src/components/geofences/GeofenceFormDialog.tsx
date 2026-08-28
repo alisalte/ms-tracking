@@ -23,6 +23,7 @@ import {
 } from '@/api/geofence.api';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type DrawnGeofence, GeofenceDrawMap } from '@/components/geofences/GeofenceDrawMap';
+import { formatVehicleLabel } from '@/lib/vehicle-label';
 import type { AlertOn, Geofence, GeofenceType } from '@/types/geofence.types';
 
 import { Button, Input, ListboxSelect, Modal, MultiSelect } from '@/components/tailwind-ui';
@@ -82,7 +83,7 @@ export function GeofenceFormDialog({
     void fetchAllVehiclesAsMap()
       .then(({ vehicles }) => {
         if (cancelled) return;
-        setVehicleOptions(vehicles.map((v) => ({ id: v.id, label: v.plate ?? v.name ?? v.code })));
+        setVehicleOptions(vehicles.map((v) => ({ id: v.id, label: formatVehicleLabel(v) })));
       })
       .catch(() => {
         if (!cancelled) setVehicleOptions([]);
@@ -158,7 +159,7 @@ export function GeofenceFormDialog({
     <Modal
       open={open}
       onClose={onClose}
-      size="lg"
+      size="xl"
       title={
         editing
           ? t('geofences.editTitle', { defaultValue: 'Edit Geofence' })
@@ -227,6 +228,7 @@ export function GeofenceFormDialog({
           onDrawn={setDrawn}
           onRadiusChange={(m) => setRadius(String(m))}
           initial={initial}
+          height={480}
           key={geofence?.id ?? 'new'}
         />
         <div className="flex flex-col gap-3 sm:flex-row">

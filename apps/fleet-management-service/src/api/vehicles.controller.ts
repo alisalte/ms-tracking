@@ -30,6 +30,7 @@ import type { BindingService } from '../application/binding.service.js';
 import {
   bindBodySchema,
   createVehicleSchema,
+  importVehiclesBodySchema,
   updateVehicleSchema,
   vehicleListQuerySchema,
 } from '../application/validation/schemas.js';
@@ -54,6 +55,23 @@ export class VehiclesController {
   ) {
     const vehicle = await this.vehicles.create(actorFrom(auth, req), body as never);
     return { data: vehicle };
+  }
+
+  /**
+   * Spreadsheet import. Static `import` is declared before `:id` so it wins.
+   * Partial success: some rows may create while others fail.
+   */
+  @Post('import')
+  @HttpCode(200)
+  @RequirePermissions('vehicle.write')
+  public async importRows(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(importVehiclesBodySchema)) body: {
+      rows: Record<string, unknown>[];
+    },
+  ) {
+    return { data: await this.vehicles.importMany(actorFrom(auth, req), body.rows) };
   }
 
   @Get()

@@ -21,8 +21,12 @@ export type VehicleType = 'truck' | 'van' | 'bus' | 'car';
 /** A single vehicle tracked on the fleet map. */
 export interface MapVehicle {
   id: string;
-  /** Display label, e.g. "Truck-42". */
+  /** Display caption, e.g. "کامیون ولوو · 12A345". */
   label: string;
+  /** Registry name when known (shown as the primary caption). */
+  name?: string;
+  /** License plate when known (shown alongside the name). */
+  plate?: string | null;
   state: VehicleState | 'overspeed';
   /** Decimal degrees (WGS84). */
   lat: number;

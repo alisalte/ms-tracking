@@ -30,8 +30,19 @@ vi.mock('maplibre-gl', () => {
     loaded() {
       return true;
     }
+    isStyleLoaded() {
+      return true;
+    }
     addSource() {}
     addLayer() {}
+    getSource() {
+      return null;
+    }
+    resize() {}
+    stop() {}
+    getContainer() {
+      return document.createElement('div');
+    }
     getZoom() {
       return 14;
     }

@@ -99,6 +99,21 @@ export interface SendCommandPayload {
   readonly ttlSec?: number;
 }
 
+/** POST /device-commands/bulk — one command applied to many devices. */
+export interface BulkSendCommandPayload extends SendCommandPayload {
+  readonly deviceIds: readonly string[];
+}
+
+export interface BulkCommandFailure {
+  readonly deviceId: string;
+  readonly error: string;
+}
+
+export interface BulkCommandResult {
+  readonly queued: readonly DeviceCommandRecord[];
+  readonly failed: readonly BulkCommandFailure[];
+}
+
 /** Status → badge tone (single source for history table chips). */
 export const COMMAND_STATUS_TONE: Record<CommandStatus, string> = {
   QUEUED: '#94622e',

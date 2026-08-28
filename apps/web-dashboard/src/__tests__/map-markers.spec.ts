@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { inferVehicleType, vehicleMarkerDataUrl } from '@/lib/map-markers';
+import { headingArrowDataUrl, inferVehicleType, vehicleMarkerDataUrl } from '@/lib/map-markers';
 
 describe('inferVehicleType', () => {
   it('classifies passenger cars (سواری)', () => {
@@ -33,7 +33,16 @@ describe('inferVehicleType', () => {
     for (const t of ['car', 'van', 'truck', 'bus'] as const) {
       const url = vehicleMarkerDataUrl(t, '#12B76A', { heading: 45 });
       expect(url).toMatch(/^data:image\/svg\+xml;base64,/);
-      expect(atob(url.split(',')[1] ?? '')).toContain('linearGradient');
+      const svg = atob(url.split(',')[1] ?? '');
+      expect(svg).toContain('linearGradient');
+      expect(svg).toContain('feDropShadow');
+      expect(svg).toContain('url(#glass)');
     }
+  });
+
+  it('headingArrowDataUrl uses the same 3D vehicle body', () => {
+    const svg = atob(headingArrowDataUrl('#06B6D4', 90).split(',')[1] ?? '');
+    expect(svg).toContain('url(#body)');
+    expect(svg).toContain('rotate(90 32 32)');
   });
 });

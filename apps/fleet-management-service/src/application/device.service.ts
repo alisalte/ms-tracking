@@ -11,7 +11,7 @@ import type { Page } from '@fleetvision/shared-kernel';
  *   the owning tenant's active-status checked. It is the source of truth for the
  *   device-gateway's auth-resolver L3 (cached upward; never per-packet).
  */
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, HttpException, NotFoundException } from '@nestjs/common';
 import type { DeviceResolution, DeviceStatus } from '../domain/device/device-types.js';
 import type { DeviceRecord } from '../domain/device/device-types.js';
 import type { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
@@ -20,9 +20,20 @@ import {
   type DeviceListFilters,
   DeviceRepository,
 } from '../infrastructure/persistence/device.repository.js';
+import type {
+  VehicleRepository,
+  VehicleRow,
+} from '../infrastructure/persistence/vehicle.repository.js';
+import type { BindingService } from './binding.service.js';
+import { indexByLookup, lookupKeys, matchIndexed } from './code-lookup.js';
 import { mapUniqueViolation } from './db-errors.js';
+import type { ImportResult } from './import-result.js';
 import type { ActorContext } from './service-context.js';
-import type { CreateDeviceInput, UpdateDeviceInput } from './validation/schemas.js';
+import {
+  type CreateDeviceInput,
+  type UpdateDeviceInput,
+  importDeviceRowSchema,
+} from './validation/schemas.js';
 
 export class DeviceService {
   constructor(
@@ -31,6 +42,10 @@ export class DeviceService {
     private readonly audit: AuditRepository,
     /** Sprint D §11 — push-based gateway cache invalidation (best-effort). */
     private readonly invalidation: RegistryInvalidationPublisher | null = null,
+    /** Optional — used by spreadsheet import to resolve `vehicleCode`. */
+    private readonly vehicles: VehicleRepository | null = null,
+    /** Optional — used by spreadsheet import to bind after create. */
+    private readonly bindings: BindingService | null = null,
   ) {}
 
   // --- Management API -------------------------------------------------------
@@ -53,6 +68,79 @@ export class DeviceService {
     } catch (err) {
       throw mapUniqueViolation(err);
     }
+  }
+
+  /**
+   * Spreadsheet import: create each device independently; optional `vehicleCode`
+   * binds after a successful create (TRACKER; primary unless the slot is taken).
+   */
+  public async importMany(
+    ctx: ActorContext,
+    rows: ReadonlyArray<Record<string, unknown>>,
+  ): Promise<ImportResult<DeviceRecord>> {
+    const created: DeviceRecord[] = [];
+    const failed: ImportResult<DeviceRecord>['failed'] = [];
+    const warnings: ImportResult<DeviceRecord>['warnings'] = [];
+    const vehicleCache = new Map<string, VehicleRow | null>();
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const raw = rows[i] ?? {};
+      const rowNum = Number.isFinite(Number(raw.row)) ? Number(raw.row) : i + 2;
+      try {
+        const parsed = importDeviceRowSchema.safeParse(raw);
+        if (!parsed.success) {
+          failed.push({
+            row: rowNum,
+            error: parsed.error.issues[0]?.message ?? 'Invalid device row.',
+          });
+          continue;
+        }
+        const input = parsed.data;
+        let vehicle: VehicleRow | null = null;
+        if (input.vehicleCode) {
+          const cacheKey = input.vehicleCode.toLowerCase();
+          if (!vehicleCache.has(cacheKey)) {
+            vehicleCache.set(cacheKey, await this.resolveVehicle(ctx.tenantId, input.vehicleCode));
+          }
+          vehicle = vehicleCache.get(cacheKey) ?? null;
+          if (!vehicle) {
+            failed.push({
+              row: rowNum,
+              error: `Vehicle '${input.vehicleCode}' was not found.`,
+            });
+            continue;
+          }
+          if (vehicle.status === 'ARCHIVED') {
+            failed.push({
+              row: rowNum,
+              error: `Vehicle '${input.vehicleCode}' is archived.`,
+            });
+            continue;
+          }
+        }
+        const record = await this.create(ctx, {
+          imei: input.imei,
+          serialNumber: input.serialNumber,
+          manufacturer: input.manufacturer,
+          model: input.model,
+          protocol: input.protocol,
+        });
+        created.push(record);
+        if (vehicle && this.bindings) {
+          try {
+            await this.bindImported(ctx, vehicle.id, record.id);
+          } catch (err) {
+            warnings.push({
+              row: rowNum,
+              error: `Device created but not bound: ${importErrorMessage(err)}`,
+            });
+          }
+        }
+      } catch (err) {
+        failed.push({ row: rowNum, error: importErrorMessage(err) });
+      }
+    }
+    return { created, failed, warnings };
   }
 
   public async get(ctx: ActorContext, id: string): Promise<DeviceRecord> {
@@ -121,6 +209,37 @@ export class DeviceService {
     return this.devices.resolveByImei(imei);
   }
 
+  private async resolveVehicle(tenantId: string, vehicleCode: string): Promise<VehicleRow | null> {
+    if (!this.vehicles) return null;
+    const out: VehicleRow[] = [];
+    let cursor: string | undefined;
+    for (let n = 0; n < 50; n += 1) {
+      const page = await this.vehicles.list(tenantId, {}, { cursor, limit: 200 });
+      out.push(...page.data);
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+    const index = indexByLookup(out, (v) => [...lookupKeys(v.code), ...lookupKeys(v.name)]);
+    return matchIndexed(index, vehicleCode);
+  }
+
+  private async bindImported(
+    ctx: ActorContext,
+    vehicleId: string,
+    deviceId: string,
+  ): Promise<void> {
+    if (!this.bindings) return;
+    try {
+      await this.bindings.bind(ctx, vehicleId, deviceId, { role: 'TRACKER', isPrimary: true });
+    } catch (err) {
+      if (err instanceof ConflictException && /primary/i.test(err.message)) {
+        await this.bindings.bind(ctx, vehicleId, deviceId, { role: 'TRACKER', isPrimary: false });
+        return;
+      }
+      throw err;
+    }
+  }
+
   private entry(
     ctx: ActorContext,
     action: string,
@@ -144,4 +263,10 @@ export class DeviceService {
       after,
     };
   }
+}
+
+function importErrorMessage(err: unknown): string {
+  if (err instanceof HttpException) return err.message;
+  if (err instanceof Error) return err.message;
+  return 'Import failed.';
 }

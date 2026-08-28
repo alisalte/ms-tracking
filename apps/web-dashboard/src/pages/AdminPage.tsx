@@ -3,11 +3,10 @@
  *
  * Two-column settings shell (UI_UX §5.5): `AdminNav` (left) + the active
  * section content (right); on mobile the nav collapses into a horizontal
- * scrollable strip above the content. The five keyword sections are
- * functional (users, roles, permissions, settings, audit); the rest of the IA
- * renders an "upcoming" placeholder. The active section + selection sync to
- * the URL (`?section=`). Failed registry queries surface as per-section
- * ErrorState with retry — never as empty tables.
+ * scrollable strip above the content. Every IA item is wired — live APIs
+ * where they exist, honest empty/unavailable cards otherwise. The active
+ * section + selection sync to the URL (`?section=`). Failed registry queries
+ * surface as per-section ErrorState with retry — never as empty tables.
  */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,8 +14,21 @@ import { useSearchParams } from 'react-router';
 
 import { usePermissions, useRoles, useUsers } from '@/api/admin.api';
 import { AdminNav } from '@/components/admin/AdminNav';
+import { ApiKeysSection } from '@/components/admin/ApiKeysSection';
 import { AuditSection } from '@/components/admin/AuditSection';
+import { BillingSection } from '@/components/admin/BillingSection';
+import {
+  IntegrationsSection,
+  NotificationsSection,
+  PoliciesSection,
+} from '@/components/admin/OpsSections';
+import { OrganizationSection } from '@/components/admin/OrganizationSection';
 import { PermissionsSection } from '@/components/admin/PermissionsSection';
+import {
+  DevicesSection,
+  FleetsSection,
+  GeofencesSection,
+} from '@/components/admin/RegistrySections';
 import { RoleDetailDrawer } from '@/components/admin/RoleDetailDrawer';
 import { RolesSection } from '@/components/admin/RolesSection';
 import { SettingsSection } from '@/components/admin/SettingsSection';
@@ -26,10 +38,25 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { PageHeader } from '@/components/tailwind-ui';
 import type { AdminSection, AdminUserStatus } from '@/types/admin.types';
 
-const ENABLED: AdminSection[] = ['users', 'roles', 'permissions', 'settings', 'audit'];
+const SECTIONS: AdminSection[] = [
+  'organization',
+  'users',
+  'roles',
+  'permissions',
+  'fleets',
+  'devices',
+  'geofences',
+  'policies',
+  'notifications',
+  'integrations',
+  'apikeys',
+  'billing',
+  'audit',
+  'settings',
+];
 
 function readSection(v: string | null): AdminSection {
-  return (ENABLED as readonly string[]).includes(v ?? '') ? (v as AdminSection) : 'users';
+  return (SECTIONS as readonly string[]).includes(v ?? '') ? (v as AdminSection) : 'users';
 }
 
 export function AdminPage() {
@@ -100,6 +127,7 @@ export function AdminPage() {
             <ErrorState error={sectionError} onRetry={sectionRetry} />
           ) : (
             <>
+              {section === 'organization' && <OrganizationSection />}
               {section === 'users' && (
                 <>
                   <UsersSection
@@ -135,6 +163,14 @@ export function AdminPage() {
                   loading={permissions.isLoading}
                 />
               )}
+              {section === 'fleets' && <FleetsSection />}
+              {section === 'devices' && <DevicesSection />}
+              {section === 'geofences' && <GeofencesSection />}
+              {section === 'policies' && <PoliciesSection />}
+              {section === 'notifications' && <NotificationsSection />}
+              {section === 'integrations' && <IntegrationsSection />}
+              {section === 'apikeys' && <ApiKeysSection />}
+              {section === 'billing' && <BillingSection />}
               {section === 'settings' && <SettingsSection />}
               {section === 'audit' && <AuditSection />}
             </>

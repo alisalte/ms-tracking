@@ -44,6 +44,7 @@
       "networkError": "Unable to connect to server"
     },
     "tenantIdHelp": "Your organization name (e.g. FleetVision)",
+    "localSeedHint": "Local admin is pre-filled: FleetVision / admin@fleetvision.local / ChangeMe!StrongPass123. Clear the browser's saved password if Sign In still returns 401.",
     "brandHeadline": "Enterprise Fleet Intelligence",
     "brandSubline": "Real-time tracking, video telematics, maintenance, and compliance — unified in one calm, fast, secure dashboard.",
     "brandPill": {
@@ -1011,6 +1012,40 @@
       "decommissionConfirmTitle": "Decommission {{name}}?",
       "decommissionConfirmBody": "The device is decommissioned (soft delete) and stops reporting.",
       "conflict": "A record with this code or IMEI already exists."
+    },
+    "import": {
+      "action": "Import Excel",
+      "titleVehicles": "Import vehicles",
+      "titleDevices": "Import devices",
+      "subtitle": "Upload an Excel or CSV file. Download the template so the columns match.",
+      "downloadTemplate": "Download template",
+      "chooseFile": "Choose Excel or CSV file",
+      "dropHint": "Accepts .xlsx and .csv. Store IMEI and code columns as Text in Excel.",
+      "submit": "Import {{count}} rows",
+      "parseError": "Could not read the file.",
+      "rowsReady": "{{count}} rows ready",
+      "rowsInvalid": "{{count}} rows have errors",
+      "resultCreated": "{{count}} created",
+      "resultFailed": "{{count}} failed",
+      "row": "Row {{row}}",
+      "colRow": "Row",
+      "hints": {
+        "vehicles": "Required columns: name, code, fleetCode. If that fleet does not exist yet, it is created from fleetCode (e.g. FLEET-01). Optional: plate, vin.",
+        "devices": "Required: imei (15 digits, Luhn-valid) and protocol (meitrack, gt06, jt808, or stub). Optional: serialNumber, manufacturer, model, vehicleCode (binds after create)."
+      },
+      "errors": {
+        "emptyFile": "The file has no data rows.",
+        "badHeaders": "Could not recognize the columns. Download the template and keep the header row.",
+        "maxRows": "Maximum {{max}} rows per file.",
+        "missingName": "Name is required.",
+        "missingCode": "Code is required.",
+        "invalidCode": "Code may only contain letters, numbers, '_' and '-'.",
+        "missingFleetCode": "Fleet code is required.",
+        "invalidVin": "VIN must be 17 characters with no I, O, or Q.",
+        "invalidImei": "IMEI must be exactly 15 digits.",
+        "imeiLuhn": "IMEI failed the checksum (Luhn) check.",
+        "invalidProtocol": "Protocol must be meitrack, gt06, jt808, or stub."
+      }
     }
   },
   "reports": {
@@ -1222,6 +1257,10 @@
         "locked": "Locked"
       },
       "emptyDescription": "Users will appear here once they are added to this tenant.",
+      "create": "Create user",
+      "createTitle": "New user",
+      "createSubmit": "Create user",
+      "toastCreated": "User created",
       "confirmSuspendTitle": "Suspend user?",
       "confirmSuspendMessage": "Suspend {{name}}? They will be unable to sign in until reactivated.",
       "confirmActivateTitle": "Activate user?",
@@ -1348,8 +1387,88 @@
       "chainTooltip": "Every entry carries a hash-chained integrity hash; a live chain verification endpoint is not available yet.",
       "emptyDescription": "Audit entries will appear here as platform activity happens."
     },
+    "openFullPage": "Open full page",
+    "org": {
+      "empty": "Tenant record is not available.",
+      "users": "Users",
+      "fleets": "Fleets",
+      "vehicles": "Vehicles",
+      "tier": "Plan",
+      "region": "Region",
+      "treeNote": "Divisions and org-tree editing are not modeled yet — the tenant is the organization."
+    },
+    "apikeys": {
+      "create": "Create API key",
+      "createTitle": "New API key",
+      "createSubmit": "Create key",
+      "name": "Name",
+      "scopes": "Scopes",
+      "scopesHint": "Space or comma separated. Example: tracking.read",
+      "revoke": "Revoke",
+      "colName": "Name",
+      "colPrefix": "Prefix",
+      "colScopes": "Scopes",
+      "colStatus": "Status",
+      "empty": "No API keys yet. Create one to grant partner access without a user login.",
+      "plaintextTitle": "Copy this secret now — it is shown only once.",
+      "plaintextHelp": "Store it in your secrets manager. The list only shows the prefix after this.",
+      "toastCreated": "API key created",
+      "toastRevoked": "API key revoked",
+      "confirmRevokeTitle": "Revoke API key?",
+      "confirmRevokeMessage": "Calls using this key will fail immediately. This cannot be undone."
+    },
+    "billing": {
+      "subscription": "Subscription",
+      "tier": "Plan",
+      "region": "Region",
+      "invoicesTitle": "Invoices and payment methods",
+      "invoicesBody": "Billing-service is not in this stack, so invoices, usage meters, and cards are not available. The plan above is the live tenant record."
+    },
+    "fleets": {
+      "colName": "Name",
+      "colCode": "Code",
+      "colVehicle": "Vehicle",
+      "colPlate": "Plate",
+      "vehicles": "Vehicles"
+    },
+    "devices": {
+      "colImei": "IMEI",
+      "colProtocol": "Protocol",
+      "unbound": "Unbound",
+      "empty": "No devices in the registry yet."
+    },
+    "geofences": {
+      "colName": "Name",
+      "colType": "Type",
+      "colAlerts": "Alert on",
+      "empty": "No geofences defined yet."
+    },
+    "notifications": {
+      "colTitle": "Title",
+      "colSeverity": "Severity",
+      "colRead": "Read",
+      "read": "Read",
+      "unread": "Unread",
+      "empty": "No notifications yet."
+    },
+    "policies": {
+      "geofenceAlerts": "Geofence alert rules",
+      "notificationPrefs": "Notification preferences",
+      "colCategory": "Category",
+      "colChannels": "Channels",
+      "prefsEmpty": "No saved preference rows yet.",
+      "hosTitle": "Hours of service & speed policies",
+      "hosBody": "HOS and speed-policy engines are not in this stack. Geofence alerts and notification preferences above are live."
+    },
+    "integrations": {
+      "ssoTitle": "Single sign-on",
+      "ssoBody": "SSO (SAML/OIDC) is not configured in this stack. Local username/password and API keys are the available identity methods.",
+      "scimTitle": "SCIM provisioning",
+      "scimBody": "SCIM is not available yet. Users are created in this admin panel or via the identity API.",
+      "channelsEmpty": "No notification channel providers are reporting health yet."
+    },
     "eyebrow": "Administration",
-    "description": "Tenant users, roles, permissions, settings and the audit trail."
+    "description": "Organization, users, fleets, devices, geofences, notifications, API keys, billing snapshot, and the audit trail."
   },
   "geofences": {
     "title": "Geofences",
@@ -1413,10 +1532,13 @@
       "search": "Search by name…"
     },
     "draw": {
+      "polygonHint": "Click the map to add vertices. The blue fill is the selected area.",
+      "selfIntersecting": "Edges cross — drag a vertex so the blue fill does not fold over itself.",
       "polygonStatus": "{{count}} vertices · {{area}}",
       "circleStatus": "Center {{lat}}, {{lng}} · radius {{radius}} m",
-      "circleCenterHint": "Click the map to set the center, then drag to set the radius",
-      "circleDragging": "Drag outward to set the radius — release to finish",
+      "circleCenterHint": "Click the map to place the center. The circle uses the radius field.",
+      "circleDragging": "Drag the blue handle to change the radius",
+      "radiusHandleHint": "Drag to change the radius",
       "selectType": "Select a geometry type to draw",
       "vertexHint": "Vertex — drag to move, right-click to remove",
       "centerHint": "Circle center — drag to move",
@@ -1430,9 +1552,9 @@
   "commands": {
     "title": "Command Center",
     "description": "Send commands to devices — request position, reboot, lock/unlock, engine cut, configuration, and OTA firmware updates.",
-    "subtitle": "Configure devices over TCP — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).",
+    "subtitle": "Configure one device or apply the same setting to many — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).",
     "selectDevice": "Device (IMEI)",
-    "selectDeviceFirst": "Select a device to enable commands.",
+    "selectDeviceFirst": "Select one or more devices to enable commands.",
     "noMeitrackDevices": "No Meitrack devices registered",
     "noModel": "No model",
     "noSendPermission": "You lack permission to send commands (read-only).",
@@ -1440,6 +1562,17 @@
     "noMatch": "No commands match.",
     "readable": "readable",
     "sent": "Command {{code}} queued",
+    "sentBulk": "Command {{code}} queued on {{count}} devices",
+    "sentPartial": "Command {{code}} queued on {{queued}} devices; {{failed}} failed",
+    "sentNone": "No devices queued.",
+    "picker": {
+      "title": "Devices",
+      "selectedCount": "{{selected}} of {{total}} selected",
+      "selectAll": "Select all",
+      "clearVisible": "Clear visible",
+      "search": "Filter by IMEI or model…",
+      "noMatch": "No devices match."
+    },
     "categories": {
       "all": "All",
       "tracking": "Tracking",
@@ -1466,6 +1599,8 @@
     },
     "form": {
       "send": "Send command",
+      "sendBulk": "Send to {{count}} devices",
+      "bulkHint": "The same values will be sent to {{count}} selected devices.",
       "required": "Required",
       "number": "Must be a number",
       "integer": "Must be an integer",
@@ -1476,7 +1611,8 @@
     },
     "confirm": {
       "title": "Send {{code}}?",
-      "message": "Send command {{code}} to device {{imei}}? This acts on the physical device immediately."
+      "message": "Send command {{code}} to device {{imei}}? This acts on the physical device immediately.",
+      "messageBulk": "Send command {{code}} to {{count}} devices? This acts on each physical device immediately."
     },
     "history": {
       "title": "Command history",
@@ -1486,7 +1622,8 @@
       "status": "Status",
       "response": "Response / Error",
       "filterStatus": "Status",
-      "empty": "No commands sent to this device yet."
+      "empty": "No commands sent to this device yet.",
+      "bulkHint": "Command history is shown when a single device is selected. {{count}} devices will receive the next command."
     }
   },
   "maintenance": {

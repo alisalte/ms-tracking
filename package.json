@@ -28,6 +28,7 @@
     "stack:logs": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml logs -f --tail=50",
     "stack:ps": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml ps",
     "seed:demo": "node tools/seed-demo.mjs",
+    "seed:history": "node tools/seed-history-existing.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

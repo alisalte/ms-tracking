@@ -18,6 +18,8 @@ import type { CommandDef, CommandParamDef } from '@/types/command.types';
 interface CommandParamDialogProps {
   /** The command being configured (null = closed). */
   command: CommandDef | null;
+  /** How many devices will receive this command (changes copy + toast). */
+  deviceCount?: number;
   /** Submit — receives the typed param map. */
   onSubmit: (params: Record<string, string | number>) => Promise<void>;
   onClose: () => void;
@@ -25,7 +27,12 @@ interface CommandParamDialogProps {
 
 type Values = Record<string, string>;
 
-export function CommandParamDialog({ command, onSubmit, onClose }: CommandParamDialogProps) {
+export function CommandParamDialog({
+  command,
+  deviceCount = 1,
+  onSubmit,
+  onClose,
+}: CommandParamDialogProps) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const fa = i18n.language?.startsWith('fa');
@@ -107,10 +114,16 @@ export function CommandParamDialog({ command, onSubmit, onClose }: CommandParamD
     try {
       await onSubmit(params);
       toast.success(
-        t('commands.sent', {
-          defaultValue: 'Command {{code}} queued',
-          code: command.code,
-        }),
+        deviceCount > 1
+          ? t('commands.sentBulk', {
+              defaultValue: 'Command {{code}} queued on {{count}} devices',
+              code: command.code,
+              count: deviceCount,
+            })
+          : t('commands.sent', {
+              defaultValue: 'Command {{code}} queued',
+              code: command.code,
+            }),
       );
       onClose();
     } catch (err) {
@@ -144,7 +157,12 @@ export function CommandParamDialog({ command, onSubmit, onClose }: CommandParamD
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button onClick={() => void handleSubmit()} loading={submitting}>
-              {t('commands.form.send', { defaultValue: 'Send command' })}
+              {deviceCount > 1
+                ? t('commands.form.sendBulk', {
+                    defaultValue: 'Send to {{count}} devices',
+                    count: deviceCount,
+                  })
+                : t('commands.form.send', { defaultValue: 'Send command' })}
             </Button>
           </>
         ) : undefined
@@ -155,6 +173,14 @@ export function CommandParamDialog({ command, onSubmit, onClose }: CommandParamD
           <p className="text-sm text-gray-500 dark:text-graydark-600">
             {fa ? command.descriptionFa : command.description}
           </p>
+          {deviceCount > 1 && (
+            <Alert variant="info">
+              {t('commands.form.bulkHint', {
+                defaultValue: 'The same values will be sent to {{count}} selected devices.',
+                count: deviceCount,
+              })}
+            </Alert>
+          )}
           {serverError && <Alert variant="danger">{serverError}</Alert>}
           {!hasParams && (
             <Alert variant="info">

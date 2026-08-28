@@ -37,6 +37,7 @@ import type { DeviceService } from '../application/device.service.js';
 import {
   createDeviceSchema,
   deviceListQuerySchema,
+  importDevicesBodySchema,
   updateDeviceSchema,
 } from '../application/validation/schemas.js';
 import { actorFrom, readActor } from './shared/actor.js';
@@ -81,6 +82,21 @@ export class DevicesController {
     @Body(new ZodValidationPipe(createDeviceSchema)) body: unknown,
   ) {
     return { data: await this.devices.create(actorFrom(auth, req), body as never) };
+  }
+
+  /**
+   * Spreadsheet import. Static `import` is declared before `:id` so it wins.
+   * Partial success: some rows may create while others fail.
+   */
+  @Post('import')
+  @HttpCode(200)
+  @RequirePermissions('device.write')
+  public async importRows(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(importDevicesBodySchema)) body: { rows: Record<string, unknown>[] },
+  ) {
+    return { data: await this.devices.importMany(actorFrom(auth, req), body.rows) };
   }
 
   @Get()

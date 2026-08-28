@@ -78,7 +78,7 @@ describe('useTrips (real /trips mapping)', () => {
     expect(trip).toMatchObject({
       id: tripWire.id,
       vehicleId: tripWire.vehicleId,
-      vehicleLabel: '11-B-22', // plate wins as the label
+      vehicleLabel: 'Truck 7 · 11-B-22',
       status: 'completed',
       startTime: '2026-08-15T08:00:00Z',
       endTime: '2026-08-15T09:00:00Z',

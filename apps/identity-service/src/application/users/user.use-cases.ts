@@ -40,6 +40,14 @@ export interface AssignRoleInput {
   readonly correlationId?: string;
 }
 
+export interface ChangeUserStatusInput {
+  readonly tenantId: string;
+  readonly userId: string;
+  readonly status: 'active' | 'suspended' | 'deactivated';
+  readonly reason?: string;
+  readonly correlationId?: string;
+}
+
 @Injectable()
 export class CreateUserUseCase {
   constructor(
@@ -114,5 +122,37 @@ export class AssignRoleUseCase {
     if (!user) throw new NotFoundError('User');
     await this.users.assignRole(input.tenantId, input.userId, input.roleId);
     await this.revocation.revokeUser(input.userId, this.config.accessTtlSeconds);
+  }
+}
+
+/**
+ * Admin status transition (IAM §5.1 PATCH /users/{id}/status). Suspend and
+ * deactivate revoke outstanding tokens so a disabled user cannot keep using
+ * a still-valid access JWT.
+ */
+@Injectable()
+export class ChangeUserStatusUseCase {
+  constructor(
+    private readonly users: UserRepository,
+    private readonly revocation: RevocationStore,
+    private readonly config: { accessTtlSeconds: number },
+  ) {}
+
+  public async execute(input: ChangeUserStatusInput): Promise<User> {
+    const user = await this.users.findById(input.tenantId, input.userId);
+    if (!user) throw new NotFoundError('User');
+    const ctx = buildEventContext(input.tenantId, 'user', input.correlationId);
+    if (input.status === 'suspended') {
+      user.suspend(input.reason ?? 'admin', ctx);
+    } else if (input.status === 'deactivated') {
+      user.deactivate(ctx);
+    } else {
+      user.activate(ctx);
+    }
+    await this.users.save(user, ctx);
+    if (input.status !== 'active') {
+      await this.revocation.revokeUser(input.userId, this.config.accessTtlSeconds);
+    }
+    return user;
   }
 }

@@ -87,6 +87,15 @@ const DEPOTS = {
   PAX: { name: 'پارکینگ مسافربری شرق', lat: 35.73, lng: 51.53 },
   RFR: { name: 'سردخانه جنوب', lat: 35.63, lng: 51.48 },
 };
+const DEPOT_KEYS = Object.keys(DEPOTS);
+/** Map unknown fleet codes (e.g. FLEET-01) onto a stable Tehran depot. */
+function depotOf(code) {
+  if (code && DEPOTS[code]) return DEPOTS[code];
+  const s = String(code ?? '');
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (h + s.charCodeAt(i) * (i + 1)) | 0;
+  return DEPOTS[DEPOT_KEYS[Math.abs(h) % DEPOT_KEYS.length]];
+}
 const POIS = [
   { name: 'بازار بزرگ تهران', lat: 35.6734, lng: 51.42, hwy: false },
   { name: 'شهرک صنعتی شمس‌آباد', lat: 35.615, lng: 51.59, hwy: true },
@@ -140,18 +149,20 @@ const uuid = () => randomUUID();
 const fleet = JSON.parse((await import('node:fs')).readFileSync('/tmp/fleet-seed.json', 'utf8'));
 
 // Offline vehicles (device failure for the tail of the window): stop early.
-const OFFLINE_EARLY = new Set(fleet.filter((_, i) => i % 19 === 7).map((v) => v.idx)); // ~5 vehicles
+const OFFLINE_EARLY = new Set(fleet.filter((_, i) => i % 19 === 7).map((v) => Number(v.idx))); // ~5 vehicles
 // Aggressive drivers (harsh events, overspeeds).
-const AGGRESSIVE = new Set(fleet.filter((_, i) => i % 11 === 3).map((v) => v.idx)); // ~9 vehicles
+const AGGRESSIVE = new Set(fleet.filter((_, i) => i % 11 === 3).map((v) => Number(v.idx))); // ~9 vehicles
 // Night shift.
-const NIGHT = new Set(fleet.filter((_, i) => i % 23 === 5).map((v) => v.idx)); // ~4 vehicles
+const NIGHT = new Set(fleet.filter((_, i) => i % 23 === 5).map((v) => Number(v.idx))); // ~4 vehicles
 
 const liveState = [];
 
 for (const v of fleet) {
-  const depot = DEPOTS[v.fleetCode];
-  const aggressive = AGGRESSIVE.has(v.idx);
-  const night = NIGHT.has(v.idx);
+  const depot = depotOf(v.fleetCode);
+  const idx = Number(v.idx) || 0;
+  const deviceId = v.deviceId || v.vehicleId;
+  const aggressive = AGGRESSIVE.has(idx);
+  const night = NIGHT.has(idx);
   let odoKm = rr(15_000, 280_000); // starting odometer
   let pos = { lat: depot.lat + rr(-0.001, 0.001), lng: depot.lng + rr(-0.001, 0.001) };
   const vehiclePositions = [];
@@ -196,7 +207,7 @@ for (const v of fleet) {
       (3 + rnd() * 5).toFixed(1),
       odoKm.toFixed(3),
       ignition ? 't' : 'f',
-      v.deviceId,
+      v.deviceId || deviceId,
       String(quality),
       sessionId,
       '{"protocol":"meitrack"}',
@@ -331,7 +342,7 @@ for (const v of fleet) {
     if (rnd() > workProb) continue; // off day — nothing emitted (device sleep)
     // Vehicle went permanently offline mid-window?
     const dayIndex = Math.round((dayStart - dayStartLocalMs(startMs)) / 86_400_000);
-    if (OFFLINE_EARLY.has(v.idx) && dayIndex > DAYS - ri(3, 10)) break;
+    if (OFFLINE_EARLY.has(idx) && dayIndex > DAYS - ri(3, 10)) break;
 
     const sessionId = uuid(); // one device session per work day
 
@@ -460,28 +471,28 @@ for (const v of fleet) {
     ]);
   }
   files.deviceStatus.push([
-    v.deviceId,
+    deviceId,
     TENANT,
-    OFFLINE_EARLY.has(v.idx) ? 'OFFLINE' : 'OFFLINE',
+    OFFLINE_EARLY.has(idx) ? 'OFFLINE' : 'OFFLINE',
     'meitrack',
-    OFFLINE_EARLY.has(v.idx) ? 'NO_DATA' : 'REMOTE_DISCONNECT',
+    OFFLINE_EARLY.has(idx) ? 'NO_DATA' : 'REMOTE_DISCONNECT',
     iso(Math.min(T0 - 60_000, Date.parse(vehiclePositions.at(-1)?.[3] ?? iso(T0)))),
     iso(T0),
   ]);
 
   liveState.push({
-    idx: v.idx,
+    idx,
     imei: v.imei,
     vehicleId: v.vehicleId,
     fleetCode: v.fleetCode,
     lat: pos.lat,
     lng: pos.lng,
     odoKm,
-    offline: OFFLINE_EARLY.has(v.idx),
+    offline: OFFLINE_EARLY.has(idx),
     aggressive,
   });
   process.stdout.write(
-    `\r  vehicle ${v.idx + 1}/${fleet.length} (${vehiclePositions.length.toLocaleString()} pos)`,
+    `\r  vehicle ${idx + 1}/${fleet.length} (${vehiclePositions.length.toLocaleString()} pos)`,
   );
 }
 console.log('');

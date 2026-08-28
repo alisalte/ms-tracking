@@ -5,7 +5,13 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PERMISSION_CATALOG, mockAuditEntries, mockRoles, mockSettings, mockUsers } from '@/mock/admin-data';
+import {
+  PERMISSION_CATALOG,
+  mockAuditEntries,
+  mockRoles,
+  mockSettings,
+  mockUsers,
+} from '@/mock/admin-data';
 import { AdminPage } from '@/pages/AdminPage';
 
 import { i18n } from '@/i18n';
@@ -45,6 +51,33 @@ vi.mock('@/api/client', () => ({
     if (url === '/tenant/settings') {
       return mockSettings;
     }
+    if (url === '/tenant') {
+      return {
+        id: 'test-tenant',
+        name: mockSettings.orgName,
+        tier: 'STANDARD',
+        region: 'local',
+        status: 'ACTIVE',
+      };
+    }
+    if (url === '/auth/api-keys') {
+      return [];
+    }
+    if (url === '/audit/entries') {
+      return mockAuditEntries.map((e) => ({
+        id: e.id,
+        created_at: e.timestamp,
+        action: e.action,
+        actor_type: e.actorType,
+        actor_id: e.actorName,
+        resource_type: e.targetType,
+        resource_id: e.targetId,
+        request_id: e.correlationId,
+        ip_address: e.ipAddress ?? null,
+        outcome: 'SUCCESS',
+        entry_hash: e.integrityHash,
+      }));
+    }
     if (url === '/iam/users') {
       // List endpoint — the real wire body is { data: rows, meta }, which the
       // client unwraps to the rows array.
@@ -81,7 +114,13 @@ vi.mock('@/api/client', () => ({
     return null;
   }),
   apiClient: { interceptors: { request: { use: () => {} }, response: { use: () => {} } } },
-  apiGetRaw: vi.fn(async () => []),
+  apiGetRaw: vi.fn(async (url: string) => {
+    if (typeof url === 'string' && url.includes('/notification/')) {
+      return { data: [] };
+    }
+    if (url === '/location/geofences') return [];
+    return { data: [], nextCursor: null };
+  }),
   apiPost: vi.fn(),
   apiPostNoContent: vi.fn(),
   apiPut: vi.fn(),
@@ -238,6 +277,56 @@ describe('AdminPage', () => {
     const domains = new Set(PERMISSION_CATALOG.map((g) => g.domain));
     expect(domains.has('iam')).toBe(true);
     expect(domains.has('fleet')).toBe(true);
+  });
+
+  it('opens the create-user dialog from the users toolbar', async () => {
+    renderAdmin();
+    await waitFor(() => {
+      expect(screen.getByTestId('admin-create-user')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('admin-create-user'));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the organization snapshot', async () => {
+    renderAdmin('/admin?section=organization');
+    await waitFor(() => {
+      expect(screen.getByText(mockSettings.orgName)).toBeInTheDocument();
+    });
+    expect(screen.getByText('STANDARD')).toBeInTheDocument();
+  });
+
+  it('renders fleets from the registry', async () => {
+    renderAdmin('/admin?section=fleets');
+    await waitFor(() => {
+      expect(screen.getByText('NORTH Fleet')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the API keys empty state', async () => {
+    renderAdmin('/admin?section=apikeys');
+    await waitFor(() => {
+      expect(screen.getByText(/No API keys yet/)).toBeInTheDocument();
+    });
+  });
+
+  it('renders billing as a tenant snapshot without fake invoices', async () => {
+    renderAdmin('/admin?section=billing');
+    await waitFor(() => {
+      expect(screen.getByText('Subscription')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Billing-service is not in this stack/)).toBeInTheDocument();
+  });
+
+  it('renders integrations with an honest SSO gap', async () => {
+    renderAdmin('/admin?section=integrations');
+    await waitFor(() => {
+      expect(screen.getByText('Single sign-on')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/SSO \(SAML\/OIDC\) is not configured/)).toBeInTheDocument();
   });
 
   it('includes the 9 system roles', () => {

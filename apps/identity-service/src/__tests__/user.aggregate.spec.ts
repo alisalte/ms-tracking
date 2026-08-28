@@ -67,6 +67,14 @@ describe('User aggregate', () => {
     expect(user.failedLoginAttempts).toBe(0);
   });
 
+  it('reactivates a suspended account', () => {
+    const user = makeUser();
+    user.suspend('policy', ctx);
+    expect(user.status).toBe('SUSPENDED');
+    user.activate(ctx);
+    expect(user.status).toBe('ACTIVE');
+  });
+
   it('rejects illegal status transitions (ACTIVE → DEACTIVATED direct)', () => {
     const user = makeUser();
     expect(() => user.deactivate(ctx)).not.toThrow(); // ACTIVE → DEACTIVATED is allowed
