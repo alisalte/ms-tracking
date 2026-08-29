@@ -1,16 +1,19 @@
 /**
  * VehiclesTab — the vehicle registry table (REAL fleet-management contract).
  *
- * Columns: Name · Code · Fleet (name resolved via the fleet list) · Plate ·
- * VIN · Status (ACTIVE/ARCHIVED) · Updated. Filters: fleet dropdown, status,
- * free-text search (client-side). Row click opens the vehicle detail drawer;
- * per-row actions (view / edit / archive) gated by `vehicle.write`.
+ * Columns: Name · Code · Fleet · Plate · VIN · Odometer · Engine hours · Status · Updated.
+ * Filters: fleet dropdown, status, free-text search (client-side). Row click
+ * opens the vehicle detail drawer; per-row actions gated by `vehicle.write`.
  */
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
-import { vehicleStatusColor } from '@/components/assets/asset-meta';
+import {
+  formatEngineHours,
+  formatOdometerKm,
+  vehicleStatusColor,
+} from '@/components/assets/asset-meta';
 import {
   Badge,
   DataTable,
@@ -110,6 +113,18 @@ export function VehiclesTab({
       id: 'vin',
       headerKey: 'assets.vehicle.colVin',
       render: (v) => <span className="font-mono text-xs">{v.vin ?? '—'}</span>,
+    },
+    {
+      id: 'odometer',
+      headerKey: 'assets.vehicle.colOdometer',
+      sortBy: (v) => v.odometerKm ?? -1,
+      render: (v) => <span className="tabular-nums">{formatOdometerKm(v.odometerKm)}</span>,
+    },
+    {
+      id: 'engineHours',
+      headerKey: 'assets.vehicle.colEngineHours',
+      sortBy: (v) => v.engineHours ?? -1,
+      render: (v) => <span className="tabular-nums">{formatEngineHours(v.engineHours)}</span>,
     },
     {
       id: 'status',

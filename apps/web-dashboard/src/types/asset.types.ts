@@ -58,6 +58,10 @@ export interface Vehicle {
   code: string;
   plate: string | null;
   vin: string | null;
+  /** Operator-entered current odometer (km). Null when never recorded. */
+  odometerKm: number | null;
+  /** Operator-entered hour-meter (engine hours). Null when never recorded. */
+  engineHours: number | null;
   status: VehicleStatus;
   version: number;
   createdAt: string;
@@ -72,10 +76,17 @@ export interface CreateVehiclePayload {
   plate?: string;
   /** 17 chars, no I/O/Q (ISO 3779). */
   vin?: string;
+  /** Current dashboard odometer in kilometres. */
+  odometerKm?: number;
+  /** Current hour-meter (engine hours) for heavy equipment. */
+  engineHours?: number;
 }
 
 /** Update a vehicle (PATCH /vehicles/:id — full replace, name+code required). */
-export type UpdateVehiclePayload = CreateVehiclePayload;
+export type UpdateVehiclePayload = Omit<CreateVehiclePayload, 'odometerKm' | 'engineHours'> & {
+  odometerKm?: number | null;
+  engineHours?: number | null;
+};
 
 // ── Devices (fleet-management DeviceRecord) ──────────────────────────────────
 
@@ -136,6 +147,8 @@ export interface ImportVehicleRow {
   fleetCode: string;
   plate?: string;
   vin?: string;
+  odometerKm?: number;
+  engineHours?: number;
 }
 
 /** Device row sent to POST /devices/import. Optional `vehicleCode` binds after create. */

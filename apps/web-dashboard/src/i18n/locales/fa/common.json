@@ -921,6 +921,10 @@
       "search": "جستجوی نام / کد / پلاک / شاسی…",
       "vin": "VIN",
       "plate": "پلاک",
+      "odometer": "کیلومترشمار (km)",
+      "colOdometer": "کارکرد",
+      "engineHours": "ساعت موتور",
+      "colEngineHours": "ساعت",
       "fleet": "ناوگان",
       "pickFleet": "— یک ناوگان انتخاب کنید —",
       "name": "نام",
@@ -1030,7 +1034,7 @@
       "row": "ردیف {{row}}",
       "colRow": "ردیف",
       "hints": {
-        "vehicles": "ستون‌های الزامی: name، code، fleetCode. اگر ناوگان با آن کد نباشد، هنگام ایمپورت ساخته می‌شود (مثلاً FLEET-01). اختیاری: plate، vin.",
+        "vehicles": "ستون‌های الزامی: name، code، fleetCode. اگر ناوگان با آن کد نباشد، هنگام ایمپورت ساخته می‌شود (مثلاً FLEET-01). اختیاری: plate، vin، odometerKm (کیلومتر)، engineHours (ساعت موتور).",
         "devices": "الزامی: imei (۱۵ رقم با رقم کنترل لوهن) و protocol (meitrack، gt06، jt808 یا stub). اختیاری: serialNumber، manufacturer، model، vehicleCode (پس از ایجاد متصل می‌شود)."
       },
       "errors": {
@@ -1042,6 +1046,8 @@
         "invalidCode": "کد فقط می‌تواند شامل حروف، عدد، '_' و '-' باشد.",
         "missingFleetCode": "کد ناوگان الزامی است.",
         "invalidVin": "VIN باید ۱۷ نویسه باشد و شامل I، O یا Q نباشد.",
+        "invalidOdometer": "کیلومترشمار باید عددی بین ۰ و ۱۰٬۰۰۰٬۰۰۰ کیلومتر باشد.",
+        "invalidEngineHours": "ساعت موتور باید عددی بین ۰ و ۱٬۰۰۰٬۰۰۰ باشد.",
         "invalidImei": "IMEI باید دقیقاً ۱۵ رقم باشد.",
         "imeiLuhn": "رقم کنترل IMEI (الگوریتم لوهن) نامعتبر است.",
         "invalidProtocol": "پروتکل باید meitrack، gt06، jt808 یا stub باشد."
@@ -1078,6 +1084,9 @@
       "overview": "نمای کلی",
       "analytics": "شاخص‌ها و تحلیل",
       "vehicles": "خودروها",
+      "stops": "توقفات",
+      "operation": "کارکرد",
+      "odometer": "کیلومترشمار",
       "trips": "سفرها",
       "alarms": "هشدارها",
       "geofences": "محدوده‌ها",
@@ -1098,6 +1107,17 @@
       "all": "همه",
       "idle": "درجای",
       "parking": "پارک"
+    },
+    "stops": {
+      "idleHours": "ساعت درجا",
+      "parkingHours": "ساعت توقف"
+    },
+    "operation": {
+      "periodHours": "ساعت کارکرد در بازه"
+    },
+    "odometer": {
+      "withCounter": "خودرو با کیلومترشمار",
+      "note": "عدد پایان، کانتر ثبت‌شده روی خودرو است. شروع از تفاضل مسافت سفرهای همین بازه برآورد می‌شود."
     },
     "kpi": {
       "totalVehicles": "کل خودروها",
@@ -1144,6 +1164,13 @@
       "alarmTrend": "هشدارهای روزانه بر اساس نوع",
       "stateDistribution": "توزیع وضعیت خودروها (بازه)",
       "fleetComparison": "مسافت و سفرها بر اساس ناوگان",
+      "stopMix": "ساعت درجا در برابر توقف",
+      "stopsByVehicle": "ساعت توقف به تفکیک خودرو",
+      "totalHours": "جمع ساعت",
+      "operationMix": "حرکت / درجا / توقف",
+      "engineHours": "ساعت کارکرد به تفکیک خودرو",
+      "periodDistance": "مسافت در بازه",
+      "odometer": "عدد کیلومترشمار",
       "empty": "در این بازه داده‌ای نیست"
     },
     "export": {
@@ -1166,6 +1193,10 @@
       "utilization": "بهره‌وری",
       "distance": "مسافت",
       "trips": "سفرها",
+      "odometer": "کیلومترشمار",
+      "odometerStart": "شروع کیلومتر",
+      "engineHours": "ساعت‌شمار",
+      "periodEngineHours": "ساعت کارکرد",
       "avgTrip": "میانگین سفر",
       "maxTrip": "بیشینه سفر",
       "discarded": "حذف‌شده",
@@ -1693,7 +1724,9 @@
       "codeInvalid": "کد فقط می‌تواند شامل حروف، اعداد، \"_\" و \"-\" باشد",
       "fleetRequired": "یک ناوگان انتخاب کنید",
       "plateTooLong": "پلاک حداکثر ۳۲ نویسه است",
-      "vinInvalid": "VIN باید ۱۷ نویسه باشد (حروف/اعداد، بدون I، O، Q)"
+      "vinInvalid": "VIN باید ۱۷ نویسه باشد (حروف/اعداد، بدون I، O، Q)",
+      "odometerInvalid": "کیلومترشمار باید عددی بین ۰ و ۱۰٬۰۰۰٬۰۰۰ کیلومتر باشد",
+      "engineHoursInvalid": "ساعت موتور باید عددی بین ۰ و ۱٬۰۰۰٬۰۰۰ باشد"
     },
     "device": {
       "imeiRequired": "IMEI الزامی است",

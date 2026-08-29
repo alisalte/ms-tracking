@@ -398,8 +398,8 @@ function ActionButton({
   );
 }
 
-/** Kilometer formatting (backend reports meters when available; 0 = unknown). */
-function fmtKm(m: number): string {
-  if (!m) return '—';
-  return `${(m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+/** Registry odometer is stored in kilometres (0 = unset in this drawer). */
+function fmtKm(km: number): string {
+  if (!km) return '—';
+  return `${km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
 }

@@ -7,8 +7,8 @@
  *   PATCH  /fleets/:id                (full replace: name+code required)
  *   DELETE /fleets/:id                (204 — SOFT ARCHIVE)
  *   GET    /vehicles                  (?cursor&limit&fleetId&status&search)
- *   POST   /vehicles                  { fleetId, name, code, plate?, vin? }
- *   POST   /vehicles/import           { rows: [{ name, code, fleetCode, plate?, vin? }] }
+ *   POST   /vehicles                  { fleetId, name, code, plate?, vin?, odometerKm?, engineHours? }
+ *   POST   /vehicles/import           { rows: [{ name, code, fleetCode, plate?, vin?, odometerKm?, engineHours? }] }
  *   PATCH  /vehicles/:id              (full replace)
  *   DELETE /vehicles/:id              (204 — SOFT ARCHIVE)
  *   GET    /devices                   (?cursor&limit&status&protocol&vehicleId&imei&search)
@@ -107,6 +107,8 @@ function mockVehicles(): Vehicle[] {
     code: `V${String(i + 1).padStart(3, '0')}`,
     plate: v.label,
     vin: null,
+    odometerKm: 80_000 + i * 137,
+    engineHours: i % 3 === 0 ? 4_200 + i * 11 : null,
     status: 'ACTIVE' as VehicleStatus,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',

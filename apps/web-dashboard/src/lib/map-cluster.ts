@@ -39,23 +39,43 @@ interface PointProps {
   vehicle: MapVehicle;
 }
 
+/**
+ * Below this zoom, nearby vehicles merge into count bubbles (country / metro
+ * overview). At the live-map default (zoom 11) and closer, every vehicle is an
+ * individual 3D silhouette — otherwise depot-mates collapse into the old
+ * circular cluster dots and the new body icons never appear.
+ */
+export const INDIVIDUAL_FROM_ZOOM = 11;
+
 const INDEX = new Supercluster<PointProps, { cluster_id?: number }>({
   radius: 48, // cluster radius in pixels at the zoom level
-  maxZoom: 16, // beyond zoom 16 everything is individual markers
+  maxZoom: INDIVIDUAL_FROM_ZOOM - 1,
 });
 
 let loadedKey: string | null = null;
 
+function hasFix(v: MapVehicle): boolean {
+  return !(v.lat === 0 && v.lng === 0);
+}
+
+function inBbox(v: MapVehicle, bbox: BBox): boolean {
+  return v.lng >= bbox[0] && v.lat >= bbox[1] && v.lng <= bbox[2] && v.lat <= bbox[3];
+}
+
+/** Sorted identity of id + rounded position so live deltas rebuild the index. */
+function fleetKey(vehicles: MapVehicle[]): string {
+  return vehicles
+    .map((v) => `${v.id}:${v.lat.toFixed(5)}:${v.lng.toFixed(5)}`)
+    .sort()
+    .join('|');
+}
+
 /**
- * (Re)load the index when the fleet identity changes. Keys on the sorted id
- * list so a position-only refresh (same vehicles, new coords) re-loads too —
+ * (Re)load the index when the fleet identity or positions change.
  * supercluster's `load` is cheap for our demo size.
  */
 function ensureLoaded(vehicles: MapVehicle[]) {
-  const key = vehicles
-    .map((v) => v.id)
-    .sort()
-    .join('|');
+  const key = fleetKey(vehicles);
   if (key === loadedKey) return;
   const points = vehicles.map((v) => ({
     type: 'Feature' as const,
@@ -66,6 +86,17 @@ function ensureLoaded(vehicles: MapVehicle[]) {
   loadedKey = key;
 }
 
+function asPoints(vehicles: MapVehicle[], bbox: BBox): ClusterResult {
+  return vehicles
+    .filter((v) => inBbox(v, bbox))
+    .map((v) => ({
+      kind: 'point' as const,
+      vehicle: v,
+      lng: v.lng,
+      lat: v.lat,
+    }));
+}
+
 /**
  * Cluster the fleet for the given viewport + zoom.
  *
@@ -74,7 +105,12 @@ function ensureLoaded(vehicles: MapVehicle[]) {
  * @param zoom current integer-ish map zoom.
  */
 export function cluster(vehicles: MapVehicle[], bbox: BBox, zoom: number): ClusterResult {
-  ensureLoaded(vehicles);
+  const placed = vehicles.filter(hasFix);
+  // Small fleets always show individual 3D bodies — cluster bubbles look like
+  // the old circular pins and hide the new icons at city zoom.
+  if (placed.length < 80 || zoom >= INDIVIDUAL_FROM_ZOOM) return asPoints(placed, bbox);
+
+  ensureLoaded(placed);
   const features = INDEX.getClusters(bbox, Math.round(zoom));
   return features.map((f): ClusterPoint | ClusterFeature => {
     const [lng, lat] = f.geometry.coordinates;
@@ -91,8 +127,8 @@ export function cluster(vehicles: MapVehicle[], bbox: BBox, zoom: number): Clust
 /** Zoom level at which a cluster breaks apart (for "click cluster → zoom in"). */
 export function expandZoom(clusterId: number, fallbackZoom: number): number {
   try {
-    return INDEX.getClusterExpansionZoom(clusterId);
+    return Math.max(INDEX.getClusterExpansionZoom(clusterId), INDIVIDUAL_FROM_ZOOM);
   } catch {
-    return Math.min(16, Math.round(fallbackZoom) + 2);
+    return Math.max(INDIVIDUAL_FROM_ZOOM, Math.round(fallbackZoom) + 2);
   }
 }

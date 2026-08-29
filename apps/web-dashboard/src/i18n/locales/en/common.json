@@ -921,6 +921,10 @@
       "search": "Search name / code / plate / VIN…",
       "vin": "VIN",
       "plate": "Plate",
+      "odometer": "Odometer (km)",
+      "colOdometer": "Odometer",
+      "engineHours": "Engine hours",
+      "colEngineHours": "Hours",
       "fleet": "Fleet",
       "pickFleet": "— Select a fleet —",
       "name": "Name",
@@ -1030,7 +1034,7 @@
       "row": "Row {{row}}",
       "colRow": "Row",
       "hints": {
-        "vehicles": "Required columns: name, code, fleetCode. If that fleet does not exist yet, it is created from fleetCode (e.g. FLEET-01). Optional: plate, vin.",
+        "vehicles": "Required columns: name, code, fleetCode. If that fleet does not exist yet, it is created from fleetCode (e.g. FLEET-01). Optional: plate, vin, odometerKm (current km), engineHours (hour meter).",
         "devices": "Required: imei (15 digits, Luhn-valid) and protocol (meitrack, gt06, jt808, or stub). Optional: serialNumber, manufacturer, model, vehicleCode (binds after create)."
       },
       "errors": {
@@ -1042,6 +1046,8 @@
         "invalidCode": "Code may only contain letters, numbers, '_' and '-'.",
         "missingFleetCode": "Fleet code is required.",
         "invalidVin": "VIN must be 17 characters with no I, O, or Q.",
+        "invalidOdometer": "Odometer must be a number of kilometres between 0 and 10,000,000.",
+        "invalidEngineHours": "Engine hours must be a number between 0 and 1,000,000.",
         "invalidImei": "IMEI must be exactly 15 digits.",
         "imeiLuhn": "IMEI failed the checksum (Luhn) check.",
         "invalidProtocol": "Protocol must be meitrack, gt06, jt808, or stub."
@@ -1078,6 +1084,9 @@
       "overview": "Overview",
       "analytics": "KPIs & Analytics",
       "vehicles": "Vehicles",
+      "stops": "Stops",
+      "operation": "Working hours",
+      "odometer": "Odometer",
       "trips": "Trips",
       "alarms": "Alarms",
       "geofences": "Geofences",
@@ -1098,6 +1107,17 @@
       "all": "All",
       "idle": "Idle",
       "parking": "Parking"
+    },
+    "stops": {
+      "idleHours": "Idle hours",
+      "parkingHours": "Parking hours"
+    },
+    "operation": {
+      "periodHours": "Working hours in range"
+    },
+    "odometer": {
+      "withCounter": "Vehicles with odometer",
+      "note": "End reading is the registry odometer. Start is estimated as end minus trip distance in the selected range."
     },
     "kpi": {
       "totalVehicles": "Total vehicles",
@@ -1144,6 +1164,13 @@
       "alarmTrend": "Daily alarms by type",
       "stateDistribution": "Vehicle state distribution (period)",
       "fleetComparison": "Distance & trips by fleet",
+      "stopMix": "Idle vs parking hours",
+      "stopsByVehicle": "Stop hours by vehicle",
+      "totalHours": "Total hours",
+      "operationMix": "Moving / idle / parking",
+      "engineHours": "Working hours by vehicle",
+      "periodDistance": "Distance in range",
+      "odometer": "Odometer reading",
       "empty": "No data in range"
     },
     "export": {
@@ -1166,6 +1193,10 @@
       "utilization": "Utilization",
       "distance": "Distance",
       "trips": "Trips",
+      "odometer": "Odometer",
+      "odometerStart": "Start odometer",
+      "engineHours": "Hour meter",
+      "periodEngineHours": "Working hours",
       "avgTrip": "Avg trip",
       "maxTrip": "Max trip",
       "discarded": "Discarded",
@@ -1693,7 +1724,9 @@
       "codeInvalid": "Code may only contain letters, digits, \"_\" and \"-\"",
       "fleetRequired": "Select a fleet",
       "plateTooLong": "Plate must be at most 32 characters",
-      "vinInvalid": "VIN must be 17 characters (letters/digits, no I, O, Q)"
+      "vinInvalid": "VIN must be 17 characters (letters/digits, no I, O, Q)",
+      "odometerInvalid": "Odometer must be a number of kilometres between 0 and 10,000,000",
+      "engineHoursInvalid": "Engine hours must be a number between 0 and 1,000,000"
     },
     "device": {
       "imeiRequired": "IMEI is required",

@@ -20,14 +20,20 @@
  * Usage: node tools/generate-history.mjs [--days 30]
  */
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const TMP = join(ROOT, '.tmp');
 const TENANT = process.env.SEED_TENANT_ID ?? '4193ef68-74c6-4d2d-8ce5-06dc2e06febf';
 const DAYS = Number(
   process.argv.includes('--days') ? process.argv[process.argv.indexOf('--days') + 1] : 30,
 );
 const T0 = Date.now(); // history ends "now"
-const OUT = '/tmp/csv';
+const OUT = process.env.SEED_CSV_DIR ?? join(TMP, 'csv');
+const FLEET_SEED = process.env.SEED_FLEET_JSON ?? join(TMP, 'fleet-seed.json');
+const LIVE_STATE = process.env.SEED_LIVE_STATE ?? join(TMP, 'live-state.json');
 
 // ── deterministic RNG ────────────────────────────────────────────────────────
 function mulberry32(seed) {
@@ -146,7 +152,7 @@ const files = {
 const uuid = () => randomUUID();
 
 // ── per-vehicle simulation ───────────────────────────────────────────────────
-const fleet = JSON.parse((await import('node:fs')).readFileSync('/tmp/fleet-seed.json', 'utf8'));
+const fleet = JSON.parse(readFileSync(FLEET_SEED, 'utf8'));
 
 // Offline vehicles (device failure for the tail of the window): stop early.
 const OFFLINE_EARLY = new Set(fleet.filter((_, i) => i % 19 === 7).map((v) => Number(v.idx))); // ~5 vehicles
@@ -516,7 +522,7 @@ writeFileSync(`${OUT}/parking.csv`, csv(files.parking));
 writeFileSync(`${OUT}/idle.csv`, csv(files.idle));
 writeFileSync(`${OUT}/engine_hours.csv`, csv(files.engine));
 writeFileSync(`${OUT}/device_status.csv`, csv(files.deviceStatus));
-writeFileSync('/tmp/live-state.json', JSON.stringify(liveState));
+writeFileSync(LIVE_STATE, JSON.stringify(liveState));
 console.log(
   `✓ CSVs written: ${files.positions.length.toLocaleString()} positions, ${files.trips.length.toLocaleString()} trips, ${files.parking.length.toLocaleString()} parking, ${files.idle.length.toLocaleString()} idle, ${files.engine.length.toLocaleString()} engine-hours`,
 );

@@ -27,6 +27,29 @@ const code = z
   .min(1)
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/, 'code may only contain letters, numbers, "_" and "-"');
+/** Dashboard odometer (km). Empty/omitted → unset; 0 is a valid new-vehicle reading. */
+const ODOMETER_KM_MAX = 10_000_000;
+const ENGINE_HOURS_MAX = 1_000_000;
+const odometerKm = z.preprocess((v) => {
+  if (v === '' || v === undefined) return undefined;
+  return v;
+}, z.coerce.number().finite().min(0).max(ODOMETER_KM_MAX).optional());
+/** PATCH may clear the reading with `null` (do not coerce null → 0). */
+const odometerKmPatch = z.preprocess((v) => {
+  if (v === '' || v === undefined) return undefined;
+  if (v === null) return null;
+  return v;
+}, z.union([z.null(), z.coerce.number().finite().min(0).max(ODOMETER_KM_MAX)]).optional());
+/** Hour-meter for heavy equipment. Same empty/null rules as odometerKm. */
+const engineHours = z.preprocess((v) => {
+  if (v === '' || v === undefined) return undefined;
+  return v;
+}, z.coerce.number().finite().min(0).max(ENGINE_HOURS_MAX).optional());
+const engineHoursPatch = z.preprocess((v) => {
+  if (v === '' || v === undefined) return undefined;
+  if (v === null) return null;
+  return v;
+}, z.union([z.null(), z.coerce.number().finite().min(0).max(ENGINE_HOURS_MAX)]).optional());
 /** Canonical, Luhn-valid IMEI. Stored normalized (15 digits). */
 const imeiField = z
   .string()
@@ -76,6 +99,8 @@ export const createVehicleSchema = z.object({
     .max(17)
     .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
     .optional(),
+  odometerKm,
+  engineHours,
 });
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 
@@ -100,6 +125,8 @@ export const importVehicleRowSchema = z.object({
     .max(17)
     .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
     .optional(),
+  odometerKm,
+  engineHours,
 });
 export type ImportVehicleRowInput = z.infer<typeof importVehicleRowSchema>;
 
@@ -121,6 +148,8 @@ export const updateVehicleSchema = z.object({
     .max(17)
     .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
     .optional(),
+  odometerKm: odometerKmPatch,
+  engineHours: engineHoursPatch,
 });
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 

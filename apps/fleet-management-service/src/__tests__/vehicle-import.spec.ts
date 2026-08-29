@@ -44,6 +44,8 @@ function vehicleRow(code: string): VehicleRow {
     code,
     plate: null,
     vin: null,
+    odometer_km: null,
+    engine_hours: null,
     status: 'ACTIVE',
     version: 1,
     created_at: new Date(),
@@ -82,7 +84,16 @@ function makeService(opts?: { fleet?: FleetRow | null; uniqueFailOn?: string }) 
     },
   };
   const vehicles = {
-    create: async (_trx: unknown, _tenant: string, input: { code: string; name: string }) => {
+    create: async (
+      _trx: unknown,
+      _tenant: string,
+      input: {
+        code: string;
+        name: string;
+        odometerKm?: number | null;
+        engineHours?: number | null;
+      },
+    ) => {
       if (opts?.uniqueFailOn && input.code === opts.uniqueFailOn) {
         const err = Object.assign(new Error('duplicate'), {
           code: '23505',
@@ -91,6 +102,12 @@ function makeService(opts?: { fleet?: FleetRow | null; uniqueFailOn?: string }) 
         throw err;
       }
       const row = vehicleRow(input.code);
+      if (input.odometerKm !== undefined) {
+        (row as { odometer_km: number | null }).odometer_km = input.odometerKm;
+      }
+      if (input.engineHours !== undefined) {
+        (row as { engine_hours: number | null }).engine_hours = input.engineHours;
+      }
       created.push(row);
       return row;
     },
@@ -173,5 +190,23 @@ describe('VehicleService.importMany', () => {
     expect(result.created[0]?.code).toBe('V002');
     expect(result.failed[0]?.row).toBe(2);
     expect(result.failed[0]?.error).toMatch(/already exists/i);
+  });
+
+  it('persists odometerKm from a spreadsheet row', async () => {
+    const { service, created } = makeService();
+    const result = await service.importMany(CTX, [
+      { row: 2, name: 'Truck A', code: 'V001', fleetCode: 'NORTH', odometerKm: 48210 },
+    ]);
+    expect(result.failed).toEqual([]);
+    expect(created[0]?.odometer_km).toBe(48210);
+  });
+
+  it('persists engineHours from a spreadsheet row', async () => {
+    const { service, created } = makeService();
+    const result = await service.importMany(CTX, [
+      { row: 2, name: 'Loader A', code: 'L001', fleetCode: 'NORTH', engineHours: 12500 },
+    ]);
+    expect(result.failed).toEqual([]);
+    expect(created[0]?.engine_hours).toBe(12500);
   });
 });

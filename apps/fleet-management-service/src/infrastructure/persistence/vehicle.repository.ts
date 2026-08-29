@@ -18,6 +18,8 @@ export interface VehicleRow {
   readonly code: string;
   readonly plate: string | null;
   readonly vin: string | null;
+  readonly odometer_km: number | null;
+  readonly engine_hours: number | null;
   readonly status: VehicleStatus;
   readonly version: number;
   readonly created_at: Date;
@@ -97,6 +99,8 @@ export class VehicleRepository {
       code: string;
       plate?: string | null;
       vin?: string | null;
+      odometerKm?: number | null;
+      engineHours?: number | null;
     },
   ): Promise<VehicleRow> {
     const [row] = await trx
@@ -109,6 +113,8 @@ export class VehicleRepository {
         code: input.code,
         plate: input.plate ?? null,
         vin: input.vin ?? null,
+        odometer_km: input.odometerKm ?? null,
+        engine_hours: input.engineHours ?? null,
         status: 'ACTIVE',
       })
       .returning('*');
@@ -125,6 +131,8 @@ export class VehicleRepository {
       code: string;
       plate?: string | null;
       vin?: string | null;
+      odometerKm?: number | null;
+      engineHours?: number | null;
     },
     expectedVersion: number,
   ): Promise<VehicleRow | null> {
@@ -136,6 +144,8 @@ export class VehicleRepository {
       updated_at: trx.fn.now(),
       version: trx.raw('version + 1'),
     };
+    if (patch.odometerKm !== undefined) updates.odometer_km = patch.odometerKm;
+    if (patch.engineHours !== undefined) updates.engine_hours = patch.engineHours;
     if (patch.fleetId) updates.fleet_id = trx.raw('?::uuid', [patch.fleetId]);
     const [row] = await trx
       .withSchema(SCHEMA)
@@ -174,6 +184,8 @@ export class VehicleRepository {
       code: row.code,
       plate: row.plate,
       vin: row.vin,
+      odometerKm: row.odometer_km,
+      engineHours: row.engine_hours,
       status: row.status,
       version: row.version,
       createdAt: new Date(row.created_at),

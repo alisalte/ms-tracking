@@ -13,12 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { circleToPolygonRing } from '@/components/geofences/GeofenceDrawMap';
 import { type BasemapId, basemapById } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
-import {
-  clusterMarkerDataUrl,
-  headingArrowDataUrl,
-  vehicleColor,
-  vehicleMarkerDataUrl,
-} from '@/lib/map-markers';
+import { clusterMarkerDataUrl, paintVehicleMarker, vehicleColor } from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
@@ -331,7 +326,7 @@ export function FleetMap({
         .filter((f): f is Extract<typeof f, { kind: 'cluster' }> => f.kind === 'cluster')
         .map((feat) => {
           const el = document.createElement('img');
-          el.className = 'fv-vehicle-marker';
+          el.className = 'fv-cluster-marker';
           el.src = clusterMarkerDataUrl(feat.count, mapAccents.vehicleActive);
           el.alt = t('map.clusterAlt', { count: feat.count });
           el.style.cursor = 'pointer';
@@ -367,10 +362,10 @@ export function FleetMap({
           }
           continue;
         }
-        const el = document.createElement('img');
+        const el = document.createElement('div');
         el.className = 'fv-vehicle-marker';
         applyVehicleIcon(el, v, v.id === selectedId);
-        el.alt = v.label;
+        el.setAttribute('aria-label', v.label);
         el.style.cursor = 'pointer';
         // Colors come from the .fv-map-popup CSS (light + dark aware) — inline
         // hexes would win over the dark-mode overrides.
@@ -490,12 +485,10 @@ export function FleetMap({
       if (!playbackMarkerRef.current) {
         const el = document.createElement('div');
         el.className = 'fv-playback-marker';
-        const img = document.createElement('img');
-        img.src = headingArrowDataUrl(mapAccents.vehicleActive, 0);
-        img.style.width = '48px';
-        img.style.height = '48px';
-        img.alt = '';
-        el.appendChild(img);
+        paintVehicleMarker(el, 'car', mapAccents.vehicleActive, {
+          heading: playbackHead.heading ?? 0,
+          id: 'playback',
+        });
         playbackMarkerRef.current = new MaplibreMarker({ element: el, anchor: 'center' })
           .setLngLat([playbackHead.lng, playbackHead.lat])
           .addTo(map);
@@ -503,10 +496,10 @@ export function FleetMap({
       }
       // Imperative update — no source/layer rebuild, no map recreation.
       playbackMarkerRef.current.setLngLat([playbackHead.lng, playbackHead.lat]);
-      const img = playbackMarkerRef.current.getElement().firstElementChild as HTMLElement | null;
-      if (img) {
-        img.style.transform = `rotate(${playbackHead.heading ?? 0}deg)`;
-      }
+      paintVehicleMarker(playbackMarkerRef.current.getElement(), 'car', mapAccents.vehicleActive, {
+        heading: playbackHead.heading ?? 0,
+        id: 'playback',
+      });
     };
     if (map.loaded() || map.isStyleLoaded()) sync();
     else runWhenStyleReady(map, sync);
@@ -547,13 +540,9 @@ export function FleetMap({
 
 /** Set the marker image: body silhouette by type, tint by status, rotate by heading. */
 function applyVehicleIcon(el: HTMLElement, v: MapVehicle, selected: boolean) {
-  el.setAttribute(
-    'src',
-    vehicleMarkerDataUrl(v.type, vehicleColor(v), {
-      heading: v.heading,
-      selected,
-    }),
-  );
-  el.style.width = selected ? '56px' : '48px';
-  el.style.height = selected ? '56px' : '48px';
+  paintVehicleMarker(el, v.type, vehicleColor(v), {
+    heading: v.heading,
+    selected,
+    id: v.id,
+  });
 }

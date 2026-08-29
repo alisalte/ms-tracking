@@ -4,7 +4,8 @@
  * Extracted from the dashboard mini-map so the full Map dashboard shares the
  * same status→color mapping and SVG data-URL construction. All markers are
  * inline SVG data-URLs (no external assets) colored from the semantic palette
- * (UI_UX_Design.md §0.2 mapAccents).
+ * (UI_UX_Design.md §0.2 mapAccents). Silhouettes are orthographic top-down
+ * (flat fleet-vector icon set, top-down), not isometric toys.
  *
  * Vehicle body type (سواری / وانت / سنگین / اتوبوس) selects the silhouette;
  * movement status still drives the fill color (§2.4).
@@ -63,9 +64,9 @@ export function inferVehicleType(text: string | null | undefined): VehicleType {
   return 'car';
 }
 
-/** Encode a raw SVG string as an `<img>`-ready base64 data URL. */
+/** Encode a raw SVG string as an `<img>`-ready data URL (ASCII-safe). */
 function svgDataUrl(svg: string): string {
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.trim())}`;
 }
 
 /** Darken / lighten hex for 3D faces. */
@@ -103,164 +104,167 @@ function lightenColor(hex: string, amount = 0.28): string {
 }
 
 /**
- * Top-down 3D vehicle bodies (64×64, nose = north / −Y).
- * Reads as a glossy GPS pin at 40px: extrusion, glass, lights, wheels.
+ * Orthographic top-down bodies (64×64, nose = north).
+ *
+ * Visual language: flat fleet-vector clipart (the same family as typical
+ * “cars & trucks from above” sets — rounded hull, white sticker stroke,
+ * steel glass, hubbed wheels). Paths are original; Vecteezy files are not
+ * vendored (separate license).
  */
-function vehicle3dBody(type: VehicleType, dark: string): string {
-  const wheel = '#0F172A';
-  const rubber = (x: number, y: number, rx = 3.1, ry = 5.2) =>
-    `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${wheel}"/>
-     <ellipse cx="${x}" cy="${y}" rx="${rx * 0.42}" ry="${ry * 0.42}" fill="#94A3B8" opacity="0.45"/>`;
+function vehicleBody(type: VehicleType, uid: string, selected: boolean): string {
+  const paint = `url(#${uid}-body)`;
+  const roof = `url(#${uid}-roof)`;
+  const hood = `url(#${uid}-hood)`;
+  const glass = '#243044';
+  const glassLite = '#4B6280';
+  const ink = '#0B0F19';
+  const hullStroke = selected ? '#F8FAFC' : '#FFFFFF';
+  const hullW = selected ? 2.4 : 1.9;
+  const hull = `fill="${paint}" stroke="${hullStroke}" stroke-width="${hullW}" paint-order="stroke fill" stroke-linejoin="round"`;
+  const wheel = (x: number, y: number, w = 4.2, h = 9.2) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.3" fill="${ink}"/>
+     <rect x="${x + 1}" y="${y + 2.4}" width="${w - 2}" height="${h - 4.8}" rx="0.7" fill="#64748B"/>`;
+  const lamp = (x: number, y: number, w: number, fill: string) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="1.8" rx="0.7" fill="${fill}"/>`;
+  const mirror = (x: number, y: number) =>
+    `<rect x="${x}" y="${y}" width="3.4" height="2.2" rx="0.7" fill="${ink}" stroke="#FFFFFF" stroke-width="0.6"/>`;
 
   switch (type) {
     case 'truck':
       return `
-        ${rubber(20.5, 18.5, 2.6, 4.2)}
-        ${rubber(43.5, 18.5, 2.6, 4.2)}
-        ${rubber(20.5, 42, 2.8, 4.6)}
-        ${rubber(43.5, 42, 2.8, 4.6)}
-        ${rubber(20.5, 50.5, 2.8, 4.6)}
-        ${rubber(43.5, 50.5, 2.8, 4.6)}
-        <!-- trailer extrusion -->
-        <rect x="19" y="24" width="26" height="32" rx="3" fill="${dark}"/>
-        <rect x="18" y="23" width="26" height="31" rx="3" fill="url(#body)"/>
-        <rect x="20.5" y="26" width="21" height="25" rx="1.6" fill="url(#roof)"/>
-        <path d="M22 28 H40" stroke="#FFFFFF" stroke-width="0.7" opacity="0.22"/>
-        <path d="M22 33 H40" stroke="#FFFFFF" stroke-width="0.7" opacity="0.16"/>
-        <path d="M22 38 H40" stroke="#FFFFFF" stroke-width="0.7" opacity="0.12"/>
-        <!-- cab -->
-        <rect x="21" y="8" width="22" height="17" rx="5" fill="${dark}"/>
-        <rect x="20" y="7" width="22" height="16.5" rx="5" fill="url(#body)"/>
-        <path d="M24 9.2 L40 9.2 L37.5 16.5 L26.5 16.5 Z" fill="url(#glass)"/>
-        <path d="M27 16.8 H37 V21.5 H27 Z" fill="url(#roof)"/>
-        <ellipse cx="24.2" cy="8.6" rx="2.4" ry="1.35" fill="#FEF9C3"/>
-        <ellipse cx="39.8" cy="8.6" rx="2.4" ry="1.35" fill="#FEF9C3"/>
-        <rect x="23" y="52.2" width="5" height="1.7" rx="0.8" fill="#F87171"/>
-        <rect x="36" y="52.2" width="5" height="1.7" rx="0.8" fill="#F87171"/>`;
+        ${wheel(16.2, 13.4, 3.8, 8)}
+        ${wheel(44, 13.4, 3.8, 8)}
+        ${wheel(15.6, 36.8, 4.2, 9)}
+        ${wheel(44.2, 36.8, 4.2, 9)}
+        ${wheel(15.6, 47.6, 4.2, 9)}
+        ${wheel(44.2, 47.6, 4.2, 9)}
+        <rect x="19.2" y="22" width="25.6" height="34.6" rx="1.8" ${hull}/>
+        <rect x="21" y="24.2" width="22" height="28.8" rx="1" fill="${roof}"/>
+        <path d="M32 24.6 V52.6" stroke="#FFFFFF" stroke-width="0.7" opacity="0.35"/>
+        <rect x="20.4" y="5.2" width="23.2" height="18.2" rx="2.4" ${hull}/>
+        <path d="M23.6 6.8 H40.4 L38.6 15.6 H25.4 Z" fill="${glass}"/>
+        <path d="M25.2 8 H38.8" stroke="${glassLite}" stroke-width="1.1" opacity="0.55"/>
+        ${mirror(16.8, 16.2)}${mirror(43.8, 16.2)}
+        ${lamp(23.4, 5.5, 5.4, '#FFF7ED')}${lamp(35.2, 5.5, 5.4, '#FFF7ED')}
+        ${lamp(22.8, 54.8, 5.8, '#DC2626')}${lamp(35.4, 54.8, 5.8, '#DC2626')}`;
 
     case 'van':
       return `
-        ${rubber(21, 22)}
-        ${rubber(43, 22)}
-        ${rubber(21, 46)}
-        ${rubber(43, 46)}
-        <rect x="20" y="10" width="24" height="44" rx="7" fill="${dark}"/>
-        <rect x="19" y="9" width="24" height="43" rx="7" fill="url(#body)"/>
-        <path d="M23.5 11.5 L40.5 11.5 L38 22 L26 22 Z" fill="url(#glass)"/>
-        <rect x="23.5" y="22.5" width="15" height="24" rx="2" fill="url(#roof)"/>
-        <path d="M25 24.5 H37" stroke="#FFFFFF" stroke-width="0.8" opacity="0.28"/>
-        <path d="M25 30 H37" stroke="#FFFFFF" stroke-width="0.7" opacity="0.16"/>
-        <path d="M26 47 L38 47 L40 51.5 L24 51.5 Z" fill="url(#glass)" opacity="0.55"/>
-        <ellipse cx="23.5" cy="11.2" rx="2.3" ry="1.3" fill="#FEF9C3"/>
-        <ellipse cx="40.5" cy="11.2" rx="2.3" ry="1.3" fill="#FEF9C3"/>
-        <ellipse cx="17.6" cy="23" rx="2.2" ry="1.5" fill="${dark}"/>
-        <ellipse cx="46.4" cy="23" rx="2.2" ry="1.5" fill="${dark}"/>
-        <rect x="23.5" y="50.6" width="4.6" height="1.6" rx="0.8" fill="#F87171"/>
-        <rect x="35.9" y="50.6" width="4.6" height="1.6" rx="0.8" fill="#F87171"/>`;
+        ${wheel(16.4, 17.6)}
+        ${wheel(43.4, 17.6)}
+        ${wheel(16.4, 43.2)}
+        ${wheel(43.4, 43.2)}
+        <rect x="19.8" y="5.4" width="24.4" height="21.2" rx="2.6" ${hull}/>
+        <path d="M23.2 6.8 H40.8 L38.8 16.8 H25.2 Z" fill="${glass}"/>
+        <path d="M25 8.1 H39" stroke="${glassLite}" stroke-width="1.1" opacity="0.55"/>
+        <rect x="18.6" y="25.4" width="26.8" height="29.4" rx="1.6" ${hull}/>
+        <rect x="21.2" y="28" width="21.6" height="23.6" rx="0.8" fill="${ink}" opacity="0.32"/>
+        <path d="M20.6 26.8 H43.4 M20.6 52.8 H43.4" stroke="#FFFFFF" stroke-width="1.05" opacity="0.45"/>
+        ${mirror(16.2, 19.4)}${mirror(44.4, 19.4)}
+        ${lamp(23.2, 5.7, 5.6, '#FFF7ED')}${lamp(35.2, 5.7, 5.6, '#FFF7ED')}
+        ${lamp(22.8, 53.2, 5.8, '#DC2626')}${lamp(35.4, 53.2, 5.8, '#DC2626')}`;
 
     case 'bus':
       return `
-        ${rubber(21.2, 20, 2.8, 4.8)}
-        ${rubber(42.8, 20, 2.8, 4.8)}
-        ${rubber(21.2, 46, 2.8, 4.8)}
-        ${rubber(42.8, 46, 2.8, 4.8)}
-        <rect x="19.5" y="8" width="25" height="48" rx="6" fill="${dark}"/>
-        <rect x="18.5" y="7" width="25" height="47" rx="6" fill="url(#body)"/>
-        <path d="M22 8.8 L42 8.8 L40 16 L24 16 Z" fill="url(#glass)"/>
-        <rect x="22.5" y="17" width="17" height="30" rx="1.4" fill="url(#roof)"/>
-        <path d="M24.5 20.5 H37.5 M24.5 26 H37.5 M24.5 31.5 H37.5 M24.5 37 H37.5 M24.5 42.5 H37.5"
-          stroke="#FFFFFF" stroke-width="0.7" opacity="0.2"/>
-        <path d="M24 47.5 L40 47.5 L42 52 L22 52 Z" fill="url(#glass)" opacity="0.5"/>
-        <ellipse cx="23.2" cy="8.4" rx="2.5" ry="1.35" fill="#FEF9C3"/>
-        <ellipse cx="40.8" cy="8.4" rx="2.5" ry="1.35" fill="#FEF9C3"/>
-        <rect x="22.5" y="52.4" width="5.2" height="1.7" rx="0.8" fill="#F87171"/>
-        <rect x="36.3" y="52.4" width="5.2" height="1.7" rx="0.8" fill="#F87171"/>`;
+        ${wheel(16.2, 15.6, 4, 9)}
+        ${wheel(43.8, 15.6, 4, 9)}
+        ${wheel(16.2, 42.8, 4, 9)}
+        ${wheel(43.8, 42.8, 4, 9)}
+        <rect x="18.6" y="4.8" width="26.8" height="54.4" rx="3.2" ${hull}/>
+        <path d="M22.2 6.4 H41.8 L40.2 15 H23.8 Z" fill="${glass}"/>
+        <rect x="22" y="16.6" width="20" height="33.2" rx="1.1" fill="${roof}"/>
+        <path d="M23.6 20.2 H40.4 M23.6 26.6 H40.4 M23.6 33 H40.4 M23.6 39.4 H40.4 M23.6 45.8 H40.4"
+          stroke="${glassLite}" stroke-width="1.35" opacity="0.7"/>
+        ${lamp(23, 5.2, 6, '#FFF7ED')}${lamp(35, 5.2, 6, '#FFF7ED')}
+        ${lamp(22.8, 57.2, 6, '#DC2626')}${lamp(35.2, 57.2, 6, '#DC2626')}`;
 
     default:
       return `
-        ${rubber(20.8, 24)}
-        ${rubber(43.2, 24)}
-        ${rubber(20.8, 44.5)}
-        ${rubber(43.2, 44.5)}
-        <!-- extrusion -->
-        <path d="M22 10 C18 12 16.5 18 16.5 26 C16.5 40 18 50 22 54 C26 57 38 57 42 54 C46 50 47.5 40 47.5 26 C47.5 18 46 12 42 10 C38 7.5 26 7.5 22 10 Z" fill="${dark}"/>
-        <!-- body -->
-        <path d="M22 9 C18.2 11 17 17 17 25 C17 39 18.5 48.5 22.2 52.5 C26 55.5 38 55.5 41.8 52.5 C45.5 48.5 47 39 47 25 C47 17 45.8 11 42 9 C38 6.6 26 6.6 22 9 Z" fill="url(#body)"/>
-        <!-- hood -->
-        <path d="M23.5 10.2 C26.5 8.6 37.5 8.6 40.5 10.2 L38.6 20.8 L25.4 20.8 Z" fill="url(#hood)"/>
-        <!-- windshield -->
-        <path d="M25.6 21.2 L38.4 21.2 L36.2 31.2 L27.8 31.2 Z" fill="url(#glass)"/>
-        <!-- roof -->
-        <rect x="26.6" y="31.4" width="10.8" height="10.2" rx="1.8" fill="url(#roof)"/>
-        <path d="M28.2 33.2 Q32 31.6 35.8 33.2" fill="none" stroke="#FFFFFF" stroke-width="1.15" opacity="0.4"/>
-        <!-- rear window -->
-        <path d="M27.8 41.8 L36.2 41.8 L38.2 49 L25.8 49 Z" fill="url(#glass)" opacity="0.62"/>
-        <!-- headlights -->
-        <ellipse cx="24.6" cy="10.4" rx="2.55" ry="1.45" fill="#FEF9C3"/>
-        <ellipse cx="39.4" cy="10.4" rx="2.55" ry="1.45" fill="#FEF9C3"/>
-        <ellipse cx="24.6" cy="10.4" rx="1.15" ry="0.65" fill="#FFFFFF" opacity="0.85"/>
-        <ellipse cx="39.4" cy="10.4" rx="1.15" ry="0.65" fill="#FFFFFF" opacity="0.85"/>
-        <!-- mirrors -->
-        <ellipse cx="16.4" cy="23.5" rx="2.4" ry="1.55" fill="${dark}"/>
-        <ellipse cx="47.6" cy="23.5" rx="2.4" ry="1.55" fill="${dark}"/>
-        <!-- taillights -->
-        <rect x="24" y="51.6" width="5" height="1.8" rx="0.9" fill="#F87171"/>
-        <rect x="35" y="51.6" width="5" height="1.8" rx="0.9" fill="#F87171"/>`;
+        ${wheel(17.8, 19.4)}
+        ${wheel(42, 19.4)}
+        ${wheel(17.8, 40.8)}
+        ${wheel(42, 40.8)}
+        <path d="M24.8 6.4 C21.6 6.6 19.2 10 18.6 14.8 L17.6 22.2 C16.8 25 16.6 28 16.6 32
+          L16.6 42.6 C16.6 49.2 18.8 53.8 23 56.2 C26.8 58.4 37.2 58.4 41 56.2
+          C45.2 53.8 47.4 49.2 47.4 42.6 L47.4 32 C47.4 28 47.2 25 46.4 22.2 L45.4 14.8
+          C44.8 10 42.4 6.6 39.2 6.4 C35 5.8 29 5.8 24.8 6.4 Z" ${hull}/>
+        <path d="M23.8 8.6 H40.2 L37.8 18.2 H26.2 Z" fill="${hood}"/>
+        <path d="M25.8 18.8 H38.2 L36.4 28.6 H27.6 Z" fill="${glass}"/>
+        <path d="M27 20 H37" stroke="${glassLite}" stroke-width="1" opacity="0.5"/>
+        <rect x="26.4" y="29.2" width="11.2" height="11.6" rx="1.4" fill="${roof}"/>
+        <path d="M27.2 41.4 L36.8 41.4 L38.6 49.4 H25.4 Z" fill="${glass}" opacity="0.92"/>
+        ${mirror(15.4, 20.8)}${mirror(45.2, 20.8)}
+        ${lamp(22.8, 6.6, 5.4, '#FFF7ED')}${lamp(35.8, 6.6, 5.4, '#FFF7ED')}
+        ${lamp(23.2, 54.8, 5.4, '#DC2626')}${lamp(35.4, 54.8, 5.4, '#DC2626')}`;
   }
 }
 
+function markerUid(id?: string): string {
+  const raw = (id ?? 'm').replace(/[^a-zA-Z0-9]/g, '');
+  return `fv${raw.slice(0, 32) || 'm'}`;
+}
+
 /**
- * Top-down 3D vehicle marker — rotates with map heading (0° = north).
- * Ground shadow stays screen-aligned so the body still reads as 3D when turning.
+ * Top-down vehicle marker — rotates with map heading (0° = north).
+ * Ground shadow stays screen-aligned (outside the rotate group). No SVG
+ * filters: `feDropShadow` clips rotated bodies into a circular blob.
  */
-export function vehicleMarkerDataUrl(
+export function vehicleMarkerSvg(
   type: VehicleType | undefined,
   color: string,
-  opts: { heading?: number; selected?: boolean } = {},
+  opts: { heading?: number; selected?: boolean; id?: string } = {},
 ): string {
   const heading = Number.isFinite(opts.heading) ? (opts.heading as number) : 0;
   const selected = Boolean(opts.selected);
-  const size = selected ? 56 : 48;
-  const dark = shadeColor(color, 0.34);
-  const light = lightenColor(color, 0.42);
-  const body = vehicle3dBody(type ?? 'car', dark);
+  const size = 56;
+  const uid = markerUid(opts.id);
+  const dark = shadeColor(color, 0.38);
+  const light = lightenColor(color, 0.16);
+  const body = vehicleBody(type ?? 'car', uid, selected);
 
-  const selectedRing = selected
-    ? `<circle cx="32" cy="32" r="30" fill="${color}" opacity="0.12"/>
-       <circle cx="32" cy="32" r="27" fill="none" stroke="${color}" stroke-width="2.2" opacity="0.55"/>`
-    : '';
-
-  return svgDataUrl(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64" overflow="visible">
       <defs>
-        <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="${light}"/>
-          <stop offset="45%" stop-color="${color}"/>
+        <linearGradient id="${uid}-body" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="${dark}"/>
+          <stop offset="38%" stop-color="${color}"/>
+          <stop offset="62%" stop-color="${light}"/>
           <stop offset="100%" stop-color="${dark}"/>
         </linearGradient>
-        <linearGradient id="roof" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="${lightenColor(color, 0.22)}"/>
-          <stop offset="100%" stop-color="${color}"/>
+        <linearGradient id="${uid}-roof" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="${shadeColor(color, 0.16)}"/>
+          <stop offset="100%" stop-color="${shadeColor(color, 0.34)}"/>
         </linearGradient>
-        <linearGradient id="hood" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="${lightenColor(color, 0.18)}"/>
-          <stop offset="100%" stop-color="${shadeColor(color, 0.12)}"/>
+        <linearGradient id="${uid}-hood" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="${lightenColor(color, 0.1)}"/>
+          <stop offset="100%" stop-color="${shadeColor(color, 0.2)}"/>
         </linearGradient>
-        <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#F0F9FF"/>
-          <stop offset="40%" stop-color="#7DD3FC"/>
-          <stop offset="100%" stop-color="#0284C7"/>
-        </linearGradient>
-        <filter id="lift" x="-25%" y="-25%" width="150%" height="160%">
-          <feDropShadow dx="0" dy="1.8" stdDeviation="1.6" flood-color="#0F172A" flood-opacity="0.4"/>
-        </filter>
       </defs>
-      ${selectedRing}
-      <g filter="url(#lift)" transform="rotate(${heading} 32 32)">
-        <ellipse cx="32" cy="53" rx="13" ry="5" fill="#0F172A" opacity="0.3"/>
+      <ellipse cx="32" cy="58.5" rx="10" ry="3.2" fill="#0F172A" opacity="0.32"/>
+      <g transform="rotate(${heading} 32 32)">
         ${body}
       </g>
-    </svg>`);
+    </svg>`;
+}
+
+/** Paint the vehicle into a MapLibre marker element (inline SVG, not `<img>`). */
+export function paintVehicleMarker(
+  el: HTMLElement,
+  type: VehicleType | undefined,
+  color: string,
+  opts: { heading?: number; selected?: boolean; id?: string } = {},
+): void {
+  const size = 56;
+  el.innerHTML = vehicleMarkerSvg(type, color, opts);
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+}
+
+export function vehicleMarkerDataUrl(
+  type: VehicleType | undefined,
+  color: string,
+  opts: { heading?: number; selected?: boolean; id?: string } = {},
+): string {
+  return svgDataUrl(vehicleMarkerSvg(type, color, opts));
 }
 
 /** Circular dot marker, white-ringed — legacy default (clusters / fallbacks). */
@@ -282,7 +286,7 @@ export function selectedMarkerDataUrl(color: string): string {
     </svg>`);
 }
 
-/** Vehicle on a track / replay head — same 3D body as the live fleet map. */
+/** Vehicle on a track / replay head — same body as the live fleet map. */
 export function headingArrowDataUrl(color: string, heading: number): string {
   return vehicleMarkerDataUrl('car', color, { heading });
 }

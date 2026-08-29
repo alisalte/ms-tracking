@@ -18,6 +18,8 @@ export interface VehicleImportDraft {
   fleetCode: string;
   plate?: string;
   vin?: string;
+  odometerKm?: number;
+  engineHours?: number;
 }
 
 export interface DeviceImportDraft {
@@ -67,6 +69,27 @@ const VEHICLE_ALIASES: Record<string, keyof Omit<VehicleImportDraft, 'row'>> = {
   vin: 'vin',
   وین: 'vin',
   شاسی: 'vin',
+  odometer: 'odometerKm',
+  odometerkm: 'odometerKm',
+  mileage: 'odometerKm',
+  km: 'odometerKm',
+  کارکرد: 'odometerKm',
+  کیلومترشمار: 'odometerKm',
+  کیلومتر: 'odometerKm',
+  اودومتر: 'odometerKm',
+  کانترکیلومتر: 'odometerKm',
+  enginehours: 'engineHours',
+  enginehour: 'engineHours',
+  hours: 'engineHours',
+  hourmeter: 'engineHours',
+  runtime: 'engineHours',
+  counter: 'engineHours',
+  motohours: 'engineHours',
+  ساعتموتور: 'engineHours',
+  ساعتکار: 'engineHours',
+  کانترساعت: 'engineHours',
+  کارکردساعت: 'engineHours',
+  کانتر: 'engineHours',
 };
 
 const DEVICE_ALIASES: Record<string, keyof Omit<DeviceImportDraft, 'row'>> = {
@@ -158,6 +181,21 @@ function mapHeaders<K extends string>(
 
 const CODE_RE = /^[A-Za-z0-9_-]+$/;
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
+const ODOMETER_KM_MAX = 10_000_000;
+const ENGINE_HOURS_MAX = 1_000_000;
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+
+function parseNonNegNumber(raw: string, max: number): { value?: number; invalid: boolean } {
+  const t = sanitizeSpreadsheetText(raw)
+    .replace(/[۰-۹]/g, (ch) => String(FA_DIGITS.indexOf(ch)))
+    .replace(/[٠-٩]/g, (ch) => String(AR_DIGITS.indexOf(ch)))
+    .replace(/[,_\s]/g, '');
+  if (t === '') return { invalid: false };
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || n > max) return { invalid: true };
+  return { value: n, invalid: false };
+}
 
 export function parseVehicleGrid(grid: string[][]): ParsedAssetImport<VehicleImportDraft> {
   const table = trimGrid(grid);
@@ -183,12 +221,25 @@ export function parseVehicleGrid(grid: string[][]): ParsedAssetImport<VehicleImp
     const fleetCode = sanitizeSpreadsheetText(cell(raw, cols.fleetCode));
     const plate = optional(cell(raw, cols.plate));
     const vin = optional(cell(raw, cols.vin))?.toUpperCase();
+    const odo = parseNonNegNumber(cell(raw, cols.odometerKm), ODOMETER_KM_MAX);
+    const hours = parseNonNegNumber(cell(raw, cols.engineHours), ENGINE_HOURS_MAX);
     if (!name) issues.push({ row, field: 'name', code: 'missingName' });
     if (!code) issues.push({ row, field: 'code', code: 'missingCode' });
     else if (!CODE_RE.test(code)) issues.push({ row, field: 'code', code: 'invalidCode' });
     if (!fleetCode) issues.push({ row, field: 'fleetCode', code: 'missingFleetCode' });
     if (vin && !VIN_RE.test(vin)) issues.push({ row, field: 'vin', code: 'invalidVin' });
-    rows.push({ row, name, code, fleetCode, plate, vin });
+    if (odo.invalid) issues.push({ row, field: 'odometerKm', code: 'invalidOdometer' });
+    if (hours.invalid) issues.push({ row, field: 'engineHours', code: 'invalidEngineHours' });
+    rows.push({
+      row,
+      name,
+      code,
+      fleetCode,
+      plate,
+      vin,
+      odometerKm: odo.value,
+      engineHours: hours.value,
+    });
   });
   if (rows.length === 0 && issues.length === 0) issues.push({ row: 1, code: 'emptyFile' });
   return { kind: 'vehicles', rows, issues };
@@ -245,8 +296,8 @@ export async function parseAssetImportFile(
 }
 
 const VEHICLE_TEMPLATE: string[][] = [
-  ['name', 'code', 'fleetCode', 'plate', 'vin'],
-  ['Truck One', 'V001', 'NORTH', '12A345-67', 'WP0ZZZ99ZTS392124'],
+  ['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours'],
+  ['Truck One', 'V001', 'NORTH', '12A345-67', 'WP0ZZZ99ZTS392124', '48210', '12500'],
 ];
 
 const DEVICE_TEMPLATE: string[][] = [

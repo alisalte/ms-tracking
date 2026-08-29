@@ -4,7 +4,7 @@
  *
  * - Selects the right zod schema + field set per `entity` (Sprint E §10
  *   contracts: fleet {name, code, description?}; vehicle {fleetId, name,
- *   code, plate?, vin?}; device {imei, serialNumber?, manufacturer?, model?,
+ *   code, plate?, vin?, odometerKm?, engineHours?}; device {imei, serialNumber?, manufacturer?, model?,
  *   protocol} + status on edit — imei is immutable server-side, so edit mode
  *   renders it read-only).
  * - The IMEI is validated client-side: exactly 15 digits AND Luhn-valid
@@ -99,6 +99,19 @@ const codeSchema = (keys: { required: string; tooLong: string; invalid: string }
 const optionalText = (max: number, tooLong: string) =>
   z.string().trim().max(max, { message: tooLong });
 
+const ODOMETER_KM_MAX = 10_000_000;
+const ENGINE_HOURS_MAX = 1_000_000;
+
+function isValidOdometerKm(raw: string): boolean {
+  const n = Number(raw.replace(/,/g, ''));
+  return Number.isFinite(n) && n >= 0 && n <= ODOMETER_KM_MAX;
+}
+
+function isValidEngineHours(raw: string): boolean {
+  const n = Number(raw.replace(/,/g, ''));
+  return Number.isFinite(n) && n >= 0 && n <= ENGINE_HOURS_MAX;
+}
+
 /** Fleet create/edit (CreateFleetPayload — PATCH is a full replace). */
 const fleetSchema = z.object({
   name: z
@@ -134,6 +147,18 @@ const vehicleSchema = z.object({
     .trim()
     .refine((v) => v === '' || /^[A-HJ-NPR-Z0-9]{17}$/i.test(v), {
       message: 'validation.vehicle.vinInvalid',
+    }),
+  odometerKm: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isValidOdometerKm(v), {
+      message: 'validation.vehicle.odometerInvalid',
+    }),
+  engineHours: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isValidEngineHours(v), {
+      message: 'validation.vehicle.engineHoursInvalid',
     }),
 });
 
@@ -271,15 +296,32 @@ export function AssetFormDrawer({
           await createFleet.mutateAsync(payload);
         }
       } else if (entity === 'vehicles') {
+        const odoRaw = String(values.odometerKm ?? '')
+          .trim()
+          .replace(/,/g, '');
+        const hoursRaw = String(values.engineHours ?? '')
+          .trim()
+          .replace(/,/g, '');
+        const odometerKm = odoRaw === '' ? undefined : Number(odoRaw);
+        const engineHours = hoursRaw === '' ? undefined : Number(hoursRaw);
         const payload: CreateVehiclePayload = {
           fleetId: String(values.fleetId),
           name: String(values.name),
           code: String(values.code),
           ...(values.plate ? { plate: String(values.plate) } : {}),
           ...(values.vin ? { vin: String(values.vin).toUpperCase() } : {}),
+          ...(odometerKm !== undefined ? { odometerKm } : {}),
+          ...(engineHours !== undefined ? { engineHours } : {}),
         };
         if (isEdit && record) {
-          await updateVehicle.mutateAsync({ id: record.id, changes: payload });
+          await updateVehicle.mutateAsync({
+            id: record.id,
+            changes: {
+              ...payload,
+              odometerKm: odometerKm ?? null,
+              engineHours: engineHours ?? null,
+            },
+          });
         } else {
           await createVehicle.mutateAsync(payload);
         }
@@ -498,6 +540,26 @@ function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fl
           t={t}
         />
       </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldText
+          control={control}
+          name="odometerKm"
+          label={t('assets.vehicle.odometer')}
+          type="number"
+          optional
+          error={errors.odometerKm as FieldError | undefined}
+          t={t}
+        />
+        <FieldText
+          control={control}
+          name="engineHours"
+          label={t('assets.vehicle.engineHours')}
+          type="number"
+          optional
+          error={errors.engineHours as FieldError | undefined}
+          t={t}
+        />
+      </div>
     </>
   );
 }
@@ -633,6 +695,8 @@ function FieldText({
             value={field.value ?? ''}
             label={label}
             type={type}
+            min={type === 'number' ? 0 : undefined}
+            step={type === 'number' ? 'any' : undefined}
             className={mono ? 'font-mono' : ''}
             error={error ? t(error.message ?? '') : null}
             hint={error ? null : optional ? t('common.optional') : null}
@@ -697,6 +761,8 @@ function buildDefaults(
         code: v.code,
         plate: v.plate ?? '',
         vin: v.vin ?? '',
+        odometerKm: v.odometerKm != null ? String(v.odometerKm) : '',
+        engineHours: v.engineHours != null ? String(v.engineHours) : '',
       };
     }
     const d = record as Device;
@@ -710,6 +776,7 @@ function buildDefaults(
   }
   // Create defaults.
   if (entity === 'fleets') return { name: '', code: '', description: '' };
-  if (entity === 'vehicles') return { fleetId: '', name: '', code: '', plate: '', vin: '' };
+  if (entity === 'vehicles')
+    return { fleetId: '', name: '', code: '', plate: '', vin: '', odometerKm: '', engineHours: '' };
   return { imei: '', serialNumber: '', manufacturer: '', model: '', protocol: 'gt06' };
 }

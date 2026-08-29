@@ -64,18 +64,19 @@ function toMapVehicle(
   deviceId: string | undefined,
   lastSeenAt: string | undefined,
 ): MapVehicle {
+  const label = formatVehicleLabel(vehicle);
   return {
     id: vehicle.id,
     name: vehicle.name,
     plate: vehicle.plate,
-    label: formatVehicleLabel(vehicle),
+    label,
     state: movementState(pos, presence),
     lat: pos?.latitude ?? 0,
     lng: pos?.longitude ?? 0,
     heading: pos?.headingDeg ?? 0,
     speed: pos?.speedKph ?? 0,
-    // Body type for map silhouettes — inferred from registry name until API exposes it.
-    type: inferVehicleType(vehicle.name),
+    // Body type for map silhouettes — inferred from registry name/plate until API exposes it.
+    type: inferVehicleType(`${vehicle.name} ${label} ${vehicle.plate ?? ''}`),
     ignitionOn: pos?.ignitionOn ?? undefined,
     updatedAt: pos?.capturedAt,
     deviceId,
@@ -197,7 +198,13 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
   return withMockFallback<VehicleDetail>(
     async () => {
       const [vehicleWire, devicesWire, statusList] = await Promise.all([
-        apiGet<{ id: string; name: string; code: string; plate: string | null }>(`/vehicles/${id}`),
+        apiGet<{
+          id: string;
+          name: string;
+          code: string;
+          plate: string | null;
+          odometerKm: number | null;
+        }>(`/vehicles/${id}`),
         apiGet<BoundDevice[]>(`/vehicles/${id}/devices`),
         fetchDeviceStatuses(),
       ]);
@@ -226,7 +233,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         lastSeenAt: status?.lastSeenAt ?? position?.capturedAt ?? undefined,
         presence,
         deviceId: primary?.deviceId,
-        odometer: 0, // Not exposed by the backend yet — never fabricated.
+        odometer: vehicleWire.odometerKm ?? 0,
         address: '', // Reverse geocoding is a map-engine concern (out of scope).
         events: [],
       } satisfies VehicleDetail;

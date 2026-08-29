@@ -6,7 +6,7 @@
  * Usage:  SEED_DAYS=30 node tools/seed-history-existing.mjs
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,9 +14,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TENANT_NAME = process.env.SEED_TENANT_NAME ?? 'FleetVision';
 const DAYS = Math.max(1, Number(process.env.SEED_DAYS ?? 30) || 30);
 const PG = process.env.PG_CONTAINER ?? 'fleetvision-postgres';
-const CSV_HOST = join(ROOT, '.tmp', 'csv');
-const CSV_TMP = '/tmp/csv';
-const SEED_JSON = '/tmp/fleet-seed.json';
+const CSV_HOST = process.env.SEED_CSV_DIR ?? join(ROOT, '.tmp', 'csv');
+const SEED_JSON = process.env.SEED_FLEET_JSON ?? join(ROOT, '.tmp', 'fleet-seed.json');
 
 function log(msg) {
   console.log(msg);
@@ -57,7 +56,7 @@ function resolveTenantId() {
 }
 
 function exportFleetSeed(tenantId) {
-  log('→ exporting existing vehicles to /tmp/fleet-seed.json');
+  log(`→ exporting existing vehicles to ${SEED_JSON}`);
   const sql = `
 SELECT COALESCE(json_agg(t ORDER BY t.idx), '[]'::json)
 FROM (
@@ -101,6 +100,7 @@ FROM (
   if (!Array.isArray(fleet) || fleet.length === 0) {
     fail('no bound ACTIVE vehicles found for this tenant');
   }
+  mkdirSync(dirname(SEED_JSON), { recursive: true });
   writeFileSync(SEED_JSON, JSON.stringify(fleet));
   log(`✓ ${fleet.length} bound vehicles exported`);
   return fleet.length;
@@ -133,7 +133,6 @@ function importHistory(tenantId) {
   clearTracking(tenantId);
 
   mkdirSync(CSV_HOST, { recursive: true });
-  cpSync(CSV_TMP, CSV_HOST, { recursive: true });
 
   dockerExec(['exec', PG, 'mkdir', '-p', '/tmp/csv']);
   execFileSync('docker', ['cp', `${CSV_HOST}/.`, `${PG}:/tmp/csv/`], { stdio: 'inherit' });
@@ -208,7 +207,9 @@ function main() {
      SELECT 'vehicles=' || ${count}
        || ' positions=' || (SELECT count(*) FROM tracking.vehicle_positions WHERE tenant_id = '${tenantId}'::uuid)
        || ' trips=' || (SELECT count(*) FROM tracking.trip_events WHERE tenant_id = '${tenantId}'::uuid)
-       || ' parking=' || (SELECT count(*) FROM tracking.parking_periods WHERE tenant_id = '${tenantId}'::uuid);`,
+       || ' parking=' || (SELECT count(*) FROM tracking.parking_periods WHERE tenant_id = '${tenantId}'::uuid)
+       || ' idle=' || (SELECT count(*) FROM tracking.idle_periods WHERE tenant_id = '${tenantId}'::uuid)
+       || ' engine_hours=' || (SELECT count(*) FROM tracking.engine_hours WHERE tenant_id = '${tenantId}'::uuid);`,
   ]);
 
   log(`\n✓ done — ${summary}`);

@@ -19,7 +19,7 @@
  *   PG_CONTAINER            default fleetvision-postgres
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,8 +32,7 @@ const TENANT_NAME = process.env.SEED_TENANT_NAME ?? 'FleetVision';
 const COUNT = Math.max(1, Number(process.env.SEED_COUNT ?? 10) || 10);
 const DAYS = Math.max(1, Number(process.env.SEED_DAYS ?? 30) || 30);
 const PG = process.env.PG_CONTAINER ?? 'fleetvision-postgres';
-const CSV_HOST = join(ROOT, '.tmp', 'csv');
-const CSV_TMP = '/tmp/csv';
+const CSV_HOST = process.env.SEED_CSV_DIR ?? join(ROOT, '.tmp', 'csv');
 
 function log(msg) {
   console.log(msg);
@@ -126,7 +125,6 @@ function importHistory(tenantId) {
   clearTracking(tenantId);
 
   mkdirSync(CSV_HOST, { recursive: true });
-  cpSync(CSV_TMP, CSV_HOST, { recursive: true });
 
   dockerExec(['exec', PG, 'mkdir', '-p', '/tmp/csv']);
   execFileSync('docker', ['cp', `${CSV_HOST}/.`, `${PG}:/tmp/csv/`], { stdio: 'inherit' });
@@ -186,7 +184,17 @@ async function main() {
     const r = spawnSync(
       process.execPath,
       [join(ROOT, 'tools/generate-history.mjs'), '--days', String(DAYS)],
-      { cwd: ROOT, env: { ...process.env, ...env }, stdio: 'inherit' },
+      {
+        cwd: ROOT,
+        env: {
+          ...process.env,
+          ...env,
+          NODE_OPTIONS: [process.env.NODE_OPTIONS, '--max-old-space-size=4096']
+            .filter(Boolean)
+            .join(' '),
+        },
+        stdio: 'inherit',
+      },
     );
     if (r.status !== 0) fail(`generate-history exited ${r.status}`);
   }
@@ -206,7 +214,10 @@ async function main() {
      SELECT 'devices=' || (SELECT count(*) FROM fleet.devices)
        || ' vehicles=' || (SELECT count(*) FROM fleet.vehicles)
        || ' positions=' || (SELECT count(*) FROM tracking.vehicle_positions)
-       || ' trips=' || (SELECT count(*) FROM tracking.trip_events);`,
+       || ' trips=' || (SELECT count(*) FROM tracking.trip_events)
+       || ' parking=' || (SELECT count(*) FROM tracking.parking_periods)
+       || ' idle=' || (SELECT count(*) FROM tracking.idle_periods)
+       || ' engine_hours=' || (SELECT count(*) FROM tracking.engine_hours);`,
   ]);
 
   log(`\n✓ done — ${summary}`);

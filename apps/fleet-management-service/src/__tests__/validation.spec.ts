@@ -117,6 +117,40 @@ describe('validation schemas (§16, INV-I02)', () => {
     expect((parsed as { tenant_id?: string }).tenant_id).toBeUndefined();
   });
 
+  it('createVehicleSchema accepts optional odometerKm and rejects a negative reading', () => {
+    const parsed = createVehicleSchema.parse({
+      fleetId: '11111111-1111-1111-1111-111111111111',
+      name: 'Truck 1',
+      code: 'TRK-1',
+      odometerKm: '12500.5',
+    });
+    expect(parsed.odometerKm).toBe(12500.5);
+    const bad = createVehicleSchema.safeParse({
+      fleetId: '11111111-1111-1111-1111-111111111111',
+      name: 'T',
+      code: 'C',
+      odometerKm: -1,
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('createVehicleSchema accepts optional engineHours and rejects a negative reading', () => {
+    const parsed = createVehicleSchema.parse({
+      fleetId: '11111111-1111-1111-1111-111111111111',
+      name: 'Loader 1',
+      code: 'LDR-1',
+      engineHours: '12500.5',
+    });
+    expect(parsed.engineHours).toBe(12500.5);
+    const bad = createVehicleSchema.safeParse({
+      fleetId: '11111111-1111-1111-1111-111111111111',
+      name: 'L',
+      code: 'C',
+      engineHours: -1,
+    });
+    expect(bad.success).toBe(false);
+  });
+
   it('importVehicleRowSchema requires fleetCode instead of fleetId', () => {
     const parsed = importVehicleRowSchema.parse({
       name: 'Truck 1',

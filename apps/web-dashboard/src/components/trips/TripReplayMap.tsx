@@ -7,7 +7,7 @@ import {
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { headingArrowDataUrl, markerDataUrl } from '@/lib/map-markers';
+import { markerDataUrl, paintVehicleMarker } from '@/lib/map-markers';
 import { mapAccents, status } from '@/theme/palette';
 import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
 
@@ -162,11 +162,13 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
     const place = () => {
       if (mapRef.current !== map) return;
       const heading = Number.isFinite(wp.heading) ? wp.heading : 0;
-      const el = document.createElement('img');
-      el.src = headingArrowDataUrl(mapAccents.selectedRoute, heading);
-      el.alt = t('trips.replay.vehicle');
-      el.style.width = '48px';
-      el.style.height = '48px';
+      const el = document.createElement('div');
+      el.className = 'fv-vehicle-marker';
+      paintVehicleMarker(el, 'car', mapAccents.selectedRoute, {
+        heading,
+        id: 'trip-replay',
+      });
+      el.setAttribute('aria-label', t('trips.replay.vehicle'));
       vehicleMarkerRef.current?.remove();
       const marker = new MaplibreMarker({ element: el, anchor: 'center' }).setLngLat([lng, lat]);
       marker.addTo(map);

@@ -107,6 +107,8 @@ export function AssetImportDialog({ open, kind, onClose }: AssetImportDialogProp
             fleetCode: v.fleetCode,
             ...(v.plate ? { plate: v.plate } : {}),
             ...(v.vin ? { vin: v.vin } : {}),
+            ...(v.odometerKm !== undefined ? { odometerKm: v.odometerKm } : {}),
+            ...(v.engineHours !== undefined ? { engineHours: v.engineHours } : {}),
           };
         }
         const d = r as DeviceImportDraft;
@@ -298,7 +300,7 @@ function PreviewTable({
   if (rows.length === 0) return null;
   const cols =
     kind === 'vehicles'
-      ? (['name', 'code', 'fleetCode', 'plate', 'vin'] as const)
+      ? (['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours'] as const)
       : (['imei', 'protocol', 'serialNumber', 'manufacturer', 'model', 'vehicleCode'] as const);
   return (
     <div className="overflow-auto rounded-lg border border-gray-200 dark:border-white/10">

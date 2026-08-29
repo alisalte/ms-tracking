@@ -35,7 +35,15 @@ export class VehicleService {
     await this.requireFleetInTenant(ctx.tenantId, input.fleetId);
     try {
       return await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
-        const row = await this.vehicles.create(trx, ctx.tenantId, input);
+        const row = await this.vehicles.create(trx, ctx.tenantId, {
+          fleetId: input.fleetId,
+          name: input.name,
+          code: input.code,
+          plate: input.plate,
+          vin: input.vin,
+          odometerKm: typeof input.odometerKm === 'number' ? input.odometerKm : undefined,
+          engineHours: typeof input.engineHours === 'number' ? input.engineHours : undefined,
+        });
         const record = VehicleRepository.toRecord(row);
         await this.audit.append(trx, this.entry(ctx, 'vehicle.created', record.id, null, record));
         return record;
@@ -71,7 +79,31 @@ export class VehicleService {
       await this.requireFleetInTenant(ctx.tenantId, input.fleetId);
     }
     return await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
-      const row = await this.vehicles.update(trx, ctx.tenantId, id, input, current.version);
+      const row = await this.vehicles.update(
+        trx,
+        ctx.tenantId,
+        id,
+        {
+          fleetId: input.fleetId,
+          name: input.name,
+          code: input.code,
+          plate: input.plate,
+          vin: input.vin,
+          odometerKm:
+            input.odometerKm === null
+              ? null
+              : typeof input.odometerKm === 'number'
+                ? input.odometerKm
+                : undefined,
+          engineHours:
+            input.engineHours === null
+              ? null
+              : typeof input.engineHours === 'number'
+                ? input.engineHours
+                : undefined,
+        },
+        current.version,
+      );
       if (!row) throw new ConflictException('Vehicle was modified by another request.');
       const record = VehicleRepository.toRecord(row);
       await this.audit.append(trx, this.entry(ctx, 'vehicle.updated', id, current, record));
@@ -157,6 +189,8 @@ export class VehicleService {
             code: input.code,
             plate: input.plate,
             vin: input.vin,
+            odometerKm: typeof input.odometerKm === 'number' ? input.odometerKm : undefined,
+            engineHours: typeof input.engineHours === 'number' ? input.engineHours : undefined,
           }),
         );
       } catch (err) {

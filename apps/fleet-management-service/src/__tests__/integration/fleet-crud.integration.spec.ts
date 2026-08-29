@@ -130,8 +130,12 @@ d('fleet-management integration — CRUD + uniqueness + isolation (§30)', () =>
       name: 'Truck 1',
       code: 'TRK1',
       plate: 'ABC-123',
+      odometerKm: 12500,
+      engineHours: 4200,
     });
     expect(vehicle.plate).toBe('ABC-123');
+    expect(vehicle.odometerKm).toBe(12500);
+    expect(vehicle.engineHours).toBe(4200);
     const listed = await vehicles.list(actorFor(TENANT_A), { fleetId: fleet.id }, { limit: 10 });
     expect(listed.data).toHaveLength(1);
   });

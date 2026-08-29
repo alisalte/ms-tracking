@@ -73,6 +73,19 @@ export interface TrendResponse {
   freshness: 'AGGREGATED';
 }
 
+export interface VehicleMetersRowWire {
+  vehicleId: string;
+  label: string;
+  odometerKm: number | null;
+  periodDistanceKm: number;
+  trips: number;
+  engineHours: number | null;
+  periodEngineHoursSec: number;
+  movingSec: number;
+  idleSec: number;
+  parkingSec: number;
+}
+
 export interface UtilizationRowWire {
   vehicleId: string;
   label: string;
@@ -283,6 +296,20 @@ export function useIdleParking(
   });
 }
 
+export function useVehicleMeters(
+  range: ReportRange,
+  filters: { vehicleId?: string; fleetId?: string } = {},
+) {
+  return useQuery({
+    queryKey: ['reports', 'vehicle-meters', range, filters],
+    queryFn: () =>
+      apiGetRaw<{ items: VehicleMetersRowWire[]; total: number }>(
+        '/reports/vehicle-meters',
+        rangeParams(range, { ...filters, limit: 50 }),
+      ),
+  });
+}
+
 export function useAlarmReport(
   range: ReportRange,
   filters: { vehicleId?: string; type?: string; severity?: string } = {},
@@ -383,7 +410,10 @@ export function useFleetComparison(range: ReportRange) {
   return useQuery({
     queryKey: ['reports', 'fleet-comparison', range],
     queryFn: () =>
-      apiGetRaw<{ items: FleetComparisonRowWire[] }>('/reports/fleet-comparison', rangeParams(range)),
+      apiGetRaw<{ items: FleetComparisonRowWire[] }>(
+        '/reports/fleet-comparison',
+        rangeParams(range),
+      ),
   });
 }
 

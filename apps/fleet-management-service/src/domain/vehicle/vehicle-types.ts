@@ -13,6 +13,10 @@ export interface VehicleRecord {
   readonly plate: string | null;
   /** Vehicle Identification Number (17-char ISO 3779 where applicable). */
   readonly vin: string | null;
+  /** Operator-entered current odometer reading in kilometres (null = unknown). */
+  readonly odometerKm: number | null;
+  /** Operator-entered hour-meter (engine hours). Used by heavy equipment. */
+  readonly engineHours: number | null;
   readonly status: VehicleStatus;
   readonly version: number;
   readonly createdAt: Date;

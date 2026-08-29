@@ -55,3 +55,15 @@ export function deviceProtocolColor(p: DeviceProtocol): BadgeProps['color'] {
 
 /** Vehicle body icon (reused across map/dashboard/assets). */
 export { Truck as VehicleIcon };
+
+/** Format a registry odometer reading (km). Null/undefined → em dash. */
+export function formatOdometerKm(km: number | null | undefined): string {
+  if (km == null || !Number.isFinite(km)) return '—';
+  return `${km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+/** Format a registry hour-meter (engine hours). Null/undefined → em dash. */
+export function formatEngineHours(hours: number | null | undefined): string {
+  if (hours == null || !Number.isFinite(hours)) return '—';
+  return `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} h`;
+}

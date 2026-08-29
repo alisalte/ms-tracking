@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { headingArrowDataUrl, inferVehicleType, vehicleMarkerDataUrl } from '@/lib/map-markers';
+import { headingArrowDataUrl, inferVehicleType, vehicleMarkerSvg } from '@/lib/map-markers';
 
 describe('inferVehicleType', () => {
   it('classifies passenger cars (سواری)', () => {
@@ -29,20 +29,36 @@ describe('inferVehicleType', () => {
     expect(inferVehicleType('')).toBe('car');
   });
 
-  it('vehicleMarkerDataUrl returns a 3D SVG data URL per type', () => {
+  it('vehicleMarkerSvg returns a flat fleet-vector SVG per type without cartoon chrome', () => {
     for (const t of ['car', 'van', 'truck', 'bus'] as const) {
-      const url = vehicleMarkerDataUrl(t, '#12B76A', { heading: 45 });
-      expect(url).toMatch(/^data:image\/svg\+xml;base64,/);
-      const svg = atob(url.split(',')[1] ?? '');
+      const svg = vehicleMarkerSvg(t, '#12B76A', { heading: 45, id: t });
       expect(svg).toContain('linearGradient');
-      expect(svg).toContain('feDropShadow');
-      expect(svg).toContain('url(#glass)');
+      expect(svg).not.toContain('feDropShadow');
+      expect(svg).not.toContain('#7DD3FC');
+      expect(svg).not.toContain('#FEF9C3');
+      expect(svg).toContain('#0F172A');
+      expect(svg).toContain('rotate(45 32 32)');
     }
   });
 
-  it('headingArrowDataUrl uses the same 3D vehicle body', () => {
-    const svg = atob(headingArrowDataUrl('#06B6D4', 90).split(',')[1] ?? '');
-    expect(svg).toContain('url(#body)');
+  it('unselected markers use a white sticker stroke', () => {
+    const svg = vehicleMarkerSvg('car', '#12B76A', { id: 'stk' });
+    expect(svg).toContain('stroke="#FFFFFF"');
+  });
+
+  it('selection uses a white hull stroke, not a circular halo or pin', () => {
+    const svg = vehicleMarkerSvg('van', '#98A2B3', { selected: true, id: 'sel' });
+    expect(svg).not.toContain('r="27"');
+    expect(svg).not.toContain('r="30"');
+    expect(svg).not.toContain('M32 64 L26 54 H38 Z');
+    expect(svg).toContain('stroke="#F8FAFC"');
+  });
+
+  it('headingArrowDataUrl uses the same vehicle body', () => {
+    const url = headingArrowDataUrl('#06B6D4', 90);
+    expect(url).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    const svg = decodeURIComponent(url.split(',')[1] ?? '');
+    expect(svg).toContain('-body');
     expect(svg).toContain('rotate(90 32 32)');
   });
 });

@@ -11,7 +11,17 @@
  * unbind — all gated by `device.write`; a 409 from a double-bind surfaces
  * visibly. The active drawer is selected by the current tab + selected id.
  */
-import { Calendar, CircleSlash, Cpu, Link2, Link2Off, Smartphone, Truck } from 'lucide-react';
+import {
+  Calendar,
+  CircleSlash,
+  Clock,
+  Cpu,
+  Gauge,
+  Link2,
+  Link2Off,
+  Smartphone,
+  Truck,
+} from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +39,8 @@ import {
   deviceProtocolColor,
   deviceStatusColor,
   fleetStatusColor,
+  formatEngineHours,
+  formatOdometerKm,
   vehicleStatusColor,
 } from '@/components/assets/asset-meta';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
@@ -354,6 +366,16 @@ function VehicleDetailDrawer({
                   icon={<Truck />}
                   label={t('assets.vehicle.vin')}
                   value={vehicle.vin ?? '—'}
+                />
+                <MetaRow
+                  icon={<Gauge />}
+                  label={t('assets.vehicle.odometer')}
+                  value={formatOdometerKm(vehicle.odometerKm)}
+                />
+                <MetaRow
+                  icon={<Clock />}
+                  label={t('assets.vehicle.engineHours')}
+                  value={formatEngineHours(vehicle.engineHours)}
                 />
               </div>
 

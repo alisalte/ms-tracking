@@ -22,11 +22,14 @@ import {
   exportReportCsv,
   useFleetOverview,
   useTrips,
+  useVehicleMeters,
 } from '@/api/report.api';
 import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
+import { OdometerSection } from '@/components/reports/OdometerSection';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
+import { StopsSection } from '@/components/reports/StopsSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { i18n } from '@/i18n';
 
@@ -44,8 +47,8 @@ vi.mock('@/api/client', () => ({
 vi.mock('@/lib/video-stream', () => ({
   downloadBlob: (...a: unknown[]) => downloadBlob(...a),
 }));
-vi.mock('@/components/dashboard/EChart', () => ({
-  EChart: () => createElement('div', { 'data-testid': 'echart-stub' }),
+vi.mock('@/components/dashboard/ApexChart', () => ({
+  ApexChart: () => createElement('div', { 'data-testid': 'apex-chart' }),
 }));
 
 function makeWrapper() {
@@ -180,8 +183,8 @@ describe('ReportsOverviewSection (backend KPIs only)', () => {
     expect(screen.getByText('km')).toBeInTheDocument();
     // Freshness is labeled honestly (§44).
     expect(screen.getByTestId('report-freshness')).toHaveTextContent(/aggregated/i);
-    // Charts rendered (stubbed EChart).
-    expect(screen.getAllByTestId('echart-stub').length).toBeGreaterThanOrEqual(2);
+    // Charts rendered (stubbed ApexChart).
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(2);
   });
 
   it('null utilization renders "—" + no-telemetry note — never a fabricated 0 (§60)', async () => {
@@ -351,5 +354,67 @@ describe('Phase 8 — sorting + permissions', () => {
       },
     });
     await waitFor(() => expect(screen.getByTestId('report-export-trips')).not.toBeNull());
+  });
+});
+
+const metersRow = {
+  vehicleId: 'v-36',
+  label: 'وانت نیسان 36',
+  odometerKm: 48210,
+  periodDistanceKm: 120.5,
+  trips: 4,
+  engineHours: 12500,
+  periodEngineHoursSec: 36_000,
+  movingSec: 36_000,
+  idleSec: 1_800,
+  parkingSec: 7_200,
+};
+
+describe('vehicle meters reports (stops / odometer)', () => {
+  it('fetches /reports/vehicle-meters with the range preset', async () => {
+    apiGetRaw.mockResolvedValueOnce({ items: [], total: 0 });
+    const { result } = renderHook(() => useVehicleMeters({ preset: '7d' }), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.data).toEqual({ items: [], total: 0 }));
+    expect(apiGetRaw).toHaveBeenCalledWith('/reports/vehicle-meters', { preset: '7d', limit: 50 });
+  });
+
+  it('renders odometer KPIs and Apex charts from meters rows', async () => {
+    apiGetRaw.mockResolvedValue({ items: [metersRow], total: 1 });
+    render(<OdometerSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-odometer')).toBeInTheDocument());
+    expect(screen.getByText('وانت نیسان 36')).toBeInTheDocument();
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders the stops section with idle/parking mix', async () => {
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/reports/fleet-overview') return overview;
+      if (url === '/reports/vehicle-meters') return { items: [metersRow], total: 1 };
+      if (url === '/reports/idle-parking') {
+        return {
+          items: [
+            {
+              id: 'p-1',
+              kind: 'PARKING',
+              vehicleId: 'v-36',
+              label: 'وانت نیسان 36',
+              startedAt: '2026-08-15T10:00:00Z',
+              endedAt: '2026-08-15T12:00:00Z',
+              durationSec: 7200,
+              lat: 35.7,
+              lng: 51.4,
+              status: 'ENDED',
+            },
+          ],
+          nextCursor: null,
+        };
+      }
+      return { items: [] };
+    });
+    render(<StopsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-stops')).toBeInTheDocument());
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
   });
 });

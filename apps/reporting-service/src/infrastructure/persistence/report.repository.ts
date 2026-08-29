@@ -34,6 +34,7 @@ import type {
   SpeedRow,
   TrendPoint,
   TripReportRow,
+  VehicleMetersRow,
   VehicleUtilizationRow,
 } from '../../domain/report-types.js';
 
@@ -1179,6 +1180,117 @@ export class ReportRepository {
         speedingEvents: Number(a.speeding ?? 0),
         highSeverityAlarms: Number(a.high_severity ?? 0),
         geofenceEvents: Number(g.total ?? 0),
+      };
+    });
+  }
+
+  // ── Vehicle meters (odometer + engine hours + stop durations) ───────────
+
+  public async vehicleMeters(
+    tenantId: string,
+    win: TimeWindow,
+    filter: VehicleFilter,
+    limit: number,
+    offset: number,
+  ): Promise<{ rows: VehicleMetersRow[]; total: number }> {
+    const vf = vehicleFilterSql(tenantId, 'v', filter);
+    return this.query(async (trx) => {
+      const rows = (
+        await trx.raw(
+          `
+          WITH moving AS (
+            SELECT t.vehicle_id, SUM(t.duration_s)::bigint AS moving_sec,
+                   SUM(t.distance_km) AS distance_km, COUNT(*)::bigint AS trips
+            FROM tracking.trip_events t
+            WHERE t.tenant_id = ?::uuid AND t.status = 'COMPLETED'
+              AND t.started_at >= ? AND t.started_at < ?
+            GROUP BY t.vehicle_id
+          ),
+          idling AS (
+            SELECT i.vehicle_id, SUM(i.duration_s)::bigint AS idle_sec
+            FROM tracking.idle_periods i
+            WHERE i.tenant_id = ?::uuid AND i.ended_at >= ? AND i.ended_at < ?
+            GROUP BY i.vehicle_id
+          ),
+          parking AS (
+            SELECT p.vehicle_id, SUM(p.duration_s)::bigint AS parking_sec
+            FROM tracking.parking_periods p
+            WHERE p.tenant_id = ?::uuid AND p.status = 'ENDED'
+              AND p.ended_at >= ? AND p.ended_at < ?
+            GROUP BY p.vehicle_id
+          ),
+          eh AS (
+            SELECT e.vehicle_id, SUM(e.duration_s)::bigint AS period_engine_sec
+            FROM tracking.engine_hours e
+            WHERE e.tenant_id = ?::uuid
+              AND e.window_end >= ? AND e.window_end < ?
+            GROUP BY e.vehicle_id
+          ),
+          agg AS (
+            SELECT v.id AS vehicle_id,
+                   ${VEHICLE_LABEL_SQL} AS label,
+                   v.odometer_km,
+                   v.engine_hours AS registry_engine_hours,
+                   COALESCE(m.distance_km, 0) AS period_distance_km,
+                   COALESCE(m.trips, 0) AS trips,
+                   COALESCE(eh.period_engine_sec, 0) AS period_engine_sec,
+                   COALESCE(m.moving_sec, 0) AS moving_sec,
+                   COALESCE(i.idle_sec, 0) AS idle_sec,
+                   COALESCE(p.parking_sec, 0) AS parking_sec
+            FROM fleet.vehicles v
+            LEFT JOIN moving m ON m.vehicle_id = v.id
+            LEFT JOIN idling i ON i.vehicle_id = v.id
+            LEFT JOIN parking p ON p.vehicle_id = v.id
+            LEFT JOIN eh ON eh.vehicle_id = v.id
+            WHERE v.tenant_id = ?::uuid AND v.status = 'ACTIVE' ${vf.clause}
+              AND (v.odometer_km IS NOT NULL OR v.engine_hours IS NOT NULL
+                   OR m.vehicle_id IS NOT NULL OR i.vehicle_id IS NOT NULL
+                   OR p.vehicle_id IS NOT NULL OR eh.vehicle_id IS NOT NULL)
+          )
+          SELECT agg.*, (SELECT COUNT(*) FROM agg)::bigint AS total_rows
+          FROM agg
+          ORDER BY period_distance_km DESC, agg.vehicle_id
+          LIMIT ? OFFSET ?
+          `,
+          [
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            win.from,
+            win.to,
+            tenantId,
+            ...vf.binds,
+            limit,
+            offset,
+          ],
+        )
+      ).rows as Array<Record<string, unknown>>;
+      const total = rows.length > 0 ? Number(rows[0]?.total_rows ?? 0) : 0;
+      return {
+        total,
+        rows: rows.map((r) => ({
+          vehicleId: String(r.vehicle_id),
+          label: String(r.label ?? r.vehicle_id),
+          odometerKm:
+            r.odometer_km === null || r.odometer_km === undefined ? null : Number(r.odometer_km),
+          periodDistanceKm: Number(r.period_distance_km ?? 0),
+          trips: Number(r.trips ?? 0),
+          engineHours:
+            r.registry_engine_hours === null || r.registry_engine_hours === undefined
+              ? null
+              : Number(r.registry_engine_hours),
+          periodEngineHoursSec: Number(r.period_engine_sec ?? 0),
+          movingSec: Number(r.moving_sec ?? 0),
+          idleSec: Number(r.idle_sec ?? 0),
+          parkingSec: Number(r.parking_sec ?? 0),
+        })),
       };
     });
   }

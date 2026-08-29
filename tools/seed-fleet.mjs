@@ -7,6 +7,12 @@
  *
  * Usage: SEED_COUNT=10 SEED_TENANT_ID=<uuid> node tools/seed-fleet.mjs
  */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const FLEET_SEED = process.env.SEED_FLEET_JSON ?? join(ROOT, '.tmp', 'fleet-seed.json');
 const API = process.env.SEED_API_BASE ?? 'http://localhost:3006/api/v1';
 const IDENTITY = process.env.SEED_IDENTITY_BASE ?? 'http://localhost:3000/api/v1';
 const TENANT = process.env.SEED_TENANT_ID ?? 'c6213758-9f71-460e-a66e-1da2ba6b25b4';
@@ -259,7 +265,6 @@ async function main() {
   console.log('✓ summary:', JSON.stringify(summary.data));
 
   // Persist the mapping for the history generator + live simulator.
-  const { writeFileSync } = await import('node:fs');
   const out = plan.map((p, i) => ({
     idx: p.idx,
     fleetCode: p.fleet.code,
@@ -273,8 +278,9 @@ async function main() {
     imei: devices[i].imei,
     deviceModel: devices[i].model,
   }));
-  writeFileSync('/tmp/fleet-seed.json', JSON.stringify(out, null, 1));
-  console.log('✓ mapping written to /tmp/fleet-seed.json');
+  mkdirSync(dirname(FLEET_SEED), { recursive: true });
+  writeFileSync(FLEET_SEED, JSON.stringify(out, null, 1));
+  console.log(`✓ mapping written to ${FLEET_SEED}`);
 }
 
 main().catch((err) => {

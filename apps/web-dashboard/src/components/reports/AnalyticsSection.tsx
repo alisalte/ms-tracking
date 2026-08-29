@@ -3,7 +3,16 @@
  * comparison (Reporting.md §1.3). Every number is a backend KPI; deltas are
  * the equal-length previous window (never a fabricated target).
  */
-import { AlertTriangle, Fence, Gauge, Layers, Route, Shield, Timer, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  Fence,
+  Gauge,
+  Layers,
+  Route,
+  Shield,
+  Timer,
+  TrendingUp,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -15,11 +24,12 @@ import {
   useSafetyScorecard,
 } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
-import { EChart } from '@/components/dashboard/EChart';
+import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
-import type { EChartsOption } from 'echarts';
+import { status } from '@/theme/palette';
+import type { ApexOptions } from 'apexcharts';
 
 const DOWN_IS_GOOD = new Set([
   'alarms',
@@ -39,10 +49,12 @@ export function AnalyticsSection({ range }: { range: ReportRange }) {
 
   if (kpis.isLoading && safety.isLoading && fleets.isLoading) {
     return (
+      // biome-ignore lint/a11y/useSemanticElements: role=status loading region.
       <div className="flex flex-col gap-4" role="status" aria-label={t('common.loading')}>
         <Skeleton className="h-4 w-64" />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {Array.from({ length: 10 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows never reorder.
             <Skeleton key={`k-${i}`} className="h-[104px] rounded-2xl" />
           ))}
         </div>
@@ -57,7 +69,9 @@ export function AnalyticsSection({ range }: { range: ReportRange }) {
         <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
           {t('reports.analytics.kpiTitle')}
         </h2>
-        <p className="text-xs text-gray-500 dark:text-graydark-600">{t('reports.analytics.kpiNote')}</p>
+        <p className="text-xs text-gray-500 dark:text-graydark-600">
+          {t('reports.analytics.kpiNote')}
+        </p>
         {kpis.isError ? (
           <ErrorState error={kpis.error} onRetry={() => kpis.refetch()} />
         ) : (
@@ -98,7 +112,12 @@ export function AnalyticsSection({ range }: { range: ReportRange }) {
           <>
             <Card>
               <CardHeader title={t('reports.charts.fleetComparison')} />
-              <EChart option={fleetBarOption(fleets.data?.items ?? [], t)} height={260} />
+              <ApexChart
+                type="bar"
+                series={fleetBarSeries(fleets.data?.items ?? [], t)}
+                options={fleetBarOptions(fleets.data?.items ?? [], t)}
+                height={260}
+              />
             </Card>
             <FleetComparisonTable rows={fleets.data?.items ?? []} />
           </>
@@ -132,7 +151,9 @@ function KpiIndicatorTile({ indicator }: { indicator: KpiIndicatorWire }) {
         suffix={formatted.suffix}
         icon={icon}
         tone={tileTone(indicator)}
-        footer={<DeltaChip deltaPct={indicator.deltaPct} invert={DOWN_IS_GOOD.has(indicator.key)} />}
+        footer={
+          <DeltaChip deltaPct={indicator.deltaPct} invert={DOWN_IS_GOOD.has(indicator.key)} />
+        }
       />
     </div>
   );
@@ -157,22 +178,41 @@ function SafetyRow({
   };
 }) {
   const items: Array<{ key: string; value: number; prev: number; icon: typeof Shield }> = [
-    { key: 'totalAlarms', value: data.totalAlarms, prev: data.previous.totalAlarms, icon: AlertTriangle },
-    { key: 'openAlarms', value: data.openAlarms, prev: data.previous.openAlarms, icon: AlertTriangle },
-    { key: 'speedingEvents', value: data.speedingEvents, prev: data.previous.speedingEvents, icon: Gauge },
+    {
+      key: 'totalAlarms',
+      value: data.totalAlarms,
+      prev: data.previous.totalAlarms,
+      icon: AlertTriangle,
+    },
+    {
+      key: 'openAlarms',
+      value: data.openAlarms,
+      prev: data.previous.openAlarms,
+      icon: AlertTriangle,
+    },
+    {
+      key: 'speedingEvents',
+      value: data.speedingEvents,
+      prev: data.previous.speedingEvents,
+      icon: Gauge,
+    },
     {
       key: 'highSeverityAlarms',
       value: data.highSeverityAlarms,
       prev: data.previous.highSeverityAlarms,
       icon: Shield,
     },
-    { key: 'geofenceEvents', value: data.geofenceEvents, prev: data.previous.geofenceEvents, icon: Fence },
+    {
+      key: 'geofenceEvents',
+      value: data.geofenceEvents,
+      prev: data.previous.geofenceEvents,
+      icon: Fence,
+    },
   ];
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-5" data-testid="report-safety-scorecard">
       {items.map((it) => {
-        const delta =
-          it.prev === 0 ? null : ((it.value - it.prev) / Math.abs(it.prev)) * 100;
+        const delta = it.prev === 0 ? null : ((it.value - it.prev) / Math.abs(it.prev)) * 100;
         return (
           <KpiTile
             key={it.key}
@@ -201,7 +241,8 @@ function FleetComparisonTable({ rows }: { rows: FleetComparisonRowWire[] }) {
     {
       id: 'util',
       headerKey: 'reports.cols.utilization',
-      render: (r) => (r.utilizationPct === null ? '—' : `${Math.round(r.utilizationPct * 10) / 10}%`),
+      render: (r) =>
+        r.utilizationPct === null ? '—' : `${Math.round(r.utilizationPct * 10) / 10}%`,
     },
     { id: 'alarms', headerKey: 'reports.cols.total', render: (r) => r.alarms },
   ];
@@ -240,36 +281,29 @@ function formatIndicator(ind: KpiIndicatorWire): { value: number | null; suffix:
   }
 }
 
-function tileTone(ind: KpiIndicatorWire): 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'gray' {
+function tileTone(
+  ind: KpiIndicatorWire,
+): 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'gray' {
   if (ind.value === null) return 'gray';
   if (DOWN_IS_GOOD.has(ind.key)) return ind.value > 0 ? 'warning' : 'success';
   return 'brand';
 }
 
-function fleetBarOption(
-  rows: FleetComparisonRowWire[],
-  t: (k: string) => string,
-): EChartsOption {
+function fleetBarSeries(rows: FleetComparisonRowWire[], t: (k: string) => string) {
+  return [
+    { name: t('reports.labels.distance'), data: rows.map((r) => Number(r.distanceKm.toFixed(1))) },
+    { name: t('reports.labels.trips'), data: rows.map((r) => r.trips) },
+  ];
+}
+
+function fleetBarOptions(rows: FleetComparisonRowWire[], t: (k: string) => string): ApexOptions {
   return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: [t('reports.labels.distance'), t('reports.labels.trips')] },
-    xAxis: { type: 'category', data: rows.map((r) => r.fleetName) },
-    yAxis: [
-      { type: 'value', name: t('reports.labels.km') },
-      { type: 'value', name: t('reports.labels.trips') },
-    ],
-    series: [
-      {
-        name: t('reports.labels.distance'),
-        type: 'bar',
-        data: rows.map((r) => Number(r.distanceKm.toFixed(1))),
-      },
-      {
-        name: t('reports.labels.trips'),
-        type: 'bar',
-        yAxisIndex: 1,
-        data: rows.map((r) => r.trips),
-      },
+    colors: [status.teal, status.info],
+    plotOptions: { bar: { columnWidth: '55%', borderRadius: 3 } },
+    xaxis: { categories: rows.map((r) => r.fleetName) },
+    yaxis: [
+      { title: { text: t('reports.labels.km') }, decimalsInFloat: 1 },
+      { opposite: true, title: { text: t('reports.labels.trips') }, decimalsInFloat: 0 },
     ],
   };
 }

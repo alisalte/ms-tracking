@@ -18,7 +18,12 @@ import {
   periodDeltaPct,
   resolveSort,
 } from '../domain/report-types.js';
-import type { FleetOverview, KpiIndicator, KpiScorecard, SafetyScorecard } from '../domain/report-types.js';
+import type {
+  FleetOverview,
+  KpiIndicator,
+  KpiScorecard,
+  SafetyScorecard,
+} from '../domain/report-types.js';
 import {
   type ReportWindowError,
   parseReportWindow,
@@ -164,7 +169,10 @@ export class ReportService {
   }
 
   /** Executive KPI scorecard — current window vs the immediately previous equal-length window. */
-  public async kpiScorecard(tenantId: string, q: ReportQueryBase): Promise<{
+  public async kpiScorecard(
+    tenantId: string,
+    q: ReportQueryBase,
+  ): Promise<{
     current: KpiScorecard;
     from: string;
     to: string;
@@ -206,7 +214,10 @@ export class ReportService {
     };
   }
 
-  public async safetyScorecard(tenantId: string, q: ReportQueryBase): Promise<{
+  public async safetyScorecard(
+    tenantId: string,
+    q: ReportQueryBase,
+  ): Promise<{
     current: SafetyScorecard;
     from: string;
     to: string;
@@ -450,6 +461,32 @@ export class ReportService {
         tenantId,
         win,
         { geofenceId: q.geofenceId, vehicleId: q.vehicleId },
+        limit,
+        offset,
+      ),
+    );
+    return {
+      items: rows,
+      total,
+      limit,
+      offset,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      freshness: 'AGGREGATED' as const,
+    };
+  }
+
+  public async vehicleMeters(
+    tenantId: string,
+    q: ReportQueryBase & { limit?: unknown; offset?: unknown },
+  ) {
+    const win = this.window(q);
+    const { limit, offset } = this.page(q.limit, q.offset);
+    const { rows, total } = await this.timed('vehicle-meters', () =>
+      this.deps.repository.vehicleMeters(
+        tenantId,
+        win,
+        { vehicleId: q.vehicleId, fleetId: q.fleetId },
         limit,
         offset,
       ),

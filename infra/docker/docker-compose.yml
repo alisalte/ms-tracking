@@ -1,9 +1,15 @@
 # FleetVision local lean stack (docs/specs/01_Master_Architecture.md §4.2, TDR §0/§2/§4/§5/§6).
 # Brings up the shared infrastructure every service depends on for local dev.
 #
-#   pnpm stack:up      # docker compose -f infra/docker/docker-compose.yml up -d
-#   pnpm stack:down    # stops containers — volumes KEPT (data preserved)
-#   pnpm stack:reset   # down --volumes + up + seed:demo (full wipe — dev only)
+#   pnpm stack:up         # start only (existing images, no docker build)
+#   pnpm stack:up:build   # rebuild images whose source changed, then start
+#   pnpm stack:down       # stops containers — named volumes KEPT (seed data stays)
+#   pnpm stack:reset      # down --volumes + up + seed:demo (the ONLY full wipe)
+#
+# Postgres data lives in the named volume `fleetvision_postgres-data`. The
+# timescaledb-ha image writes to /home/postgres/pgdata/data (NOT the usual
+# /var/lib/postgresql/data). Mounting the wrong path left the volume empty and
+# wiped seeded vehicles on every container recreate.
 #
 # Named volumes (no host bind) keep the DB/MinIO data portable across Windows/Linux
 # (Sprint 1 plan risk note). Ports are exposed on the host only for local dev.
@@ -19,6 +25,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-fleetvision}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleetvision}
       POSTGRES_DB: ${POSTGRES_DB:-fleetvision}
+      # timescaledb-ha default; must match the volume mount below.
+      PGDATA: /home/postgres/pgdata/data
       # TimescaleDB + PostGIS + trigram + uuid-ossp (docs/specs/03_Database_Architecture.md §4).
     command:
       - postgres
@@ -29,7 +37,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/home/postgres/pgdata/data
       - ./init/postgres.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
     healthcheck:
       # Probe TCP (127.0.0.1), not the Unix socket. timescaledb-ha can report
@@ -662,7 +670,12 @@ services:
       retries: 5
 
 volumes:
+  # Pinned names so compose project/dir changes do not create a second empty volume.
   postgres-data:
+    name: fleetvision_postgres-data
   redis-data:
+    name: fleetvision_redis-data
   rabbitmq-data:
+    name: fleetvision_rabbitmq-data
   minio-data:
+    name: fleetvision_minio-data

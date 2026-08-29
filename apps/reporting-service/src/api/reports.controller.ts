@@ -11,6 +11,7 @@
  *   GET /api/v1/reports/alarms               — alarm aggregates (§12)
  *   GET /api/v1/reports/alarm-trend          — daily alarm buckets (§13)
  *   GET /api/v1/reports/geofences            — geofence event aggregates (§14)
+ *   GET /api/v1/reports/vehicle-meters       — odometer / engine-hours / stop durations
  *   GET /api/v1/reports/activity             — activity timeline (§15)
  *   GET /api/v1/reports/kpis                 — executive KPI scorecard vs prior window
  *   GET /api/v1/reports/fleet-comparison     — per-fleet distance/trips/utilization
@@ -225,6 +226,23 @@ export class ReportsController {
   ) {
     return this.guard(async () =>
       this.reports.geofences(tenantId, { preset, from, to, vehicleId, geofenceId, limit, offset }),
+    );
+  }
+
+  @Get('vehicle-meters')
+  @RequirePermissions('report.read')
+  public async vehicleMeters(
+    @CurrentTenant() tenantId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('fleetId') fleetId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.guard(async () =>
+      this.reports.vehicleMeters(tenantId, { preset, from, to, vehicleId, fleetId, limit, offset }),
     );
   }
 

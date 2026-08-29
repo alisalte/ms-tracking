@@ -43,6 +43,32 @@ describe('parseVehicleGrid', () => {
     });
   });
 
+  it('maps odometer from English, Persian, and Eastern-Arabic digits', () => {
+    const parsed = parseVehicleGrid([
+      ['name', 'code', 'fleetCode', 'کارکرد'],
+      ['Truck', 'V001', 'NORTH', '۴۸۲۱۰'],
+    ]);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.rows[0]?.odometerKm).toBe(48210);
+  });
+
+  it('maps hour-meter from Persian کانتر / ساعت موتور', () => {
+    const parsed = parseVehicleGrid([
+      ['name', 'code', 'fleetCode', 'کانتر'],
+      ['Loader', 'L001', 'NORTH', '۱۲۵۰۰'],
+    ]);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.rows[0]?.engineHours).toBe(12500);
+  });
+
+  it('flags a negative odometer', () => {
+    const parsed = parseVehicleGrid([
+      ['name', 'code', 'fleetCode', 'odometerKm'],
+      ['Truck', 'V001', 'NORTH', '-12'],
+    ]);
+    expect(parsed.issues.some((i) => i.code === 'invalidOdometer')).toBe(true);
+  });
+
   it('folds a Unicode dash in fleetCode to ASCII hyphen', () => {
     const parsed = parseVehicleGrid([
       ['name', 'code', 'fleetCode'],
@@ -89,7 +115,15 @@ describe('xlsx round-trip', () => {
     const { blob, filename } = buildAssetImportTemplate('vehicles');
     expect(filename).toBe('vehicles-import.xlsx');
     const grid = await parseTabularFile(blob, filename);
-    expect(grid[0]).toEqual(['name', 'code', 'fleetCode', 'plate', 'vin']);
+    expect(grid[0]).toEqual([
+      'name',
+      'code',
+      'fleetCode',
+      'plate',
+      'vin',
+      'odometerKm',
+      'engineHours',
+    ]);
     expect(grid[1]?.[2]).toBe('NORTH');
   });
 

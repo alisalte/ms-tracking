@@ -25,11 +25,12 @@ import { useTranslation } from 'react-i18next';
 
 import { type ReportRange, useFleetOverview, useTrend } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
-import { EChart } from '@/components/dashboard/EChart';
-import { hoursFromSec } from '@/lib/hours-from-sec';
+import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
-import type { EChartsOption } from 'echarts';
+import { hoursFromSec } from '@/lib/hours-from-sec';
+import { status } from '@/theme/palette';
+import type { ApexOptions } from 'apexcharts';
 
 export function ReportsOverviewSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
@@ -197,7 +198,11 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
         <div data-testid="report-kpi">
           <KpiTile
             labelKey="dashboard.stats.avgSpeed"
-            value={o.avgSpeedKmh === null || o.avgSpeedKmh === undefined ? null : Math.round(o.avgSpeedKmh)}
+            value={
+              o.avgSpeedKmh === null || o.avgSpeedKmh === undefined
+                ? null
+                : Math.round(o.avgSpeedKmh)
+            }
             suffix="km/h"
             icon={Gauge}
             tone="teal"
@@ -206,7 +211,11 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
         <div data-testid="report-kpi">
           <KpiTile
             labelKey="dashboard.stats.maxSpeed"
-            value={o.maxSpeedKmh === null || o.maxSpeedKmh === undefined ? null : Math.round(o.maxSpeedKmh)}
+            value={
+              o.maxSpeedKmh === null || o.maxSpeedKmh === undefined
+                ? null
+                : Math.round(o.maxSpeedKmh)
+            }
             suffix="km/h"
             icon={Zap}
             tone="info"
@@ -232,8 +241,13 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
             ) : (trend.data?.points.length ?? 0) === 0 ? (
               <EmptyChart label={t('reports.charts.empty')} />
             ) : (
-              <EChart
-                option={distanceTripsOption(trend.data?.points ?? [], {
+              <ApexChart
+                type="line"
+                series={distanceTripsSeries(trend.data?.points ?? [], {
+                  distance: t('reports.labels.distance'),
+                  trips: t('reports.labels.trips'),
+                })}
+                options={distanceTripsOptions(trend.data?.points ?? [], {
                   distance: t('reports.labels.distance'),
                   trips: t('reports.labels.trips'),
                   km: t('reports.labels.km'),
@@ -251,8 +265,15 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
           ) : (trend.data?.points.length ?? 0) === 0 ? (
             <EmptyChart label={t('reports.charts.empty')} />
           ) : (
-            <EChart
-              option={alarmTrendOption(trend.data?.points ?? [], {
+            <ApexChart
+              type="bar"
+              series={alarmTrendSeries(trend.data?.points ?? [], {
+                speeding: t('reports.labels.speeding'),
+                geofence: t('reports.labels.geofence'),
+                offline: t('reports.labels.offline'),
+                other: t('reports.labels.other'),
+              })}
+              options={alarmTrendOptions(trend.data?.points ?? [], {
                 speeding: t('reports.labels.speeding'),
                 geofence: t('reports.labels.geofence'),
                 offline: t('reports.labels.offline'),
@@ -269,8 +290,10 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
         {o.movingVehicles + o.idleVehicles + o.parkedVehicles + o.noTelemetryVehicles === 0 ? (
           <EmptyChart label={t('reports.charts.empty')} />
         ) : (
-          <EChart
-            option={distributionOption(o, {
+          <ApexChart
+            type="donut"
+            series={[o.movingVehicles, o.idleVehicles, o.parkedVehicles, o.noTelemetryVehicles]}
+            options={distributionOptions({
               moving: t('reports.labels.moving'),
               idle: t('reports.labels.idle'),
               parked: t('reports.labels.parked'),
@@ -311,39 +334,39 @@ function EmptyChart({ label }: { label: string }) {
   );
 }
 
-// ── ECharts options (theme handled by the shared EChart wrapper) ───────────
+// ── ApexCharts options (theme handled by ApexChart wrapper) ───────────────
 
-function distanceTripsOption(
+function distanceTripsSeries(
+  points: Array<{ day: string; distanceKm: number; trips: number }>,
+  labels: { distance: string; trips: string },
+) {
+  return [
+    {
+      name: labels.distance,
+      type: 'area' as const,
+      data: points.map((p) => Number(p.distanceKm.toFixed(1))),
+    },
+    { name: labels.trips, type: 'bar' as const, data: points.map((p) => p.trips) },
+  ];
+}
+
+function distanceTripsOptions(
   points: Array<{ day: string; distanceKm: number; trips: number }>,
   labels: { distance: string; trips: string; km: string },
-): EChartsOption {
+): ApexOptions {
   return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: [labels.distance, labels.trips] },
-    xAxis: { type: 'category' as const, data: points.map((p) => p.day) },
-    yAxis: [
-      { type: 'value' as const, name: labels.km },
-      { type: 'value' as const, name: labels.trips },
-    ],
-    series: [
-      {
-        name: labels.distance,
-        type: 'line' as const,
-        smooth: true,
-        areaStyle: { opacity: 0.15 },
-        data: points.map((p) => Number(p.distanceKm.toFixed(1))),
-      },
-      {
-        name: labels.trips,
-        type: 'bar' as const,
-        yAxisIndex: 1,
-        data: points.map((p) => p.trips),
-      },
+    colors: [status.teal, status.info],
+    stroke: { width: [2, 0], curve: 'smooth' },
+    fill: { type: ['gradient', 'solid'], opacity: [0.25, 0.85] },
+    xaxis: { categories: points.map((p) => p.day) },
+    yaxis: [
+      { title: { text: labels.km }, decimalsInFloat: 1 },
+      { opposite: true, title: { text: labels.trips }, decimalsInFloat: 0 },
     ],
   };
 }
 
-function alarmTrendOption(
+function alarmTrendSeries(
   points: Array<{
     day: string;
     alarmSpeeding: number;
@@ -352,47 +375,46 @@ function alarmTrendOption(
     alarmOther: number;
   }>,
   labels: { speeding: string; geofence: string; offline: string; other: string },
-): EChartsOption {
-  const keys = ['alarmSpeeding', 'alarmGeofence', 'alarmOffline', 'alarmOther'] as const;
-  const names = [labels.speeding, labels.geofence, labels.offline, labels.other];
+) {
+  return [
+    { name: labels.speeding, data: points.map((p) => p.alarmSpeeding) },
+    { name: labels.geofence, data: points.map((p) => p.alarmGeofence) },
+    { name: labels.offline, data: points.map((p) => p.alarmOffline) },
+    { name: labels.other, data: points.map((p) => p.alarmOther) },
+  ];
+}
+
+function alarmTrendOptions(
+  points: Array<{ day: string }>,
+  _labels: { speeding: string; geofence: string; offline: string; other: string },
+): ApexOptions {
   return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: names },
-    xAxis: { type: 'category' as const, data: points.map((p) => p.day) },
-    yAxis: { type: 'value' as const },
-    series: keys.map((k, i) => ({
-      name: names[i],
-      type: 'bar' as const,
-      stack: 'alarms',
-      data: points.map((p) => p[k]),
-    })),
+    chart: { stacked: true },
+    colors: [status.danger, status.info, status.slate, status.purple],
+    plotOptions: { bar: { columnWidth: '58%', borderRadius: 2 } },
+    xaxis: { categories: points.map((p) => p.day) },
+    legend: { position: 'bottom' },
   };
 }
 
-function distributionOption(
-  o: {
-    movingVehicles: number;
-    idleVehicles: number;
-    parkedVehicles: number;
-    noTelemetryVehicles: number;
-  },
-  labels: { moving: string; idle: string; parked: string; noTelemetry: string },
-): EChartsOption {
+function distributionOptions(labels: {
+  moving: string;
+  idle: string;
+  parked: string;
+  noTelemetry: string;
+}): ApexOptions {
   return {
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0 },
-    series: [
-      {
-        type: 'pie' as const,
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: true,
-        data: [
-          { name: labels.moving, value: o.movingVehicles },
-          { name: labels.idle, value: o.idleVehicles },
-          { name: labels.parked, value: o.parkedVehicles },
-          { name: labels.noTelemetry, value: o.noTelemetryVehicles },
-        ],
+    labels: [labels.moving, labels.idle, labels.parked, labels.noTelemetry],
+    colors: [status.success, status.warning, status.slate, status.info],
+    legend: { position: 'bottom' },
+    stroke: { width: 2, colors: ['transparent'] },
+    plotOptions: {
+      pie: {
+        donut: {
+          size: '62%',
+          labels: { show: true, total: { show: true, label: '' } },
+        },
       },
-    ],
+    },
   };
 }

@@ -248,6 +248,24 @@ export interface SafetyScorecard {
   };
 }
 
+/** Per-vehicle meters: registry counters + period telemetry (odometer / engine hours / stops). */
+export interface VehicleMetersRow {
+  readonly vehicleId: string;
+  readonly label: string;
+  /** Registry odometer (km). Null when never set. */
+  readonly odometerKm: number | null;
+  /** SUM completed trip distance in the window. */
+  readonly periodDistanceKm: number;
+  readonly trips: number;
+  /** Registry hour-meter. Null when never set. */
+  readonly engineHours: number | null;
+  /** SUM tracking.engine_hours.duration_s in the window. */
+  readonly periodEngineHoursSec: number;
+  readonly movingSec: number;
+  readonly idleSec: number;
+  readonly parkingSec: number;
+}
+
 export function resolveSort<K extends string>(
   value: string | undefined,
   whitelist: Record<K, string>,
