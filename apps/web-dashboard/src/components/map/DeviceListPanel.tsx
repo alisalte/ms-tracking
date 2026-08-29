@@ -1,4 +1,16 @@
-import { Bus, Car, Caravan, Clock, Compass, Gauge, Power, Search, Truck } from 'lucide-react';
+import {
+  Bike,
+  Bus,
+  Car,
+  Caravan,
+  Clock,
+  Compass,
+  Forklift,
+  Gauge,
+  Power,
+  Search,
+  Truck,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,11 +49,18 @@ interface DeviceListPanelProps {
 function VehicleTypeIcon({ type }: { type?: VehicleType }) {
   switch (type) {
     case 'truck':
+    case 'trailer':
       return <Truck />;
     case 'bus':
       return <Bus />;
     case 'van':
+    case 'pickup':
       return <Caravan />;
+    case 'motorcycle':
+      return <Bike />;
+    case 'crane':
+    case 'excavator':
+      return <Forklift />;
     default:
       return <Car />;
   }

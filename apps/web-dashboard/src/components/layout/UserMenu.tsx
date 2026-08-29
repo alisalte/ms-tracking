@@ -2,8 +2,10 @@ import { LogOut, UserCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { getTenantName } from '@/auth/token.storage';
 import { Dropdown, DropdownItem } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
+import { displayLabel } from '@/lib/ids';
 
 /**
  * UserMenu — account dropdown in the TailAdmin header.
@@ -16,6 +18,7 @@ export function UserMenu() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const tenantLabel = displayLabel(user?.tenantId, user?.tenantName ?? getTenantName());
 
   const handleLogout = async () => {
     await logout();
@@ -40,10 +43,12 @@ export function UserMenu() {
           <p className="truncate text-sm font-semibold text-gray-800 dark:text-white">
             {user.email || '—'}
           </p>
-          <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-graydark-600">
-            <span className="font-medium">{t('auth.tenantId')}: </span>
-            {user.tenantId}
-          </p>
+          {tenantLabel && (
+            <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-graydark-600">
+              <span className="font-medium">{t('auth.tenantId')}: </span>
+              {tenantLabel}
+            </p>
+          )}
         </div>
       )}
       <div className="pt-1">

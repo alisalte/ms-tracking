@@ -46,9 +46,6 @@ export function OrganizationSection() {
             </Badge>
           }
         />
-        <p className="-mt-2 mb-3 font-mono text-xs text-gray-500 dark:text-graydark-600">
-          {org.id}
-        </p>
         <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Meta label={t('admin.org.tier')} value={org.tier} />
           <Meta label={t('admin.org.region')} value={org.region} />

@@ -15,6 +15,8 @@ import type { Request } from 'express';
 import { LoginUseCase, LogoutUseCase, RefreshTokenUseCase } from '../../application/index.js';
 import { InvalidCredentialsError } from '../../domain/errors.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { UserRepository } from '../../infrastructure/persistence/user.repository.js';
@@ -32,6 +34,7 @@ export class AuthController {
     private readonly logoutUseCase: LogoutUseCase,
     private readonly tenants: TenantRepository,
     private readonly users: UserRepository,
+    private readonly roles: RoleRepository,
   ) {}
 
   /**
@@ -73,7 +76,13 @@ export class AuthController {
       refresh_token: string;
       token_type: string;
       expires_in: number;
-      user: { id: string; email: string; tenant_id: string; roles: readonly string[] };
+      user: {
+        id: string;
+        email: string;
+        tenant_id: string;
+        tenant_name: string;
+        roles: readonly string[];
+      };
     };
   }> {
     const tenantId = await this.resolveTenantId(req.headers['x-tenant-id'] as string | undefined);
@@ -94,6 +103,7 @@ export class AuthController {
           id: result.user.id,
           email: result.user.email,
           tenant_id: result.user.tenantId,
+          tenant_name: result.user.tenantName,
           roles: result.user.roles,
         },
       },
@@ -155,20 +165,28 @@ export class AuthController {
       id: string;
       email: string;
       tenant_id: string;
+      tenant_name: string;
       roles: readonly string[];
       permissions: readonly string[];
     };
   }> {
     const p = getPrincipal(req);
     // Email is not carried in the JWT — hydrate it from the user record so the
-    // dashboard can show the signed-in identity (Sprint E §5).
-    const user = await this.users.findById(p.tenantId, p.userId);
+    // dashboard can show the signed-in identity (Sprint E §5). Role names and
+    // the tenant title are resolved from the DB so a token minted before this
+    // change (roles as UUIDs) still surfaces human labels.
+    const [user, tenant, roleNames] = await Promise.all([
+      this.users.findById(p.tenantId, p.userId),
+      this.tenants.findById(p.tenantId),
+      this.roles.namesForUser(p.tenantId, p.userId),
+    ]);
     return {
       data: {
         id: p.userId,
         email: user?.email ?? '',
         tenant_id: p.tenantId,
-        roles: p.roles,
+        tenant_name: tenant?.name ?? '',
+        roles: roleNames.length > 0 ? roleNames : p.roles,
         permissions: p.permissions,
       },
     };

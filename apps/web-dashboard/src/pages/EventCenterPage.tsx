@@ -5,7 +5,8 @@
  * every alarm-driven event carries eventType, vehicle, timestamp, severity)
  * as a chronological timeline grouped by day. Server-side filtered
  * (type/severity) + client search, cursor-paginated, URL-synced like the
- * Alarm Center; new events stream in over the WebSocket without reloads.
+ * Alarm Center. Live rows arrive via the header bell's Socket.IO hook
+ * (shared React Query cache — no extra WebSocket from this page).
  *
  * Honest scope: this is the event surface the backend exposes today — there
  * is no separate telemetry-events endpoint, so nothing is fabricated. Route
@@ -29,7 +30,6 @@ import {
   Spinner,
   Toolbar,
 } from '@/components/tailwind-ui';
-import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import { relativeTime } from '@/lib/relative-time';
 
 const SEVERITIES = ['critical', 'high', 'normal', 'low'] as const;
@@ -62,9 +62,6 @@ export function EventCenterPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
-
-  // Realtime: new events arrive over WS and patch the shared cache (no reload).
-  useNotificationRealtime();
 
   const eventType = params.get('eventType') ?? undefined;
   const severity = params.get('severity') ?? undefined;

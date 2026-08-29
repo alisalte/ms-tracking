@@ -86,12 +86,15 @@ export class RefreshTokenUseCase {
     if (!user || !tenant) throw new TokenInvalidError();
     // Re-resolve permissions on refresh so a rotated token reflects the latest
     // role grants (Sprint B).
-    const permissions = await this.roles.permissionsForUser(tenantId, userId);
+    const [permissions, roleNames] = await Promise.all([
+      this.roles.permissionsForUser(tenantId, userId),
+      this.roles.namesForUser(tenantId, userId),
+    ]);
     return {
       sub: user.id as string,
       tenant_id: tenantId,
       tenant_tier: tenant.tier,
-      roles: [...user.roles],
+      roles: roleNames,
       permissions,
       scope: 'openid offline_access',
       aal: 1,

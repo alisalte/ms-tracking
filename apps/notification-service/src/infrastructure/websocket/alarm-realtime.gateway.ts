@@ -51,8 +51,16 @@ export class AlarmRealtimeGateway implements OnApplicationBootstrap, OnApplicati
   }
 
   private async start(): Promise<void> {
+    const rawCors = (this.deps.config.NOTIF_WS_CORS_ORIGIN ?? '*').trim();
+    const corsOrigin =
+      rawCors === '*'
+        ? '*'
+        : rawCors
+            .split(',')
+            .map((o) => o.trim())
+            .filter((o) => o.length > 0);
     const io = new IoServer(this.deps.config.NOTIF_WS_PORT, {
-      cors: { origin: this.deps.config.NOTIF_WS_CORS_ORIGIN ?? '*' },
+      cors: { origin: corsOrigin.length === 0 ? '*' : corsOrigin, methods: ['GET', 'POST'] },
       maxHttpBufferSize: 1e6,
       pingTimeout: 30_000,
     });

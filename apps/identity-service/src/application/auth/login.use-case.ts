@@ -45,7 +45,13 @@ export interface LoginResult {
   readonly refreshToken: string;
   readonly expiresIn: number;
   readonly sessionId: string;
-  readonly user: { id: string; email: string; tenantId: string; roles: readonly string[] };
+  readonly user: {
+    id: string;
+    email: string;
+    tenantId: string;
+    tenantName: string;
+    roles: readonly string[];
+  };
 }
 
 export interface LoginConfig {
@@ -118,10 +124,8 @@ export class LoginUseCase {
     // 6. Issue tokens + create session + start refresh family.
     const sessionId = randomUUID();
     const refreshFamilyId = randomUUID();
-    const issued = await this.tokens.issuePair(
-      await this.claims(user, tenant, sessionId),
-      sessionId,
-    );
+    const claims = await this.claims(user, tenant, sessionId);
+    const issued = await this.tokens.issuePair(claims, sessionId);
     const family = RefreshTokenFamily.start(
       refreshFamilyId,
       {
@@ -166,7 +170,8 @@ export class LoginUseCase {
         id: user.id as string,
         email: user.email,
         tenantId: input.tenantId,
-        roles: user.roles,
+        tenantName: tenant.name,
+        roles: claims.roles,
       },
     };
   }
@@ -176,12 +181,15 @@ export class LoginUseCase {
    * downstream services authorize statelessly (Sprint B).
    */
   private async claims(user: User, tenant: Tenant, sessionId: string) {
-    const permissions = await this.roles.permissionsForUser(user.tenantId, user.id as string);
+    const [permissions, roleNames] = await Promise.all([
+      this.roles.permissionsForUser(user.tenantId, user.id as string),
+      this.roles.namesForUser(user.tenantId, user.id as string),
+    ]);
     return {
       sub: user.id as string,
       tenant_id: user.tenantId,
       tenant_tier: tenant.tier,
-      roles: [...user.roles],
+      roles: roleNames,
       permissions,
       scope: 'openid offline_access',
       aal: 1,

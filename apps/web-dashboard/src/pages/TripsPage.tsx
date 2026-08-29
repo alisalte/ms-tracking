@@ -16,6 +16,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { displayLabel } from '@/lib/ids';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
 /** Status → Badge color (cell). */
@@ -76,8 +77,10 @@ export function TripsPage() {
     {
       id: 'trip',
       headerKey: 'trips.list.colTrip',
-      sortBy: (trip) => trip.id,
-      render: (trip) => <span className="font-semibold tabular-nums">{trip.id}</span>,
+      sortBy: (trip) => trip.vehicleLabel || trip.id,
+      render: (trip) => (
+        <span className="font-semibold">{displayLabel(trip.id, trip.vehicleLabel) ?? '—'}</span>
+      ),
     },
     {
       id: 'vehicle',

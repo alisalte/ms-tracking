@@ -207,6 +207,7 @@ function renderMap() {
 describe('MapPage (Live Tracking)', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
+    localStorage.removeItem('fv:map-basemap');
     mockUseMapVehicles.mockReturnValue({
       data: vehiclesFixture,
       isLoading: false,
@@ -248,26 +249,29 @@ describe('MapPage (Live Tracking)', () => {
     renderMap();
     await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
 
-    // Settings live in their OWN floating control, separate from the toolbar.
     fireEvent.click(screen.getByTestId('map-settings-button'));
-    const group = screen.getByRole('radiogroup', { name: 'Basemap style' });
-    const options = within(group).getAllByRole('radio');
-    expect(options.length).toBe(4);
-    // Streets is the default-active mode.
-    expect(within(group).getByRole('radio', { name: /Streets/ })).toHaveAttribute(
+    const popover = screen.getByTestId('map-settings-popover');
+    const options = within(popover).getAllByRole('radio');
+    expect(options.length).toBe(8);
+    expect(within(popover).getByRole('radio', { name: /Google Streets/ })).toHaveAttribute(
       'aria-checked',
       'true',
     );
 
-    // Switch to satellite — selection flips (popover stays open for quick flips).
-    fireEvent.click(within(group).getByRole('radio', { name: /Satellite/ }));
-    expect(within(group).getByRole('radio', { name: /Satellite/ })).toHaveAttribute(
+    fireEvent.click(within(popover).getByRole('radio', { name: /Google Satellite/ }));
+    expect(within(popover).getByRole('radio', { name: /Google Satellite/ })).toHaveAttribute(
       'aria-checked',
       'true',
     );
-    expect(within(group).getByRole('radio', { name: /Streets/ })).toHaveAttribute(
+    expect(within(popover).getByRole('radio', { name: /Google Streets/ })).toHaveAttribute(
       'aria-checked',
       'false',
+    );
+
+    fireEvent.click(within(popover).getByRole('radio', { name: /OpenStreetMap/ }));
+    expect(within(popover).getByRole('radio', { name: /OpenStreetMap/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
     );
   });
 

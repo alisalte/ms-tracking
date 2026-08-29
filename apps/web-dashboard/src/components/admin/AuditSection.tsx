@@ -22,6 +22,7 @@ import {
   Toolbar,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { displayLabel } from '@/lib/ids';
 import type { AuditAction, AuditCategory, AuditEntry } from '@/types/admin.types';
 
 const ACTIONS: Array<AuditAction | 'all'> = [
@@ -109,14 +110,17 @@ export function AuditSection() {
     {
       id: 'target',
       headerKey: 'admin.audit.colTarget',
-      render: (e) => (
-        <div className="flex flex-col">
-          <span className="text-sm">{e.targetType}</span>
-          <span className="font-mono text-xs text-gray-500 dark:text-graydark-600">
-            {e.targetId}
-          </span>
-        </div>
-      ),
+      render: (e) => {
+        const targetTitle = displayLabel(e.targetId, e.targetType);
+        return (
+          <div className="flex flex-col">
+            <span className="text-sm">{e.targetType}</span>
+            {targetTitle && targetTitle !== e.targetType && (
+              <span className="text-xs text-gray-500 dark:text-graydark-600">{targetTitle}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: 'service',

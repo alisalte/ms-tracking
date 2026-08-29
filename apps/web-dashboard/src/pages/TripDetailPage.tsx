@@ -19,6 +19,8 @@ import { TripReplayMap } from '@/components/trips/TripReplayMap';
 import { TripSummary } from '@/components/trips/TripSummary';
 import { TripTimeline } from '@/components/trips/TripTimeline';
 import { useTripPlayback } from '@/components/trips/useTripPlayback';
+import { displayLabel } from '@/lib/ids';
+import { getVehicleIcon } from '@/lib/map-markers';
 import { shouldUseMock } from '@/lib/mock-gate';
 import { status as statusPalette } from '@/theme/palette';
 import type { Trip, TripEvent } from '@/types/fleet.types';
@@ -186,7 +188,11 @@ export function TripDetailPage() {
         </RouterLink>
       </div>
       <PageHeader
-        title={trip.vehicleLabel ? `${trip.vehicleLabel} · ${dateLabel}` : trip.id}
+        title={
+          trip.vehicleLabel
+            ? `${trip.vehicleLabel} · ${dateLabel}`
+            : (displayLabel(trip.id) ?? dateLabel)
+        }
         description={
           <span className="mt-1 flex flex-wrap items-center gap-4">
             <span className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-graydark-600">
@@ -217,7 +223,12 @@ export function TripDetailPage() {
       {/* Replay: map (left) + speed graph (right) */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card flush className="overflow-hidden">
-          <TripReplayMap waypoints={waypoints} events={events} index={playback.index} />
+          <TripReplayMap
+            waypoints={waypoints}
+            events={events}
+            index={playback.index}
+            vehicleType={getVehicleIcon({ label: trip.vehicleLabel })}
+          />
         </Card>
         <Card className="flex h-90 flex-col">
           <CardHeader title={t('trips.replay.speedGraph')} />

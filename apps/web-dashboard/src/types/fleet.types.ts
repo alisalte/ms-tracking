@@ -15,8 +15,22 @@
 /** Operational vehicle state — the axes of the stat-card row + utilization donut. */
 export type VehicleState = 'driving' | 'idle' | 'stopped' | 'offline';
 
-/** Vehicle body type — selects the marker shape / list icon (UI_UX_Design.md §2.4). */
-export type VehicleType = 'truck' | 'van' | 'bus' | 'car';
+/**
+ * Vehicle body type — selects the map silhouette / list icon.
+ * Registry has no `vehicleType` column yet; the dashboard infers this from
+ * name/plate (see `getVehicleIcon`). Unknown labels resolve to `unknown`.
+ */
+export type VehicleType =
+  | 'car'
+  | 'truck'
+  | 'crane'
+  | 'bus'
+  | 'van'
+  | 'pickup'
+  | 'trailer'
+  | 'motorcycle'
+  | 'excavator'
+  | 'unknown';
 
 /** A single vehicle tracked on the fleet map. */
 export interface MapVehicle {

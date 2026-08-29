@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { type ConnectionState, useRealtimeSocket } from '@/hooks/useRealtimeSocket';
+import { shouldUseMock } from '@/lib/mock-gate';
 import type { Alarm } from '@/types/alarm.types';
 
 export interface AlarmRealtimeEvent {
@@ -41,7 +42,7 @@ export interface AlarmRealtimeResult {
  */
 export function useAlarmRealtime(tenantId: string | null, wsUrl?: string): AlarmRealtimeResult {
   const url = wsUrl ?? import.meta.env.VITE_NOTIFICATION_WS_URL ?? 'http://localhost:3010';
-  const enabled = Boolean(tenantId);
+  const enabled = Boolean(tenantId) && !shouldUseMock();
 
   const { state, subscribe, emit } = useRealtimeSocket({ url, enabled });
   const [events, setEvents] = useState<AlarmRealtimeEvent[]>([]);

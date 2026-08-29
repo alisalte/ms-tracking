@@ -41,6 +41,7 @@ import {
   Table,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { displayLabel } from '@/lib/ids';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mapAccents, status } from '@/theme/palette';
 import type { Geofence, GeofenceStatus, GeofenceType } from '@/types/geofence.types';
@@ -141,6 +142,15 @@ export function GeofencePage() {
           className="h-9 min-w-56 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800 dark:placeholder:text-graydark-600"
         />
       </div>
+
+      {(overlays?.length ?? 0) > 0 && (
+        <GeofencePreviewMap
+          geofences={overlays}
+          selectedId={detailTarget?.id ?? editTarget?.id}
+          onSelect={setDetailTarget}
+          height={320}
+        />
+      )}
 
       {page.isLoading ? (
         <div className="flex justify-center py-12">
@@ -283,8 +293,6 @@ export function GeofencePage() {
           });
         }}
       />
-      {/* Overlay source consumed by the form's existing-fence rendering. */}
-      <span hidden>{overlays?.length ?? 0}</span>
     </div>
   );
 }
@@ -419,11 +427,15 @@ function GeofenceDetailDialog({
             </p>
           ) : (
             <div className="mt-1.5 flex flex-wrap gap-1">
-              {geofence.assignedVehicleIds.map((id) => (
-                <Badge key={id} color="gray">
-                  {vehicleLabels.get(id) ?? id.slice(0, 8)}
-                </Badge>
-              ))}
+              {geofence.assignedVehicleIds.map((id) => {
+                const label = vehicleLabels.get(id) || displayLabel(id);
+                if (!label) return null;
+                return (
+                  <Badge key={id} color="gray">
+                    {label}
+                  </Badge>
+                );
+              })}
             </div>
           )}
         </div>

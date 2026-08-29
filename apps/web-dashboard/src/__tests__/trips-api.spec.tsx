@@ -107,8 +107,8 @@ describe('useTrips (real /trips mapping)', () => {
     expect(result.current.data?.[0].status).toBe('in_progress');
     expect(result.current.data?.[0].endTime).toBeUndefined();
     expect(result.current.data?.[0].destinationLabel).toBe('—');
-    // Falls back to a truncated vehicle id when the registry is down.
-    expect(result.current.data?.[0].vehicleLabel).toBe(tripWire.vehicleId.slice(0, 8));
+    // No title when the registry is down — never show a truncated GUID.
+    expect(result.current.data?.[0].vehicleLabel).toBe('');
   });
 });
 

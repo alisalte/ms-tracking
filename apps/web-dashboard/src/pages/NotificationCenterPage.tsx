@@ -27,7 +27,6 @@ import {
 } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Button, Card, PageHeader, Spinner, Tooltip } from '@/components/tailwind-ui';
-import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import { relativeTime } from '@/lib/relative-time';
 import type { Notification, NotificationChannel } from '@/types/notification.types';
 
@@ -73,9 +72,6 @@ export function NotificationCenterPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'history' | 'preferences'>('history');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // Realtime push (shared query cache with the bell).
-  useNotificationRealtime();
 
   const eventType = searchParams.get('eventType') ?? undefined;
   const severity = searchParams.get('severity') ?? undefined;

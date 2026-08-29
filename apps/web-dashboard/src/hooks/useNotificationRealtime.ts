@@ -15,6 +15,7 @@ import { useEffect, useRef } from 'react';
 import { queryKeys } from '@/api/query-keys';
 import { useAuthStore } from '@/auth/auth.store';
 import { useRealtimeSocket } from '@/hooks/useRealtimeSocket';
+import { shouldUseMock } from '@/lib/mock-gate';
 import type { Notification, UnreadCount } from '@/types/notification.types';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -71,7 +72,7 @@ export function useNotificationRealtime(wsUrl?: string) {
   const qc = useQueryClient();
 
   const url = wsUrl ?? import.meta.env.VITE_NOTIFICATION_WS_URL ?? 'http://localhost:3010';
-  const enabled = Boolean(tenantId);
+  const enabled = Boolean(tenantId) && !shouldUseMock();
 
   const { state, subscribe, emit } = useRealtimeSocket({ url, enabled });
   const tenantRef = useRef(tenantId);

@@ -383,11 +383,17 @@
     },
     "settings": {
       "open": "Map settings",
-      "basemap": "Basemap style"
+      "basemap": "Basemap style",
+      "providerGoogle": "Google",
+      "providerOther": "Other maps"
     },
     "basemap": {
-      "streets": "Streets",
-      "satellite": "Satellite",
+      "google": "Google Streets",
+      "googleSatellite": "Google Satellite",
+      "googleHybrid": "Google Hybrid",
+      "googleTerrain": "Google Terrain",
+      "streets": "OpenStreetMap",
+      "satellite": "Esri Satellite",
       "dark": "Dark",
       "topo": "Topographic"
     },
@@ -1567,7 +1573,8 @@
       "selfIntersecting": "Edges cross — drag a vertex so the blue fill does not fold over itself.",
       "polygonStatus": "{{count}} vertices · {{area}}",
       "circleStatus": "Center {{lat}}, {{lng}} · radius {{radius}} m",
-      "circleCenterHint": "Click the map to place the center. The circle uses the radius field.",
+      "circleCenterHint": "Click the map to place the center. The circle uses the radius field (meters).",
+      "invalidRadius": "Enter a radius greater than 0 m to draw the circle.",
       "circleDragging": "Drag the blue handle to change the radius",
       "radiusHandleHint": "Drag to change the radius",
       "selectType": "Select a geometry type to draw",
@@ -1577,8 +1584,13 @@
       "removeLastLabel": "− Vertex",
       "clear": "Clear polygon",
       "redrawCircle": "Clear circle and redraw",
-      "mapLabel": "Geofence drawing map"
-    }
+      "mapLabel": "Geofence drawing map",
+      "legendActive": "Area being drawn",
+      "legendExisting": "Other geofences",
+      "selectedCircle": "Selected area · {{radius}} m radius",
+      "selectedPolygon": "Selected area (blue fill)"
+    },
+    "overviewMap": "All geofences on the map"
   },
   "commands": {
     "title": "Command Center",
@@ -1682,7 +1694,9 @@
     "mfaNotEnforcedHelp": "MFA is not yet active for this account.",
     "changePassword": "Password",
     "changePasswordHelp": "Reset your password via the email flow.",
-    "changePasswordAction": "Change"
+    "changePasswordAction": "Change password",
+    "allPermissions": "Full access",
+    "rolePermCount": "{{roles}} roles · {{permissions}} permissions"
   },
   "validation": {
     "tenantId": {

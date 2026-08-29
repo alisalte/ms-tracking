@@ -64,6 +64,9 @@ vi.mock('maplibre-gl', () => {
     addTo() {
       return this;
     }
+    getElement() {
+      return document.createElement('div');
+    }
     remove() {}
   };
   const StubPopup = class {

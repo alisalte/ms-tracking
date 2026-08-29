@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Top-down sedan. Fill = currentColor (status). Nose = north. -->
+  <rect x="17.8" y="19.4" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
+  <rect x="42" y="19.4" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
+  <rect x="17.8" y="40.8" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
+  <rect x="42" y="40.8" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
+  <path d="M24.8 6.4 C21.6 6.6 19.2 10 18.6 14.8 L17.6 22.2 C16.8 25 16.6 28 16.6 32 L16.6 42.6 C16.6 49.2 18.8 53.8 23 56.2 C26.8 58.4 37.2 58.4 41 56.2 C45.2 53.8 47.4 49.2 47.4 42.6 L47.4 32 C47.4 28 47.2 25 46.4 22.2 L45.4 14.8 C44.8 10 42.4 6.6 39.2 6.4 C35 5.8 29 5.8 24.8 6.4 Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.9" paint-order="stroke fill" stroke-linejoin="round"/>
+  <path d="M25.8 18.8 H38.2 L36.4 28.6 H27.6 Z" fill="#243044"/>
+  <rect x="26.4" y="29.2" width="11.2" height="11.6" rx="1.4" fill="#0B0F19" opacity="0.35"/>
+</svg>

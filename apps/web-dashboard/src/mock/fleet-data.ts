@@ -163,12 +163,29 @@ const DRIVERS = [
   'F. Ahmadi',
   'T. Okonkwo',
 ] as const;
-const TYPES: VehicleType[] = ['truck', 'van', 'bus', 'car'];
+const TYPES: VehicleType[] = [
+  'truck',
+  'van',
+  'bus',
+  'car',
+  'crane',
+  'pickup',
+  'trailer',
+  'motorcycle',
+  'excavator',
+  'unknown',
+];
 const TYPE_LABEL: Record<VehicleType, string> = {
   truck: 'Truck',
   van: 'Van',
   bus: 'Bus',
   car: 'Car',
+  crane: 'Crane',
+  pickup: 'Pickup',
+  trailer: 'Trailer',
+  motorcycle: 'Motorcycle',
+  excavator: 'Excavator',
+  unknown: 'Vehicle',
 };
 
 /** Tiny deterministic PRNG (mulberry32) — no Math.random so tests are stable. */

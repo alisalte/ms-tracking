@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Mobile crane / air-lifter: cab + deck + boom. Original drawing. -->
+  <rect x="16.4" y="28.4" width="3.8" height="8" rx="1.3" fill="#0B0F19"/>
+  <rect x="43.8" y="28.4" width="3.8" height="8" rx="1.3" fill="#0B0F19"/>
+  <rect x="15.8" y="42.2" width="4.2" height="9" rx="1.3" fill="#0B0F19"/>
+  <rect x="44" y="42.2" width="4.2" height="9" rx="1.3" fill="#0B0F19"/>
+  <rect x="20.2" y="22.4" width="23.6" height="17.6" rx="2.2" fill="currentColor" stroke="#FFFFFF" stroke-width="1.9" paint-order="stroke fill" stroke-linejoin="round"/>
+  <path d="M23.4 24 H40.6 L39 32.4 H25 Z" fill="#243044"/>
+  <rect x="19.4" y="38.4" width="25.2" height="17.2" rx="1.6" fill="currentColor" stroke="#FFFFFF" stroke-width="1.9" paint-order="stroke fill" stroke-linejoin="round"/>
+  <rect x="30.2" y="6.4" width="3.6" height="17.2" rx="1.2" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/>
+  <path d="M31.2 6.4 L48.6 18.8 L46.8 21.2 L29.8 9.2 Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round"/>
+  <circle cx="47.4" cy="20.4" r="2.1" fill="#0B0F19" stroke="#FFFFFF" stroke-width="0.8"/>
+</svg>

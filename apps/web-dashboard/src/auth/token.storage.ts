@@ -1,7 +1,9 @@
+import { isUuid } from '@/lib/ids';
 import type { TokenPair } from '@/types/auth.types';
 
 const TOKENS_KEY = 'fleetvision_tokens';
 const TENANT_KEY = 'fleetvision_tenant_id';
+const TENANT_NAME_KEY = 'fleetvision_tenant_name';
 
 /**
  * Persist the token pair + tenant ID to localStorage.
@@ -55,10 +57,22 @@ export function saveTenantId(tenantId: string): void {
   localStorage.setItem(TENANT_KEY, tenantId);
 }
 
+/** Persist a human tenant title (never a UUID) for UI labels. */
+export function saveTenantName(name: string): void {
+  const trimmed = name.trim();
+  if (!trimmed || isUuid(trimmed)) return;
+  localStorage.setItem(TENANT_NAME_KEY, trimmed);
+}
+
+export function getTenantName(): string | null {
+  return localStorage.getItem(TENANT_NAME_KEY);
+}
+
 /**
  * Clear all auth-related storage (logout).
  */
 export function clearTokens(): void {
   localStorage.removeItem(TOKENS_KEY);
   localStorage.removeItem(TENANT_KEY);
+  localStorage.removeItem(TENANT_NAME_KEY);
 }

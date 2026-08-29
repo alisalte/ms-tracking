@@ -363,8 +363,13 @@ services:
       NOTIF_SMTP_PASS: ${NOTIF_SMTP_PASS:-}
       NOTIF_SMTP_FROM: ${NOTIF_SMTP_FROM:-noreply@fleetvision.local}
       NOTIF_SMTP_SECURE: ${NOTIF_SMTP_SECURE:-false}
+      # Realtime Socket.IO (browser connects to localhost:3010, same pattern as GPS :3001).
+      NOTIF_WS_PORT: "3010"
+      NOTIF_WS_ENABLED: "true"
+      NOTIF_WS_CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
     ports:
       - "${NOTIFICATION_PORT:-3008}:3008"
+      - "${NOTIFICATION_WS_PORT:-3010}:3010"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3008/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s

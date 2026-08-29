@@ -2,7 +2,7 @@
  * Role repository — maps the Role aggregate to `iam.roles` + `iam.role_permissions`.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
-import { Role as RoleClass, type Role, type RoleProps } from '../../domain/index.js';
+import { type Role, Role as RoleClass, type RoleProps } from '../../domain/index.js';
 import { withTenantContext } from './tenant-context.js';
 
 export interface RoleRow {
@@ -102,9 +102,9 @@ export class RoleRepository {
     permissions: readonly string[],
   ): Promise<Role> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
-      const row = (await trx('iam.roles')
-        .where({ id: roleId, tenant_id: tenantId })
-        .first()) as RoleRow | undefined;
+      const row = (await trx('iam.roles').where({ id: roleId, tenant_id: tenantId }).first()) as
+        | RoleRow
+        | undefined;
       if (!row) throw new Error('Role not found');
       if (row.is_system) throw new Error('System roles are immutable.');
       await trx('iam.role_permissions').where({ role_id: roleId }).delete();
@@ -148,6 +148,19 @@ export class RoleRepository {
         .select('iam.role_permissions.permission')
         .distinct()) as PermissionRow[];
       return rows.map((r) => r.permission);
+    });
+  }
+
+  /** Resolve assigned role *names* (JWT /me show names, never role UUIDs). */
+  public async namesForUser(tenantId: string, userId: string): Promise<string[]> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = (await trx('iam.roles')
+        .join('iam.user_roles', 'iam.user_roles.role_id', 'iam.roles.id')
+        .where('iam.user_roles.tenant_id', tenantId)
+        .where('iam.user_roles.user_id', userId)
+        .orderBy('iam.roles.name')
+        .select('iam.roles.name')) as Array<{ name: string }>;
+      return rows.map((r) => r.name);
     });
   }
 

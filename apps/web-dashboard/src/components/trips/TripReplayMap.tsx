@@ -4,12 +4,15 @@ import {
   Map as MaplibreMap,
   Marker as MaplibreMarker,
 } from 'maplibre-gl';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
+import { useFollowBasemap } from '@/hooks/useBasemap';
+import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { markerDataUrl, paintVehicleMarker } from '@/lib/map-markers';
 import { mapAccents, status } from '@/theme/palette';
-import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
+import type { TripEvent, TripWaypoint, VehicleType } from '@/types/fleet.types';
 
 interface TripReplayMapProps {
   /** Ordered position samples of the trip track. */
@@ -18,6 +21,8 @@ interface TripReplayMapProps {
   events: TripEvent[];
   /** Current replay index — the animated vehicle marker follows it. */
   index: number;
+  /** Registry body type when known; inferred from the trip label otherwise. */
+  vehicleType?: VehicleType;
 }
 
 /** Event type → marker color (stop=amber, idle=slate, overspeed=red). */
@@ -35,6 +40,8 @@ const EMPTY_COLLECTION: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
   features: [],
 };
+
+const TRIP_BASEMAP_BEFORE = ['route-casing'] as const;
 
 /** GeoJSON [lng, lat] for waypoints with finite in-range coordinates. */
 function routeCoordinates(waypoints: readonly TripWaypoint[]): [number, number][] {
@@ -72,40 +79,33 @@ function routeCollection(coords: [number, number][]): GeoJSON.FeatureCollection 
  * vehicle marker that follows the current replay index (heading-rotated arrow).
  * The map fits to the track bounds on load.
  */
-export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) {
-  const { t } = useTranslation();
+export function TripReplayMap({ waypoints, events, index, vehicleType }: TripReplayMapProps) {
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const eventMarkersRef = useRef<MaplibreMarker[]>([]);
   const vehicleMarkerRef = useRef<MaplibreMarker | null>(null);
   const waypointsRef = useRef(waypoints);
   const eventsRef = useRef(events);
   waypointsRef.current = waypoints;
   eventsRef.current = events;
+  const { basemap, setBasemap } = useFollowBasemap(mapRef, TRIP_BASEMAP_BEFORE, mapReady);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const first = routeCoordinates(waypointsRef.current)[0] ?? TEHRAN;
 
     const map = new MaplibreMap({
       container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
+      style: rasterMapStyle(loadPersistedBasemap(), i18n.language),
       center: first,
       zoom: 12,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    setMapReady(true);
 
     // Empty FeatureCollection is valid GeoJSON; an empty LineString is not and
     // MapLibre refuses the source — the whole map then fails to render.
@@ -139,6 +139,7 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
       vehicleMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, []);
 
@@ -161,23 +162,35 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
 
     const place = () => {
       if (mapRef.current !== map) return;
-      const heading = Number.isFinite(wp.heading) ? wp.heading : 0;
-      const el = document.createElement('div');
-      el.className = 'fv-vehicle-marker';
-      paintVehicleMarker(el, 'car', mapAccents.selectedRoute, {
-        heading,
-        id: 'trip-replay',
-      });
-      el.setAttribute('aria-label', t('trips.replay.vehicle'));
-      vehicleMarkerRef.current?.remove();
-      const marker = new MaplibreMarker({ element: el, anchor: 'center' }).setLngLat([lng, lat]);
-      marker.addTo(map);
-      vehicleMarkerRef.current = marker;
+      const heading = Number.isFinite(wp.heading) ? wp.heading : null;
+      if (!vehicleMarkerRef.current) {
+        const el = document.createElement('div');
+        el.className = 'fv-vehicle-marker';
+        paintVehicleMarker(el, vehicleType, mapAccents.selectedRoute, {
+          heading,
+          id: 'trip-replay',
+        });
+        el.setAttribute('aria-label', t('trips.replay.vehicle'));
+        const marker = new MaplibreMarker({ element: el, anchor: 'center' }).setLngLat([lng, lat]);
+        marker.addTo(map);
+        vehicleMarkerRef.current = marker;
+        return;
+      }
+      vehicleMarkerRef.current.setLngLat([lng, lat]);
+      paintVehicleMarker(
+        vehicleMarkerRef.current.getElement(),
+        vehicleType,
+        mapAccents.selectedRoute,
+        {
+          heading,
+          id: 'trip-replay',
+        },
+      );
     };
 
     if (map.loaded()) place();
     else map.once('load', place);
-  }, [index, waypoints, t]);
+  }, [index, waypoints, t, vehicleType]);
 
   return (
     <div
@@ -190,6 +203,7 @@ export function TripReplayMap({ waypoints, events, index }: TripReplayMapProps) 
         data-testid="trip-replay-map"
         style={{ width: '100%', height: MAP_HEIGHT_PX }}
       />
+      <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
       <div className="pointer-events-none absolute bottom-1.5 start-1.5 z-10 flex flex-wrap items-center gap-3 rounded-lg bg-white/85 px-2 py-1 backdrop-blur-sm">
         {(
           [

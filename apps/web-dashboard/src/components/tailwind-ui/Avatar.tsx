@@ -8,7 +8,7 @@ export interface AvatarProps {
   alt?: string;
   /** Initials when no image (falls back to first letter of `name`). */
   name?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   className?: string;
 }
 
@@ -17,6 +17,8 @@ const SIZES = {
   sm: 'size-8 text-xs',
   md: 'size-9 text-sm',
   lg: 'size-12 text-base',
+  xl: 'size-16 text-xl',
+  '2xl': 'size-20 text-2xl',
 };
 
 function initials(name?: string): string | undefined {

@@ -281,9 +281,13 @@ vi.mock('maplibre-gl', () => {
   return {
     Map: vi.fn().mockImplementation(() => ({
       loaded: () => true,
+      isStyleLoaded: () => true,
       once: (_e: string, cb: () => void) => cb(),
       on: vi.fn(),
       addControl: vi.fn(),
+      getSource: () => null,
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
       getLayer: () => undefined,
       removeLayer: vi.fn(),
       removeSource: vi.fn(),

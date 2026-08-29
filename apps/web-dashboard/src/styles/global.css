@@ -226,9 +226,11 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
   color: #9aa6b5;
 }
 
-/* Tracking map: lift the zoom/compass controls above the history playback
-   transport so they never overlap (playback spans the bottom edge). */
-.fv-tracking-map .maplibregl-ctrl-bottom-right {
+/* Tracking map: lift zoom/compass above the history playback transport
+   (playback spans the bottom edge). Both physical corners: LTR uses
+   bottom-right, RTL uses bottom-left so controls sit opposite the roster. */
+.fv-tracking-map .maplibregl-ctrl-bottom-right,
+.fv-tracking-map .maplibregl-ctrl-bottom-left {
   margin-bottom: 4.5rem;
 }
 
@@ -237,6 +239,8 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
    div markers a fixed size so the body stays readable. */
 .fv-vehicle-marker,
 .fv-playback-marker {
+  --fv-zoom-scale: 1;
+  --fv-state-scale: 1;
   width: 56px;
   height: 56px;
   max-width: none !important;
@@ -244,14 +248,83 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
   pointer-events: auto;
   cursor: pointer;
 }
+.fv-tracking-map[data-zoom-tier='far'] .fv-vehicle-marker,
+.fv-tracking-map[data-zoom-tier='far'] .fv-playback-marker {
+  --fv-zoom-scale: 0.62;
+}
+.fv-tracking-map[data-zoom-tier='mid'] .fv-vehicle-marker,
+.fv-tracking-map[data-zoom-tier='mid'] .fv-playback-marker {
+  --fv-zoom-scale: 0.82;
+}
+.fv-vehicle-marker:hover {
+  --fv-state-scale: 1.08;
+  z-index: 2;
+}
+.fv-vehicle-marker.is-selected {
+  --fv-state-scale: 1.16;
+  z-index: 3;
+}
 .fv-vehicle-marker svg,
 .fv-playback-marker svg {
   display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
+  transform: scale(calc(var(--fv-zoom-scale) * var(--fv-state-scale)));
+  transform-origin: center center;
 }
 .fv-cluster-marker {
   max-width: none !important;
   cursor: pointer;
+}
+
+.fv-draw-vertex {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #fff;
+  cursor: grab;
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 0.4), 0 1px 4px rgb(15 23 42 / 0.35);
+}
+.fv-draw-vertex.is-last {
+  width: 18px;
+  height: 18px;
+}
+.fv-draw-center {
+  width: 12px;
+  height: 12px;
+  background: #dc2626;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.35), 0 1px 3px rgb(15 23 42 / 0.4);
+  z-index: 4;
+}
+.fv-draw-radius {
+  width: 14px;
+  height: 14px;
+  cursor: ew-resize;
+}
+
+.fv-geofence-label {
+  pointer-events: none;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 0.82);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.35);
+}
+.fv-geofence-label.is-existing {
+  background: rgb(71 85 105 / 0.88);
+  font-weight: 550;
+}
+.fv-geofence-label.is-selected {
+  background: #465ffb;
+  box-shadow: 0 0 0 2px rgb(70 95 251 / 0.45), 0 1px 4px rgb(15 23 42 / 0.35);
 }

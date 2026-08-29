@@ -7,13 +7,20 @@ import {
   Popup as MaplibrePopup,
   NavigationControl,
 } from 'maplibre-gl';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { circleToPolygonRing } from '@/components/geofences/GeofenceDrawMap';
-import { type BasemapId, basemapById } from '@/lib/basemaps';
+import { useFollowBasemap } from '@/hooks/useBasemap';
+import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
-import { clusterMarkerDataUrl, paintVehicleMarker, vehicleColor } from '@/lib/map-markers';
+import {
+  clusterMarkerDataUrl,
+  getVehicleIcon,
+  markerHeading,
+  paintVehicleMarker,
+  vehicleColor,
+} from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
@@ -50,20 +57,18 @@ interface FleetMapProps {
    * Playback head (Sprint I §34): animated marker position + heading. Updated
    * imperatively (setLngLat + CSS rotation) — never a map re-creation.
    */
-  playbackHead?: { lat: number; lng: number; heading: number | null } | null;
+  playbackHead?: {
+    lat: number;
+    lng: number;
+    heading: number | null;
+    type?: MapVehicle['type'];
+  } | null;
   /**
    * Live follow target (vehicle id): when set and present in `vehicles`, the
    * camera pans to the vehicle on every position update. Cleared by the owner
    * (null/undefined) to stop following.
    */
   followId?: string | null;
-  /**
-   * Basemap style (streets / satellite / dark / topo). Switching swaps the
-   * raster source's tiles in place of a full setStyle: DOM markers survive,
-   * and the re-added raster layer is inserted BENEATH the history-track
-   * overlay so an active track never disappears under the new tiles.
-   */
-  basemap?: BasemapId;
   /**
    * Active tenant geofences rendered as dashed brand outlines on the live map
    * (context for enter/exit alarms). Polygons pass through; circles are
@@ -86,13 +91,17 @@ function ageLabel(updatedAt: string | undefined, t: TFunction) {
 /** Icon identity: rebuild the marker image only when this changes. */
 function iconKey(v: MapVehicle, selected: boolean): string {
   const headingBucket = Math.round(v.heading / 5) * 5;
-  return `${v.type ?? 'car'}|${vehicleColor(v)}|${selected ? 'sel' : 'n'}|h${headingBucket}`;
+  const kind = getVehicleIcon(v);
+  const alarm = v.state === 'overspeed' ? 'a' : 'n';
+  return `${kind}|${vehicleColor(v)}|${selected ? 'sel' : 'n'}|${alarm}|h${headingBucket}`;
 }
+
+const FLEET_BASEMAP_BEFORE = ['geofence-fill', 'history-track-line'] as const;
 
 /**
  * FleetMap — the full-bleed real-time map for the Live Tracking page.
  *
- * UI_UX_Design.md §2.2–§2.7: free OSM raster tiles via MapLibre GL, vehicle
+ * UI_UX_Design.md §2.2–§2.7: raster basemap (Google / OSM / Esri) via MapLibre GL, vehicle
  * markers colored by status (cyan/yellow/rose/slate) and rotated to heading,
  * client-side clustering with `supercluster` (count bubbles, click → zoom in),
  * hover tooltip, and a selection highlight. Markers are managed imperatively
@@ -115,12 +124,12 @@ export function FleetMap({
   track = null,
   playbackHead = null,
   followId = null,
-  basemap = 'streets',
   geofences = [],
 }: FleetMapProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   /** Keyed vehicle markers (id → marker + rendered icon identity). */
   const vehicleMarkersRef = useRef(
     new Map<string, { marker: MaplibreMarker; el: HTMLElement; key: string }>(),
@@ -128,8 +137,7 @@ export function FleetMap({
   /** Cluster markers (churn by nature — rebuilt per sync). */
   const clusterMarkersRef = useRef<MaplibreMarker[]>([]);
 
-  /** Basemap currently applied to the map style (guards no-op swaps). */
-  const appliedBasemapRef = useRef<BasemapId>('streets');
+  useFollowBasemap(mapRef, FLEET_BASEMAP_BEFORE, mapReady);
 
   // The latest fleet for the focus effect (which must not re-run on data change).
   const vehiclesRef = useRef(vehicles);
@@ -144,37 +152,24 @@ export function FleetMap({
     onDeselectRef.current = onDeselect;
   });
 
-  // Initialize the map once.
-  // The init effect reads `basemap` for the FIRST style only; later changes
-  // flow through the swap effect below (the map is never recreated).
+  // Initialize the map once. Later basemap changes flow through useFollowBasemap.
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const bm = basemapById(basemap);
     const map = new MaplibreMap({
       container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          basemap: {
-            type: 'raster',
-            tiles: [...bm.tiles],
-            tileSize: 256,
-            attribution: bm.attribution,
-          },
-        },
-        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
-      },
+      style: rasterMapStyle(loadPersistedBasemap(), i18n.language),
       center: [51.338, 35.719],
       zoom: 11,
       attributionControl: { compact: true },
     });
-    // Zoom + compass controls (bottom-end; CSS lifts them above the history
-    // playback bar on the tracking map container).
-    map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right');
+    // Zoom + compass on the free map edge (opposite the vehicle roster).
+    // CSS lifts them above the history playback bar.
+    const navCorner = i18n.dir() === 'rtl' ? 'bottom-left' : 'bottom-right';
+    map.addControl(new NavigationControl({ visualizePitch: false }), navCorner);
     mapRef.current = map;
-    appliedBasemapRef.current = basemap;
+    setMapReady(true);
     // Clicking empty map clears the selection (§2.5 Esc/backdrop closes).
     map.on('click', (e) => {
       // If the click originated on a marker element, ignore (markers stop propagation).
@@ -194,45 +189,9 @@ export function FleetMap({
       clusterMarkersRef.current = [];
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, []);
-
-  // ── Basemap switching ──
-  // Swap the raster source's tiles in place of setStyle: DOM markers survive,
-  // and the re-added raster layer goes UNDER the history-track overlay (when
-  // one is active) so tracks never vanish beneath the new tiles.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || appliedBasemapRef.current === basemap) return;
-    appliedBasemapRef.current = basemap;
-    const bm = basemapById(basemap);
-    const swap = () => {
-      if (map.getLayer('basemap')) map.removeLayer('basemap');
-      if (map.getSource('basemap')) map.removeSource('basemap');
-      map.addSource('basemap', {
-        type: 'raster',
-        tiles: [...bm.tiles],
-        tileSize: 256,
-        attribution: bm.attribution,
-      });
-      // Insert beneath the geofence + track lines when they exist; otherwise
-      // append (the vehicle/cluster markers are DOM overlays and always
-      // render on top).
-      map.addLayer(
-        { id: 'basemap', type: 'raster', source: 'basemap' },
-        map.getLayer('geofence-fill')
-          ? 'geofence-fill'
-          : map.getLayer('history-track-line')
-            ? 'history-track-line'
-            : undefined,
-      );
-    };
-    if (map.isStyleLoaded()) {
-      swap();
-    } else {
-      map.once('styledata', swap);
-    }
-  }, [basemap]);
 
   // ── Geofence context layer ──
   // Active tenant fences as a dashed brand outline + faint fill: operators see
@@ -260,7 +219,7 @@ export function FleetMap({
       .filter((f): f is { id: string; name: string; ring: number[][] } => f !== null);
 
     const apply = () => {
-      for (const layerId of ['geofence-fill', 'geofence-line']) {
+      for (const layerId of ['geofence-fill', 'geofence-line-casing', 'geofence-line']) {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
       }
       if (map.getSource('geofences')) map.removeSource('geofences');
@@ -283,7 +242,16 @@ export function FleetMap({
           id: 'geofence-fill',
           type: 'fill',
           source: 'geofences',
-          paint: { 'fill-color': mapAccents.geofence, 'fill-opacity': 0.06 },
+          paint: { 'fill-color': mapAccents.geofence, 'fill-opacity': 0.22 },
+        },
+        before,
+      );
+      map.addLayer(
+        {
+          id: 'geofence-line-casing',
+          type: 'line',
+          source: 'geofences',
+          paint: { 'line-color': '#FFFFFF', 'line-width': 5, 'line-opacity': 0.85 },
         },
         before,
       );
@@ -293,9 +261,8 @@ export function FleetMap({
         source: 'geofences',
         paint: {
           'line-color': mapAccents.geofence,
-          'line-width': 1.5,
-          'line-opacity': 0.75,
-          'line-dasharray': [2, 2],
+          'line-width': 2.25,
+          'line-opacity': 0.95,
         },
       });
     };
@@ -319,6 +286,8 @@ export function FleetMap({
         number,
       ];
       const features = cluster(vehicles, bbox, zoom);
+      const tier = zoom < 10 ? 'far' : zoom < 13 ? 'mid' : 'near';
+      containerRef.current?.setAttribute('data-zoom-tier', tier);
 
       // Clusters churn per viewport — rebuild them wholesale.
       for (const m of clusterMarkersRef.current) m.remove();
@@ -482,13 +451,21 @@ export function FleetMap({
         playbackMarkerRef.current = null;
         return;
       }
+      const applyIcon = (el: HTMLElement) => {
+        const prev = Number.parseFloat(el.dataset.heading ?? '');
+        const heading = markerHeading(playbackHead.heading, Number.isFinite(prev) ? prev : 0);
+        const key = `${playbackHead.type ?? 'unknown'}|h${Math.round(heading / 5) * 5}`;
+        if (el.dataset.iconKey === key) return;
+        paintVehicleMarker(el, playbackHead.type, mapAccents.vehicleActive, {
+          heading: playbackHead.heading,
+          id: 'playback',
+        });
+        el.dataset.iconKey = key;
+      };
       if (!playbackMarkerRef.current) {
         const el = document.createElement('div');
         el.className = 'fv-playback-marker';
-        paintVehicleMarker(el, 'car', mapAccents.vehicleActive, {
-          heading: playbackHead.heading ?? 0,
-          id: 'playback',
-        });
+        applyIcon(el);
         playbackMarkerRef.current = new MaplibreMarker({ element: el, anchor: 'center' })
           .setLngLat([playbackHead.lng, playbackHead.lat])
           .addTo(map);
@@ -496,18 +473,18 @@ export function FleetMap({
       }
       // Imperative update — no source/layer rebuild, no map recreation.
       playbackMarkerRef.current.setLngLat([playbackHead.lng, playbackHead.lat]);
-      paintVehicleMarker(playbackMarkerRef.current.getElement(), 'car', mapAccents.vehicleActive, {
-        heading: playbackHead.heading ?? 0,
-        id: 'playback',
-      });
+      applyIcon(playbackMarkerRef.current.getElement());
     };
     if (map.loaded() || map.isStyleLoaded()) sync();
     else runWhenStyleReady(map, sync);
-    return () => {
+  }, [playbackHead]);
+  useEffect(
+    () => () => {
       playbackMarkerRef.current?.remove();
       playbackMarkerRef.current = null;
-    };
-  }, [playbackHead]);
+    },
+    [],
+  );
 
   // §17 selection sync: a list-row selection flies the camera to the vehicle.
   // Depends only on the focus token so live position deltas never re-trigger it.
@@ -540,9 +517,11 @@ export function FleetMap({
 
 /** Set the marker image: body silhouette by type, tint by status, rotate by heading. */
 function applyVehicleIcon(el: HTMLElement, v: MapVehicle, selected: boolean) {
-  paintVehicleMarker(el, v.type, vehicleColor(v), {
+  el.classList.toggle('is-selected', selected);
+  paintVehicleMarker(el, getVehicleIcon(v), vehicleColor(v), {
     heading: v.heading,
     selected,
     id: v.id,
+    alarm: v.state === 'overspeed',
   });
 }

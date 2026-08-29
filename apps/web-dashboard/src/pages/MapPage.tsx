@@ -19,8 +19,8 @@ import { RoutePlannerDialog } from '@/components/map/RoutePlannerDialog';
 import { type PresenceFilter, presenceOf } from '@/components/map/types';
 import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
+import { useBasemap } from '@/hooks/useBasemap';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
-import { type BasemapId, loadPersistedBasemap, persistBasemap } from '@/lib/basemaps';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
@@ -144,13 +144,8 @@ export function MapPage() {
   const [fleetId, setFleetId] = useState<string>('all');
   const [paused, setPaused] = useState(false);
 
-  // ── Map display settings (separate from the tracking toolbar) ──
-  // Basemap style, persisted per browser. The tile swap itself happens in
-  // FleetMap; this state is the single source of truth for the settings panel.
-  const [basemap, setBasemap] = useState<BasemapId>(loadPersistedBasemap);
-  useEffect(() => {
-    persistBasemap(basemap);
-  }, [basemap]);
+  // ── Map display settings (Google / OSM / Esri) — persisted, shared with every map.
+  const [basemap, setBasemap] = useBasemap();
 
   // ── Sprint F §20: LIVE vs HISTORY mode ──
   // LIVE merges WebSocket deltas; HISTORY queries the real track for the
@@ -264,10 +259,16 @@ export function MapPage() {
 
   // ── Sprint I §32–§35: playback over the loaded (bounded) dataset ──
   const playback = useTrackPlayback(displayPoints ?? []);
+  const selectedVehicle = selectedId ? (vehicles.find((v) => v.id === selectedId) ?? null) : null;
   const playbackHead =
     mode === 'history' && displayPoints && displayPoints.length > 0
       ? playback.sample
-        ? { lat: playback.sample.lat, lng: playback.sample.lng, heading: playback.sample.heading }
+        ? {
+            lat: playback.sample.lat,
+            lng: playback.sample.lng,
+            heading: playback.sample.heading,
+            type: selectedVehicle?.type,
+          }
         : null
       : null;
 
@@ -450,13 +451,13 @@ export function MapPage() {
             }
             playbackHead={playbackHead}
             followId={following && selectedId ? selectedId : null}
-            basemap={basemap}
             geofences={geofencesData ?? []}
           />
         </div>
         {/* Map display settings (basemap modes) — a control SEPARATE from the
-         * tracking toolbar: floating button + popover at the bottom-start,
-         * lifted above the playback transport while history playback runs. */}
+         * tracking toolbar: floating button + popover at the bottom-end
+         * (opposite the vehicle roster), lifted with the zoom cluster while
+         * history playback runs. */}
         <MapSettingsPanel
           basemap={basemap}
           onBasemapChange={setBasemap}

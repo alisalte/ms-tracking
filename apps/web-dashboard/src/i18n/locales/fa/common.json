@@ -383,11 +383,17 @@
     },
     "settings": {
       "open": "تنظیمات نقشه",
-      "basemap": "نوع نمایش نقشه"
+      "basemap": "نوع نمایش نقشه",
+      "providerGoogle": "گوگل",
+      "providerOther": "نقشه‌های دیگر"
     },
     "basemap": {
-      "streets": "خیابانی",
-      "satellite": "ماهواره‌ای",
+      "google": "گوگل — خیابان",
+      "googleSatellite": "گوگل — ماهواره",
+      "googleHybrid": "گوگل — ترکیبی",
+      "googleTerrain": "گوگل — پستی‌بلندی",
+      "streets": "اوپن‌استریت‌مپ",
+      "satellite": "ماهواره Esri",
       "dark": "تیره",
       "topo": "توپوگرافی"
     },
@@ -1567,7 +1573,8 @@
       "selfIntersecting": "اضلاع همدیگر را قطع کرده‌اند — یک رأس را جابه‌جا کنید تا محدوده روی خودش نیفتد.",
       "polygonStatus": "{{count}} رأس · {{area}}",
       "circleStatus": "مرکز {{lat}}، {{lng}} · شعاع {{radius}} متر",
-      "circleCenterHint": "روی نقشه کلیک کنید تا مرکز دایره گذاشته شود. شعاع از فیلد بالا می‌آید.",
+      "circleCenterHint": "روی نقشه کلیک کنید تا مرکز دایره گذاشته شود. شعاع از فیلد بالا (متر) می‌آید.",
+      "invalidRadius": "برای رسم دایره، شعاع را بزرگ‌تر از صفر متر وارد کنید.",
       "circleDragging": "دستگیره آبی را بکشید تا شعاع عوض شود",
       "radiusHandleHint": "برای تغییر شعاع بکشید",
       "selectType": "برای ترسیم، یک نوع هندسه انتخاب کنید",
@@ -1577,8 +1584,13 @@
       "removeLastLabel": "− رأس",
       "clear": "پاک کردن چندضلعی",
       "redrawCircle": "پاک کردن دایره و ترسیم مجدد",
-      "mapLabel": "نقشه ترسیم محدوده"
-    }
+      "mapLabel": "نقشه ترسیم محدوده",
+      "legendActive": "محدوده در حال ترسیم",
+      "legendExisting": "محدوده‌های دیگر",
+      "selectedCircle": "محدوده انتخاب‌شده · شعاع {{radius}} متر",
+      "selectedPolygon": "محدوده انتخاب‌شده (رنگ آبی)"
+    },
+    "overviewMap": "همه محدوده‌ها روی نقشه"
   },
   "commands": {
     "title": "مرکز فرمان",
@@ -1682,7 +1694,9 @@
     "mfaNotEnforcedHelp": "احراز هویت چندمرحله‌ای هنوز برای این حساب فعال نیست.",
     "changePassword": "رمز عبور",
     "changePasswordHelp": "رمز عبور خود را از طریق فرایند ایمیل بازنشانی کنید.",
-    "changePasswordAction": "تغییر"
+    "changePasswordAction": "تغییر رمز عبور",
+    "allPermissions": "دسترسی کامل",
+    "rolePermCount": "{{roles}} نقش · {{permissions}} دسترسی"
   },
   "validation": {
     "tenantId": {

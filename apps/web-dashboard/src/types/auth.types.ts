@@ -13,6 +13,8 @@ export interface User {
   id: string;
   email: string;
   tenantId: string;
+  /** Human tenant title when the API provides it; never a UUID. */
+  tenantName?: string | null;
   roles: readonly string[];
   permissions: readonly string[];
 }
@@ -34,7 +36,7 @@ export interface LoginResponse {
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
-  user: Pick<User, 'id' | 'email' | 'tenantId' | 'roles'>;
+  user: Pick<User, 'id' | 'email' | 'tenantId' | 'tenantName' | 'roles'>;
 }
 
 /** Successful refresh response (camelCase, mapped from `RefreshResponseWire`). */
@@ -52,7 +54,13 @@ export interface LoginResponseWire {
   refresh_token: string;
   token_type: string;
   expires_in: number;
-  user: { id: string; email: string; tenant_id: string; roles: readonly string[] };
+  user: {
+    id: string;
+    email: string;
+    tenant_id: string;
+    tenant_name?: string;
+    roles: readonly string[];
+  };
 }
 
 /** Raw POST /auth/refresh response payload (snake_case on the wire). */
@@ -67,6 +75,7 @@ export interface MeResponseWire {
   id: string;
   email: string;
   tenant_id: string;
+  tenant_name?: string;
   roles: readonly string[];
   permissions: readonly string[];
 }

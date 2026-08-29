@@ -1,50 +1,64 @@
 /**
- * GeofencePreviewMap — read-only map preview of a saved geofence (Sprint I §47).
+ * GeofencePreviewMap — read-only map of one or many saved geofences.
  *
- * A single MapLibre instance per dialog: the fence renders as a fill + outline
- * (boundaryGeoJson, or the circle materialized from center+radius) and the map
- * fits its bounds once. No drawing affordances — the edit flow happens in
- * GeofenceFormDialog.
+ * Single-fence mode (detail dialog): fill + outline, camera fits that ring.
+ * Overview mode (`geofences`): every fence is painted; the selected one is
+ * highlighted so it is obvious which area is chosen. Click a fill to select.
  */
-import { type GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl';
+import { type GeoJSONSource, Map as MaplibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
+import { useFollowBasemap } from '@/hooks/useBasemap';
+import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
+import { geofenceFeature, geofenceRing, ringCentroid } from '@/lib/geofence-geo';
 import { runWhenStyleReady } from '@/lib/map-ready';
+import { mapAccents } from '@/theme/palette';
 import type { Geofence } from '@/types/geofence.types';
-import { circleToPolygonRing } from './GeofenceDrawMap';
+
+const PREVIEW_BASEMAP_BEFORE = ['geofence-preview-fill'] as const;
 
 export function GeofencePreviewMap({
   geofence,
+  geofences,
+  selectedId,
+  onSelect,
   height = 320,
 }: {
-  geofence: Geofence;
+  geofence?: Geofence | null;
+  geofences?: readonly Geofence[];
+  selectedId?: string | null;
+  onSelect?: (g: Geofence) => void;
   height?: number;
 }) {
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const labelsRef = useRef<Marker[]>([]);
+  const fittedIdsRef = useRef('');
+  const items = geofences ?? (geofence ? [geofence] : []);
+  const highlightId = selectedId ?? geofence?.id ?? null;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const { basemap, setBasemap } = useFollowBasemap(mapRef, PREVIEW_BASEMAP_BEFORE, mapReady);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = new MaplibreMap({
       container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
+      style: rasterMapStyle(loadPersistedBasemap(), i18n.language),
       center: [51.338, 35.719],
       zoom: 10,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    setMapReady(true);
     map.on('load', () => {
       map.addSource('geofence-preview', {
         type: 'geojson',
@@ -54,18 +68,54 @@ export function GeofencePreviewMap({
         id: 'geofence-preview-fill',
         type: 'fill',
         source: 'geofence-preview',
-        paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.38 },
+        paint: {
+          'fill-color': ['case', ['==', ['get', 'selected'], 1], mapAccents.geofence, '#64748B'],
+          'fill-opacity': ['case', ['==', ['get', 'selected'], 1], 0.36, 0.16],
+        },
+      });
+      map.addLayer({
+        id: 'geofence-preview-halo',
+        type: 'line',
+        source: 'geofence-preview',
+        filter: ['==', ['get', 'selected'], 1],
+        paint: {
+          'line-color': mapAccents.geofence,
+          'line-width': 16,
+          'line-opacity': 0.28,
+          'line-blur': 8,
+        },
+      });
+      map.addLayer({
+        id: 'geofence-preview-line-casing',
+        type: 'line',
+        source: 'geofence-preview',
+        paint: { 'line-color': '#FFFFFF', 'line-width': 7, 'line-opacity': 0.95 },
       });
       map.addLayer({
         id: 'geofence-preview-line',
         type: 'line',
         source: 'geofence-preview',
-        paint: { 'line-color': '#2563eb', 'line-width': 3 },
+        paint: {
+          'line-color': ['case', ['==', ['get', 'selected'], 1], mapAccents.geofence, '#475569'],
+          'line-width': ['case', ['==', ['get', 'selected'], 1], 3.5, 2],
+        },
+      });
+      map.on('click', 'geofence-preview-fill', (e) => {
+        const id = e.features?.[0]?.properties?.id as string | undefined;
+        const hit = itemsRef.current.find((g) => g.id === id);
+        if (hit) onSelectRef.current?.(hit);
+      });
+      map.on('mouseenter', 'geofence-preview-fill', () => {
+        map.getCanvas().style.cursor = onSelectRef.current ? 'pointer' : '';
+      });
+      map.on('mouseleave', 'geofence-preview-fill', () => {
+        map.getCanvas().style.cursor = '';
       });
     });
     return () => {
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, []);
 
@@ -80,31 +130,33 @@ export function GeofencePreviewMap({
         });
         return;
       }
-      let geometry: GeoJSON.Polygon | null = null;
-      if (geofence.boundaryGeoJson) {
-        geometry = geofence.boundaryGeoJson as GeoJSON.Polygon;
-      } else if (
-        geofence.centerLat !== null &&
-        geofence.centerLng !== null &&
-        geofence.radiusM !== null
-      ) {
-        geometry = {
-          type: 'Polygon',
-          coordinates: [
-            circleToPolygonRing(geofence.centerLat, geofence.centerLng, geofence.radiusM),
-          ],
-        };
+      for (const m of labelsRef.current) m.remove();
+      labelsRef.current = [];
+      const features: GeoJSON.Feature[] = [];
+      const lngs: number[] = [];
+      const lats: number[] = [];
+      for (const g of items) {
+        const feat = geofenceFeature(g, { selected: g.id === highlightId ? 1 : 0 });
+        if (!feat) continue;
+        features.push(feat);
+        const ring = geofenceRing(g);
+        if (!ring) continue;
+        for (const p of ring) {
+          lngs.push(p[0] ?? 0);
+          lats.push(p[1] ?? 0);
+        }
+        const el = document.createElement('div');
+        el.className = g.id === highlightId ? 'fv-geofence-label is-selected' : 'fv-geofence-label';
+        el.textContent = g.name;
+        labelsRef.current.push(
+          new Marker({ element: el, anchor: 'center' }).setLngLat(ringCentroid(ring)).addTo(map),
+        );
       }
-      if (!geometry) return;
       map.resize();
-      src.setData({
-        type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry, properties: { name: geofence.name } }],
-      });
-      const ring = geometry.coordinates[0] ?? [];
-      if (ring.length >= 3) {
-        const lngs = ring.map((r) => r[0] ?? 0);
-        const lats = ring.map((r) => r[1] ?? 0);
+      src.setData({ type: 'FeatureCollection', features });
+      const idKey = items.map((g) => g.id).join(',');
+      if (idKey !== fittedIdsRef.current && lngs.length >= 1 && lats.length >= 1) {
+        fittedIdsRef.current = idKey;
         map.stop();
         map.fitBounds(
           [
@@ -116,15 +168,28 @@ export function GeofencePreviewMap({
       }
     };
     render();
-  }, [geofence]);
+    return () => {
+      for (const m of labelsRef.current) m.remove();
+      labelsRef.current = [];
+    };
+  }, [items, highlightId]);
+
+  if (items.length === 0) return null;
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height, borderRadius: 8, overflow: 'hidden' }}
-      data-testid="geofence-preview-map"
-      role="img"
-      aria-label={`Geofence ${geofence.name} preview`}
-    />
+    <div className="relative" style={{ width: '100%', height }}>
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height, borderRadius: 8, overflow: 'hidden' }}
+        data-testid="geofence-preview-map"
+        role="img"
+        aria-label={
+          geofence
+            ? `Geofence ${geofence.name} preview`
+            : t('geofences.overviewMap', { defaultValue: 'All geofences on the map' })
+        }
+      />
+      <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
+    </div>
   );
 }

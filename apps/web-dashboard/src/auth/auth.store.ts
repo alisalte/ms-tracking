@@ -2,8 +2,15 @@ import { create } from 'zustand';
 
 import * as loginApi from '@/api/auth.api';
 import { refreshTokensSingleFlight, subscribeTokensRefreshed } from '@/api/token-refresh';
+import { isUuid } from '@/lib/ids';
 import type { User } from '@/types/auth.types';
-import { clearTokens, getStoredTokens, saveTenantId, saveTokens } from './token.storage';
+import {
+  clearTokens,
+  getStoredTokens,
+  saveTenantId,
+  saveTenantName,
+  saveTokens,
+} from './token.storage';
 
 /**
  * Synchronously hydrate from localStorage on store creation.
@@ -83,6 +90,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       // typed in the form, and identity returns generic "Invalid credentials".
       clearTokens();
       saveTenantId(tenantId.trim());
+      if (!isUuid(tenantId.trim())) saveTenantName(tenantId.trim());
       const response = await loginApi.login(email.trim().toLowerCase(), password, tenantId.trim());
 
       // Persist tokens. Sprint I E2E fix: the login form accepts a tenant
@@ -97,6 +105,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
         tenantId: canonicalTenantId,
       });
       saveTenantId(canonicalTenantId);
+      if (response.user.tenantName) saveTenantName(response.user.tenantName);
 
       set({
         accessToken: response.accessToken,
@@ -110,6 +119,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
           id: response.user.id,
           email: response.user.email,
           tenantId: response.user.tenantId,
+          tenantName: response.user.tenantName ?? null,
           roles: response.user.roles,
           permissions: [],
         },
@@ -120,10 +130,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
       // login response email is kept as a safety net.
       try {
         const fullUser = await loginApi.getMe();
+        if (fullUser.tenantName) saveTenantName(fullUser.tenantName);
         set({
           user: {
             ...fullUser,
             email: fullUser.email || response.user.email,
+            tenantName: fullUser.tenantName ?? response.user.tenantName ?? null,
           },
         });
       } catch {
@@ -159,6 +171,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   fetchUser: async () => {
     try {
       const user = await loginApi.getMe();
+      if (user.tenantName) saveTenantName(user.tenantName);
       set({ user, isAuthenticated: true });
     } catch {
       set({ user: null, isAuthenticated: false });

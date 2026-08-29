@@ -1,11 +1,13 @@
 import { MapPin } from 'lucide-react';
 import { Map as MaplibreMap, Marker as MaplibreMarker, Popup as MaplibrePopup } from 'maplibre-gl';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useMapVehicles } from '@/api/fleet.api';
 import { Skeleton } from '@/components/tailwind-ui';
+import { NO_OVERLAY_LAYERS, useFollowBasemap } from '@/hooks/useBasemap';
+import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { PRESENCE_COLORS, paintVehicleMarker, vehicleColor } from '@/lib/map-markers';
 import type { VehiclePresence } from '@/types/fleet.types';
 
@@ -29,31 +31,23 @@ const LEGEND: Array<{ presence: VehiclePresence; key: string }> = [
  * by design. Links to /map.
  */
 export function FleetMapPreviewCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const markersRef = useRef<MaplibreMarker[]>([]);
   const { data, isLoading, isError, refetch } = useMapVehicles();
   const vehicles = data ?? [];
+  useFollowBasemap(mapRef, NO_OVERLAY_LAYERS, mapReady);
 
-  // Initialize the map once.
+  // Initialize the map once. Language/basemap swaps go through useFollowBasemap.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const map = new MaplibreMap({
       container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
+      style: rasterMapStyle(loadPersistedBasemap(), i18n.language),
       center: [51.338, 35.719],
       zoom: 11,
       attributionControl: false,
@@ -61,12 +55,14 @@ export function FleetMapPreviewCard() {
       pitchWithRotate: false,
     });
     mapRef.current = map;
+    setMapReady(true);
 
     return () => {
       for (const m of markersRef.current) m.remove();
       markersRef.current = [];
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, []);
 

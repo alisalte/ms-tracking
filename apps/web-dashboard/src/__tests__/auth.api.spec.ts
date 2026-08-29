@@ -60,7 +60,7 @@ describe('auth.api (snake_case → camelCase boundary mapping)', () => {
       refreshToken: 'refresh-1',
       tokenType: 'Bearer',
       expiresIn: 900,
-      user: { id: 'u1', email: 'a@b.io', tenantId: 't1', roles: ['admin'] },
+      user: { id: 'u1', email: 'a@b.io', tenantId: 't1', tenantName: null, roles: ['admin'] },
     });
   });
 
@@ -89,6 +89,7 @@ describe('auth.api (snake_case → camelCase boundary mapping)', () => {
       id: 'u1',
       email: 'a@b.io',
       tenantId: 't1',
+      tenantName: null,
       roles: ['admin'],
       permissions: ['iam.user.read'],
     });

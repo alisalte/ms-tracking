@@ -117,6 +117,9 @@ vi.mock('maplibre-gl', () => {
     loaded() {
       return true;
     }
+    isStyleLoaded() {
+      return true;
+    }
     getZoom() {
       return 18;
     }
@@ -148,6 +151,9 @@ vi.mock('maplibre-gl', () => {
     }
     addTo() {
       return this;
+    }
+    getElement() {
+      return document.createElement('div');
     }
     remove() {}
   };

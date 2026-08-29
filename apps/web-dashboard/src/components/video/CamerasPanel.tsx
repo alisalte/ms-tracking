@@ -24,6 +24,7 @@ import {
   Table,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { displayLabel } from '@/lib/ids';
 import type { CameraChannel } from '@/types/video.types';
 
 interface CamerasPanelProps {
@@ -111,6 +112,7 @@ export function CamerasPanel({ channels, loading, onAddToWall }: CamerasPanelPro
             <TBody>
               {filtered.map((c) => {
                 const available = c.online && c.consentGiven;
+                const channelId = displayLabel(c.id);
                 return (
                   <tr key={c.id}>
                     <TD>
@@ -127,9 +129,13 @@ export function CamerasPanel({ channels, loading, onAddToWall }: CamerasPanelPro
                       </span>
                     </TD>
                     <TD>
-                      <code className="font-mono text-xs text-gray-500 dark:text-graydark-600">
-                        {c.id}
-                      </code>
+                      {channelId ? (
+                        <code className="font-mono text-xs text-gray-500 dark:text-graydark-600">
+                          {channelId}
+                        </code>
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-graydark-600">—</span>
+                      )}
                     </TD>
                     <TD>{c.sourceLabel}</TD>
                     <TD>

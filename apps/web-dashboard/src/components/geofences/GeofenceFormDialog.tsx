@@ -228,6 +228,7 @@ export function GeofenceFormDialog({
           onDrawn={setDrawn}
           onRadiusChange={(m) => setRadius(String(m))}
           initial={initial}
+          excludeId={geofence?.id}
           height={480}
           key={geofence?.id ?? 'new'}
         />

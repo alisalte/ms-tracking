@@ -4,7 +4,9 @@ import {
   clearTokens,
   getStoredTokens,
   getTenantId,
+  getTenantName,
   saveTenantId,
+  saveTenantName,
   saveTokens,
 } from '@/auth/token.storage';
 
@@ -43,8 +45,10 @@ describe('Token storage', () => {
   it('clears all tokens', () => {
     saveTokens({ accessToken: 'a', refreshToken: 'r', tenantId: 't' });
     saveTenantId('t');
+    saveTenantName('FleetVision');
     clearTokens();
     expect(getStoredTokens()).toBeNull();
     expect(getTenantId()).toBeNull();
+    expect(getTenantName()).toBeNull();
   });
 });

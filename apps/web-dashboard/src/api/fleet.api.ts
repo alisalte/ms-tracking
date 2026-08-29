@@ -21,7 +21,8 @@
  */
 import { useQuery } from '@tanstack/react-query';
 
-import { inferVehicleType } from '@/lib/map-markers';
+import { displayLabel } from '@/lib/ids';
+import { getVehicleIcon } from '@/lib/map-markers';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
@@ -76,7 +77,7 @@ function toMapVehicle(
     heading: pos?.headingDeg ?? 0,
     speed: pos?.speedKph ?? 0,
     // Body type for map silhouettes — inferred from registry name/plate until API exposes it.
-    type: inferVehicleType(`${vehicle.name} ${label} ${vehicle.plate ?? ''}`),
+    type: getVehicleIcon({ name: vehicle.name, label, plate: vehicle.plate }),
     ignitionOn: pos?.ignitionOn ?? undefined,
     updatedAt: pos?.capturedAt,
     deviceId,
@@ -352,7 +353,7 @@ function fetchTrips(): Promise<Trip[]> {
         return {
           id: w.id,
           vehicleId: w.vehicleId,
-          vehicleLabel: labelOf.get(w.vehicleId) ?? w.vehicleId.slice(0, 8),
+          vehicleLabel: labelOf.get(w.vehicleId) || displayLabel(w.vehicleId) || '',
           status: toTripStatus(w.status),
           originLabel: `${w.startLat.toFixed(4)}, ${w.startLng.toFixed(4)}`,
           destinationLabel:
@@ -395,7 +396,9 @@ function fetchTripDetail(id: string): Promise<TripDetail | null> {
       return {
         id: w.id,
         vehicleId: w.vehicleId,
-        vehicleLabel: vehicle ? formatVehicleLabel(vehicle) : w.vehicleId.slice(0, 8),
+        vehicleLabel: vehicle
+          ? formatVehicleLabel(vehicle) || displayLabel(w.vehicleId) || ''
+          : displayLabel(w.vehicleId) || '',
         status: toTripStatus(w.status),
         originLabel: `${w.startLat.toFixed(4)}, ${w.startLng.toFixed(4)}`,
         destinationLabel:

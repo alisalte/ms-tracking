@@ -32,7 +32,12 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
+import { useFollowBasemap } from '@/hooks/useBasemap';
+import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
+import { circleToPolygonRing, geofenceRing, ringCentroid } from '@/lib/geofence-geo';
 import { runWhenStyleReady } from '@/lib/map-ready';
+import { mapAccents, status } from '@/theme/palette';
 import type { Geofence } from '@/types/geofence.types';
 
 export type DrawMode = 'polygon' | 'circle' | null;
@@ -66,6 +71,8 @@ interface GeofenceDrawMapProps {
   onRadiusChange?: (meters: number) => void;
   /** Edit-mode seed geometry (Sprint I §15). */
   initial?: InitialGeometry | null;
+  /** Fence being edited — omitted from the "existing" overlay so it is not drawn twice. */
+  excludeId?: string;
   height?: number;
 }
 
@@ -81,25 +88,32 @@ export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: 
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-/** Circle → polygon ring approximation (48 vertices, closed). */
-export function circleToPolygonRing(
-  centerLat: number,
-  centerLng: number,
-  radiusM: number,
-  vertices = 48,
-): number[][] {
-  const ring: number[][] = [];
-  const latRad = (centerLat * Math.PI) / 180;
-  const metersPerDegLat = 111_320;
-  const metersPerDegLng = Math.max(111_320 * Math.cos(latRad), 1e-6);
-  const r = Math.max(0, radiusM);
-  for (let i = 0; i <= vertices; i++) {
-    const theta = (2 * Math.PI * i) / vertices;
-    const dLat = (r * Math.sin(theta)) / metersPerDegLat;
-    const dLng = (r * Math.cos(theta)) / metersPerDegLng;
-    ring.push([centerLng + dLng, centerLat + dLat]);
+export { circleToPolygonRing } from '@/lib/geofence-geo';
+
+const EMPTY_DRAW: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+/** Radius in meters from the form field. Empty / 0 / NaN → do not draw. */
+export function parseCircleRadiusM(value: number): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+/** Wait until a named source exists (style-ready is not enough — we add sources on `load`). */
+function whenSourceExists(map: MaplibreMap, sourceId: string, fn: () => void): void {
+  if (map.getSource(sourceId)) {
+    fn();
+    return;
   }
-  return ring;
+  let done = false;
+  const run = () => {
+    if (done || !map.getSource(sourceId)) return;
+    done = true;
+    map.off('load', run);
+    map.off('idle', run);
+    fn();
+  };
+  map.on('load', run);
+  map.on('idle', run);
 }
 
 /** Eastern-edge handle used to drag-resize a circle. MapLibre wants [lng, lat]. */
@@ -110,7 +124,37 @@ export function radiusHandleLngLat(
 ): [number, number] {
   const latRad = (centerLat * Math.PI) / 180;
   const metersPerDegLng = Math.max(111_320 * Math.cos(latRad), 1e-6);
-  return [centerLng + Math.max(10, radiusM) / metersPerDegLng, centerLat];
+  return [centerLng + Math.max(radiusM, 1) / metersPerDegLng, centerLat];
+}
+
+/** Geographic circle for MapLibre (no L.Circle) — a closed polygon ring in meters. */
+export function circleDrawCollection(
+  lat: number,
+  lng: number,
+  radiusM: number,
+): GeoJSON.FeatureCollection {
+  const handle = radiusHandleLngLat(lat, lng, radiusM);
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { overlay: 'selection' },
+        geometry: { type: 'Polygon', coordinates: [circleToPolygonRing(lat, lng, radiusM)] },
+      },
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [lng, lat],
+            [handle[0], handle[1]],
+          ],
+        },
+      },
+    ],
+  };
 }
 
 function circleBounds(
@@ -118,7 +162,7 @@ function circleBounds(
   lng: number,
   radiusM: number,
 ): [[number, number], [number, number]] {
-  const ring = circleToPolygonRing(lat, lng, Math.max(10, radiusM));
+  const ring = circleToPolygonRing(lat, lng, Math.max(radiusM, 1));
   const lngs = ring.map((p) => p[0] ?? lng);
   const lats = ring.map((p) => p[1] ?? lat);
   return [
@@ -133,7 +177,7 @@ function fitCircle(map: MaplibreMap, lat: number, lng: number, radiusM: number):
     map.resize();
     const w = map.getContainer().clientWidth;
     const h = map.getContainer().clientHeight;
-    if ((w < 32 || h < 32) && attempt < 24) {
+    if ((w < 32 || h < 32) && attempt < 60) {
       requestAnimationFrame(() => apply(attempt + 1));
       return;
     }
@@ -287,6 +331,8 @@ export function polygonAreaM2(ring: number[][]): number {
   return Math.abs(sum / 2);
 }
 
+const DRAW_BASEMAP_BEFORE = ['geofence-existing-fill'] as const;
+
 export function GeofenceDrawMap({
   geofences,
   mode,
@@ -294,11 +340,13 @@ export function GeofenceDrawMap({
   onDrawn,
   onRadiusChange,
   initial,
+  excludeId,
   height = 480,
 }: GeofenceDrawMapProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [polygonVertices, setPolygonVertices] = useState<number[][]>(
     initial?.type !== 'CIRCLE' && initial?.ring && initial.ring.length >= 3
       ? initial.ring.slice(0, -1) // drop the closure; it is re-appended on emit
@@ -318,10 +366,57 @@ export function GeofenceDrawMap({
   const modeRef = useRef(mode);
   const radiusRef = useRef(circleRadiusM);
   const centerRef = useRef(circleCenter);
+  const polygonRef = useRef(polygonVertices);
   const drawingRef = useRef(false); // a click was just consumed by drawing
   modeRef.current = mode;
   radiusRef.current = circleRadiusM;
   centerRef.current = circleCenter;
+  polygonRef.current = polygonVertices;
+
+  const { basemap, setBasemap } = useFollowBasemap(mapRef, DRAW_BASEMAP_BEFORE, mapReady);
+
+  const applyDrawRef = useRef<(map: MaplibreMap) => void>(() => {});
+  applyDrawRef.current = (map) => {
+    const src = map.getSource('geofence-draw') as GeoJSONSource | undefined;
+    if (!src) return;
+    const currentMode = modeRef.current;
+    const vertices = polygonRef.current;
+    const center = centerRef.current;
+    const radiusM = parseCircleRadiusM(radiusRef.current);
+    if (currentMode === 'polygon' && vertices.length > 0) {
+      const invalid = ringSelfIntersects(vertices);
+      if (vertices.length >= 3) {
+        const first = vertices[0] as number[];
+        src.setData({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'Polygon', coordinates: [[...vertices, first]] },
+              properties: { invalid },
+            },
+          ],
+        });
+      } else {
+        src.setData({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: vertices },
+              properties: { invalid: false },
+            },
+          ],
+        });
+      }
+      return;
+    }
+    if (currentMode === 'circle' && center && radiusM != null) {
+      src.setData(circleDrawCollection(center[0], center[1], radiusM));
+      return;
+    }
+    src.setData(EMPTY_DRAW);
+  };
 
   // Seed the radius when editing an existing circle (form ↔ map sync, once).
   const seededRadius = useRef(false);
@@ -352,8 +447,8 @@ export function GeofenceDrawMap({
     }
     if (mode === 'circle' && circleCenter) {
       const [lat, lng] = circleCenter;
-      const radiusM = Math.max(10, circleRadiusM);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      const radiusM = parseCircleRadiusM(circleRadiusM);
+      if (radiusM == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
         onDrawn(null);
         return;
       }
@@ -376,18 +471,7 @@ export function GeofenceDrawMap({
     if (!containerRef.current || mapRef.current) return;
     const map = new MaplibreMap({
       container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
+      style: rasterMapStyle(loadPersistedBasemap(), i18n.language),
       center:
         initial?.type === 'CIRCLE' &&
         initial.centerLng !== undefined &&
@@ -400,6 +484,7 @@ export function GeofenceDrawMap({
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    setMapReady(true);
 
     const container = containerRef.current;
     let lastW = 0;
@@ -412,36 +497,15 @@ export function GeofenceDrawMap({
       lastH = cr.height;
       map.resize();
       const center = centerRef.current;
-      if (center && modeRef.current === 'circle' && !draggingRadiusRef.current) {
-        fitCircle(map, center[0], center[1], Math.max(10, radiusRef.current));
+      const radiusM = parseCircleRadiusM(radiusRef.current);
+      if (center && modeRef.current === 'circle' && !draggingRadiusRef.current && radiusM != null) {
+        fitCircle(map, center[0], center[1], radiusM);
       }
     });
     ro.observe(container);
 
     map.on('load', () => {
       map.resize();
-      map.addSource('geofence-draw', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'geofence-draw-fill',
-        type: 'fill',
-        source: 'geofence-draw',
-        paint: {
-          'fill-color': ['case', ['boolean', ['get', 'invalid'], false], '#dc2626', '#2563eb'],
-          'fill-opacity': 0.38,
-        },
-      });
-      map.addLayer({
-        id: 'geofence-draw-line',
-        type: 'line',
-        source: 'geofence-draw',
-        paint: {
-          'line-color': ['case', ['boolean', ['get', 'invalid'], false], '#dc2626', '#2563eb'],
-          'line-width': 3,
-        },
-      });
       map.addSource('geofence-existing', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -450,14 +514,81 @@ export function GeofenceDrawMap({
         id: 'geofence-existing-fill',
         type: 'fill',
         source: 'geofence-existing',
-        paint: { 'fill-color': '#16a34a', 'fill-opacity': 0.14 },
+        paint: { 'fill-color': '#64748B', 'fill-opacity': 0.12 },
+      });
+      map.addLayer({
+        id: 'geofence-existing-line-casing',
+        type: 'line',
+        source: 'geofence-existing',
+        paint: { 'line-color': '#FFFFFF', 'line-width': 4, 'line-opacity': 0.8 },
       });
       map.addLayer({
         id: 'geofence-existing-line',
         type: 'line',
         source: 'geofence-existing',
-        paint: { 'line-color': '#16a34a', 'line-width': 1.5 },
+        paint: {
+          'line-color': '#475569',
+          'line-width': 1.75,
+          'line-dasharray': [2, 2],
+        },
       });
+      map.addSource('geofence-draw', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'geofence-draw-fill',
+        type: 'fill',
+        source: 'geofence-draw',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: {
+          'fill-color': [
+            'case',
+            ['boolean', ['get', 'invalid'], false],
+            status.danger,
+            mapAccents.geofence,
+          ],
+          'fill-opacity': ['case', ['boolean', ['get', 'invalid'], false], 0.28, 0.36],
+        },
+      });
+      map.addLayer({
+        id: 'geofence-draw-halo',
+        type: 'line',
+        source: 'geofence-draw',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: {
+          'line-color': [
+            'case',
+            ['boolean', ['get', 'invalid'], false],
+            status.danger,
+            mapAccents.geofence,
+          ],
+          'line-width': 16,
+          'line-opacity': 0.28,
+          'line-blur': 8,
+        },
+      });
+      map.addLayer({
+        id: 'geofence-draw-line-casing',
+        type: 'line',
+        source: 'geofence-draw',
+        paint: { 'line-color': '#FFFFFF', 'line-width': 7, 'line-opacity': 0.95 },
+      });
+      map.addLayer({
+        id: 'geofence-draw-line',
+        type: 'line',
+        source: 'geofence-draw',
+        paint: {
+          'line-color': [
+            'case',
+            ['boolean', ['get', 'invalid'], false],
+            status.danger,
+            mapAccents.geofence,
+          ],
+          'line-width': 3,
+        },
+      });
+      applyDrawRef.current(map);
       if (initial?.ring && initial.ring.length >= 3) {
         const lngs = initial.ring.map((r) => r[0] ?? 0);
         const lats = initial.ring.map((r) => r[1] ?? 0);
@@ -508,7 +639,9 @@ export function GeofenceDrawMap({
       } else if (modeRef.current === 'circle') {
         setCircleCenter([lat, lng]);
         centerRef.current = [lat, lng];
-        fitCircle(map, lat, lng, Math.max(10, radiusRef.current));
+        applyDrawRef.current(map);
+        const radiusM = parseCircleRadiusM(radiusRef.current);
+        if (radiusM != null) fitCircle(map, lat, lng, radiusM);
       }
     });
 
@@ -517,6 +650,7 @@ export function GeofenceDrawMap({
       ro.disconnect();
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -551,13 +685,8 @@ export function GeofenceDrawMap({
       if (mode !== 'polygon') return;
       polygonVertices.forEach((v, i) => {
         const el = document.createElement('div');
-        el.className = 'fv-draw-vertex';
-        el.style.width = '12px';
-        el.style.height = '12px';
-        el.style.borderRadius = '50%';
-        el.style.background = '#2563eb';
-        el.style.border = '2px solid #fff';
-        el.style.cursor = 'grab';
+        el.className =
+          i === polygonVertices.length - 1 ? 'fv-draw-vertex is-last' : 'fv-draw-vertex';
         el.title = t('geofences.draw.vertexHint', {
           defaultValue: `Vertex ${i + 1} — drag to move, right-click to remove`,
         });
@@ -591,6 +720,7 @@ export function GeofenceDrawMap({
   // ── Circle center + radius-edge handle (draggable) ──
   const centerMarkerRef = useRef<Marker | null>(null);
   const radiusHandleRef = useRef<Marker | null>(null);
+  const hasRadius = parseCircleRadiusM(circleRadiusM) != null;
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -604,16 +734,9 @@ export function GeofenceDrawMap({
       radiusHandleRef.current?.remove();
       radiusHandleRef.current = null;
       if (mode !== 'circle' || !circleCenter) return;
-      const radiusM = Math.max(10, radiusRef.current);
 
       const centerEl = document.createElement('div');
-      centerEl.style.width = '12px';
-      centerEl.style.height = '12px';
-      centerEl.style.borderRadius = '50%';
-      centerEl.style.background = '#dc2626';
-      centerEl.style.border = '2px solid #fff';
-      centerEl.style.cursor = 'grab';
-      centerEl.style.boxShadow = '0 0 0 1px rgb(0 0 0 / 0.25)';
+      centerEl.className = 'fv-draw-vertex fv-draw-center';
       centerEl.title = t('geofences.draw.centerHint', {
         defaultValue: 'Circle center — drag to move',
       });
@@ -628,14 +751,12 @@ export function GeofenceDrawMap({
       });
       centerMarkerRef.current = centerMarker;
 
+      if (!hasRadius) return;
+      const radiusM = parseCircleRadiusM(radiusRef.current);
+      if (radiusM == null) return;
+
       const handleEl = document.createElement('div');
-      handleEl.style.width = '16px';
-      handleEl.style.height = '16px';
-      handleEl.style.borderRadius = '50%';
-      handleEl.style.background = '#2563eb';
-      handleEl.style.border = '2px solid #fff';
-      handleEl.style.cursor = 'ew-resize';
-      handleEl.style.boxShadow = '0 0 0 1px rgb(0 0 0 / 0.25)';
+      handleEl.className = 'fv-draw-vertex fv-draw-radius';
       handleEl.title = t('geofences.draw.radiusHandleHint', {
         defaultValue: 'Drag to change the radius',
       });
@@ -668,23 +789,26 @@ export function GeofenceDrawMap({
       radiusHandleRef.current?.remove();
       radiusHandleRef.current = null;
     };
-    // Recreate markers when the center moves; radius updates move the handle below.
-  }, [mode, circleCenter, t, setDragging]);
+    // Recreate markers when the center moves or a valid radius appears.
+  }, [mode, circleCenter, t, setDragging, hasRadius]);
 
   // Keep the edge handle on the current radius without tearing down the marker.
   useEffect(() => {
     if (draggingRadius || !circleCenter) return;
+    const radiusM = parseCircleRadiusM(circleRadiusM);
+    if (radiusM == null) return;
     radiusHandleRef.current?.setLngLat(
-      radiusHandleLngLat(circleCenter[0], circleCenter[1], Math.max(10, circleRadiusM)),
+      radiusHandleLngLat(circleCenter[0], circleCenter[1], radiusM),
     );
   }, [circleCenter, circleRadiusM, draggingRadius]);
 
   // Zoom so the ring is visible (zoom 10 makes a 500 m circle ~4 px — a “dot”).
   useEffect(() => {
     if (mode !== 'circle' || !circleCenter || draggingRadius) return;
+    const radiusM = parseCircleRadiusM(circleRadiusM);
+    if (radiusM == null) return;
     const map = mapRef.current;
     if (!map) return;
-    const radiusM = Math.max(10, circleRadiusM);
     const [lat, lng] = circleCenter;
     const timer = window.setTimeout(() => {
       fitCircle(map, lat, lng, radiusM);
@@ -692,72 +816,24 @@ export function GeofenceDrawMap({
     return () => window.clearTimeout(timer);
   }, [mode, circleCenter, circleRadiusM, draggingRadius]);
 
-  // Redraw the preview (vertices/radius live). Gate on the source existing —
-  // `isStyleLoaded()` stays false while tiles stream after fitBounds, which
-  // used to skip setData and leave an empty source (markers only, no ring).
+  // Redraw after center/radius/vertices change. Wait for the draw SOURCE, not
+  // merely a loaded style — runWhenStyleReady can fire before we addSource.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps retrigger applyDrawRef (refs are not valid deps)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const redraw = () => {
-      const src = map.getSource('geofence-draw') as GeoJSONSource | undefined;
-      if (!src) {
-        runWhenStyleReady(map, () => {
-          if (map.getSource('geofence-draw')) redraw();
-        });
-        return;
-      }
-      if (mode === 'polygon' && polygonVertices.length > 0) {
-        const invalid = ringSelfIntersects(polygonVertices);
-        if (polygonVertices.length >= 3) {
-          const first = polygonVertices[0] as number[];
-          src.setData({
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: {
-                  type: 'Polygon',
-                  coordinates: [[...polygonVertices, first]],
-                },
-                properties: { invalid },
-              },
-            ],
-          });
-        } else {
-          src.setData({
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: polygonVertices },
-                properties: { invalid: false },
-              },
-            ],
-          });
-        }
-      } else if (mode === 'circle' && circleCenter) {
-        const radiusM = Math.max(10, circleRadiusM);
-        src.setData({
-          type: 'FeatureCollection',
-          features: [
-            {
-              type: 'Feature',
-              geometry: {
-                type: 'Polygon',
-                coordinates: [circleToPolygonRing(circleCenter[0], circleCenter[1], radiusM)],
-              },
-              properties: {},
-            },
-          ],
-        });
-      } else {
-        src.setData({ type: 'FeatureCollection', features: [] });
-      }
+    let cancelled = false;
+    whenSourceExists(map, 'geofence-draw', () => {
+      if (cancelled || mapRef.current !== map) return;
+      applyDrawRef.current(map);
+    });
+    return () => {
+      cancelled = true;
     };
-    redraw();
   }, [mode, polygonVertices, circleCenter, circleRadiusM]);
 
-  // Render existing geofences as static outlines.
+  // Render existing geofences as static outlines (not the one being edited).
+  const existingLabelsRef = useRef<Marker[]>([]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -769,29 +845,33 @@ export function GeofenceDrawMap({
         });
         return;
       }
+      for (const m of existingLabelsRef.current) m.remove();
+      existingLabelsRef.current = [];
       const features: GeoJSON.Feature[] = [];
       for (const g of geofences) {
-        if (g.boundaryGeoJson) {
-          features.push({
-            type: 'Feature',
-            geometry: g.boundaryGeoJson as GeoJSON.Polygon,
-            properties: { name: g.name },
-          });
-        } else if (g.centerLat !== null && g.centerLng !== null && g.radiusM) {
-          features.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [circleToPolygonRing(g.centerLat, g.centerLng, g.radiusM)],
-            },
-            properties: { name: g.name },
-          });
-        }
+        if (excludeId && g.id === excludeId) continue;
+        const ring = geofenceRing(g);
+        if (!ring) continue;
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [ring] },
+          properties: { name: g.name },
+        });
+        const el = document.createElement('div');
+        el.className = 'fv-geofence-label is-existing';
+        el.textContent = g.name;
+        existingLabelsRef.current.push(
+          new Marker({ element: el, anchor: 'center' }).setLngLat(ringCentroid(ring)).addTo(map),
+        );
       }
       src.setData({ type: 'FeatureCollection', features });
     };
     render();
-  }, [geofences]);
+    return () => {
+      for (const m of existingLabelsRef.current) m.remove();
+      existingLabelsRef.current = [];
+    };
+  }, [geofences, excludeId]);
 
   const areaM2 = useMemo(
     () =>
@@ -803,15 +883,18 @@ export function GeofenceDrawMap({
 
   const polygonInvalid = mode === 'polygon' && ringSelfIntersects(polygonVertices);
 
+  const circleRadius = parseCircleRadiusM(circleRadiusM);
+  const radiusInvalid = mode === 'circle' && circleCenter !== null && circleRadius == null;
+
   const statusText =
     mode === 'polygon'
       ? polygonInvalid
         ? t('geofences.draw.selfIntersecting', {
-            defaultValue: 'Edges cross — drag a vertex so the blue fill does not fold over itself.',
+            defaultValue: 'Edges cross — drag a vertex so the fill does not fold over itself.',
           })
         : polygonVertices.length === 0
           ? t('geofences.draw.polygonHint', {
-              defaultValue: 'Click the map to add vertices. The blue fill is the selected area.',
+              defaultValue: 'Click the map to add vertices. The fill is the selected area.',
             })
           : t('geofences.draw.polygonStatus', {
               count: polygonVertices.length,
@@ -822,20 +905,24 @@ export function GeofenceDrawMap({
               defaultValue: `${polygonVertices.length} vertices · ${areaM2 >= 10_000 ? `${(areaM2 / 10_000).toFixed(1)} ha` : `${Math.round(areaM2)} m²`}`,
             })
       : mode === 'circle'
-        ? circleCenter
-          ? draggingRadius
-            ? t('geofences.draw.circleDragging', {
-                defaultValue: 'Drag outward to set the radius — release to finish',
-              })
-            : t('geofences.draw.circleStatus', {
-                lat: circleCenter[0].toFixed(5),
-                lng: circleCenter[1].toFixed(5),
-                radius: Math.round(Math.max(10, circleRadiusM)),
-                defaultValue: `Center ${circleCenter[0].toFixed(5)}, ${circleCenter[1].toFixed(5)} · radius ${Math.round(Math.max(10, circleRadiusM))} m`,
-              })
-          : t('geofences.draw.circleCenterHint', {
+        ? !circleCenter
+          ? t('geofences.draw.circleCenterHint', {
               defaultValue: 'Click the map to place the center. The circle uses the radius field.',
             })
+          : circleRadius == null
+            ? t('geofences.draw.invalidRadius', {
+                defaultValue: 'Enter a radius greater than 0 m to draw the circle.',
+              })
+            : draggingRadius
+              ? t('geofences.draw.circleDragging', {
+                  defaultValue: 'Drag outward to set the radius — release to finish',
+                })
+              : t('geofences.draw.circleStatus', {
+                  lat: circleCenter[0].toFixed(5),
+                  lng: circleCenter[1].toFixed(5),
+                  radius: Math.round(circleRadius),
+                  defaultValue: `Center ${circleCenter[0].toFixed(5)}, ${circleCenter[1].toFixed(5)} · radius ${Math.round(circleRadius)} m`,
+                })
         : t('geofences.draw.selectType', { defaultValue: 'Select a geometry type to draw' });
 
   // TailAdmin map-overlay button (token-owned classes — Phase 2.6 §10).
@@ -848,7 +935,7 @@ export function GeofenceDrawMap({
       <p
         aria-live="polite"
         className={`my-1 mx-0.5 text-xs ${
-          polygonInvalid
+          polygonInvalid || radiusInvalid
             ? 'text-danger-600 dark:text-danger-400'
             : 'text-gray-600 dark:text-graydark-600'
         }`}
@@ -863,7 +950,36 @@ export function GeofenceDrawMap({
           role="application"
           aria-label={t('geofences.draw.mapLabel', { defaultValue: 'Geofence drawing map' })}
         />
-        <div className="absolute top-2 start-2 flex gap-1.5">
+        <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
+        <div className="pointer-events-none absolute bottom-2 start-2 z-1 flex flex-col gap-1">
+          {(mode === 'circle' && circleCenter && circleRadius != null) ||
+          (mode === 'polygon' && polygonVertices.length >= 3) ? (
+            <div className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white shadow-md ring-2 ring-white/80">
+              {mode === 'circle'
+                ? t('geofences.draw.selectedCircle', {
+                    radius: Math.round(circleRadius ?? 0),
+                    defaultValue: `Selected area · ${Math.round(circleRadius ?? 0)} m radius`,
+                  })
+                : t('geofences.draw.selectedPolygon', {
+                    defaultValue: 'Selected area (blue fill)',
+                  })}
+            </div>
+          ) : null}
+          <div className="rounded-md border border-gray-200 bg-white/95 px-2.5 py-1.5 text-[11px] text-gray-700 shadow-sm dark:border-white/10 dark:bg-graydark-200/95 dark:text-graydark-800">
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-3.5 rounded-sm ring-2 ring-white"
+                style={{ backgroundColor: mapAccents.geofence }}
+              />
+              {t('geofences.draw.legendActive', { defaultValue: 'Area being drawn' })}
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-3.5 rounded-sm bg-gray-400/80 ring-1 ring-white" />
+              {t('geofences.draw.legendExisting', { defaultValue: 'Other geofences' })}
+            </div>
+          </div>
+        </div>
+        <div className="absolute top-2 start-2 z-1 flex gap-1.5">
           {mode === 'polygon' && polygonVertices.length > 0 && (
             <>
               <button

@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_USE_MOCK: string;
   /** gps-engine Socket.IO URL (connects directly — not via the /api proxy). */
   readonly VITE_GPS_WS_URL?: string;
+  /** notification-service Socket.IO URL (alarms + notification bell). */
+  readonly VITE_NOTIFICATION_WS_URL?: string;
 }
 
 interface ImportMeta {

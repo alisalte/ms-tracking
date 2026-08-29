@@ -35,6 +35,7 @@ function mapLoginResponse(wire: LoginResponseWire): LoginResponse {
       id: wire.user.id,
       email: wire.user.email,
       tenantId: wire.user.tenant_id,
+      tenantName: wire.user.tenant_name ?? null,
       roles: wire.user.roles,
     },
   };
@@ -55,6 +56,7 @@ function mapMeResponse(wire: MeResponseWire): User {
     id: wire.id,
     email: wire.email,
     tenantId: wire.tenant_id,
+    tenantName: wire.tenant_name ?? null,
     roles: wire.roles,
     permissions: wire.permissions,
   };

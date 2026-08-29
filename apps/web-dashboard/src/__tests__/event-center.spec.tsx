@@ -73,10 +73,6 @@ vi.mock('@/api/notification.api', () => ({
   useNotificationsPage: (params: unknown) => notifApi.useNotificationsPage(params),
 }));
 
-vi.mock('@/hooks/useNotificationRealtime', () => ({
-  useNotificationRealtime: () => ({ state: 'connected' }),
-}));
-
 // Server-side-filtered mock: honors the eventType/severity params the page
 // pushes into the URL (mirrors the real notification-service behavior).
 function setEvents(
