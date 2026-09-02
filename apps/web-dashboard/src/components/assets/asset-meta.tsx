@@ -11,7 +11,13 @@
 import { Truck } from 'lucide-react';
 
 import type { BadgeProps } from '@/components/tailwind-ui';
-import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
+import type {
+  DeviceProtocol,
+  DeviceStatus,
+  DriverStatus,
+  FleetStatus,
+  VehicleStatus,
+} from '@/types/asset.types';
 
 /** Fleet lifecycle status → semantic color (ACTIVE green / ARCHIVED slate). */
 export function fleetStatusColor(s: FleetStatus): BadgeProps['color'] {
@@ -21,6 +27,22 @@ export function fleetStatusColor(s: FleetStatus): BadgeProps['color'] {
 /** Vehicle lifecycle status → semantic color (ACTIVE green / ARCHIVED slate). */
 export function vehicleStatusColor(s: VehicleStatus): BadgeProps['color'] {
   return s === 'ACTIVE' ? 'success' : 'gray';
+}
+
+/** Driver lifecycle status → semantic color. */
+export function driverStatusColor(s: DriverStatus): BadgeProps['color'] {
+  switch (s) {
+    case 'ACTIVE':
+      return 'success';
+    case 'SUSPENDED':
+      return 'warning';
+    case 'INACTIVE':
+      return 'gray';
+    case 'TERMINATED':
+      return 'danger';
+    default:
+      return 'gray';
+  }
 }
 
 /** Device REGISTRY lifecycle status → semantic color. */

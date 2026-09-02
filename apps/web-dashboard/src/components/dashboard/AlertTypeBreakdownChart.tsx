@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveAlarms } from '@/api/fleet.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 import type { AlertType } from '@/types/fleet.types';
 
 import { ApexChart } from './ApexChart';
@@ -12,12 +12,12 @@ import { DashboardCard } from './DashboardCard';
 
 /** Alert type → semantic color (§0.2). */
 const TYPE_COLOR: Record<AlertType, string> = {
-  overspeed: status.red,
-  fcw: status.purple,
-  idle: status.amber,
-  geofence: status.indigo,
-  dtc: status.teal,
-  lowBattery: status.slate,
+  overspeed: chart.speeding,
+  fcw: chart.fcw,
+  idle: chart.idle,
+  geofence: chart.geofence,
+  dtc: chart.dtc,
+  lowBattery: chart.lowBattery,
 };
 
 /** Display order for the rose/donut — most-severe first. */
@@ -49,8 +49,7 @@ export function AlertTypeBreakdownChart() {
       labels,
       colors,
       legend: { position: 'right', offsetY: 12 },
-      stroke: { width: 1, colors: ['transparent'] },
-      fill: { opacity: 0.9 },
+      fill: { opacity: 0.82 },
       plotOptions: {
         polarArea: {
           rings: { strokeWidth: 0 },

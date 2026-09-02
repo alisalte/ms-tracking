@@ -2,26 +2,25 @@ import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 
-import { NAV_GROUPS } from '@/components/shell/nav.config';
+import { NAV_GROUPS, isNavItemActive } from '@/components/shell/nav.config';
 
 /**
  * Breadcrumb — header trail derived from the nav model (Tailwind).
  *
- * Maps the current pathname onto the permission-independent nav config
- * (longest prefix wins) and renders `Group / Item`. Deep links that don't match
- * a nav entry (e.g. `/account/profile`) render nothing — those pages carry
- * their own headers. The chevron mirrors in RTL via `rtl:rotate-180`.
+ * Maps the current location onto the permission-independent nav config
+ * (query-aware so `/assets?tab=drivers` resolves to Drivers) and renders
+ * `Group / Item`. Deep links that don't match a nav entry (e.g.
+ * `/account/profile`) render nothing — those pages carry their own headers.
+ * The chevron mirrors in RTL via `rtl:rotate-180`.
  */
 export function Breadcrumb() {
   const { t } = useTranslation();
-  const { pathname } = useLocation();
+  const location = useLocation();
 
   let match: { groupKey: string | null; itemKey: string } | null = null;
   for (const group of NAV_GROUPS) {
     for (const item of group.items) {
-      const active =
-        pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
-      if (active && (!match || item.path.length > 0)) {
+      if (isNavItemActive(item.path, location)) {
         match = { groupKey: group.groupKey, itemKey: item.key };
       }
     }

@@ -265,6 +265,39 @@ services:
       retries: 12
       start_period: 30s
 
+  # fleet-service — driver registry + business trips (`/api/v1/fleet/...`).
+  fleet-service:
+    build:
+      context: ../..
+      dockerfile: apps/fleet-service/Dockerfile
+    container_name: fleetvision-fleet
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3007"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: local
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
+      REDISURL: redis://redis:6379/0
+      JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "${FLEET_SVC_PORT:-3007}:3007"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3007/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   # gps-engine-service — Real-time position processing + WebSocket.
   gps-engine-service:
     build:
@@ -301,7 +334,7 @@ services:
       GPS_KAFKA_SESSION_TOPIC: fleetvision.telemetry.session.lifecycle
       GPS_WS_PORT: "3001"
       GPS_WS_ENABLED: "true"
-      GPS_WS_CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080"
+      GPS_WS_CORS_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
       GPS_REPORT_INTERVAL_SECONDS: "60"
       GPS_STALE_AFTER_SECONDS: "300"
       GPS_FUTURE_THRESHOLD_SECONDS: "60"
@@ -366,7 +399,7 @@ services:
       # Realtime Socket.IO (browser connects to localhost:3010, same pattern as GPS :3001).
       NOTIF_WS_PORT: "3010"
       NOTIF_WS_ENABLED: "true"
-      NOTIF_WS_CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+      NOTIF_WS_CORS_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
     ports:
       - "${NOTIFICATION_PORT:-3008}:3008"
       - "${NOTIFICATION_WS_PORT:-3010}:3010"

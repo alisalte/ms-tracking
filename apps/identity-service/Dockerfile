@@ -27,6 +27,9 @@ COPY apps/identity-service/package.json ./apps/identity-service/
 COPY apps/map-engine-service/package.json ./apps/map-engine-service/
 COPY apps/media-service/package.json ./apps/media-service/
 COPY apps/notification-service/package.json ./apps/notification-service/
+COPY apps/reporting-service/package.json ./apps/reporting-service/
+COPY apps/web-dashboard/package.json ./apps/web-dashboard/
+COPY apps/mdvr-streamer-service/package.json ./apps/mdvr-streamer-service/
 COPY packages/shared-kernel/package.json ./packages/shared-kernel/
 COPY packages/config/package.json ./packages/config/
 COPY packages/observability/package.json ./packages/observability/

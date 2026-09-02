@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useFleetOverview } from '@/api/report.api';
 import { hoursFromSec } from '@/lib/hours-from-sec';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -30,17 +30,17 @@ export function DurationMixChart() {
       {
         label: t('dashboard.charts.movingHours'),
         value: hoursFromSec(o.movingDurationSec ?? 0),
-        color: status.success,
+        color: chart.moving,
       },
       {
         label: t('dashboard.charts.idleHours'),
         value: hoursFromSec(o.idleDurationSec ?? 0),
-        color: status.warning,
+        color: chart.idle,
       },
       {
         label: t('dashboard.charts.parkingHours'),
         value: hoursFromSec(o.parkingDurationSec ?? 0),
-        color: status.slate,
+        color: chart.parked,
       },
     ].filter((s) => s.value > 0);
   }, [o, t]);
@@ -55,7 +55,6 @@ export function DurationMixChart() {
       labels: slices.map((s) => s.label),
       colors: slices.map((s) => s.color),
       legend: { position: 'bottom' },
-      stroke: { width: 2, colors: ['transparent'] },
       plotOptions: {
         pie: {
           donut: {

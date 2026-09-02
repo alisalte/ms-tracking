@@ -85,6 +85,10 @@ vi.mock('@/api/asset.api', () => ({
   useFleets: () => ({ data: [] }),
   useVehicles: () => ({ data: [] }),
 }));
+vi.mock('@/api/driver.api', () => ({
+  driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
+  useDrivers: () => ({ data: [] }),
+}));
 
 vi.mock('@/hooks/useLiveTracking', () => ({
   useLiveTracking: () => ({

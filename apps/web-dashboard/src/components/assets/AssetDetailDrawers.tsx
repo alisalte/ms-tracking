@@ -17,10 +17,13 @@ import {
   Clock,
   Cpu,
   Gauge,
+  IdCard,
   Link2,
   Link2Off,
+  Phone,
   Smartphone,
   Truck,
+  UserRound,
 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,16 +36,28 @@ import {
   useVehicleDetail,
   useVehicleDevices,
 } from '@/api/asset.api';
+import {
+  driverFullName,
+  useAssignDriverVehicle,
+  useDriverDetail,
+  useUnassignDriverVehicle,
+} from '@/api/driver.api';
 import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { PermissionGate } from '@/auth/permissions';
 import {
   deviceProtocolColor,
   deviceStatusColor,
+  driverStatusColor,
   fleetStatusColor,
   formatEngineHours,
   formatOdometerKm,
   vehicleStatusColor,
 } from '@/components/assets/asset-meta';
+import {
+  devicesOnVehicle,
+  driverOnVehicle,
+  formatDeviceLabel,
+} from '@/components/assets/driver-join';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import {
@@ -60,6 +75,7 @@ import type {
   Device,
   DeviceRole,
   DeviceStatus,
+  Driver,
   Fleet,
   Vehicle,
 } from '@/types/asset.types';
@@ -72,6 +88,7 @@ interface AssetDetailDrawersProps {
   fleets: Fleet[];
   vehicles: Vehicle[];
   devices: Device[];
+  drivers: Driver[];
 }
 
 /** Dispatcher: renders the drawer matching the active tab. */
@@ -82,6 +99,7 @@ export function AssetDetailDrawers({
   fleets,
   vehicles,
   devices,
+  drivers,
 }: AssetDetailDrawersProps) {
   return (
     <>
@@ -94,10 +112,24 @@ export function AssetDetailDrawers({
           onClose={onClose}
           fleets={fleets}
           devices={devices}
+          drivers={drivers}
         />
       )}
       {tab === 'devices' && (
-        <DeviceDetailDrawer deviceId={selectedId} onClose={onClose} vehicles={vehicles} />
+        <DeviceDetailDrawer
+          deviceId={selectedId}
+          onClose={onClose}
+          vehicles={vehicles}
+          drivers={drivers}
+        />
+      )}
+      {tab === 'drivers' && (
+        <DriverDetailDrawer
+          driverId={selectedId}
+          onClose={onClose}
+          vehicles={vehicles}
+          devices={devices}
+        />
       )}
     </>
   );
@@ -278,11 +310,13 @@ function VehicleDetailDrawer({
   onClose,
   fleets,
   devices,
+  drivers,
 }: {
   vehicleId: string | null;
   onClose: () => void;
   fleets: Fleet[];
   devices: Device[];
+  drivers: Driver[];
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -301,6 +335,7 @@ function VehicleDetailDrawer({
     () => fleets.find((f) => f.id === vehicle?.fleetId)?.name ?? '—',
     [fleets, vehicle?.fleetId],
   );
+  const assignedDriver = useMemo(() => driverOnVehicle(drivers, vehicleId), [drivers, vehicleId]);
   // Assignable devices: unbound (vehicleId === null) and not decommissioned.
   const unboundDevices = useMemo(
     () => devices.filter((d) => d.vehicleId === null && d.status !== 'DECOMMISSIONED'),
@@ -376,6 +411,13 @@ function VehicleDetailDrawer({
                   icon={<Clock />}
                   label={t('assets.vehicle.engineHours')}
                   value={formatEngineHours(vehicle.engineHours)}
+                />
+                <MetaRow
+                  icon={<UserRound />}
+                  label={t('assets.vehicle.assignedDriver')}
+                  value={
+                    assignedDriver ? driverFullName(assignedDriver) : t('map.popup.unassigned')
+                  }
                 />
               </div>
 
@@ -513,10 +555,12 @@ function DeviceDetailDrawer({
   deviceId,
   onClose,
   vehicles,
+  drivers,
 }: {
   deviceId: string | null;
   onClose: () => void;
   vehicles: Vehicle[];
+  drivers: Driver[];
 }) {
   const { t } = useTranslation();
   const { data: device, isLoading } = useDeviceDetail(deviceId);
@@ -524,6 +568,10 @@ function DeviceDetailDrawer({
   const vehicle = useMemo(
     () => (device?.vehicleId ? vehicles.find((v) => v.id === device.vehicleId) : undefined),
     [vehicles, device?.vehicleId],
+  );
+  const assignedDriver = useMemo(
+    () => driverOnVehicle(drivers, device?.vehicleId ?? null),
+    [drivers, device?.vehicleId],
   );
 
   return (
@@ -582,6 +630,11 @@ function DeviceDetailDrawer({
                 label={t('assets.device.colVehicle')}
                 value={device.vehicleId ? (vehicle?.name ?? device.vehicleId) : '—'}
               />
+              <MetaRow
+                icon={<UserRound />}
+                label={t('assets.device.assignedDriver')}
+                value={assignedDriver ? driverFullName(assignedDriver) : t('map.popup.unassigned')}
+              />
             </Section>
 
             <Divider />
@@ -615,6 +668,186 @@ function DeviceDetailDrawer({
                 label={t('assets.device.updatedAt')}
                 value={isoToLocal(device.updatedAt)}
               />
+            </Section>
+          </div>
+        )}
+      </DrawerBody>
+    </DetailShell>
+  );
+}
+
+// ── Driver drawer (incl. vehicle assignment) ─────────────────────────────────
+
+function DriverDetailDrawer({
+  driverId,
+  onClose,
+  vehicles,
+  devices,
+}: {
+  driverId: string | null;
+  onClose: () => void;
+  vehicles: Vehicle[];
+  devices: Device[];
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { data: driver, isLoading } = useDriverDetail(driverId);
+  const assign = useAssignDriverVehicle();
+  const unassign = useUnassignDriverVehicle();
+  const open = Boolean(driverId);
+  const [assignVehicleId, setAssignVehicleId] = useState('');
+
+  const vehicle = useMemo(
+    () =>
+      driver?.assignedVehicleId
+        ? vehicles.find((v) => v.id === driver.assignedVehicleId)
+        : undefined,
+    [vehicles, driver?.assignedVehicleId],
+  );
+  const boundDevices = useMemo(
+    () => devicesOnVehicle(devices, driver?.assignedVehicleId ?? null),
+    [devices, driver?.assignedVehicleId],
+  );
+  const freeVehicles = useMemo(() => vehicles.filter((v) => v.status === 'ACTIVE'), [vehicles]);
+
+  const onAssign = async () => {
+    if (!driverId || !assignVehicleId) return;
+    try {
+      await assign.mutateAsync({ driverId, vehicleId: assignVehicleId });
+      toast.success(t('assets.crud.updateSuccess', { name: t('assets.tabs.drivers') }));
+      setAssignVehicleId('');
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+
+  const onUnassign = async () => {
+    if (!driverId) return;
+    try {
+      await unassign.mutateAsync(driverId);
+      toast.success(t('assets.crud.updateSuccess', { name: t('assets.tabs.drivers') }));
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+
+  return (
+    <DetailShell
+      open={open}
+      onClose={onClose}
+      title={driver ? driverFullName(driver) : ''}
+      subtitle={driver?.employeeId ?? undefined}
+      badge={
+        driver ? (
+          <Badge color={driverStatusColor(driver.status)} dot>
+            {t(`assets.driver.status.${driver.status}`)}
+          </Badge>
+        ) : null
+      }
+    >
+      <DrawerBody
+        loading={isLoading}
+        notFound={open && !isLoading && !driver}
+        notFoundKey="assets.driver.notFound"
+      >
+        {driver && (
+          <div className="flex flex-col gap-3">
+            <div>
+              <MetaRow
+                icon={<IdCard />}
+                label={t('assets.driver.licenseNumber')}
+                value={
+                  <span className="font-mono">
+                    {[driver.licenseClass, driver.licenseNumber].filter(Boolean).join(' · ')}
+                  </span>
+                }
+              />
+              <MetaRow
+                icon={<Calendar />}
+                label={t('assets.driver.licenseExpires')}
+                value={
+                  driver.licenseExpires ? new Date(driver.licenseExpires).toLocaleDateString() : '—'
+                }
+              />
+              <MetaRow
+                icon={<IdCard />}
+                label={t('assets.driver.licenseCountry')}
+                value={driver.licenseCountry ?? '—'}
+              />
+              <MetaRow
+                icon={<Phone />}
+                label={t('assets.driver.phone')}
+                value={driver.phone ?? '—'}
+              />
+              <MetaRow
+                icon={<UserRound />}
+                label={t('assets.driver.email')}
+                value={driver.email ?? '—'}
+              />
+            </div>
+
+            <Divider />
+            <Section label={t('assets.driver.assignedVehicle')}>
+              <MetaRow
+                icon={<Truck />}
+                label={t('assets.driver.colVehicle')}
+                value={vehicle?.name ?? t('map.popup.unassigned')}
+              />
+              <MetaRow
+                icon={<Smartphone />}
+                label={t('assets.driver.assignedDevice')}
+                value={
+                  boundDevices.length === 0 ? (
+                    driver.assignedVehicleId ? (
+                      t('assets.driver.noDevice')
+                    ) : (
+                      t('map.popup.unassigned')
+                    )
+                  ) : (
+                    <span className="flex flex-col gap-0.5 font-mono text-xs">
+                      {boundDevices.map((d) => (
+                        <span key={d.id}>{formatDeviceLabel(d)}</span>
+                      ))}
+                    </span>
+                  )
+                }
+              />
+              <PermissionGate requires="fleet.driver.update">
+                <div className="mt-3 flex flex-wrap items-start gap-2">
+                  <Select
+                    value={assignVehicleId}
+                    onChange={(e) => setAssignVehicleId(e.target.value)}
+                    wrapperClassName="min-w-40 flex-1"
+                    aria-label={t('assets.driver.assignedVehicle')}
+                    placeholder={t('assets.driver.pickVehicle')}
+                    options={freeVehicles.map((v) => ({
+                      value: v.id,
+                      label: v.plate ? `${v.name} · ${v.plate}` : v.name,
+                    }))}
+                  />
+                  <Button
+                    size="sm"
+                    leftIcon={<Link2 size={14} />}
+                    disabled={!assignVehicleId || assign.isPending}
+                    loading={assign.isPending}
+                    onClick={onAssign}
+                  >
+                    {t('common.assign')}
+                  </Button>
+                  {driver.assignedVehicleId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      leftIcon={<Link2Off size={14} />}
+                      disabled={unassign.isPending}
+                      loading={unassign.isPending}
+                      onClick={onUnassign}
+                    >
+                      {t('assets.driver.unassign')}
+                    </Button>
+                  )}
+                </div>
+              </PermissionGate>
             </Section>
           </div>
         )}

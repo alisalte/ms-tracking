@@ -19,7 +19,7 @@ import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
 import { formatDurationSec, hours1, shortLabel } from '@/lib/report-format';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 export function OperationSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
@@ -36,8 +36,8 @@ export function OperationSection({ range }: { range: ReportRange }) {
   const stackedOptions = useMemo<ApexOptions>(
     () => ({
       chart: { stacked: true },
-      colors: [status.success, status.warning, status.slate],
-      plotOptions: { bar: { horizontal: true, barHeight: '70%', borderRadius: 2 } },
+      colors: [chart.moving, chart.idle, chart.parked],
+      plotOptions: { bar: { horizontal: true, barHeight: '70%', borderRadius: 6 } },
       xaxis: { categories: chartRows.map((r) => shortLabel(r.label)) },
       tooltip: { y: { formatter: (v: number) => `${v.toFixed(1)} h` } },
     }),
@@ -67,8 +67,8 @@ export function OperationSection({ range }: { range: ReportRange }) {
 
   const engineOptions = useMemo<ApexOptions>(
     () => ({
-      colors: [status.teal],
-      plotOptions: { bar: { borderRadius: 3, columnWidth: '55%' } },
+      colors: [chart.engine],
+      plotOptions: { bar: { borderRadius: 6, columnWidth: '48%' } },
       xaxis: {
         categories: engineSeriesRows.map((r) => shortLabel(r.label, 14)),
         labels: { rotate: -35, hideOverlappingLabels: true },

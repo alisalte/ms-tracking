@@ -1,0 +1,122 @@
+# Production overlay — pull pre-built images from the registry instead of
+# building on the server. Used with the base compose file:
+#
+#   docker compose --project-name fleetvision \
+#     -f infra/docker/docker-compose.yml \
+#     -f infra/docker/docker-compose.prod.yml \
+#     --env-file /opt/fleetvision/.env \
+#     up -d --no-build --pull always --remove-orphans
+#
+# `build: !reset` MUST sit on each service (not a YAML << anchor). Compose
+# merge drops custom tags on aliased mappings, which would leave `build:` in
+# place and make the server try to compile images locally.
+#
+# Backend ports stay on the Docker network (not published). Only the dashboard
+# (8080) and device-facing TCP ports (Meitrack + MDVR dialback) are public.
+
+name: fleetvision
+
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports: !override
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+
+  kafka:
+    ports: !override
+      - "127.0.0.1:${KAFKA_PORT:-9092}:9092"
+
+  identity-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/identity-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+
+  fleet-management-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/fleet-management-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+
+  fleet-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/fleet-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+
+  gps-engine-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/gps-engine-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+      GPS_WS_CORS_ORIGIN: ${PUBLIC_ORIGIN}
+
+  notification-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/notification-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+      NOTIF_WS_CORS_ORIGIN: ${PUBLIC_ORIGIN}
+
+  reporting-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/reporting-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+
+  device-gateway-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/device-gateway-service:${IMAGE_TAG}
+    ports: !override
+      - "${GATEWAY_MEITRACK_PORT:-5023}:${GATEWAY_MEITRACK_PORT:-5023}"
+      - "127.0.0.1:${GATEWAY_ADMIN_PORT:-8081}:8081"
+    environment:
+      ENVIRONMENT: production
+
+  mdvr-streamer-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/mdvr-streamer-service:${IMAGE_TAG}
+    ports: !override
+      - "${MDVR_VIDEO_PORT:-6182}:6182"
+    environment:
+      ENVIRONMENT: production
+
+  media-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/media-service:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+
+  map-engine:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/map-engine:${IMAGE_TAG}
+    ports: !override []
+    environment:
+      ENVIRONMENT: production
+
+  web-dashboard:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/web-dashboard:${IMAGE_TAG}
+    ports: !override
+      - "${WEB_PORT:-8080}:8080"

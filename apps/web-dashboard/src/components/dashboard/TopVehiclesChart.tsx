@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDistance } from '@/api/report.api';
-import { status } from '@/theme/palette';
+import { apexPalette } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -43,15 +43,17 @@ export function TopVehiclesChart() {
 
   const options = useMemo<ApexOptions>(
     () => ({
-      colors: [status.blue],
+      colors: [...apexPalette],
       plotOptions: {
         bar: {
           horizontal: true,
-          barHeight: '58%',
-          borderRadius: 3,
+          distributed: true,
+          barHeight: '62%',
+          borderRadius: 6,
           dataLabels: { position: 'top' },
         },
       },
+      legend: { show: false },
       dataLabels: {
         enabled: true,
         formatter: (v: number) => `${Number(v).toLocaleString()}`,

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAlarmReport } from '@/api/report.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -13,18 +13,18 @@ const RANGE = { preset: '7d' } as const;
 
 /** Status slice → semantic color (§0.2). */
 const STATUS_COLOR = {
-  open: status.red,
-  acknowledged: status.amber,
-  resolved: status.green,
+  open: chart.open,
+  acknowledged: chart.acknowledged,
+  resolved: chart.resolved,
 } as const;
 
 /** Severity bars — ordered most-severe first. */
 const SEVERITY_LEVELS = [
-  { key: 'critical' as const, color: status.red },
-  { key: 'high' as const, color: status.warning },
-  { key: 'medium' as const, color: status.amber },
-  { key: 'low' as const, color: status.blue },
-  { key: 'info' as const, color: status.slate },
+  { key: 'critical' as const, color: chart.critical },
+  { key: 'high' as const, color: chart.high },
+  { key: 'medium' as const, color: chart.medium },
+  { key: 'low' as const, color: chart.low },
+  { key: 'info' as const, color: chart.info },
 ];
 
 /**
@@ -52,7 +52,6 @@ export function AlarmStatusChart() {
       labels: slices.map((s) => s.label),
       colors: slices.map((s) => s.color),
       legend: { position: 'right', offsetY: 20 },
-      stroke: { width: 2, colors: ['transparent'] },
       plotOptions: {
         pie: {
           donut: {

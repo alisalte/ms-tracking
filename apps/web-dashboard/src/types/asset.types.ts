@@ -167,16 +167,58 @@ export type UpdateDevicePayload = Partial<Omit<CreateDevicePayload, 'imei'>> & {
   status?: DeviceStatus;
 };
 
+// ── Drivers (fleet-service /api/v1/fleet/drivers) ─────────────────────────────
+
+/** Driver lifecycle (fleet-service). Deactivate → INACTIVE (no hard delete). */
+export type DriverStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'TERMINATED';
+
+/** A driver profile — camelCase UI shape mapped from the fleet-service aggregate. */
+export interface Driver {
+  id: string;
+  tenantId: string;
+  employeeId: string | null;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  licenseNumber: string;
+  licenseClass: string | null;
+  licenseIssued: string | null;
+  licenseExpires: string | null;
+  licenseCountry: string | null;
+  status: DriverStatus;
+  assignedVehicleId: string | null;
+  assignedAt: string | null;
+  version: number;
+}
+
+/** Create a driver (POST /fleet/drivers — snake_case wire). */
+export interface CreateDriverPayload {
+  firstName: string;
+  lastName: string;
+  employeeId?: string;
+  email?: string;
+  phone?: string;
+  licenseNumber: string;
+  licenseClass?: string;
+  licenseIssued?: string;
+  licenseExpires?: string;
+  licenseCountry?: string;
+  /** Applied after create via POST /:id/assign-vehicle (not part of create DTO). */
+  assignedVehicleId?: string;
+}
+
+/** Update a driver (PUT /fleet/drivers/:id). */
+export type UpdateDriverPayload = Partial<Omit<CreateDriverPayload, 'assignedVehicleId'>> & {
+  assignedVehicleId?: string | null;
+};
+
 // ── Vehicle ↔ Device binding (fleet-management) ──────────────────────────────
 
 /** Role a bound device plays on the vehicle. */
 export type DeviceRole = 'TRACKER' | 'MDVR' | 'CAN' | 'SENSOR' | 'OTHER';
 
 /** Bind a device to a vehicle (POST /vehicles/:id/devices/:deviceId). */
-export interface BindDevicePayload {
-  role?: DeviceRole;
-  isPrimary?: boolean;
-}
 export interface BindDevicePayload {
   role?: DeviceRole;
   isPrimary?: boolean;

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { deviceProtocolColor, deviceStatusColor } from '@/components/assets/asset-meta';
+import { driverDisplayName, driverOnVehicle } from '@/components/assets/driver-join';
 import {
   Badge,
   DataTable,
@@ -23,13 +24,15 @@ import {
   Toolbar,
 } from '@/components/tailwind-ui';
 import { relativeTime } from '@/lib/relative-time';
-import type { Device, DeviceProtocol, DeviceStatus, Vehicle } from '@/types/asset.types';
+import type { Device, DeviceProtocol, DeviceStatus, Driver, Vehicle } from '@/types/asset.types';
 import { Cpu } from 'lucide-react';
 
 interface DevicesTabProps {
   devices: Device[];
   /** Vehicle registry — resolves device.vehicleId → vehicle name. */
   vehicles: Vehicle[];
+  /** Driver registry — resolves bound vehicle → assigned driver. */
+  drivers: Driver[];
   loading?: boolean;
   selectedId?: string | null;
   onSelect: (id: string) => void;
@@ -57,6 +60,7 @@ const PROTOCOLS: Array<DeviceProtocol | 'all'> = ['all', 'gt06', 'jt808', 'meitr
 export function DevicesTab({
   devices,
   vehicles,
+  drivers,
   loading = false,
   selectedId,
   onSelect,
@@ -77,21 +81,28 @@ export function DevicesTab({
       vehicleId ? (byId.get(vehicleId)?.name ?? '—') : '—';
   }, [vehicles]);
 
+  const driverName = useMemo(
+    () => (vehicleId: string | null) => driverDisplayName(driverOnVehicle(drivers, vehicleId)),
+    [drivers],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return devices.filter((d) => {
       if (filterStatus !== 'all' && d.status !== filterStatus) return false;
       if (filterProtocol !== 'all' && d.protocol !== filterProtocol) return false;
       if (!q) return true;
+      const assigned = driverName(d.vehicleId) ?? '';
       return (
         d.imei.toLowerCase().includes(q) ||
         (d.serialNumber?.toLowerCase().includes(q) ?? false) ||
         (d.manufacturer?.toLowerCase().includes(q) ?? false) ||
         (d.model?.toLowerCase().includes(q) ?? false) ||
-        vehicleName(d.vehicleId).toLowerCase().includes(q)
+        vehicleName(d.vehicleId).toLowerCase().includes(q) ||
+        assigned.toLowerCase().includes(q)
       );
     });
-  }, [devices, filterStatus, filterProtocol, query, vehicleName]);
+  }, [devices, filterStatus, filterProtocol, query, vehicleName, driverName]);
 
   const columns: Array<TableColumn<Device>> = [
     {
@@ -139,6 +150,14 @@ export function DevicesTab({
       id: 'vehicle',
       headerKey: 'assets.device.colVehicle',
       render: (d) => (d.vehicleId ? vehicleName(d.vehicleId) : '—'),
+    },
+    {
+      id: 'driver',
+      headerKey: 'assets.device.colDriver',
+      render: (d) =>
+        driverName(d.vehicleId) ?? (
+          <span className="text-gray-400 dark:text-graydark-600">{t('map.popup.unassigned')}</span>
+        ),
     },
     {
       id: 'lastSeen',

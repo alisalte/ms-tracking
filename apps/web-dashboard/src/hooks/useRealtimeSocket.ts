@@ -21,8 +21,10 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'err
 
 /** Configuration for the socket hook. */
 export interface RealtimeSocketOptions {
-  /** WebSocket URL (e.g. ws://localhost:3001). */
+  /** WebSocket URL (e.g. ws://localhost:3001 or the page origin). */
   url: string;
+  /** Socket.IO path (default `/socket.io`). Use `/gps-ws/socket.io` behind nginx. */
+  path?: string;
   /** Whether to enable the connection (false = don't connect). */
   enabled?: boolean;
   /** Maximum reconnect attempts before giving up (default 10). */
@@ -48,7 +50,14 @@ interface SocketState {
  * use it in useEffect without re-triggering.
  */
 export function useRealtimeSocket(options: RealtimeSocketOptions) {
-  const { url, enabled = true, maxRetries = 10, baseDelayMs = 1000, maxDelayMs = 30000 } = options;
+  const {
+    url,
+    path = '/socket.io',
+    enabled = true,
+    maxRetries = 10,
+    baseDelayMs = 1000,
+    maxDelayMs = 30000,
+  } = options;
   const [state, setState] = useState<ConnectionState>('disconnected');
   const stateRef = useRef<SocketState>({ socket: null, retryCount: 0, reconnectTimer: null });
   const handlersRef = useRef<Map<string, Set<(data: unknown) => void>>>(new Map());
@@ -78,6 +87,7 @@ export function useRealtimeSocket(options: RealtimeSocketOptions) {
     setState('connecting');
 
     const socket = io(url, {
+      path,
       transports: ['websocket'],
       reconnection: false,
       timeout: 10000,
@@ -116,7 +126,7 @@ export function useRealtimeSocket(options: RealtimeSocketOptions) {
       stateRef.current.retryCount += 1;
       stateRef.current.reconnectTimer = setTimeout(() => connect(), delay);
     }
-  }, [url, enabled, cleanup, maxRetries]);
+  }, [url, path, enabled, cleanup, maxRetries]);
 
   // Connect on mount / when enabled changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: connect/cleanup use stable refs
@@ -126,7 +136,7 @@ export function useRealtimeSocket(options: RealtimeSocketOptions) {
     }
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, enabled]);
+  }, [url, path, enabled]);
 
   /**
    * Subscribe to a server event. Returns an unsubscribe function.

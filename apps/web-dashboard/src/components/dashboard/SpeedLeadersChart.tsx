@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type SpeedRowWire, useSpeed } from '@/api/report.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -15,9 +15,9 @@ const RANGE = { preset: '7d' } as const;
 
 /** Heat ramp for the bars: faster = hotter. */
 function speedColor(maxSpeedKph: number): string {
-  if (maxSpeedKph >= 110) return status.danger;
-  if (maxSpeedKph >= 95) return status.warning;
-  return status.info;
+  if (maxSpeedKph >= 110) return chart.critical;
+  if (maxSpeedKph >= 95) return chart.peak;
+  return chart.distance;
 }
 
 /**
@@ -58,8 +58,8 @@ export function SpeedLeadersChart() {
         bar: {
           horizontal: true,
           distributed: true,
-          barHeight: '58%',
-          borderRadius: 4,
+          barHeight: '62%',
+          borderRadius: 6,
           dataLabels: { position: 'top' },
         },
       },

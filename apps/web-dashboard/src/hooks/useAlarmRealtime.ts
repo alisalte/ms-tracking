@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { type ConnectionState, useRealtimeSocket } from '@/hooks/useRealtimeSocket';
 import { shouldUseMock } from '@/lib/mock-gate';
+import { resolveRealtimeTarget } from '@/lib/realtime-url';
 import type { Alarm } from '@/types/alarm.types';
 
 export interface AlarmRealtimeEvent {
@@ -41,10 +42,18 @@ export interface AlarmRealtimeResult {
  * @param wsUrl    The notification-service WS URL.
  */
 export function useAlarmRealtime(tenantId: string | null, wsUrl?: string): AlarmRealtimeResult {
-  const url = wsUrl ?? import.meta.env.VITE_NOTIFICATION_WS_URL ?? 'http://localhost:3010';
+  const target = resolveRealtimeTarget(
+    wsUrl ?? import.meta.env.VITE_NOTIFICATION_WS_URL,
+    'http://localhost:3010',
+    '/notif-ws/socket.io',
+  );
   const enabled = Boolean(tenantId) && !shouldUseMock();
 
-  const { state, subscribe, emit } = useRealtimeSocket({ url, enabled });
+  const { state, subscribe, emit } = useRealtimeSocket({
+    url: target.url,
+    path: target.path,
+    enabled,
+  });
   const [events, setEvents] = useState<AlarmRealtimeEvent[]>([]);
   const tenantRef = useRef(tenantId);
   tenantRef.current = tenantId;

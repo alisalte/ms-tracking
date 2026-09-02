@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAlarmReport } from '@/api/report.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -13,11 +13,11 @@ const RANGE = { preset: '7d' } as const;
 
 /** Severity → palette color + display order. */
 const SEVERITIES = [
-  { key: 'critical' as const, color: status.danger },
-  { key: 'high' as const, color: status.dangerLight },
-  { key: 'medium' as const, color: status.warning },
-  { key: 'low' as const, color: status.infoLight },
-  { key: 'info' as const, color: status.slate },
+  { key: 'critical' as const, color: chart.critical },
+  { key: 'high' as const, color: chart.high },
+  { key: 'medium' as const, color: chart.medium },
+  { key: 'low' as const, color: chart.low },
+  { key: 'info' as const, color: chart.info },
 ];
 
 /**
@@ -45,7 +45,6 @@ export function AlarmSeverityChart() {
       labels: slices.map((s) => s.label),
       colors: slices.map((s) => s.color),
       legend: { position: 'bottom' },
-      stroke: { width: 2, colors: ['transparent'] },
       plotOptions: {
         pie: {
           donut: {

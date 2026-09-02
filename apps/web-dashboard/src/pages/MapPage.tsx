@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
+import { driverFullName, useDrivers } from '@/api/driver.api';
 import { useMapVehicles } from '@/api/fleet.api';
 import { useGeofences } from '@/api/geofence.api';
 import { type HistoryPresetId, fetchMapMatch, presetRange, useVehicleTrack } from '@/api/map.api';
 import { useAuthStore } from '@/auth/auth.store';
+import { PERMISSIONS, usePermissions } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { DeviceListPanel } from '@/components/map/DeviceListPanel';
 import { DevicePopup } from '@/components/map/DevicePopup';
@@ -111,11 +113,13 @@ export function MapPage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useMapVehicles();
   const tenantId = useAuthStore((s) => s.tenantId);
+  const { can } = usePermissions();
   const [searchParams] = useSearchParams();
 
   // §20 filters: fleet registry for the Fleet selector + the vehicle↔fleet join.
   const { data: fleetsData } = useFleets();
   const { data: registryVehicles } = useVehicles();
+  const { data: drivers } = useDrivers({ enabled: can(PERMISSIONS.driverRead) });
 
   // Live tracking: subscribe to gps-engine WS for real-time position +
   // device-status updates. The hook is a no-op when the WS server is
@@ -125,10 +129,17 @@ export function MapPage() {
   // Merge live deltas into the REST-fetched vehicles (live overrides REST).
   const vehicles = useMemo(() => {
     const rest = data ?? [];
-    return positions.size > 0 || statuses.size > 0
-      ? mergeLivePositions(rest, positions, statuses)
-      : rest;
-  }, [data, positions, statuses]);
+    const live =
+      positions.size > 0 || statuses.size > 0
+        ? mergeLivePositions(rest, positions, statuses)
+        : rest;
+    const byVehicle = new Map<string, string>();
+    for (const d of drivers ?? []) {
+      if (d.assignedVehicleId) byVehicle.set(d.assignedVehicleId, driverFullName(d));
+    }
+    if (byVehicle.size === 0) return live;
+    return live.map((v) => ({ ...v, driver: byVehicle.get(v.id) ?? v.driver }));
+  }, [data, positions, statuses, drivers]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Sprint I §31: the device popup is a transient INSPECTOR — closing it must
@@ -323,7 +334,8 @@ export function MapPage() {
       return (
         v.label.toLowerCase().includes(q) ||
         (v.name?.toLowerCase().includes(q) ?? false) ||
-        (v.plate?.toLowerCase().includes(q) ?? false)
+        (v.plate?.toLowerCase().includes(q) ?? false) ||
+        (v.driver?.toLowerCase().includes(q) ?? false)
       );
     });
   }, [vehicles, query, presence, fleetId, fleetOfVehicle]);

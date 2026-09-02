@@ -26,14 +26,15 @@ import { useTranslation } from 'react-i18next';
 import { type ReportRange, useFleetOverview, useTrend } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
+import { mixedDistanceTrips } from '@/components/dashboard/distance-trips-mixed';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
 import { hoursFromSec } from '@/lib/hours-from-sec';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 import type { ApexOptions } from 'apexcharts';
 
 export function ReportsOverviewSection({ range }: { range: ReportRange }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const overview = useFleetOverview(range);
   const trend = useTrend(range);
 
@@ -70,6 +71,15 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
       </Card>
     );
   }
+
+  const mixed = mixedDistanceTrips(
+    trend.data?.points ?? [],
+    {
+      distance: t('reports.labels.distance'),
+      trips: t('reports.labels.trips'),
+    },
+    i18n.language,
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -243,16 +253,9 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
             ) : (
               <ApexChart
                 type="line"
-                series={distanceTripsSeries(trend.data?.points ?? [], {
-                  distance: t('reports.labels.distance'),
-                  trips: t('reports.labels.trips'),
-                })}
-                options={distanceTripsOptions(trend.data?.points ?? [], {
-                  distance: t('reports.labels.distance'),
-                  trips: t('reports.labels.trips'),
-                  km: t('reports.labels.km'),
-                })}
-                height={280}
+                series={mixed.series}
+                options={mixed.options}
+                height={300}
               />
             )}
           </ChartCard>
@@ -336,36 +339,6 @@ function EmptyChart({ label }: { label: string }) {
 
 // ── ApexCharts options (theme handled by ApexChart wrapper) ───────────────
 
-function distanceTripsSeries(
-  points: Array<{ day: string; distanceKm: number; trips: number }>,
-  labels: { distance: string; trips: string },
-) {
-  return [
-    {
-      name: labels.distance,
-      type: 'area' as const,
-      data: points.map((p) => Number(p.distanceKm.toFixed(1))),
-    },
-    { name: labels.trips, type: 'bar' as const, data: points.map((p) => p.trips) },
-  ];
-}
-
-function distanceTripsOptions(
-  points: Array<{ day: string; distanceKm: number; trips: number }>,
-  labels: { distance: string; trips: string; km: string },
-): ApexOptions {
-  return {
-    colors: [status.teal, status.info],
-    stroke: { width: [2, 0], curve: 'smooth' },
-    fill: { type: ['gradient', 'solid'], opacity: [0.25, 0.85] },
-    xaxis: { categories: points.map((p) => p.day) },
-    yaxis: [
-      { title: { text: labels.km }, decimalsInFloat: 1 },
-      { opposite: true, title: { text: labels.trips }, decimalsInFloat: 0 },
-    ],
-  };
-}
-
 function alarmTrendSeries(
   points: Array<{
     day: string;
@@ -390,8 +363,8 @@ function alarmTrendOptions(
 ): ApexOptions {
   return {
     chart: { stacked: true },
-    colors: [status.danger, status.info, status.slate, status.purple],
-    plotOptions: { bar: { columnWidth: '58%', borderRadius: 2 } },
+    colors: [chart.speeding, chart.geofence, chart.offline, chart.other],
+    plotOptions: { bar: { columnWidth: '52%', borderRadius: 4 } },
     xaxis: { categories: points.map((p) => p.day) },
     legend: { position: 'bottom' },
   };
@@ -405,9 +378,8 @@ function distributionOptions(labels: {
 }): ApexOptions {
   return {
     labels: [labels.moving, labels.idle, labels.parked, labels.noTelemetry],
-    colors: [status.success, status.warning, status.slate, status.info],
+    colors: [chart.moving, chart.idle, chart.parked, chart.noTelemetry],
     legend: { position: 'bottom' },
-    stroke: { width: 2, colors: ['transparent'] },
     plotOptions: {
       pie: {
         donut: {

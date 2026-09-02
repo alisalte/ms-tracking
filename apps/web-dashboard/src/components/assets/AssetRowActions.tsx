@@ -9,7 +9,7 @@
 import { usePermissions } from '@/auth/permissions';
 import { IconButton, Tooltip } from '@/components/tailwind-ui';
 import type { LucideIcon } from 'lucide-react';
-import { Archive, CircleSlash, Eye, Pencil } from 'lucide-react';
+import { Archive, CircleSlash, Eye, Pencil, UserMinus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export function AssetRowActions<T>({
@@ -29,15 +29,20 @@ export function AssetRowActions<T>({
   onEdit?: (record: T) => void;
   /** Open the archive/decommission confirmation. */
   onDelete?: (record: T) => void;
-  /** Destructive icon: archive (fleets/vehicles) or decommission (devices). */
-  deleteIcon?: 'archive' | 'decommission';
+  /** Destructive icon: archive (fleets/vehicles), decommission (devices), or deactivate (drivers). */
+  deleteIcon?: 'archive' | 'decommission' | 'deactivate';
 }) {
   const { t } = useTranslation();
   const { can } = usePermissions();
   const canWrite = can(writePermission);
-  const DeleteIcon: LucideIcon = deleteIcon === 'archive' ? Archive : CircleSlash;
+  const DeleteIcon: LucideIcon =
+    deleteIcon === 'archive' ? Archive : deleteIcon === 'deactivate' ? UserMinus : CircleSlash;
   const deleteLabel =
-    deleteIcon === 'archive' ? t('assets.actions.archive') : t('assets.actions.decommission');
+    deleteIcon === 'archive'
+      ? t('assets.actions.archive')
+      : deleteIcon === 'deactivate'
+        ? t('assets.actions.deactivate')
+        : t('assets.actions.decommission');
 
   return (
     <div

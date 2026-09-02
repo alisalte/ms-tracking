@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useFleets, useVehicles } from '@/api/asset.api';
 import { useDeviceStatuses, useMapVehicles } from '@/api/fleet.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -97,12 +97,12 @@ export function FleetComparisonChart() {
   const options = useMemo<ApexOptions>(
     () => ({
       chart: { stacked: true },
-      colors: [status.success, status.warning, status.slate, status.danger],
+      colors: [chart.moving, chart.idle, chart.parked, chart.offline],
       plotOptions: {
         bar: {
           horizontal: true,
           barHeight: '62%',
-          borderRadius: 3,
+          borderRadius: 6,
           borderRadiusApplication: 'end',
         },
       },

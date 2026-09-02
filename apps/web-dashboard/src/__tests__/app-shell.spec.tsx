@@ -65,6 +65,7 @@ function renderShellAt(path: string) {
             <Route path="/dashboard" element={<div data-testid="page">dashboard-page</div>} />
             <Route path="/alarms" element={<div data-testid="page">alarms-page</div>} />
             <Route path="/map" element={<div data-testid="page">map-page</div>} />
+            <Route path="/assets" element={<div data-testid="page">assets-page</div>} />
             <Route path="/account/profile" element={<div data-testid="page">profile-page</div>} />
           </Route>
         </Routes>
@@ -114,6 +115,8 @@ describe('AppLayout — TailAdmin shell', () => {
     expect(nav.textContent).not.toContain('Notifications');
     expect(nav.textContent).not.toContain('Geofences');
     expect(nav.textContent).not.toContain('Reports');
+    expect(nav.textContent).not.toContain('Rules');
+    expect(nav.textContent).not.toContain('Drivers');
   });
 
   it("shows every gated item for the '*' tenant-admin wildcard", () => {
@@ -126,7 +129,23 @@ describe('AppLayout — TailAdmin shell', () => {
     expect(nav.textContent).toContain('Geofences');
     expect(nav.textContent).toContain('Reports');
     expect(nav.textContent).toContain('Assets');
+    expect(nav.textContent).toContain('Drivers');
     expect(nav.textContent).toContain('Commands');
+    expect(nav.textContent).toContain('Rules');
+  });
+
+  it('shows Drivers when fleet.driver.read is granted', () => {
+    setUser(['fleet.driver.read']);
+    renderShellAt('/dashboard');
+    const nav = screen.getByRole('navigation', { name: 'Navigation' });
+    expect(nav.textContent).toContain('Drivers');
+    expect(nav.textContent).toContain('Assets');
+  });
+
+  it('highlights Drivers (not Assets) on /assets?tab=drivers', () => {
+    setUser(['*']);
+    renderShellAt('/assets?tab=drivers');
+    expect(document.querySelector('[aria-current="page"]')?.textContent).toContain('Drivers');
   });
 
   it('marks the active nav item and navigates on click', () => {

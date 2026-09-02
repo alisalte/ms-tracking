@@ -1,16 +1,17 @@
 /**
  * AssetManagementPage — the consolidated fleet-asset registry (`/assets`).
  *
- * Three tabs — Fleets · Vehicles · Devices — over the REAL fleet-management
- * contracts (Sprint E). Full CRUD: list/view/create/edit + soft-delete
- * (fleets/vehicles = ARCHIVE, devices = DECOMMISSION). The active tab +
- * selection sync to the URL (`?tab=vehicles`). Legacy `/fleets`, `/vehicles`
- * and `/devices` routes redirect here.
+ * Four tabs — Fleets · Vehicles · Devices · Drivers. Fleets/vehicles/devices
+ * talk to fleet-management (Sprint E); drivers talk to fleet-service
+ * (`/api/v1/fleet/drivers`). Soft-delete: fleets/vehicles = ARCHIVE, devices =
+ * DECOMMISSION, drivers = DEACTIVATE. The active tab + selection sync to the
+ * URL (`?tab=vehicles`). Legacy `/fleets`, `/vehicles`, `/devices`, `/drivers`
+ * routes redirect here.
  *
- * Write actions (+ Add, edit, archive/decommission) are gated per tab via
- * <PermissionGate> (`fleet.write` / `vehicle.write` / `device.write`) — the
- * backend enforces the same strings (Sprint E §23/§24).
+ * Write actions (+ Add, edit, archive/decommission/deactivate) are gated per
+ * tab via <PermissionGate> — the backend enforces the same strings.
  */
+import { Cpu, FolderTree, Plus, Truck, Upload, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -23,32 +24,76 @@ import {
   useFleets,
   useVehicles,
 } from '@/api/asset.api';
+import { useDeactivateDriver, useDrivers } from '@/api/driver.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
 import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
 import { AssetImportDialog } from '@/components/assets/AssetImportDialog';
 import { DevicesTab } from '@/components/assets/DevicesTab';
+import { DriversTab } from '@/components/assets/DriversTab';
 import { FleetsTab } from '@/components/assets/FleetsTab';
 import { VehiclesTab } from '@/components/assets/VehiclesTab';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Button, PageHeader, Tabs } from '@/components/tailwind-ui';
-import type { DeviceProtocol, DeviceStatus, FleetStatus, VehicleStatus } from '@/types/asset.types';
-import { FolderTree, Plus, Truck, Upload } from 'lucide-react';
-import { Cpu } from 'lucide-react';
+import type {
+  DeviceProtocol,
+  DeviceStatus,
+  DriverStatus,
+  FleetStatus,
+  VehicleStatus,
+} from '@/types/asset.types';
 
-/** The three real asset-class tabs. */
-export type AssetTab = 'fleets' | 'vehicles' | 'devices';
+/** The four registry tabs. */
+export type AssetTab = 'fleets' | 'vehicles' | 'devices' | 'drivers';
 
-const TABS: AssetTab[] = ['fleets', 'vehicles', 'devices'];
+const TABS: AssetTab[] = ['fleets', 'vehicles', 'devices', 'drivers'];
 
-/** Per-tab write permission (gates + Add / edit / archive). */
+/** Per-tab write permission (gates + Add). */
 const WRITE_PERMISSION: Record<AssetTab, string> = {
   fleets: PERMISSIONS.fleetWrite,
   vehicles: PERMISSIONS.vehicleWrite,
   devices: PERMISSIONS.deviceWrite,
+  drivers: PERMISSIONS.driverCreate,
 };
+
+function tabIcon(tb: AssetTab) {
+  if (tb === 'fleets') return <FolderTree />;
+  if (tb === 'vehicles') return <Truck />;
+  if (tb === 'drivers') return <UserRound />;
+  return <Cpu />;
+}
+
+function confirmCopy(tab: AssetTab): {
+  titleKey: string;
+  bodyKey: string;
+  labelKey: string;
+  successKey: string;
+} {
+  if (tab === 'devices') {
+    return {
+      titleKey: 'assets.crud.decommissionConfirmTitle',
+      bodyKey: 'assets.crud.decommissionConfirmBody',
+      labelKey: 'assets.actions.decommission',
+      successKey: 'assets.crud.decommissionSuccess',
+    };
+  }
+  if (tab === 'drivers') {
+    return {
+      titleKey: 'assets.crud.deactivateConfirmTitle',
+      bodyKey: 'assets.crud.deactivateConfirmBody',
+      labelKey: 'assets.actions.deactivate',
+      successKey: 'assets.crud.deactivateSuccess',
+    };
+  }
+  return {
+    titleKey: 'assets.crud.archiveConfirmTitle',
+    bodyKey: 'assets.crud.archiveConfirmBody',
+    labelKey: 'assets.actions.archive',
+    successKey: 'assets.crud.archiveSuccess',
+  };
+}
 
 /** Clamp the tab from URL params to a valid tab (default: vehicles). */
 function readTab(value: string | null): AssetTab {
@@ -72,33 +117,46 @@ export function AssetManagementPage() {
   const [devStatus, setDevStatus] = useState<DeviceStatus | 'all'>('all');
   const [devProtocol, setDevProtocol] = useState<DeviceProtocol | 'all'>('all');
   const [devQuery, setDevQuery] = useState('');
+  const [drvStatus, setDrvStatus] = useState<DriverStatus | 'all'>('all');
+  const [drvQuery, setDrvQuery] = useState('');
 
   const fleetsQuery = useFleets();
   const vehiclesQuery = useVehicles();
   const devicesQuery = useDevices();
+  const driversQuery = useDrivers();
 
   const fleets = fleetsQuery.data ?? [];
   const vehicles = vehiclesQuery.data ?? [];
   const devices = devicesQuery.data ?? [];
+  const drivers = driversQuery.data ?? [];
 
-  // Soft-delete hooks (fleets/vehicles = archive, devices = decommission).
   const archiveFleet = useArchiveFleet();
   const archiveVehicle = useArchiveVehicle();
   const decommissionDevice = useDecommissionDevice();
+  const deactivateDriver = useDeactivateDriver();
   const deleteMutation =
-    tab === 'fleets' ? archiveFleet : tab === 'vehicles' ? archiveVehicle : decommissionDevice;
+    tab === 'fleets'
+      ? archiveFleet
+      : tab === 'vehicles'
+        ? archiveVehicle
+        : tab === 'drivers'
+          ? deactivateDriver
+          : decommissionDevice;
 
-  // ── CRUD trigger state ──
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [editRecord, setEditRecord] = useState<AssetRecord | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  // Tab counts for the tab badges.
   const counts = useMemo(
-    () => ({ fleets: fleets.length, vehicles: vehicles.length, devices: devices.length }),
-    [fleets.length, vehicles.length, devices.length],
+    () => ({
+      fleets: fleets.length,
+      vehicles: vehicles.length,
+      devices: devices.length,
+      drivers: drivers.length,
+    }),
+    [fleets.length, vehicles.length, devices.length, drivers.length],
   );
 
   const setTab = (next: AssetTab) => {
@@ -109,7 +167,6 @@ export function AssetManagementPage() {
     setImportOpen(false);
   };
 
-  // ── Create/Edit handlers ──
   const openCreate = () => {
     setFormMode('create');
     setEditRecord(undefined);
@@ -121,18 +178,12 @@ export function AssetManagementPage() {
     setFormOpen(true);
   };
 
-  // ── Delete handler (confirm → hook). Backend DELETE is soft: fleets and
-  // vehicles are ARCHIVED, devices are DECOMMISSIONED.
-  const isDeviceTab = tab === 'devices';
+  const copy = confirmCopy(tab);
   const onConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
       await deleteMutation.mutateAsync(deleteTarget.id);
-      toast.success(
-        t(isDeviceTab ? 'assets.crud.decommissionSuccess' : 'assets.crud.archiveSuccess', {
-          name: deleteTarget.name,
-        }),
-      );
+      toast.success(t(copy.successKey, { name: deleteTarget.name }));
       setDeleteTarget(null);
     } catch (err) {
       toast.error(err);
@@ -140,17 +191,24 @@ export function AssetManagementPage() {
   };
 
   const listQuery =
-    tab === 'fleets' ? fleetsQuery : tab === 'vehicles' ? vehiclesQuery : devicesQuery;
+    tab === 'fleets'
+      ? fleetsQuery
+      : tab === 'vehicles'
+        ? vehiclesQuery
+        : tab === 'drivers'
+          ? driversQuery
+          : devicesQuery;
+
+  const showImport = tab === 'vehicles' || tab === 'devices';
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {/* Header — + Add is permission-gated per tab. */}
       <PageHeader
         title={t('assets.title')}
         description={t('assets.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {tab !== 'fleets' && (
+            {showImport && (
               <PermissionGate requires={WRITE_PERMISSION[tab]}>
                 <Button
                   size="sm"
@@ -171,7 +229,6 @@ export function AssetManagementPage() {
         }
       />
 
-      {/* Tabs */}
       <Tabs
         aria-label={t('assets.title')}
         value={tab}
@@ -179,12 +236,11 @@ export function AssetManagementPage() {
         tabs={TABS.map((tb) => ({
           value: tb,
           label: t(`assets.tabs.${tb}`),
-          icon: tb === 'fleets' ? <FolderTree /> : tb === 'vehicles' ? <Truck /> : <Cpu />,
+          icon: tabIcon(tb),
           count: counts[tb],
         }))}
       />
 
-      {/* Active tab */}
       <div className="min-h-0 flex-1">
         {listQuery.isError ? (
           <ErrorState error={listQuery.error} onRetry={() => listQuery.refetch()} />
@@ -226,6 +282,7 @@ export function AssetManagementPage() {
               <DevicesTab
                 devices={devices}
                 vehicles={vehicles}
+                drivers={drivers}
                 loading={devicesQuery.isLoading}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
@@ -239,11 +296,26 @@ export function AssetManagementPage() {
                 onDelete={(id, name) => setDeleteTarget({ id, name })}
               />
             )}
+            {tab === 'drivers' && (
+              <DriversTab
+                drivers={drivers}
+                vehicles={vehicles}
+                devices={devices}
+                loading={driversQuery.isLoading}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                filterStatus={drvStatus}
+                query={drvQuery}
+                onFilterStatus={setDrvStatus}
+                onQuery={setDrvQuery}
+                onEdit={openEdit}
+                onDelete={(id, name) => setDeleteTarget({ id, name })}
+              />
+            )}
           </>
         )}
       </div>
 
-      {/* Detail drawer for the active tab */}
       <AssetDetailDrawers
         tab={tab}
         selectedId={selectedId}
@@ -251,19 +323,20 @@ export function AssetManagementPage() {
         fleets={fleets}
         vehicles={vehicles}
         devices={devices}
+        drivers={drivers}
       />
 
-      {/* Create / Edit form drawer */}
       <AssetFormDrawer
         open={formOpen}
         mode={formMode}
         entity={tab}
         record={editRecord}
         fleets={fleets}
+        vehicles={vehicles}
         onClose={() => setFormOpen(false)}
       />
 
-      {tab !== 'fleets' && (
+      {showImport && (
         <AssetImportDialog
           open={importOpen}
           kind={tab === 'devices' ? 'devices' : 'vehicles'}
@@ -271,17 +344,11 @@ export function AssetManagementPage() {
         />
       )}
 
-      {/* Archive / Decommission confirmation (backend is soft-delete). */}
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={t(
-          isDeviceTab ? 'assets.crud.decommissionConfirmTitle' : 'assets.crud.archiveConfirmTitle',
-          { name: deleteTarget?.name ?? '' },
-        )}
-        message={t(
-          isDeviceTab ? 'assets.crud.decommissionConfirmBody' : 'assets.crud.archiveConfirmBody',
-        )}
-        confirmLabelKey={isDeviceTab ? 'assets.actions.decommission' : 'assets.actions.archive'}
+        title={t(copy.titleKey, { name: deleteTarget?.name ?? '' })}
+        message={t(copy.bodyKey)}
+        confirmLabelKey={copy.labelKey}
         loading={deleteMutation.isPending}
         onConfirm={onConfirmDelete}
         onClose={() => setDeleteTarget(null)}

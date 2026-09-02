@@ -38,7 +38,7 @@ Legend: **IMPLEMENTED** runs in code today · **PARTIAL** exists but incomplete 
 | gRPC | **PLANNED** | Inter-service comms today are Kafka + in-process. No `.proto`/`@grpc/grpc-js` in the tree. |
 | Service mesh (Istio) | **PLANNED** | No manifests. |
 | API gateway (Kong) | **PLANNED** | No Kong service/config. |
-| GitOps (ArgoCD) | **PLANNED** | CI is GitHub Actions only. |
+| GitOps (ArgoCD) | **PLANNED** | CD today is GitHub Actions → GHCR → SSH `docker compose` (`docs/runbooks/server-deploy.md`). ArgoCD/K8s still planned. |
 | Kubernetes | **PLANNED** | Local dev is `docker compose`. No Helm/Kustomize/manifests. |
 | MongoDB | **PLANNED (removed)** | Removed per ADR-022 → PostgreSQL JSONB. |
 | ClickHouse | **PLANNED (deferred)** | Deferred per ADR-022 with a re-introduction trigger. |
@@ -164,7 +164,8 @@ FleetVision is a **cloud-native, enterprise-grade Fleet Management Platform** de
 
 | Document | Path | Description |
 |---|---|---|
-| **CI/CD Pipeline** | `docs/runbooks/ci-cd-pipeline.md` | GitHub Actions + ArgoCD pipeline, canary rollout, rollback procedures |
+| **Server deploy (Compose)** | `docs/runbooks/server-deploy.md` | GitHub Actions CI → GHCR images → SSH `docker compose` on a VM |
+| **CI/CD Pipeline (target)** | `docs/runbooks/ci-cd-pipeline.md` | Design-phase ArgoCD / canary (not the path that runs today) |
 | **Monitoring & Observability** | `docs/runbooks/monitoring-observability.md` | SLI/SLO framework, dashboards, alerting rules, chaos engineering |
 
 ### 📋 Governance

@@ -84,6 +84,10 @@ vi.mock('@/api/asset.api', () => ({
   useFleets: () => mockUseFleets(),
   useVehicles: () => mockUseVehicles(),
 }));
+vi.mock('@/api/driver.api', () => ({
+  driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
+  useDrivers: () => ({ data: [] as { assignedVehicleId: string | null; firstName: string; lastName: string }[] }),
+}));
 
 // ── Mock supercluster: return every point as its own (un-clustered) feature so
 // the device list + map both see the full fleet. getClusters returns the points

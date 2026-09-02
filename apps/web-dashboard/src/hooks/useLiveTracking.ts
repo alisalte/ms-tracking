@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { type ConnectionState, useRealtimeSocket } from '@/hooks/useRealtimeSocket';
+import { resolveRealtimeTarget } from '@/lib/realtime-url';
 import type { MapVehicle } from '@/types/fleet.types';
 
 /** A live position update from the gps-engine (wire format). */
@@ -58,10 +59,18 @@ export interface LiveTrackingResult {
  * @param wsUrl    The gps-engine WS URL (default from env or localhost:3001).
  */
 export function useLiveTracking(tenantId: string | null, wsUrl?: string): LiveTrackingResult {
-  const url = wsUrl ?? import.meta.env.VITE_GPS_WS_URL ?? 'http://localhost:3001';
+  const target = resolveRealtimeTarget(
+    wsUrl ?? import.meta.env.VITE_GPS_WS_URL,
+    'http://localhost:3001',
+    '/gps-ws/socket.io',
+  );
   const enabled = Boolean(tenantId);
 
-  const { state, subscribe, emit } = useRealtimeSocket({ url, enabled });
+  const { state, subscribe, emit } = useRealtimeSocket({
+    url: target.url,
+    path: target.path,
+    enabled,
+  });
 
   const [positions, setPositions] = useState<Map<string, LivePosition>>(new Map());
   const [statuses, setStatuses] = useState<Map<string, DeviceStatus>>(new Map());

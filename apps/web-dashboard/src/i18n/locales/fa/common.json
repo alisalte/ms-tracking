@@ -62,6 +62,7 @@
     "trips": "سفرها",
     "video": "ویدیو",
     "alarms": "هشدارها",
+    "rules": "تنظیم قانون",
     "assets": "دارایی‌ها",
     "maintenance": "تعمیر و نگهداری",
     "compliance": "انطباق",
@@ -889,13 +890,14 @@
   },
   "assets": {
     "title": "مدیریت دارایی‌ها",
-    "subtitle": "ناوگان‌ها، خودروها و دستگاه‌ها",
+    "subtitle": "ناوگان‌ها، خودروها، دستگاه‌ها و رانندگان",
     "empty": "هیچ رکوردی با فیلترهای شما مطابقت ندارد.",
     "count": "{{count}}",
     "tabs": {
       "fleets": "ناوگان‌ها",
       "vehicles": "خودروها",
-      "devices": "دستگاه‌ها"
+      "devices": "دستگاه‌ها",
+      "drivers": "رانندگان"
     },
     "filters": {
       "allStatus": "همه‌ی وضعیت‌ها",
@@ -931,6 +933,7 @@
       "colOdometer": "کارکرد",
       "engineHours": "ساعت موتور",
       "colEngineHours": "ساعت",
+      "assignedDriver": "راننده تخصیص‌یافته",
       "fleet": "ناوگان",
       "pickFleet": "— یک ناوگان انتخاب کنید —",
       "name": "نام",
@@ -952,7 +955,7 @@
     },
     "device": {
       "notFound": "دستگاه یافت نشد.",
-      "search": "جستجوی IMEI / سریال / مدل…",
+      "search": "جستجوی IMEI / سریال / مدل / راننده…",
       "imei": "IMEI",
       "serial": "شماره سریال",
       "manufacturer": "سازنده",
@@ -965,6 +968,8 @@
       "colModel": "مدل",
       "colProtocol": "پروتکل",
       "colVehicle": "خودرو",
+      "colDriver": "راننده",
+      "assignedDriver": "راننده تخصیص‌یافته",
       "colLastSeen": "آخرین دیدار",
       "registry": "ثبت",
       "connection": "اتصال",
@@ -1008,9 +1013,42 @@
       "colStatus": "وضعیت",
       "emptyDescription": "هنوز دستگاهی نیست — یک ردیاب ثبت کنید تا اینجا نمایش داده شود."
     },
+    "driver": {
+      "notFound": "راننده یافت نشد.",
+      "search": "جستجوی نام / گواهینامه / شماره پرسنلی / دستگاه…",
+      "firstName": "نام",
+      "lastName": "نام خانوادگی",
+      "employeeId": "شماره پرسنلی",
+      "email": "ایمیل",
+      "phone": "تلفن",
+      "licenseNumber": "شماره گواهینامه",
+      "licenseClass": "کلاس گواهینامه",
+      "licenseIssued": "تاریخ صدور",
+      "licenseExpires": "تاریخ انقضا",
+      "licenseExpiry": "انقضا",
+      "licenseCountry": "کشور گواهینامه",
+      "assignedVehicle": "خودروی تخصیص‌یافته",
+      "assignedDevice": "دستگاه تخصیص‌یافته",
+      "noDevice": "ردیابی روی این خودرو نیست",
+      "pickVehicle": "— بدون تخصیص —",
+      "unassign": "لغو تخصیص",
+      "colName": "نام",
+      "colLicense": "گواهینامه",
+      "colVehicle": "خودرو",
+      "colDevice": "دستگاه",
+      "colStatus": "وضعیت",
+      "emptyDescription": "هنوز راننده‌ای نیست — یک راننده اضافه کنید تا به خودرو تخصیص دهید.",
+      "status": {
+        "ACTIVE": "فعال",
+        "INACTIVE": "غیرفعال",
+        "SUSPENDED": "معلق",
+        "TERMINATED": "خاتمه‌یافته"
+      }
+    },
     "actions": {
       "archive": "بایگانی",
-      "decommission": "تسویه"
+      "decommission": "تسویه",
+      "deactivate": "غیرفعال‌سازی"
     },
     "crud": {
       "createSuccess": "{{name}} ایجاد شد.",
@@ -1021,6 +1059,9 @@
       "archiveConfirmBody": "رکورد به‌صورت نرم بایگانی می‌شود و از فهرست‌های فعال پنهان می‌گردد.",
       "decommissionConfirmTitle": "تسویه {{name}}؟",
       "decommissionConfirmBody": "دستگاه تسویه می‌شود (حذف نرم) و گزارش‌دهی آن متوقف می‌شود.",
+      "deactivateSuccess": "{{name}} غیرفعال شد.",
+      "deactivateConfirmTitle": "غیرفعال‌سازی {{name}}؟",
+      "deactivateConfirmBody": "راننده غیرفعال می‌شود و تخصیص خودرو آزاد می‌گردد.",
       "conflict": "رکوردی با این کد یا IMEI از قبل وجود دارد."
     },
     "import": {
@@ -1747,6 +1788,85 @@
       "imeiFormat": "IMEI باید دقیقاً ۱۵ رقم باشد",
       "imeiLuhn": "IMEI معتبر نیست (بررسی Luhn ناموفق بود)",
       "protocolRequired": "یک پروتکل انتخاب کنید"
+    },
+    "driver": {
+      "firstNameRequired": "نام الزامی است",
+      "lastNameRequired": "نام خانوادگی الزامی است",
+      "nameTooLong": "نام حداکثر ۱۲۸ نویسه است",
+      "employeeIdTooLong": "شماره پرسنلی حداکثر ۶۴ نویسه است",
+      "phoneTooLong": "تلفن حداکثر ۳۲ نویسه است",
+      "licenseNumberRequired": "شماره گواهینامه الزامی است",
+      "licenseNumberTooLong": "شماره گواهینامه حداکثر ۶۴ نویسه است",
+      "licenseClassTooLong": "کلاس گواهینامه حداکثر ۳۲ نویسه است",
+      "licenseCountryTooLong": "کشور حداکثر ۶۴ نویسه است"
+    }
+  },
+  "rules": {
+    "title": "تنظیم قانون",
+    "subtitle": "قوانین سرعت، درجا، محدوده و سایر هشدارها را پیکربندی کنید",
+    "empty": "هنوز قانونی نیست",
+    "emptyHelp": "یک قانون بسازید تا موتور هشدار بتواند رویداد بسازد.",
+    "search": "جستجوی قوانین…",
+    "colName": "نام",
+    "colType": "نوع",
+    "colSeverity": "شدت",
+    "colEnabled": "فعال",
+    "colConditions": "شرایط",
+    "add": "افزودن قانون",
+    "edit": "ویرایش قانون",
+    "deleteConfirmTitle": "حذف {{name}}؟",
+    "deleteConfirmBody": "هشدارهای ثبت‌شده باقی می‌مانند. این قانون دیگر ارزیابی نمی‌شود.",
+    "createSuccess": "قانون ایجاد شد.",
+    "updateSuccess": "قانون به‌روزرسانی شد.",
+    "deleteSuccess": "قانون حذف شد.",
+    "enable": "فعال‌سازی",
+    "disable": "غیرفعال‌سازی",
+    "enabled": "روشن",
+    "disabled": "خاموش",
+    "allVehicles": "همه خودروها",
+    "allGeofences": "هر محدوده",
+    "noParams": "فقط رویداد",
+    "name": "نام",
+    "type": "نوع",
+    "severity": "شدت",
+    "entity": "اعمال روی",
+    "cooldown": "زمان انتظار (ثانیه)",
+    "dedup": "پنجرهٔ حذف تکرار (ثانیه)",
+    "repeat": "سیاست تکرار",
+    "thresholdKmh": "حد سرعت (کیلومتر بر ساعت)",
+    "gracePeriodSec": "مهلت (ثانیه)",
+    "minDurationSec": "حداقل مدت (ثانیه)",
+    "minOfflineSec": "حداقل آفلاین (ثانیه)",
+    "dwellSec": "توقف در محدوده (ثانیه)",
+    "maxDurationSec": "حداکثر مدت (ثانیه)",
+    "maxStopDurationSec": "حداکثر توقف (ثانیه)",
+    "geofenceId": "محدوده جغرافیایی",
+    "types": {
+      "overspeed": "سرعت غیرمجاز",
+      "ignition_on": "روشن شدن موتور",
+      "ignition_off": "خاموش شدن موتور",
+      "prolonged_idle": "درجا طولانی",
+      "parking": "پارک",
+      "device_offline": "دستگاه آفلاین",
+      "geofence_enter": "ورود به محدوده",
+      "geofence_exit": "خروج از محدوده",
+      "geofence_dwell": "توقف در محدوده",
+      "trip_started": "شروع سفر",
+      "trip_ended": "پایان سفر",
+      "excessive_trip_duration": "مدت سفر بیش از حد",
+      "excessive_stop_duration": "توقف بیش از حد"
+    },
+    "severities": {
+      "INFO": "اطلاعات",
+      "LOW": "کم",
+      "MEDIUM": "متوسط",
+      "HIGH": "زیاد",
+      "CRITICAL": "بحرانی"
+    },
+    "repeatPolicies": {
+      "ALWAYS": "همیشه",
+      "ONCE": "یک‌بار",
+      "COOLDOWN": "با فاصله"
     }
   },
   "navGroups": {

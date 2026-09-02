@@ -9,6 +9,7 @@ import { AppLayout } from '@/layouts/AppLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { AdminPage } from '@/pages/AdminPage';
 import { AlarmCenterPage } from '@/pages/AlarmCenterPage';
+import { AlarmRulesPage } from '@/pages/AlarmRulesPage';
 import { AssetManagementPage } from '@/pages/AssetManagementPage';
 import { CommandCenterPage } from '@/pages/CommandCenterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -157,6 +158,14 @@ export const router = createBrowserRouter([
             element: <AlarmCenterPage />,
           },
           {
+            path: '/rules',
+            element: (
+              <RequirePermission permission={PERMISSIONS.ruleRead}>
+                <AlarmRulesPage />
+              </RequirePermission>
+            ),
+          },
+          {
             // Phase 6 — Event Center (notification event-stream timeline).
             path: '/events',
             element: (
@@ -179,7 +188,7 @@ export const router = createBrowserRouter([
             element: (
               // Phase 3 — ANY-of gate mirrors the nav item's visibility rule
               // (vehicle.read OR fleet.read); the backend enforces per-entity.
-              <RequirePermission anyOf={[PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead]}>
+              <RequirePermission anyOf={[PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead, PERMISSIONS.driverRead]}>
                 <AssetManagementPage />
               </RequirePermission>
             ),
@@ -196,6 +205,10 @@ export const router = createBrowserRouter([
           {
             path: '/devices',
             element: <Navigate to="/assets?tab=devices" replace />,
+          },
+          {
+            path: '/drivers',
+            element: <Navigate to="/assets?tab=drivers" replace />,
           },
           {
             path: '/reports',

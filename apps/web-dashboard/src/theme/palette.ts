@@ -59,6 +59,80 @@ export const status = {
   slate: '#667085',
 } as const;
 
+/**
+ * Official ApexCharts demo palette
+ * (https://apexcharts.com/javascript-chart-demos/ — default theme colors).
+ * Chart series use these hues so dashboard/report charts match the demos.
+ */
+export const apex = {
+  blue: '#008FFB',
+  green: '#00E396',
+  yellow: '#FEB019',
+  red: '#FF4560',
+  purple: '#775DD0',
+  indigo: '#3F51B5',
+  slate: '#546E7A',
+  rose: '#D4526E',
+  brown: '#8D5B4C',
+  orange: '#F86624',
+  cyan: '#26A69A',
+  magenta: '#D10CE8',
+} as const;
+
+/** Default series order used by ApexCharts JavaScript demos. */
+export const apexPalette: readonly string[] = [
+  apex.blue,
+  apex.green,
+  apex.yellow,
+  apex.red,
+  apex.purple,
+  apex.indigo,
+  apex.cyan,
+  apex.orange,
+  apex.rose,
+  apex.magenta,
+];
+
+/**
+ * Semantic series colors for fleet charts — Apex demo hues, domain meaning
+ * preserved (moving stays green, speeding stays red, …).
+ */
+export const chart = {
+  moving: apex.green,
+  idle: apex.yellow,
+  parked: apex.slate,
+  offline: apex.red,
+  driving: apex.green,
+  stopped: apex.slate,
+  noTelemetry: apex.indigo,
+  distance: apex.blue,
+  trips: apex.green,
+  engine: apex.cyan,
+  odometer: apex.indigo,
+  peak: apex.orange,
+  speeding: apex.red,
+  geofence: apex.indigo,
+  fcw: apex.purple,
+  dtc: apex.cyan,
+  lowBattery: apex.brown,
+  other: apex.orange,
+  critical: apex.red,
+  high: apex.orange,
+  medium: apex.yellow,
+  low: apex.blue,
+  info: apex.slate,
+  open: apex.red,
+  acknowledged: apex.yellow,
+  resolved: apex.green,
+} as const;
+
+/** Donut/pie slice separators — match the card surface so slices look like Apex demos. */
+export const chartSurface = {
+  light: '#FFFFFF',
+  dark: '#1A2231',
+  tooltipGlow: 'rgba(0, 143, 251, 0.18)',
+} as const;
+
 /** Map/marker accents — vehicle states, geofences, selected routes. */
 export const mapAccents = {
   vehicleActive: '#12B76A',

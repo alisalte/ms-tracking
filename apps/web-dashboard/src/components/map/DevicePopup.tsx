@@ -20,8 +20,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { type AlarmListParams, fetchAlarms } from '@/api/alarm.api';
+import { driverFullName, useDrivers } from '@/api/driver.api';
 import { useVehicleDetail } from '@/api/fleet.api';
 import { useReverseGeocode } from '@/api/map.api';
+import { PERMISSIONS, usePermissions } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
 import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
@@ -67,7 +69,15 @@ export function DevicePopup({
 }: DevicePopupProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { can } = usePermissions();
   const { data, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
+  const { data: drivers } = useDrivers({
+    enabled: Boolean(vehicleId) && can(PERMISSIONS.driverRead),
+  });
+  const assignedDriver = drivers?.find((d) => d.assignedVehicleId === vehicleId);
+  const driverLabel = assignedDriver
+    ? driverFullName(assignedDriver)
+    : (data?.driver ?? t('map.popup.unassigned'));
 
   // Recent alerts for THIS vehicle (mock mode falls back to fixtures internally).
   const alerts = useQuery({
@@ -182,12 +192,7 @@ export function DevicePopup({
                 value={fmtKm(data.odometer)}
                 tone="gray"
               />
-              <Fact
-                icon={User}
-                label={t('map.popup.driver')}
-                value={data.driver ?? t('map.popup.unassigned')}
-                tone="gray"
-              />
+              <Fact icon={User} label={t('map.popup.driver')} value={driverLabel} tone="gray" />
               {/* §19 Last seen — device status last_seen, falling back to the fix. */}
               <Fact
                 icon={Satellite}

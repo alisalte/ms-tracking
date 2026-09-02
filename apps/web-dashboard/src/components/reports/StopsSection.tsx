@@ -18,7 +18,7 @@ import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
 import { formatDurationSec, hours1, shortLabel } from '@/lib/report-format';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 export function StopsSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
@@ -34,8 +34,8 @@ export function StopsSection({ range }: { range: ReportRange }) {
     const idle = hours1(o?.idleDurationSec ?? rows.reduce((s, r) => s + r.idleSec, 0));
     const parking = hours1(o?.parkingDurationSec ?? rows.reduce((s, r) => s + r.parkingSec, 0));
     return [
-      { label: t('reports.labels.idle'), value: idle, color: status.warning },
-      { label: t('reports.labels.parked'), value: parking, color: status.slate },
+      { label: t('reports.labels.idle'), value: idle, color: chart.idle },
+      { label: t('reports.labels.parked'), value: parking, color: chart.parked },
     ].filter((s) => s.value > 0);
   }, [o, rows, t]);
 
@@ -50,7 +50,6 @@ export function StopsSection({ range }: { range: ReportRange }) {
       labels: mix.map((s) => s.label),
       colors: mix.map((s) => s.color),
       legend: { position: 'bottom' },
-      stroke: { width: 2, colors: ['transparent'] },
       plotOptions: {
         pie: {
           donut: {
@@ -74,8 +73,8 @@ export function StopsSection({ range }: { range: ReportRange }) {
   const barOptions = useMemo<ApexOptions>(
     () => ({
       chart: { stacked: true },
-      colors: [status.warning, status.slate],
-      plotOptions: { bar: { horizontal: true, barHeight: '68%', borderRadius: 3 } },
+      colors: [chart.idle, chart.parked],
+      plotOptions: { bar: { horizontal: true, barHeight: '68%', borderRadius: 6 } },
       xaxis: { categories: topStops.map((r) => shortLabel(r.label)) },
       tooltip: { y: { formatter: (v: number) => `${v.toFixed(1)} h` } },
     }),

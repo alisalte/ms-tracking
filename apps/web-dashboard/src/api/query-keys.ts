@@ -36,6 +36,8 @@ export const queryKeys = {
     all: ['alarms'] as const,
     list: () => [...queryKeys.alarms.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.alarms.all, 'detail', id] as const,
+    rules: () => [...queryKeys.alarms.all, 'rules'] as const,
+    ruleDetail: (id: string) => [...queryKeys.alarms.all, 'rule', id] as const,
   },
   commands: {
     all: ['commands'] as const,

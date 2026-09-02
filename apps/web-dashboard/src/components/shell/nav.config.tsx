@@ -8,9 +8,11 @@ import {
   Map as MapIcon,
   MapPin,
   Navigation,
+  Scale,
   Settings,
   ShieldCheck,
   TerminalSquare,
+  UserRound,
   Video,
   Wrench,
 } from 'lucide-react';
@@ -71,6 +73,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'alarms', path: '/alarms', icon: Bell },
       {
+        key: 'rules',
+        path: '/rules',
+        icon: Scale,
+        permission: PERMISSIONS.ruleRead,
+      },
+      {
         // Phase 6 — Event Center (fleet event timeline).
         key: 'events',
         path: '/events',
@@ -107,7 +115,13 @@ export const NAV_GROUPS: NavGroup[] = [
         key: 'assets',
         path: '/assets',
         icon: Boxes,
-        anyOf: [PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead],
+        anyOf: [PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead, PERMISSIONS.driverRead],
+      },
+      {
+        key: 'drivers',
+        path: '/assets?tab=drivers',
+        icon: UserRound,
+        permission: PERMISSIONS.driverRead,
       },
     ],
   },
@@ -140,4 +154,44 @@ export function filterNavByPermissions(
       items: g.items.filter((i) => has(i.permission) && (i.anyOf ? i.anyOf.some(has) : true)),
     }))
     .filter((g) => g.items.length > 0);
+}
+
+/** Split a nav path that may carry a query string (`/assets?tab=drivers`). */
+export function splitNavPath(path: string): { pathname: string; searchParams: URLSearchParams } {
+  const q = path.indexOf('?');
+  if (q === -1) return { pathname: path, searchParams: new URLSearchParams() };
+  return { pathname: path.slice(0, q), searchParams: new URLSearchParams(path.slice(q)) };
+}
+
+const ALL_NAV_PATHS: readonly string[] = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.path));
+
+/**
+ * Active-item match that understands query strings so `/assets` and
+ * `/assets?tab=drivers` do not highlight at the same time.
+ */
+export function isNavItemActive(
+  itemPath: string,
+  location: { pathname: string; search: string },
+  allItemPaths: readonly string[] = ALL_NAV_PATHS,
+): boolean {
+  const { pathname, searchParams } = splitNavPath(itemPath);
+  const locParams = new URLSearchParams(location.search);
+
+  const pathMatch =
+    location.pathname === pathname ||
+    (pathname !== '/dashboard' && location.pathname.startsWith(`${pathname}/`));
+  if (!pathMatch) return false;
+
+  if ([...searchParams.keys()].length > 0) {
+    return [...searchParams.entries()].every(([k, v]) => locParams.get(k) === v);
+  }
+
+  // A more specific sibling (same pathname + extra query) owns this location.
+  return !allItemPaths.some((other) => {
+    if (other === itemPath) return false;
+    const o = splitNavPath(other);
+    if (o.pathname !== pathname) return false;
+    if ([...o.searchParams.keys()].length === 0) return false;
+    return [...o.searchParams.entries()].every(([k, v]) => locParams.get(k) === v);
+  });
 }

@@ -62,6 +62,7 @@
     "trips": "Trips",
     "video": "Video",
     "alarms": "Alarms",
+    "rules": "Rules",
     "assets": "Assets",
     "maintenance": "Maintenance",
     "compliance": "Compliance",
@@ -889,13 +890,14 @@
   },
   "assets": {
     "title": "Asset Management",
-    "subtitle": "Fleets, vehicles, and devices",
+    "subtitle": "Fleets, vehicles, devices, and drivers",
     "empty": "No records match your filters.",
     "count": "{{count}}",
     "tabs": {
       "fleets": "Fleets",
       "vehicles": "Vehicles",
-      "devices": "Devices"
+      "devices": "Devices",
+      "drivers": "Drivers"
     },
     "filters": {
       "allStatus": "All statuses",
@@ -931,6 +933,7 @@
       "colOdometer": "Odometer",
       "engineHours": "Engine hours",
       "colEngineHours": "Hours",
+      "assignedDriver": "Assigned driver",
       "fleet": "Fleet",
       "pickFleet": "— Select a fleet —",
       "name": "Name",
@@ -952,7 +955,7 @@
     },
     "device": {
       "notFound": "Device not found.",
-      "search": "Search IMEI / serial / model…",
+      "search": "Search IMEI / serial / model / driver…",
       "imei": "IMEI",
       "serial": "Serial number",
       "manufacturer": "Manufacturer",
@@ -965,6 +968,8 @@
       "colModel": "Model",
       "colProtocol": "Protocol",
       "colVehicle": "Vehicle",
+      "colDriver": "Driver",
+      "assignedDriver": "Assigned driver",
       "colLastSeen": "Last seen",
       "registry": "Registry",
       "connection": "Connection",
@@ -1008,9 +1013,42 @@
       "colStatus": "Status",
       "emptyDescription": "No devices yet — register a tracker to see it here."
     },
+    "driver": {
+      "notFound": "Driver not found.",
+      "search": "Search name / license / employee id / device…",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "employeeId": "Employee ID",
+      "email": "Email",
+      "phone": "Phone",
+      "licenseNumber": "License number",
+      "licenseClass": "License class",
+      "licenseIssued": "Issued",
+      "licenseExpires": "Expires",
+      "licenseExpiry": "Expires",
+      "licenseCountry": "License country",
+      "assignedVehicle": "Assigned vehicle",
+      "assignedDevice": "Assigned device",
+      "noDevice": "No tracker on this vehicle",
+      "pickVehicle": "— Unassigned —",
+      "unassign": "Unassign",
+      "colName": "Name",
+      "colLicense": "License",
+      "colVehicle": "Vehicle",
+      "colDevice": "Device",
+      "colStatus": "Status",
+      "emptyDescription": "No drivers yet — add a driver to assign to vehicles.",
+      "status": {
+        "ACTIVE": "Active",
+        "INACTIVE": "Inactive",
+        "SUSPENDED": "Suspended",
+        "TERMINATED": "Terminated"
+      }
+    },
     "actions": {
       "archive": "Archive",
-      "decommission": "Decommission"
+      "decommission": "Decommission",
+      "deactivate": "Deactivate"
     },
     "crud": {
       "createSuccess": "{{name}} created.",
@@ -1021,6 +1059,9 @@
       "archiveConfirmBody": "The record is soft-archived and hidden from active lists.",
       "decommissionConfirmTitle": "Decommission {{name}}?",
       "decommissionConfirmBody": "The device is decommissioned (soft delete) and stops reporting.",
+      "deactivateSuccess": "{{name}} deactivated.",
+      "deactivateConfirmTitle": "Deactivate {{name}}?",
+      "deactivateConfirmBody": "The driver is set inactive and any vehicle assignment is released.",
       "conflict": "A record with this code or IMEI already exists."
     },
     "import": {
@@ -1747,6 +1788,85 @@
       "imeiFormat": "IMEI must be exactly 15 digits",
       "imeiLuhn": "IMEI is not valid (Luhn check failed)",
       "protocolRequired": "Select a protocol"
+    },
+    "driver": {
+      "firstNameRequired": "First name is required",
+      "lastNameRequired": "Last name is required",
+      "nameTooLong": "Name must be at most 128 characters",
+      "employeeIdTooLong": "Employee ID must be at most 64 characters",
+      "phoneTooLong": "Phone must be at most 32 characters",
+      "licenseNumberRequired": "License number is required",
+      "licenseNumberTooLong": "License number must be at most 64 characters",
+      "licenseClassTooLong": "License class must be at most 32 characters",
+      "licenseCountryTooLong": "Country must be at most 64 characters"
+    }
+  },
+  "rules": {
+    "title": "Alert rules",
+    "subtitle": "Configure overspeed, idle, geofence, and other alarm laws",
+    "empty": "No rules yet",
+    "emptyHelp": "Create a rule so the engine can raise alarms.",
+    "search": "Search rules…",
+    "colName": "Name",
+    "colType": "Type",
+    "colSeverity": "Severity",
+    "colEnabled": "Enabled",
+    "colConditions": "Conditions",
+    "add": "Add rule",
+    "edit": "Edit rule",
+    "deleteConfirmTitle": "Delete {{name}}?",
+    "deleteConfirmBody": "Raised alarms stay in history. This rule will no longer evaluate.",
+    "createSuccess": "Rule created.",
+    "updateSuccess": "Rule updated.",
+    "deleteSuccess": "Rule deleted.",
+    "enable": "Enable",
+    "disable": "Disable",
+    "enabled": "On",
+    "disabled": "Off",
+    "allVehicles": "All vehicles",
+    "allGeofences": "Any geofence",
+    "noParams": "Event only",
+    "name": "Name",
+    "type": "Type",
+    "severity": "Severity",
+    "entity": "Applies to",
+    "cooldown": "Cooldown (seconds)",
+    "dedup": "Dedup window (seconds)",
+    "repeat": "Repeat policy",
+    "thresholdKmh": "Speed limit (km/h)",
+    "gracePeriodSec": "Grace period (seconds)",
+    "minDurationSec": "Minimum duration (seconds)",
+    "minOfflineSec": "Minimum offline (seconds)",
+    "dwellSec": "Dwell (seconds)",
+    "maxDurationSec": "Max duration (seconds)",
+    "maxStopDurationSec": "Max stop (seconds)",
+    "geofenceId": "Geofence",
+    "types": {
+      "overspeed": "Overspeed",
+      "ignition_on": "Ignition on",
+      "ignition_off": "Ignition off",
+      "prolonged_idle": "Prolonged idle",
+      "parking": "Parking",
+      "device_offline": "Device offline",
+      "geofence_enter": "Geofence enter",
+      "geofence_exit": "Geofence exit",
+      "geofence_dwell": "Geofence dwell",
+      "trip_started": "Trip started",
+      "trip_ended": "Trip ended",
+      "excessive_trip_duration": "Excessive trip duration",
+      "excessive_stop_duration": "Excessive stop duration"
+    },
+    "severities": {
+      "INFO": "Info",
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "CRITICAL": "Critical"
+    },
+    "repeatPolicies": {
+      "ALWAYS": "Always",
+      "ONCE": "Once",
+      "COOLDOWN": "Cooldown"
     }
   },
   "navGroups": {

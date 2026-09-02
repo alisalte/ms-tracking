@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTrips } from '@/api/report.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
@@ -53,24 +53,26 @@ export function HourlyActivityChart() {
 
   const options = useMemo<ApexOptions>(
     () => ({
-      colors: [status.teal],
+      colors: [chart.distance],
       fill: {
         type: 'gradient',
         gradient: {
-          shadeIntensity: 0.4,
-          opacityFrom: 0.95,
-          opacityTo: 0.35,
+          shade: 'light',
+          type: 'vertical',
+          shadeIntensity: 0.35,
+          opacityFrom: 1,
+          opacityTo: 0.65,
           stops: [0, 100],
         },
       },
       plotOptions: {
         bar: {
-          columnWidth: '58%',
-          borderRadius: 3,
+          columnWidth: '52%',
+          borderRadius: 6,
           colors: {
             ranges:
               peak >= 0
-                ? [{ from: counts[peak], to: counts[peak], color: status.warning }]
+                ? [{ from: counts[peak], to: counts[peak], color: chart.peak }]
                 : [],
           },
         },

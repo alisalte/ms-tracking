@@ -1,7 +1,4 @@
-# FleetVision CI — Sprint 1 base pipeline (Sprint 1 plan Deliverable 5).
-# Single job, no matrix. Installs via Corepack-bundled pnpm, then typecheck +
-# Biome lint/format + build + unit tests across the whole workspace.
-# Matrix/scan/sign gates land in Sprint 2.
+# FleetVision CI — verify on every PR/main, publish images from main.
 name: CI
 
 on:
@@ -9,10 +6,14 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -49,3 +50,67 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  images:
+    name: docker • ${{ matrix.image }}
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - image: identity-service
+            dockerfile: apps/identity-service/Dockerfile
+          - image: fleet-management-service
+            dockerfile: apps/fleet-management-service/Dockerfile
+          - image: fleet-service
+            dockerfile: apps/fleet-service/Dockerfile
+          - image: gps-engine-service
+            dockerfile: apps/gps-engine-service/Dockerfile
+          - image: notification-service
+            dockerfile: apps/notification-service/Dockerfile
+          - image: reporting-service
+            dockerfile: apps/reporting-service/Dockerfile
+          - image: device-gateway-service
+            dockerfile: apps/device-gateway-service/Dockerfile
+          - image: mdvr-streamer-service
+            dockerfile: apps/mdvr-streamer-service/Dockerfile
+          - image: media-service
+            dockerfile: apps/media-service/Dockerfile
+          - image: map-engine
+            dockerfile: apps/map-engine-service/Dockerfile
+          - image: web-dashboard
+            dockerfile: apps/web-dashboard/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Registry (lowercase)
+        run: echo "REGISTRY=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ matrix.image }}:main
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=min,scope=${{ matrix.image }}
+          build-args: |
+            VITE_GPS_WS_URL=/gps-ws
+            VITE_NOTIFICATION_WS_URL=/notif-ws

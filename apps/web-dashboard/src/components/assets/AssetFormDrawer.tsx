@@ -29,6 +29,7 @@ import {
   useUpdateFleet,
   useUpdateVehicle,
 } from '@/api/asset.api';
+import { datetimeToDateInput, useCreateDriver, useUpdateDriver } from '@/api/driver.api';
 import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { useToast } from '@/components/feedback/ToastProvider';
 import {
@@ -44,18 +45,21 @@ import {
 import type { AssetTab } from '@/pages/AssetManagementPage';
 import type {
   CreateDevicePayload,
+  CreateDriverPayload,
   CreateFleetPayload,
   CreateVehiclePayload,
   Device,
   DeviceProtocol,
   DeviceStatus,
+  Driver,
   Fleet,
   UpdateDevicePayload,
+  UpdateDriverPayload,
   Vehicle,
 } from '@/types/asset.types';
 
 /** The discriminated record a drawer can edit (create omits the record). */
-export type AssetRecord = Fleet | Vehicle | Device;
+export type AssetRecord = Fleet | Vehicle | Device | Driver;
 
 export interface AssetFormDrawerProps {
   open: boolean;
@@ -65,6 +69,8 @@ export interface AssetFormDrawerProps {
   record?: AssetRecord;
   /** Fleet registry — powers the vehicle form's fleet select. */
   fleets?: Fleet[];
+  /** Vehicle registry — powers the driver form's assignment select. */
+  vehicles?: Vehicle[];
   onClose: () => void;
   /** Invoked after a successful create/update (the hook already invalidated). */
   onSuccess?: () => void;
@@ -189,12 +195,53 @@ const deviceEditSchema = z.object({
 const PROTOCOL_OPTIONS: DeviceProtocol[] = ['gt06', 'jt808', 'meitrack', 'stub'];
 const DEVICE_STATUS_OPTIONS: DeviceStatus[] = ['ACTIVE', 'SUSPENDED', 'UNPAIRED', 'DECOMMISSIONED'];
 
+const optionalEmail = z
+  .string()
+  .trim()
+  .refine((v) => v === '' || z.string().email().safeParse(v).success, {
+    message: 'validation.email.invalid',
+  });
+
+const driverSchema = z.object({
+  firstName: z
+    .string()
+    .trim()
+    .min(1, { message: 'validation.driver.firstNameRequired' })
+    .max(128, { message: 'validation.driver.nameTooLong' }),
+  lastName: z
+    .string()
+    .trim()
+    .min(1, { message: 'validation.driver.lastNameRequired' })
+    .max(128, { message: 'validation.driver.nameTooLong' }),
+  employeeId: optionalText(64, 'validation.driver.employeeIdTooLong'),
+  email: optionalEmail,
+  phone: optionalText(32, 'validation.driver.phoneTooLong'),
+  licenseNumber: z
+    .string()
+    .trim()
+    .min(1, { message: 'validation.driver.licenseNumberRequired' })
+    .max(64, { message: 'validation.driver.licenseNumberTooLong' }),
+  licenseClass: optionalText(32, 'validation.driver.licenseClassTooLong'),
+  licenseIssued: z.string(),
+  licenseExpires: z.string(),
+  licenseCountry: optionalText(64, 'validation.driver.licenseCountryTooLong'),
+  assignedVehicleId: z.string(),
+});
+
+function schemaFor(entity: AssetTab, isEdit: boolean) {
+  if (entity === 'fleets') return fleetSchema;
+  if (entity === 'vehicles') return vehicleSchema;
+  if (entity === 'drivers') return driverSchema;
+  return isEdit ? deviceEditSchema : deviceCreateSchema;
+}
+
 export function AssetFormDrawer({
   open,
   mode,
   entity,
   record,
   fleets = [],
+  vehicles = [],
   onClose,
   onSuccess,
 }: AssetFormDrawerProps) {
@@ -209,18 +256,10 @@ export function AssetFormDrawer({
   const updateVehicle = useUpdateVehicle();
   const createDevice = useCreateDevice();
   const updateDevice = useUpdateDevice();
+  const createDriver = useCreateDriver();
+  const updateDriver = useUpdateDriver();
 
-  const schema = useMemo(
-    () =>
-      entity === 'fleets'
-        ? fleetSchema
-        : entity === 'vehicles'
-          ? vehicleSchema
-          : isEdit
-            ? deviceEditSchema
-            : deviceCreateSchema,
-    [entity, isEdit],
-  );
+  const schema = useMemo(() => schemaFor(entity, isEdit), [entity, isEdit]);
 
   const defaultValues = useMemo(
     () => buildDefaults(entity, record, isEdit),
@@ -266,18 +305,12 @@ export function AssetFormDrawer({
     onClose();
   };
 
-  const isPending =
-    entity === 'fleets'
-      ? isEdit
-        ? updateFleet.isPending
-        : createFleet.isPending
-      : entity === 'vehicles'
-        ? isEdit
-          ? updateVehicle.isPending
-          : createVehicle.isPending
-        : isEdit
-          ? updateDevice.isPending
-          : createDevice.isPending;
+  const isPending = (() => {
+    if (entity === 'fleets') return isEdit ? updateFleet.isPending : createFleet.isPending;
+    if (entity === 'vehicles') return isEdit ? updateVehicle.isPending : createVehicle.isPending;
+    if (entity === 'drivers') return isEdit ? updateDriver.isPending : createDriver.isPending;
+    return isEdit ? updateDevice.isPending : createDevice.isPending;
+  })();
 
   const entityLabelKey = `assets.tabs.${entity}`;
 
@@ -324,6 +357,30 @@ export function AssetFormDrawer({
           });
         } else {
           await createVehicle.mutateAsync(payload);
+        }
+      } else if (entity === 'drivers') {
+        const assigned = String(values.assignedVehicleId ?? '').trim();
+        const payload: CreateDriverPayload = {
+          firstName: String(values.firstName),
+          lastName: String(values.lastName),
+          licenseNumber: String(values.licenseNumber),
+          ...(values.employeeId ? { employeeId: String(values.employeeId) } : {}),
+          ...(values.email ? { email: String(values.email) } : {}),
+          ...(values.phone ? { phone: String(values.phone) } : {}),
+          ...(values.licenseClass ? { licenseClass: String(values.licenseClass) } : {}),
+          ...(values.licenseIssued ? { licenseIssued: String(values.licenseIssued) } : {}),
+          ...(values.licenseExpires ? { licenseExpires: String(values.licenseExpires) } : {}),
+          ...(values.licenseCountry ? { licenseCountry: String(values.licenseCountry) } : {}),
+          ...(assigned ? { assignedVehicleId: assigned } : {}),
+        };
+        if (isEdit && record) {
+          const changes: UpdateDriverPayload = {
+            ...payload,
+            assignedVehicleId: assigned || null,
+          };
+          await updateDriver.mutateAsync({ id: record.id, changes });
+        } else {
+          await createDriver.mutateAsync(payload);
         }
       } else {
         // Devices — create takes the IMEI; edit never sends it (immutable).
@@ -404,6 +461,9 @@ export function AssetFormDrawer({
               imei={record && entity === 'devices' ? (record as Device).imei : undefined}
               t={t}
             />
+          )}
+          {entity === 'drivers' && (
+            <DriverFields control={control} errors={errors} vehicles={vehicles} t={t} />
           )}
 
           <p className="mt-2 text-xs text-gray-500 dark:text-graydark-600">
@@ -646,6 +706,120 @@ function DeviceFields({
   );
 }
 
+function DriverFields({
+  control,
+  errors,
+  vehicles,
+  t,
+}: FieldProps & { vehicles: Vehicle[] }) {
+  const options = [...vehicles].sort(
+    (a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE'),
+  );
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldText
+          control={control}
+          name="firstName"
+          label={`${t('assets.driver.firstName')} *`}
+          error={errors.firstName as FieldError | undefined}
+          t={t}
+        />
+        <FieldText
+          control={control}
+          name="lastName"
+          label={`${t('assets.driver.lastName')} *`}
+          error={errors.lastName as FieldError | undefined}
+          t={t}
+        />
+      </div>
+      <FieldText
+        control={control}
+        name="employeeId"
+        label={t('assets.driver.employeeId')}
+        optional
+        error={errors.employeeId as FieldError | undefined}
+        t={t}
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldText
+          control={control}
+          name="email"
+          label={t('assets.driver.email')}
+          optional
+          error={errors.email as FieldError | undefined}
+          t={t}
+        />
+        <FieldText
+          control={control}
+          name="phone"
+          label={t('assets.driver.phone')}
+          optional
+          error={errors.phone as FieldError | undefined}
+          t={t}
+        />
+      </div>
+      <FieldText
+        control={control}
+        name="licenseNumber"
+        label={`${t('assets.driver.licenseNumber')} *`}
+        error={errors.licenseNumber as FieldError | undefined}
+        t={t}
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldText
+          control={control}
+          name="licenseClass"
+          label={t('assets.driver.licenseClass')}
+          optional
+          error={errors.licenseClass as FieldError | undefined}
+          t={t}
+        />
+        <FieldText
+          control={control}
+          name="licenseCountry"
+          label={t('assets.driver.licenseCountry')}
+          optional
+          error={errors.licenseCountry as FieldError | undefined}
+          t={t}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldText
+          control={control}
+          name="licenseIssued"
+          label={t('assets.driver.licenseIssued')}
+          type="date"
+          optional
+          error={errors.licenseIssued as FieldError | undefined}
+          t={t}
+        />
+        <FieldText
+          control={control}
+          name="licenseExpires"
+          label={t('assets.driver.licenseExpires')}
+          type="date"
+          optional
+          error={errors.licenseExpires as FieldError | undefined}
+          t={t}
+        />
+      </div>
+      <FieldSelect
+        control={control}
+        name="assignedVehicleId"
+        label={t('assets.driver.assignedVehicle')}
+        placeholder={t('assets.driver.pickVehicle')}
+        options={options.map((v) => ({
+          value: v.id,
+          label: v.status === 'ACTIVE' ? v.name : `${v.name} (${t('assets.vehicle.status.ARCHIVED')})`,
+        }))}
+        error={errors.assignedVehicleId as FieldError | undefined}
+        t={t}
+      />
+    </>
+  );
+}
+
 // ── Field primitives ─────────────────────────────────────────────────────────
 
 interface FieldCommon {
@@ -765,6 +939,22 @@ function buildDefaults(
         engineHours: v.engineHours != null ? String(v.engineHours) : '',
       };
     }
+    if (entity === 'drivers') {
+      const d = record as Driver;
+      return {
+        firstName: d.firstName,
+        lastName: d.lastName,
+        employeeId: d.employeeId ?? '',
+        email: d.email ?? '',
+        phone: d.phone ?? '',
+        licenseNumber: d.licenseNumber,
+        licenseClass: d.licenseClass ?? '',
+        licenseIssued: datetimeToDateInput(d.licenseIssued),
+        licenseExpires: datetimeToDateInput(d.licenseExpires),
+        licenseCountry: d.licenseCountry ?? '',
+        assignedVehicleId: d.assignedVehicleId ?? '',
+      };
+    }
     const d = record as Device;
     return {
       serialNumber: d.serialNumber ?? '',
@@ -778,5 +968,20 @@ function buildDefaults(
   if (entity === 'fleets') return { name: '', code: '', description: '' };
   if (entity === 'vehicles')
     return { fleetId: '', name: '', code: '', plate: '', vin: '', odometerKm: '', engineHours: '' };
+  if (entity === 'drivers') {
+    return {
+      firstName: '',
+      lastName: '',
+      employeeId: '',
+      email: '',
+      phone: '',
+      licenseNumber: '',
+      licenseClass: '',
+      licenseIssued: '',
+      licenseExpires: '',
+      licenseCountry: '',
+      assignedVehicleId: '',
+    };
+  }
   return { imei: '', serialNumber: '', manufacturer: '', model: '', protocol: 'gt06' };
 }

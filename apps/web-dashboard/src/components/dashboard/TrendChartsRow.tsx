@@ -4,10 +4,11 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ReportPresetId, useTrend } from '@/api/report.api';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
+import { mixedDistanceTrips } from './distance-trips-mixed';
 
 /** Trend presets offered on the dashboard (compact 7d/30d switch). */
 const PRESETS: ReportPresetId[] = ['7d', '30d'];
@@ -17,61 +18,41 @@ const PRESETS: ReportPresetId[] = ['7d', '30d'];
  * the reporting service's `GET /reports/trend` (Sprint J KPI formulas).
  */
 export function TrendChartsRow() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [preset, setPreset] = useState<ReportPresetId>('7d');
   const trend = useTrend({ preset });
   const points = useMemo(() => trend.data?.points ?? [], [trend.data]);
   const empty = !trend.isLoading && !trend.isError && points.length === 0;
   const categories = useMemo(() => points.map((p) => p.day.slice(5)), [points]);
 
-  const distanceTripsOptions = useMemo<ApexOptions>(
-    () => ({
-      chart: { stacked: false },
-      colors: [status.blue, status.teal],
-      stroke: { width: [3, 0] },
-      fill: { type: ['gradient', 'solid'], opacity: [0.25, 1] },
-      legend: { position: 'top', horizontalAlign: 'left' },
-      xaxis: { categories },
-      yaxis: [
-        { title: { text: 'km' }, decimalsInFloat: 0 },
-        { opposite: true, title: { text: t('dashboard.charts.trips') }, decimalsInFloat: 0 },
-      ],
-      plotOptions: { bar: { columnWidth: '42%', borderRadius: 3 } },
-    }),
-    [categories, t],
-  );
-
-  const distanceTripsSeries = useMemo(
-    () => [
-      {
-        name: t('dashboard.charts.distance'),
-        type: 'area' as const,
-        data: points.map((p) => Number(p.distanceKm.toFixed(1))),
-      },
-      {
-        name: t('dashboard.charts.trips'),
-        type: 'column' as const,
-        data: points.map((p) => p.trips),
-      },
-    ],
-    [points, t],
+  const mixed = useMemo(
+    () =>
+      mixedDistanceTrips(
+        points,
+        {
+          distance: t('dashboard.charts.distance'),
+          trips: t('dashboard.charts.trips'),
+        },
+        i18n.language,
+      ),
+    [points, t, i18n.language],
   );
 
   const alarmBuckets = useMemo(
     () =>
       [
-        { key: 'alarmSpeeding' as const, label: t('dashboard.charts.speeding'), color: status.red },
+        { key: 'alarmSpeeding' as const, label: t('dashboard.charts.speeding'), color: chart.speeding },
         {
           key: 'alarmGeofence' as const,
           label: t('dashboard.charts.geofence'),
-          color: status.indigo,
+          color: chart.geofence,
         },
         {
           key: 'alarmOffline' as const,
           label: t('dashboard.charts.offline'),
-          color: status.slate,
+          color: chart.offline,
         },
-        { key: 'alarmOther' as const, label: t('dashboard.charts.other'), color: status.amber },
+        { key: 'alarmOther' as const, label: t('dashboard.charts.other'), color: chart.other },
       ] as const,
     [t],
   );
@@ -83,7 +64,7 @@ export function TrendChartsRow() {
       legend: { position: 'top', horizontalAlign: 'left' },
       xaxis: { categories },
       yaxis: { decimalsInFloat: 0 },
-      plotOptions: { bar: { columnWidth: '48%', borderRadius: 2 } },
+      plotOptions: { bar: { columnWidth: '48%', borderRadius: 4 } },
       fill: { opacity: 1 },
     }),
     [alarmBuckets, categories],
@@ -136,9 +117,9 @@ export function TrendChartsRow() {
           <div className="w-full px-4 pb-3 sm:px-5">
             <ApexChart
               type="line"
-              series={distanceTripsSeries}
-              options={distanceTripsOptions}
-              height={240}
+              series={mixed.series}
+              options={mixed.options}
+              height={300}
             />
           </div>
         </DashboardCard>

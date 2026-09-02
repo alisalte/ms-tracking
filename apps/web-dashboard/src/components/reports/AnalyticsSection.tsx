@@ -28,7 +28,7 @@ import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
-import { status } from '@/theme/palette';
+import { chart } from '@/theme/palette';
 import type { ApexOptions } from 'apexcharts';
 
 const DOWN_IS_GOOD = new Set([
@@ -298,8 +298,8 @@ function fleetBarSeries(rows: FleetComparisonRowWire[], t: (k: string) => string
 
 function fleetBarOptions(rows: FleetComparisonRowWire[], t: (k: string) => string): ApexOptions {
   return {
-    colors: [status.teal, status.info],
-    plotOptions: { bar: { columnWidth: '55%', borderRadius: 3 } },
+    colors: [chart.distance, chart.trips],
+    plotOptions: { bar: { columnWidth: '48%', borderRadius: 6 } },
     xaxis: { categories: rows.map((r) => r.fleetName) },
     yaxis: [
       { title: { text: t('reports.labels.km') }, decimalsInFloat: 1 },

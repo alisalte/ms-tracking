@@ -24,6 +24,10 @@ export const PERMISSIONS = {
   vehicleWrite: 'vehicle.write',
   deviceRead: 'device.read',
   deviceWrite: 'device.write',
+  driverRead: 'fleet.driver.read',
+  driverCreate: 'fleet.driver.create',
+  driverWrite: 'fleet.driver.update',
+  driverManage: 'fleet.driver.manage',
   trackingRead: 'tracking.read',
   // Sprint I — geofence management (map-engine; reused Sprint F permission names).
   mapsRead: 'maps.read',
@@ -36,6 +40,7 @@ export const PERMISSIONS = {
   alertAck: 'notification.alert.ack',
   alertResolve: 'notification.alert.resolve',
   ruleRead: 'notification.rule.read',
+  ruleCreate: 'notification.rule.create',
   ruleWrite: 'notification.rule.update',
   eventRead: 'notification.event.read',
   // Sprint H — notification center.

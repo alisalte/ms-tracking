@@ -16,6 +16,7 @@ import { queryKeys } from '@/api/query-keys';
 import { useAuthStore } from '@/auth/auth.store';
 import { useRealtimeSocket } from '@/hooks/useRealtimeSocket';
 import { shouldUseMock } from '@/lib/mock-gate';
+import { resolveRealtimeTarget } from '@/lib/realtime-url';
 import type { Notification, UnreadCount } from '@/types/notification.types';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -71,10 +72,18 @@ export function useNotificationRealtime(wsUrl?: string) {
   const userId = useAuthStore((s) => s.user?.id) ?? null;
   const qc = useQueryClient();
 
-  const url = wsUrl ?? import.meta.env.VITE_NOTIFICATION_WS_URL ?? 'http://localhost:3010';
+  const target = resolveRealtimeTarget(
+    wsUrl ?? import.meta.env.VITE_NOTIFICATION_WS_URL,
+    'http://localhost:3010',
+    '/notif-ws/socket.io',
+  );
   const enabled = Boolean(tenantId) && !shouldUseMock();
 
-  const { state, subscribe, emit } = useRealtimeSocket({ url, enabled });
+  const { state, subscribe, emit } = useRealtimeSocket({
+    url: target.url,
+    path: target.path,
+    enabled,
+  });
   const tenantRef = useRef(tenantId);
   const userRef = useRef(userId);
   tenantRef.current = tenantId;

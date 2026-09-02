@@ -1,0 +1,84 @@
+# FleetVision CD — pull GHCR images onto the server and recreate the stack.
+#
+# First-time setup: docs/runbooks/server-deploy.md
+# Auto-deploy after CI images: set repository variable ENABLE_CD=true
+# Manual: Actions → CD → Run workflow (optional IMAGE_TAG override).
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to deploy (git SHA or main)
+        required: false
+        default: main
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: deploy • server
+    runs-on: ubuntu-latest
+    environment: production
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       vars.ENABLE_CD == 'true')
+    steps:
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.image_tag }}"
+            TAG="${TAG:-main}"
+          else
+            TAG="${{ github.event.workflow_run.head_sha }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "registry=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          envs: GHCR_TOKEN,GITHUB_ACTOR,IMAGE_TAG,IMAGE_REGISTRY,DEPLOY_PATH
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${DEPLOY_PATH:-/opt/fleetvision/repo}"
+            [ -n "${DEPLOY_PATH}" ] || DEPLOY_PATH="/opt/fleetvision/repo"
+            cd "${DEPLOY_PATH}"
+            git fetch origin
+            if git rev-parse --verify "${IMAGE_TAG}^{commit}" >/dev/null 2>&1; then
+              git checkout --force "${IMAGE_TAG}"
+            elif git rev-parse --verify "origin/${IMAGE_TAG}" >/dev/null 2>&1; then
+              git checkout --force "origin/${IMAGE_TAG}"
+            else
+              git fetch origin "${IMAGE_TAG}"
+              git checkout --force FETCH_HEAD
+            fi
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+            export DEPLOY_IMAGE_TAG="${IMAGE_TAG}"
+            export DEPLOY_IMAGE_REGISTRY="${IMAGE_REGISTRY}"
+            chmod +x tools/deploy-remote.sh
+            FLEETVISION_ENV="${FLEETVISION_ENV:-/opt/fleetvision/.env}" \
+              ./tools/deploy-remote.sh
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          IMAGE_REGISTRY: ${{ steps.tag.outputs.registry }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}

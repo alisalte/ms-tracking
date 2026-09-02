@@ -29,6 +29,7 @@ describe('permission catalog (Sprint B additions)', () => {
     expect(Permissions.MAPS_WRITE).toBe('maps.write');
     expect(Permissions.MEDIA_READ).toBe('media.read');
     expect(Permissions.MEDIA_WRITE).toBe('media.write');
-    expect(Permissions.GATEWAY_MANAGE).toBe('telemetry.gateway.manage');
+    expect(Permissions.FLEET_DRIVER_READ).toBe('fleet.driver.read');
+    expect(Permissions.FLEET_DRIVER_CREATE).toBe('fleet.driver.create');
   });
 });

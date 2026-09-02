@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
 import { AssetManagementPage } from '@/pages/AssetManagementPage';
-import type { Device, Fleet, Vehicle } from '@/types/asset.types';
+import type { Device, Driver, Fleet, Vehicle } from '@/types/asset.types';
 import type { User } from '@/types/auth.types';
 
 import { i18n } from '@/i18n';
@@ -129,7 +129,27 @@ const fx = vi.hoisted(() => {
       updatedAt: TS,
     },
   ];
-  return { fleets, vehicles, devices };
+  const drivers: Driver[] = [
+    {
+      id: 'drv-1',
+      tenantId: 'tenant-1',
+      employeeId: 'EMP-001',
+      firstName: 'Ali',
+      lastName: 'Karimi',
+      email: 'ali.karimi@fleet.local',
+      phone: '+989121111111',
+      licenseNumber: 'DL-1001',
+      licenseClass: 'B',
+      licenseIssued: TS,
+      licenseExpires: '2028-01-15T00:00:00.000Z',
+      licenseCountry: 'IR',
+      status: 'ACTIVE',
+      assignedVehicleId: 'veh-1',
+      assignedAt: TS,
+      version: 1,
+    },
+  ];
+  return { fleets, vehicles, devices, drivers };
 });
 
 vi.mock('@/api/asset.api', () => {
@@ -188,6 +208,34 @@ vi.mock('@/api/asset.api', () => {
   };
 });
 
+vi.mock('@/api/driver.api', () => {
+  const ok = (data: unknown) => ({
+    data,
+    isLoading: false,
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  const mutation = () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(() => Promise.resolve({})),
+    isPending: false,
+    reset: vi.fn(),
+  });
+  return {
+    driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
+    datetimeToDateInput: (v: string | null | undefined) => (v ? v.slice(0, 10) : ''),
+    useDrivers: () => ok(fx.drivers),
+    useDriverDetail: (id: string | null) => ok(id ? fx.drivers.find((d) => d.id === id) : undefined),
+    useCreateDriver: mutation,
+    useUpdateDriver: mutation,
+    useDeactivateDriver: mutation,
+    useAssignDriverVehicle: mutation,
+    useUnassignDriverVehicle: mutation,
+  };
+});
+
 function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
 }
@@ -233,14 +281,12 @@ describe('AssetManagementPage', () => {
     setUser(['*']);
   });
 
-  it('renders the title + 3 real-registry tabs (no drivers/groups)', async () => {
+  it('renders the title + 4 real-registry tabs (no groups)', async () => {
     renderAssets();
     expect(await screen.findByText('Asset Management')).toBeInTheDocument();
-    for (const tab of ['Fleets', 'Vehicles', 'Devices']) {
+    for (const tab of ['Fleets', 'Vehicles', 'Devices', 'Drivers']) {
       expect(screen.getByRole('tab', { name: new RegExp(`^${tab}`) })).toBeInTheDocument();
     }
-    // The mock-era domains are gone entirely.
-    expect(screen.queryByRole('tab', { name: /Drivers/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Groups/ })).not.toBeInTheDocument();
   });
 
@@ -341,6 +387,7 @@ describe('AssetManagementPage', () => {
     // Never-seen unbound device → relative "never"; bound one shows a vehicle.
     expect(screen.getByText('never')).toBeInTheDocument();
     expect(screen.getByText('Truck One')).toBeInTheDocument();
+    expect(screen.getByText('Ali Karimi')).toBeInTheDocument();
   });
 
   it('switches to the fleets tab and renders fleet rows', async () => {
@@ -406,5 +453,17 @@ describe('AssetManagementPage', () => {
     await waitFor(() => expect(screen.getByText('North Fleet')).toBeInTheDocument());
     expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
     expect(screen.getByText('Add Fleets')).toBeInTheDocument();
+  });
+
+  it('switches to the drivers tab and renders driver rows', async () => {
+    renderAssets('/assets?tab=drivers');
+    await waitFor(() => {
+      expect(screen.getByText('Ali Karimi')).toBeInTheDocument();
+      expect(screen.getByText(/DL-1001/)).toBeInTheDocument();
+    });
+    expect(screen.getByText('Truck One')).toBeInTheDocument();
+    expect(screen.getByText(/490154203237518/)).toBeInTheDocument();
+    expect(screen.getByText('Add Drivers')).toBeInTheDocument();
+    expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
   });
 });

@@ -37,6 +37,7 @@ const INFRA = ['postgres', 'redis', 'zookeeper', 'kafka'];
 const APP_SERVICES = {
   'identity-service': 'apps/identity-service',
   'fleet-management-service': 'apps/fleet-management-service',
+  'fleet-service': 'apps/fleet-service',
   'gps-engine-service': 'apps/gps-engine-service',
   'notification-service': 'apps/notification-service',
   'reporting-service': 'apps/reporting-service',

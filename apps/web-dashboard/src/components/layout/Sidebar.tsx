@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 
 import { Brand } from '@/components/branding/Brand';
-import { NAV_GROUPS, filterNavByPermissions } from '@/components/shell/nav.config';
+import { NAV_GROUPS, filterNavByPermissions, isNavItemActive } from '@/components/shell/nav.config';
 import { Tooltip } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 import { isRTL } from '@/i18n/config';
@@ -47,15 +47,13 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
   const rtl = isRTL(i18n.language);
 
   const groups = filterNavByPermissions(NAV_GROUPS, user?.permissions ?? []);
-  const currentPath = location.pathname;
 
   const handleNavigate = (path: string) => {
     navigate(path);
     onMobileClose();
   };
 
-  const isActive = (path: string) =>
-    currentPath === path || (path !== '/dashboard' && currentPath.startsWith(path));
+  const isActive = (path: string) => isNavItemActive(path, location);
 
   // Shared inner content between the desktop rail and the mobile drawer.
   const content = (

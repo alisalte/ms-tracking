@@ -60,6 +60,10 @@ vi.mock('@/api/asset.api', () => ({
   useFleets: () => mockUseFleets(),
   useVehicles: () => mockUseVehicles(),
 }));
+vi.mock('@/api/driver.api', () => ({
+  driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
+  useDrivers: () => ({ data: [] }),
+}));
 
 vi.mock('supercluster', () => ({
   default: class {

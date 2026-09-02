@@ -14,7 +14,7 @@ import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
 import { shortLabel } from '@/lib/report-format';
-import { mapAccents, status } from '@/theme/palette';
+import { apexPalette, chart } from '@/theme/palette';
 
 function startKm(r: VehicleMetersRowWire): number | null {
   if (r.odometerKm === null) return null;
@@ -36,8 +36,9 @@ export function OdometerSection({ range }: { range: ReportRange }) {
 
   const barOptions = useMemo<ApexOptions>(
     () => ({
-      colors: [mapAccents.selectedRoute],
-      plotOptions: { bar: { borderRadius: 3, columnWidth: '52%' } },
+      colors: [...apexPalette],
+      plotOptions: { bar: { distributed: true, borderRadius: 6, columnWidth: '48%' } },
+      legend: { show: false },
       xaxis: {
         categories: chartRows.map((r) => shortLabel(r.label, 14)),
         labels: { rotate: -35, hideOverlappingLabels: true },
@@ -59,8 +60,8 @@ export function OdometerSection({ range }: { range: ReportRange }) {
 
   const odoOptions = useMemo<ApexOptions>(
     () => ({
-      colors: [status.info],
-      plotOptions: { bar: { horizontal: true, barHeight: '68%', borderRadius: 3 } },
+      colors: [chart.odometer],
+      plotOptions: { bar: { horizontal: true, barHeight: '68%', borderRadius: 6 } },
       xaxis: { categories: chartRows.map((r) => shortLabel(r.label)) },
       tooltip: { y: { formatter: (v: number) => `${v.toLocaleString()} km` } },
     }),

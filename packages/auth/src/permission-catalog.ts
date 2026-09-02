@@ -65,6 +65,12 @@ export const Permissions = {
   // device enumeration by any user (including tenant-admin's wildcard).
   DEVICE_REGISTRY_RESOLVE: 'device.registry.resolve',
 
+  // --- Drivers (fleet-service) ---
+  FLEET_DRIVER_READ: 'fleet.driver.read',
+  FLEET_DRIVER_CREATE: 'fleet.driver.create',
+  FLEET_DRIVER_UPDATE: 'fleet.driver.update',
+  FLEET_DRIVER_MANAGE: 'fleet.driver.manage', // deactivate
+
   // --- Alarm/Event engine (notification-service) — Sprint G ---
   NOTIFICATION_ALERT_READ: 'notification.alert.read', // alarm list/detail + in-app notifications
   NOTIFICATION_ALERT_ACK: 'notification.alert.ack', // acknowledge alarms
@@ -151,6 +157,10 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       Permissions.VEHICLE_WRITE,
       Permissions.DEVICE_READ,
       Permissions.DEVICE_WRITE,
+      Permissions.FLEET_DRIVER_READ,
+      Permissions.FLEET_DRIVER_CREATE,
+      Permissions.FLEET_DRIVER_UPDATE,
+      Permissions.FLEET_DRIVER_MANAGE,
       // Sprint G — alarm engine administration (rules + lifecycle actions).
       Permissions.NOTIFICATION_ALERT_READ,
       Permissions.NOTIFICATION_ALERT_ACK,
@@ -187,6 +197,7 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       Permissions.FLEET_READ,
       Permissions.VEHICLE_READ,
       Permissions.DEVICE_READ,
+      Permissions.FLEET_DRIVER_READ,
       // Sprint G — read-only alarm/event visibility (no lifecycle actions).
       Permissions.NOTIFICATION_ALERT_READ,
       Permissions.NOTIFICATION_RULE_READ,
