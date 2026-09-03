@@ -1068,6 +1068,7 @@
       "action": "ورود اکسل",
       "titleVehicles": "ورود خودروها از اکسل",
       "titleDevices": "ورود دستگاه‌ها از اکسل",
+      "titleDrivers": "ورود رانندگان از اکسل",
       "subtitle": "فایل اکسل یا CSV را بارگذاری کنید. برای ستون‌های درست، قالب را دانلود کنید.",
       "downloadTemplate": "دانلود قالب",
       "chooseFile": "انتخاب فایل اکسل یا CSV",
@@ -1082,7 +1083,8 @@
       "colRow": "ردیف",
       "hints": {
         "vehicles": "ستون‌های الزامی: name، code، fleetCode. اگر ناوگان با آن کد نباشد، هنگام ایمپورت ساخته می‌شود (مثلاً FLEET-01). اختیاری: plate، vin، odometerKm (کیلومتر)، engineHours (ساعت موتور).",
-        "devices": "الزامی: imei (۱۵ رقم با رقم کنترل لوهن) و protocol (meitrack، gt06، jt808 یا stub). اختیاری: serialNumber، manufacturer، model، vehicleCode (پس از ایجاد متصل می‌شود)."
+        "devices": "الزامی: imei (۱۵ رقم با رقم کنترل لوهن) و protocol (meitrack، gt06، jt808 یا stub). اختیاری: serialNumber، manufacturer، model، vehicleCode (پس از ایجاد متصل می‌شود).",
+        "drivers": "الزامی: firstName، lastName، licenseNumber. اختیاری: employeeId، email، phone، licenseClass، licenseIssued، licenseExpires (YYYY-MM-DD)، licenseCountry، vehicleCode (پس از ایجاد تخصیص داده می‌شود)."
       },
       "errors": {
         "emptyFile": "فایل ردیف داده‌ای ندارد.",
@@ -1097,8 +1099,16 @@
         "invalidEngineHours": "ساعت موتور باید عددی بین ۰ و ۱٬۰۰۰٬۰۰۰ باشد.",
         "invalidImei": "IMEI باید دقیقاً ۱۵ رقم باشد.",
         "imeiLuhn": "رقم کنترل IMEI (الگوریتم لوهن) نامعتبر است.",
-        "invalidProtocol": "پروتکل باید meitrack، gt06، jt808 یا stub باشد."
+        "invalidProtocol": "پروتکل باید meitrack، gt06، jt808 یا stub باشد.",
+        "missingFirstName": "نام الزامی است.",
+        "missingLastName": "نام خانوادگی الزامی است.",
+        "missingLicenseNumber": "شماره گواهینامه الزامی است.",
+        "invalidEmail": "ایمیل نامعتبر است.",
+        "invalidDate": "تاریخ باید به صورت YYYY-MM-DD باشد (یا سلول تاریخ اکسل)."
       }
+    },
+    "export": {
+      "action": "خروجی اکسل"
     }
   },
   "reports": {

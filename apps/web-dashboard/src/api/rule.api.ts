@@ -11,6 +11,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { MAX_PAGE_SIZE } from '@/lib/pagination';
 import type { Page } from '@/types/api.types';
 import type {
   AlarmRule,
@@ -23,7 +24,7 @@ import type {
 import { apiDeleteNoContent, apiGet, apiGetRaw, apiPost, apiPostNoContent, apiPut } from './client';
 import { queryKeys } from './query-keys';
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = MAX_PAGE_SIZE;
 const MAX_PAGES = 50;
 
 function asStr(v: unknown): string | null {
@@ -143,7 +144,10 @@ export function useCreateAlarmRule() {
   const qc = useQueryClient();
   return useMutation<{ id: string }, Error, CreateAlarmRulePayload>({
     mutationFn: (payload) =>
-      apiPost<Record<string, unknown>, { id: string }>('/notification/rules', toCreateWire(payload)),
+      apiPost<Record<string, unknown>, { id: string }>(
+        '/notification/rules',
+        toCreateWire(payload),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.alarms.rules() }),
   });
 }

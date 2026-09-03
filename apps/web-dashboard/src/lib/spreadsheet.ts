@@ -363,6 +363,8 @@ function sheetXml(rows: string[][]): string {
   ].join('');
 }
 
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 /** Build a real .xlsx workbook (first sheet) from a table of strings. */
 export function buildXlsx(sheetName: string, rows: string[][]): Uint8Array {
   const safeName = sheetName.replace(/[\\/?*[\]]/g, ' ').slice(0, 31) || 'Sheet1';
@@ -395,6 +397,14 @@ export function buildXlsx(sheetName: string, rows: string[][]): Uint8Array {
     ].join(''),
     'xl/worksheets/sheet1.xml': sheetXml(rows),
   });
+}
+
+/** `.xlsx` Blob Excel opens without a CSV format-mismatch warning. */
+export function xlsxBlob(sheetName: string, rows: string[][]): Blob {
+  const bytes = buildXlsx(sheetName, rows);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new Blob([copy.buffer], { type: XLSX_MIME });
 }
 
 async function parseXlsx(buf: Uint8Array): Promise<string[][]> {

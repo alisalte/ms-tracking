@@ -59,12 +59,12 @@ export async function up(knex) {
       .defaultTo('PLANNED');
     // Trip details
     t.string('origin_label', 256).nullable();
-    t.doublePrecision('origin_lat').nullable();
-    t.doublePrecision('origin_lng').nullable();
+    t.double('origin_lat').nullable();
+    t.double('origin_lng').nullable();
     t.string('destination_label', 256).nullable();
-    t.doublePrecision('destination_lat').nullable();
-    t.doublePrecision('destination_lng').nullable();
-    t.doublePrecision('distance_km').notNullable().defaultTo(0);
+    t.double('destination_lat').nullable();
+    t.double('destination_lng').nullable();
+    t.double('distance_km').notNullable().defaultTo(0);
     t.integer('duration_sec').notNullable().defaultTo(0);
     t.string('purpose', 256).nullable();
     t.text('notes').nullable();

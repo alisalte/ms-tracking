@@ -11,7 +11,7 @@
  * Write actions (+ Add, edit, archive/decommission/deactivate) are gated per
  * tab via <PermissionGate> — the backend enforces the same strings.
  */
-import { Cpu, FolderTree, Plus, Truck, Upload, UserRound } from 'lucide-react';
+import { Cpu, Download, FolderTree, Plus, Truck, Upload, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -37,6 +37,8 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Button, PageHeader, Tabs } from '@/components/tailwind-ui';
+import { downloadAssetExport } from '@/lib/asset-export';
+import type { AssetImportKind } from '@/lib/asset-import';
 import type {
   DeviceProtocol,
   DeviceStatus,
@@ -199,7 +201,28 @@ export function AssetManagementPage() {
           ? driversQuery
           : devicesQuery;
 
-  const showImport = tab === 'vehicles' || tab === 'devices';
+  const showImport = tab === 'vehicles' || tab === 'devices' || tab === 'drivers';
+  const importKind: AssetImportKind =
+    tab === 'devices' ? 'devices' : tab === 'drivers' ? 'drivers' : 'vehicles';
+
+  const onExport = () => {
+    downloadAssetExport(
+      tab,
+      { fleets, vehicles, devices, drivers },
+      {
+        fleetStatus,
+        fleetQuery,
+        vehStatus,
+        vehFleet,
+        vehQuery,
+        devStatus,
+        devProtocol,
+        devQuery,
+        drvStatus,
+        drvQuery,
+      },
+    );
+  };
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -208,6 +231,15 @@ export function AssetManagementPage() {
         description={t('assets.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<Download size={15} />}
+              onClick={onExport}
+              type="button"
+            >
+              {t('assets.export.action')}
+            </Button>
             {showImport && (
               <PermissionGate requires={WRITE_PERMISSION[tab]}>
                 <Button
@@ -339,7 +371,8 @@ export function AssetManagementPage() {
       {showImport && (
         <AssetImportDialog
           open={importOpen}
-          kind={tab === 'devices' ? 'devices' : 'vehicles'}
+          kind={importKind}
+          vehicles={vehicles}
           onClose={() => setImportOpen(false)}
         />
       )}

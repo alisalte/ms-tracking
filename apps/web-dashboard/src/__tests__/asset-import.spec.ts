@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildVehiclesExportGrid } from '@/lib/asset-export';
 import {
   ASSET_IMPORT_MAX_ROWS,
   buildAssetImportTemplate,
   parseAssetImportFile,
   parseDeviceGrid,
+  parseDriverGrid,
+  parseSpreadsheetDate,
   parseVehicleGrid,
 } from '@/lib/asset-import';
 import { buildXlsx, parseCsv, parseTabularFile } from '@/lib/spreadsheet';
@@ -110,6 +113,89 @@ describe('parseDeviceGrid', () => {
   });
 });
 
+describe('parseDriverGrid', () => {
+  it('maps English and Persian headers', () => {
+    const parsed = parseDriverGrid([
+      ['نام', 'نام خانوادگی', 'شماره گواهینامه', 'کد خودرو'],
+      ['علی', 'کریمی', 'DL-1001', 'V001'],
+    ]);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.rows[0]).toMatchObject({
+      row: 2,
+      firstName: 'علی',
+      lastName: 'کریمی',
+      licenseNumber: 'DL-1001',
+      vehicleCode: 'V001',
+    });
+  });
+
+  it('converts an Excel serial date to YYYY-MM-DD', () => {
+    expect(parseSpreadsheetDate('44927').value).toBe('2023-01-01');
+    const parsed = parseDriverGrid([
+      ['firstName', 'lastName', 'licenseNumber', 'licenseIssued'],
+      ['Ali', 'Karimi', 'DL-1', '44927'],
+    ]);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.rows[0]?.licenseIssued).toBe('2023-01-01');
+  });
+
+  it('flags missing last name and a bad email', () => {
+    const parsed = parseDriverGrid([
+      ['firstName', 'lastName', 'licenseNumber', 'email'],
+      ['Ali', '', 'DL-1', 'not-an-email'],
+    ]);
+    expect(parsed.issues.map((i) => i.code).sort()).toEqual(['invalidEmail', 'missingLastName']);
+  });
+});
+
+describe('vehicle Excel export', () => {
+  it('uses import-compatible headers including fleetCode', () => {
+    const grid = buildVehiclesExportGrid(
+      [
+        {
+          id: 'veh-1',
+          tenantId: 't',
+          fleetId: 'fleet-1',
+          name: 'Truck One',
+          code: 'V001',
+          plate: 'ABC-123',
+          vin: null,
+          odometerKm: 10,
+          engineHours: null,
+          status: 'ACTIVE',
+          version: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+      [
+        {
+          id: 'fleet-1',
+          tenantId: 't',
+          name: 'North',
+          code: 'NORTH',
+          description: null,
+          status: 'ACTIVE',
+          version: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    );
+    expect(grid[0]).toEqual([
+      'name',
+      'code',
+      'fleetCode',
+      'plate',
+      'vin',
+      'odometerKm',
+      'engineHours',
+      'status',
+    ]);
+    expect(grid[1]?.[2]).toBe('NORTH');
+  });
+});
+
 describe('xlsx round-trip', () => {
   it('writes a template Excel file that parses back to the same grid', async () => {
     const { blob, filename } = buildAssetImportTemplate('vehicles');
@@ -125,6 +211,25 @@ describe('xlsx round-trip', () => {
       'engineHours',
     ]);
     expect(grid[1]?.[2]).toBe('NORTH');
+  });
+
+  it('writes a drivers template Excel file that parses back', async () => {
+    const { blob, filename } = buildAssetImportTemplate('drivers');
+    expect(filename).toBe('drivers-import.xlsx');
+    const parsed = await parseAssetImportFile(
+      new File([blob], filename, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      'drivers',
+    );
+    expect(parsed.kind).toBe('drivers');
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.rows[0]).toMatchObject({
+      firstName: 'Ali',
+      lastName: 'Karimi',
+      licenseNumber: 'DL-1001',
+      vehicleCode: 'V001',
+    });
   });
 
   it('parseAssetImportFile reads a generated workbook', async () => {

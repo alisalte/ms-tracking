@@ -1068,6 +1068,7 @@
       "action": "Import Excel",
       "titleVehicles": "Import vehicles",
       "titleDevices": "Import devices",
+      "titleDrivers": "Import drivers",
       "subtitle": "Upload an Excel or CSV file. Download the template so the columns match.",
       "downloadTemplate": "Download template",
       "chooseFile": "Choose Excel or CSV file",
@@ -1082,7 +1083,8 @@
       "colRow": "Row",
       "hints": {
         "vehicles": "Required columns: name, code, fleetCode. If that fleet does not exist yet, it is created from fleetCode (e.g. FLEET-01). Optional: plate, vin, odometerKm (current km), engineHours (hour meter).",
-        "devices": "Required: imei (15 digits, Luhn-valid) and protocol (meitrack, gt06, jt808, or stub). Optional: serialNumber, manufacturer, model, vehicleCode (binds after create)."
+        "devices": "Required: imei (15 digits, Luhn-valid) and protocol (meitrack, gt06, jt808, or stub). Optional: serialNumber, manufacturer, model, vehicleCode (binds after create).",
+        "drivers": "Required: firstName, lastName, licenseNumber. Optional: employeeId, email, phone, licenseClass, licenseIssued, licenseExpires (YYYY-MM-DD), licenseCountry, vehicleCode (assigns after create)."
       },
       "errors": {
         "emptyFile": "The file has no data rows.",
@@ -1097,8 +1099,16 @@
         "invalidEngineHours": "Engine hours must be a number between 0 and 1,000,000.",
         "invalidImei": "IMEI must be exactly 15 digits.",
         "imeiLuhn": "IMEI failed the checksum (Luhn) check.",
-        "invalidProtocol": "Protocol must be meitrack, gt06, jt808, or stub."
+        "invalidProtocol": "Protocol must be meitrack, gt06, jt808, or stub.",
+        "missingFirstName": "First name is required.",
+        "missingLastName": "Last name is required.",
+        "missingLicenseNumber": "License number is required.",
+        "invalidEmail": "Email is not valid.",
+        "invalidDate": "Date must be YYYY-MM-DD (or an Excel date cell)."
       }
+    },
+    "export": {
+      "action": "Export Excel"
     }
   },
   "reports": {

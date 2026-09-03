@@ -1,15 +1,15 @@
 /**
- * Map a spreadsheet grid onto vehicle / device import rows.
+ * Map a spreadsheet grid onto vehicle / device / driver import rows.
  *
  * Headers accept English and Persian aliases. IMEI is stripped of separators
  * and expanded from Excel scientific notation when it still looks like 15 digits.
  */
-import { SpreadsheetParseError, buildXlsx, parseTabularFile, trimGrid } from '@/lib/spreadsheet';
+import { SpreadsheetParseError, parseTabularFile, trimGrid, xlsxBlob } from '@/lib/spreadsheet';
 import type { DeviceProtocol } from '@/types/asset.types';
 
 export const ASSET_IMPORT_MAX_ROWS = 500;
 
-export type AssetImportKind = 'vehicles' | 'devices';
+export type AssetImportKind = 'vehicles' | 'devices' | 'drivers';
 
 export interface VehicleImportDraft {
   row: number;
@@ -32,6 +32,22 @@ export interface DeviceImportDraft {
   vehicleCode?: string;
 }
 
+export interface DriverImportDraft {
+  row: number;
+  firstName: string;
+  lastName: string;
+  licenseNumber: string;
+  employeeId?: string;
+  email?: string;
+  phone?: string;
+  licenseClass?: string;
+  /** Calendar date `YYYY-MM-DD` (converted to ISO datetime on submit). */
+  licenseIssued?: string;
+  licenseExpires?: string;
+  licenseCountry?: string;
+  vehicleCode?: string;
+}
+
 export interface ImportRowIssue {
   row: number;
   field?: string;
@@ -47,7 +63,12 @@ export interface ParsedAssetImport<T> {
 const PROTOCOLS = new Set<DeviceProtocol>(['gt06', 'jt808', 'meitrack', 'stub']);
 
 function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/\s+/g, '').replace(/[_-]+/g, '');
+  return h
+    .trim()
+    .toLowerCase()
+    .replace(/[\u200c\u200d]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[_-]+/g, '');
 }
 
 const VEHICLE_ALIASES: Record<string, keyof Omit<VehicleImportDraft, 'row'>> = {
@@ -105,6 +126,42 @@ const DEVICE_ALIASES: Record<string, keyof Omit<DeviceImportDraft, 'row'>> = {
   سازنده: 'manufacturer',
   model: 'model',
   مدل: 'model',
+  vehiclecode: 'vehicleCode',
+  vehicle: 'vehicleCode',
+  کدخودرو: 'vehicleCode',
+  خودرو: 'vehicleCode',
+};
+
+const DRIVER_ALIASES: Record<string, keyof Omit<DriverImportDraft, 'row'>> = {
+  firstname: 'firstName',
+  نام: 'firstName',
+  نامکوچک: 'firstName',
+  lastname: 'lastName',
+  نامخانوادگی: 'lastName',
+  فامیل: 'lastName',
+  licensenumber: 'licenseNumber',
+  license: 'licenseNumber',
+  گواهینامه: 'licenseNumber',
+  شمارهگواهینامه: 'licenseNumber',
+  employeeid: 'employeeId',
+  شمارهپرسنلی: 'employeeId',
+  پرسنلی: 'employeeId',
+  کدپرسنلی: 'employeeId',
+  email: 'email',
+  ایمیل: 'email',
+  phone: 'phone',
+  تلفن: 'phone',
+  موبایل: 'phone',
+  شمارهتماس: 'phone',
+  licenseclass: 'licenseClass',
+  کلاسگواهینامه: 'licenseClass',
+  licenseissued: 'licenseIssued',
+  تاریخصدور: 'licenseIssued',
+  licenseexpires: 'licenseExpires',
+  تاریخانقضا: 'licenseExpires',
+  انقضا: 'licenseExpires',
+  licensecountry: 'licenseCountry',
+  کشورگواهینامه: 'licenseCountry',
   vehiclecode: 'vehicleCode',
   vehicle: 'vehicleCode',
   کدخودرو: 'vehicleCode',
@@ -197,6 +254,59 @@ function parseNonNegNumber(raw: string, max: number): { value?: number; invalid:
   return { value: n, invalid: false };
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function asciiDigits(raw: string): string {
+  return sanitizeSpreadsheetText(raw)
+    .replace(/[۰-۹]/g, (ch) => String(FA_DIGITS.indexOf(ch)))
+    .replace(/[٠-٩]/g, (ch) => String(AR_DIGITS.indexOf(ch)));
+}
+
+function isValidYmd(iso: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return false;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+/** `YYYY-MM-DD`, Excel serial (e.g. 44927), or day/month/year. */
+export function parseSpreadsheetDate(raw: string): { value?: string; invalid: boolean } {
+  const t = asciiDigits(raw);
+  if (t === '') return { invalid: false };
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+    const iso = t.slice(0, 10);
+    return isValidYmd(iso) ? { value: iso, invalid: false } : { invalid: true };
+  }
+  const ymd = /^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/.exec(t);
+  if (ymd) {
+    const iso = `${ymd[1]}-${(ymd[2] ?? '').padStart(2, '0')}-${(ymd[3] ?? '').padStart(2, '0')}`;
+    return isValidYmd(iso) ? { value: iso, invalid: false } : { invalid: true };
+  }
+  if (/^\d{4,6}(\.\d+)?$/.test(t)) {
+    const n = Number(t);
+    if (n >= 20000 && n < 80000) {
+      const utc = Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000;
+      const d = new Date(utc);
+      if (!Number.isNaN(d.getTime()))
+        return { value: d.toISOString().slice(0, 10), invalid: false };
+    }
+  }
+  const dmy = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/.exec(t);
+  if (dmy) {
+    const a = Number(dmy[1]);
+    const b = Number(dmy[2]);
+    const y = Number(dmy[3]);
+    const day = a > 12 ? a : b;
+    const month = a > 12 ? b : a;
+    const iso = `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return isValidYmd(iso) ? { value: iso, invalid: false } : { invalid: true };
+  }
+  return { invalid: true };
+}
+
 export function parseVehicleGrid(grid: string[][]): ParsedAssetImport<VehicleImportDraft> {
   const table = trimGrid(grid);
   if (table.length < 2) {
@@ -287,12 +397,78 @@ export function parseDeviceGrid(grid: string[][]): ParsedAssetImport<DeviceImpor
   return { kind: 'devices', rows, issues };
 }
 
+export function parseDriverGrid(grid: string[][]): ParsedAssetImport<DriverImportDraft> {
+  const table = trimGrid(grid);
+  if (table.length < 2) {
+    return { kind: 'drivers', rows: [], issues: [{ row: 1, code: 'emptyFile' }] };
+  }
+  const cols = mapHeaders(table[0] ?? [], DRIVER_ALIASES);
+  if (
+    cols.firstName === undefined ||
+    cols.lastName === undefined ||
+    cols.licenseNumber === undefined
+  ) {
+    return { kind: 'drivers', rows: [], issues: [{ row: 1, code: 'badHeaders' }] };
+  }
+  const rows: DriverImportDraft[] = [];
+  const issues: ImportRowIssue[] = [];
+  const data = table.slice(1);
+  if (data.length > ASSET_IMPORT_MAX_ROWS) {
+    issues.push({ row: 1, code: 'maxRows' });
+    return { kind: 'drivers', rows, issues };
+  }
+  data.forEach((raw, i) => {
+    const row = i + 2;
+    if (raw.every((c) => c.trim() === '')) return;
+    const firstName = sanitizeSpreadsheetText(cell(raw, cols.firstName));
+    const lastName = sanitizeSpreadsheetText(cell(raw, cols.lastName));
+    const licenseNumber = sanitizeSpreadsheetText(cell(raw, cols.licenseNumber));
+    const employeeId = optional(cell(raw, cols.employeeId));
+    const email = optional(cell(raw, cols.email));
+    const phone = optional(cell(raw, cols.phone));
+    const licenseClass = optional(cell(raw, cols.licenseClass));
+    const issued = parseSpreadsheetDate(cell(raw, cols.licenseIssued));
+    const expires = parseSpreadsheetDate(cell(raw, cols.licenseExpires));
+    const licenseCountry = optional(cell(raw, cols.licenseCountry));
+    const vehicleCode = optional(cell(raw, cols.vehicleCode));
+    if (!firstName) issues.push({ row, field: 'firstName', code: 'missingFirstName' });
+    if (!lastName) issues.push({ row, field: 'lastName', code: 'missingLastName' });
+    if (!licenseNumber) issues.push({ row, field: 'licenseNumber', code: 'missingLicenseNumber' });
+    if (email && !EMAIL_RE.test(email)) issues.push({ row, field: 'email', code: 'invalidEmail' });
+    if (issued.invalid) issues.push({ row, field: 'licenseIssued', code: 'invalidDate' });
+    if (expires.invalid) issues.push({ row, field: 'licenseExpires', code: 'invalidDate' });
+    rows.push({
+      row,
+      firstName,
+      lastName,
+      licenseNumber,
+      employeeId,
+      email,
+      phone,
+      licenseClass,
+      licenseIssued: issued.value,
+      licenseExpires: expires.value,
+      licenseCountry,
+      vehicleCode,
+    });
+  });
+  if (rows.length === 0 && issues.length === 0) issues.push({ row: 1, code: 'emptyFile' });
+  return { kind: 'drivers', rows, issues };
+}
+
+export type ParsedAnyAssetImport =
+  | ParsedAssetImport<VehicleImportDraft>
+  | ParsedAssetImport<DeviceImportDraft>
+  | ParsedAssetImport<DriverImportDraft>;
+
 export async function parseAssetImportFile(
   file: File,
   kind: AssetImportKind,
-): Promise<ParsedAssetImport<VehicleImportDraft> | ParsedAssetImport<DeviceImportDraft>> {
+): Promise<ParsedAnyAssetImport> {
   const grid = await parseTabularFile(file);
-  return kind === 'vehicles' ? parseVehicleGrid(grid) : parseDeviceGrid(grid);
+  if (kind === 'vehicles') return parseVehicleGrid(grid);
+  if (kind === 'devices') return parseDeviceGrid(grid);
+  return parseDriverGrid(grid);
 }
 
 const VEHICLE_TEMPLATE: string[][] = [
@@ -305,18 +481,47 @@ const DEVICE_TEMPLATE: string[][] = [
   ['490154203237518', 'gt06', 'SN-1001', 'Teltonika', 'FMB920', 'V001'],
 ];
 
+const DRIVER_TEMPLATE: string[][] = [
+  [
+    'firstName',
+    'lastName',
+    'licenseNumber',
+    'employeeId',
+    'email',
+    'phone',
+    'licenseClass',
+    'licenseIssued',
+    'licenseExpires',
+    'licenseCountry',
+    'vehicleCode',
+  ],
+  [
+    'Ali',
+    'Karimi',
+    'DL-1001',
+    'EMP-001',
+    'ali.karimi@fleet.local',
+    '+989121111111',
+    'B',
+    '2020-01-15',
+    '2028-01-15',
+    'IR',
+    'V001',
+  ],
+];
+
+const TEMPLATE_META: Record<
+  AssetImportKind,
+  { sheet: string; filename: string; rows: string[][] }
+> = {
+  vehicles: { sheet: 'Vehicles', filename: 'vehicles-import.xlsx', rows: VEHICLE_TEMPLATE },
+  devices: { sheet: 'Devices', filename: 'devices-import.xlsx', rows: DEVICE_TEMPLATE },
+  drivers: { sheet: 'Drivers', filename: 'drivers-import.xlsx', rows: DRIVER_TEMPLATE },
+};
+
 export function buildAssetImportTemplate(kind: AssetImportKind): { blob: Blob; filename: string } {
-  const rows = kind === 'vehicles' ? VEHICLE_TEMPLATE : DEVICE_TEMPLATE;
-  const bytes = buildXlsx(kind === 'vehicles' ? 'Vehicles' : 'Devices', rows);
-  // Copy into a fresh ArrayBuffer so BlobPart is a definite ArrayBuffer, not ArrayBufferLike.
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return {
-    blob: new Blob([copy.buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }),
-    filename: kind === 'vehicles' ? 'vehicles-import.xlsx' : 'devices-import.xlsx',
-  };
+  const meta = TEMPLATE_META[kind];
+  return { blob: xlsxBlob(meta.sheet, meta.rows), filename: meta.filename };
 }
 
 export { SpreadsheetParseError };

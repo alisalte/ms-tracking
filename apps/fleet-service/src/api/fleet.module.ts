@@ -1,7 +1,12 @@
 /**
  * FleetModule — wires driver + business-trip repositories, controllers.
+ *
+ * HTTP auth is AuthModule.forRoot (global CompositeAuthGuard + PermissionsGuard).
+ * Do not add jwtAuthGuardProvider() here: that factory requires TOKEN_VERIFIER,
+ * which AuthModule does not export, and Nest then crash-loops the process
+ * (nginx 502 on /assets?tab=drivers).
  */
-import { AuthModule, jwtAuthGuardProvider } from '@fleetvision/auth';
+import { AuthModule } from '@fleetvision/auth';
 import { KNEX_TOKEN, PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import type { Knex } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
@@ -26,7 +31,6 @@ export class FleetModule {
         }),
       ],
       providers: [
-        jwtAuthGuardProvider(),
         {
           provide: DriverRepository,
           inject: [KNEX_TOKEN, PLATFORM_KNEX_TOKEN],

@@ -1,49 +1,59 @@
 /**
- * AssetImportDialog — Excel/CSV import for vehicles or devices (`/assets`).
+ * AssetImportDialog — Excel/CSV import for vehicles, devices, or drivers (`/assets`).
  *
  * Template download + file parse (client-side preview/validation) + POST
- * `/vehicles/import` or `/devices/import`. Partial success is shown per row.
+ * `/vehicles/import`, `/devices/import`, or per-row `POST /fleet/drivers`.
+ * Partial success is shown per row.
  */
 import { useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useImportDevices, useImportVehicles } from '@/api/asset.api';
+import { useImportDrivers } from '@/api/driver.api';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Modal } from '@/components/tailwind-ui';
 import {
   ASSET_IMPORT_MAX_ROWS,
   type AssetImportKind,
   type DeviceImportDraft,
+  type DriverImportDraft,
   type ImportRowIssue,
-  type ParsedAssetImport,
+  type ParsedAnyAssetImport,
   SpreadsheetParseError,
   type VehicleImportDraft,
   buildAssetImportTemplate,
   parseAssetImportFile,
 } from '@/lib/asset-import';
 import { downloadBlob } from '@/lib/video-stream';
-import type { AssetImportFailure } from '@/types/asset.types';
+import type { AssetImportFailure, Vehicle } from '@/types/asset.types';
 import { Download, FileSpreadsheet, Upload } from 'lucide-react';
 
 export interface AssetImportDialogProps {
   open: boolean;
   kind: AssetImportKind;
+  /** Needed to resolve `vehicleCode` when importing drivers. */
+  vehicles?: Vehicle[];
   onClose: () => void;
 }
 
-type Parsed = ParsedAssetImport<VehicleImportDraft> | ParsedAssetImport<DeviceImportDraft> | null;
+const TITLE_KEY: Record<AssetImportKind, string> = {
+  vehicles: 'assets.import.titleVehicles',
+  devices: 'assets.import.titleDevices',
+  drivers: 'assets.import.titleDrivers',
+};
 
-export function AssetImportDialog({ open, kind, onClose }: AssetImportDialogProps) {
+export function AssetImportDialog({ open, kind, vehicles = [], onClose }: AssetImportDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const fileId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const importVehicles = useImportVehicles();
   const importDevices = useImportDevices();
-  const importing = importVehicles.isPending || importDevices.isPending;
+  const importDrivers = useImportDrivers();
+  const importing = importVehicles.isPending || importDevices.isPending || importDrivers.isPending;
 
   const [fileName, setFileName] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<Parsed>(null);
+  const [parsed, setParsed] = useState<ParsedAnyAssetImport | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [result, setResult] = useState<{
     created: number;
@@ -58,8 +68,9 @@ export function AssetImportDialog({ open, kind, onClose }: AssetImportDialogProp
     setResult(null);
     importVehicles.reset();
     importDevices.reset();
+    importDrivers.reset();
     if (inputRef.current) inputRef.current.value = '';
-  }, [importDevices, importVehicles]);
+  }, [importDevices, importDrivers, importVehicles]);
 
   const handleClose = () => {
     if (importing) return;
@@ -97,35 +108,36 @@ export function AssetImportDialog({ open, kind, onClose }: AssetImportDialogProp
   const submit = async () => {
     if (!canSubmit) return;
     try {
-      const payload = readyRows.map((r) => {
-        if (kind === 'vehicles') {
-          const v = r as VehicleImportDraft;
-          return {
-            row: v.row,
-            name: v.name,
-            code: v.code,
-            fleetCode: v.fleetCode,
-            ...(v.plate ? { plate: v.plate } : {}),
-            ...(v.vin ? { vin: v.vin } : {}),
-            ...(v.odometerKm !== undefined ? { odometerKm: v.odometerKm } : {}),
-            ...(v.engineHours !== undefined ? { engineHours: v.engineHours } : {}),
-          };
-        }
-        const d = r as DeviceImportDraft;
-        return {
-          row: d.row,
-          imei: d.imei,
-          protocol: d.protocol,
-          ...(d.serialNumber ? { serialNumber: d.serialNumber } : {}),
-          ...(d.manufacturer ? { manufacturer: d.manufacturer } : {}),
-          ...(d.model ? { model: d.model } : {}),
-          ...(d.vehicleCode ? { vehicleCode: d.vehicleCode } : {}),
-        };
-      });
       const res =
         kind === 'vehicles'
-          ? await importVehicles.mutateAsync(payload as VehicleImportDraft[])
-          : await importDevices.mutateAsync(payload as DeviceImportDraft[]);
+          ? await importVehicles.mutateAsync(
+              (readyRows as VehicleImportDraft[]).map((v) => ({
+                row: v.row,
+                name: v.name,
+                code: v.code,
+                fleetCode: v.fleetCode,
+                ...(v.plate ? { plate: v.plate } : {}),
+                ...(v.vin ? { vin: v.vin } : {}),
+                ...(v.odometerKm !== undefined ? { odometerKm: v.odometerKm } : {}),
+                ...(v.engineHours !== undefined ? { engineHours: v.engineHours } : {}),
+              })),
+            )
+          : kind === 'devices'
+            ? await importDevices.mutateAsync(
+                (readyRows as DeviceImportDraft[]).map((d) => ({
+                  row: d.row,
+                  imei: d.imei,
+                  protocol: d.protocol,
+                  ...(d.serialNumber ? { serialNumber: d.serialNumber } : {}),
+                  ...(d.manufacturer ? { manufacturer: d.manufacturer } : {}),
+                  ...(d.model ? { model: d.model } : {}),
+                  ...(d.vehicleCode ? { vehicleCode: d.vehicleCode } : {}),
+                })),
+              )
+            : await importDrivers.mutateAsync({
+                rows: readyRows as DriverImportDraft[],
+                vehicles,
+              });
       setResult({
         created: res.created.length,
         failed: res.failed ?? [],
@@ -151,7 +163,7 @@ export function AssetImportDialog({ open, kind, onClose }: AssetImportDialogProp
       onClose={handleClose}
       closeOnBackdrop={!importing}
       size="lg"
-      title={t(kind === 'vehicles' ? 'assets.import.titleVehicles' : 'assets.import.titleDevices')}
+      title={t(TITLE_KEY[kind])}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={handleClose} disabled={importing}>
@@ -293,7 +305,7 @@ function PreviewTable({
   blocked,
 }: {
   kind: AssetImportKind;
-  rows: Array<VehicleImportDraft | DeviceImportDraft>;
+  rows: Array<VehicleImportDraft | DeviceImportDraft | DriverImportDraft>;
   blocked: Set<number>;
 }) {
   const { t } = useTranslation();
@@ -301,7 +313,16 @@ function PreviewTable({
   const cols =
     kind === 'vehicles'
       ? (['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours'] as const)
-      : (['imei', 'protocol', 'serialNumber', 'manufacturer', 'model', 'vehicleCode'] as const);
+      : kind === 'devices'
+        ? (['imei', 'protocol', 'serialNumber', 'manufacturer', 'model', 'vehicleCode'] as const)
+        : ([
+            'firstName',
+            'lastName',
+            'licenseNumber',
+            'employeeId',
+            'email',
+            'vehicleCode',
+          ] as const);
   return (
     <div className="overflow-auto rounded-lg border border-gray-200 dark:border-white/10">
       <table className="min-w-full text-start text-xs">

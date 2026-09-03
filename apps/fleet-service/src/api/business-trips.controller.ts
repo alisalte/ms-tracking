@@ -1,7 +1,5 @@
 import {
-  JwtAuthGuard,
   type PageRequestDto,
-  PermissionsGuard,
   RequirePermissions,
   type UuidParamDto,
   ZodValidationPipe,
@@ -25,14 +23,14 @@ import {
   Put,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { BusinessTrip } from '../domain/index.js';
 import { BusinessTripNotFoundError } from '../domain/index.js';
-import type {
+// biome-ignore lint/style/useImportType: NestJS DI needs BusinessTripRepository at runtime for reflect-metadata.
+import {
   BusinessTripRepository,
-  TripFilters,
+  type TripFilters,
 } from '../infrastructure/persistence/business-trip.repository.js';
 import {
   type CompleteTripDto,
@@ -44,7 +42,6 @@ import {
 } from './fleet.dto.js';
 
 @Controller('api/v1/fleet/trips')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class BusinessTripsController {
   constructor(private readonly trips: BusinessTripRepository) {}
 

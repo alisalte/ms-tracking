@@ -15,19 +15,25 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import type { DriverImportDraft } from '@/lib/asset-import';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { MAX_PAGE_SIZE } from '@/lib/pagination';
 import { mockDrivers } from '@/mock/driver-data';
 import type { Page } from '@/types/api.types';
 import type {
+  AssetImportFailure,
+  AssetImportResult,
   CreateDriverPayload,
   Driver,
   DriverStatus,
   UpdateDriverPayload,
+  Vehicle,
 } from '@/types/asset.types';
 import { apiGet, apiGetRaw, apiPost, apiPostNoContent, apiPut } from './client';
+import { getApiErrorMessage } from './errors';
 import { queryKeys } from './query-keys';
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = MAX_PAGE_SIZE;
 const MAX_PAGES = 50;
 
 function asStr(v: unknown): string | null {
@@ -223,6 +229,64 @@ export function useUnassignDriverVehicle() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
     mutationFn: (driverId) => syncAssignment(driverId, null),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+  });
+}
+
+/** Create drivers one-by-one (fleet-service has no bulk import). Partial success. */
+export function useImportDrivers() {
+  const qc = useQueryClient();
+  return useMutation<
+    AssetImportResult<Driver>,
+    Error,
+    { rows: DriverImportDraft[]; vehicles: Vehicle[] }
+  >({
+    mutationFn: async ({ rows, vehicles }) => {
+      const byCode = new Map(vehicles.map((v) => [v.code.toLowerCase(), v]));
+      const created: Driver[] = [];
+      const failed: AssetImportFailure[] = [];
+      const warnings: AssetImportFailure[] = [];
+      for (const row of rows) {
+        try {
+          const record = await apiPost<Record<string, unknown>, Record<string, unknown>>(
+            '/fleet/drivers',
+            toWire({
+              firstName: row.firstName,
+              lastName: row.lastName,
+              licenseNumber: row.licenseNumber,
+              employeeId: row.employeeId,
+              email: row.email,
+              phone: row.phone,
+              licenseClass: row.licenseClass,
+              licenseIssued: row.licenseIssued,
+              licenseExpires: row.licenseExpires,
+              licenseCountry: row.licenseCountry,
+            }),
+          );
+          const mapped = mapDriver(record);
+          const id = mapped.id || String(record.id ?? '');
+          if (row.vehicleCode) {
+            const vehicle = byCode.get(row.vehicleCode.toLowerCase());
+            if (!vehicle) {
+              warnings.push({
+                row: row.row,
+                error: `Vehicle code "${row.vehicleCode}" was not found`,
+              });
+            } else if (id) {
+              try {
+                await syncAssignment(id, vehicle.id);
+              } catch (err) {
+                warnings.push({ row: row.row, error: getApiErrorMessage(err) });
+              }
+            }
+          }
+          created.push(mapped);
+        } catch (err) {
+          failed.push({ row: row.row, error: getApiErrorMessage(err) });
+        }
+      }
+      return { created, failed, warnings };
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }

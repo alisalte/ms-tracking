@@ -29,10 +29,14 @@ export class AppModule {
           platformClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            // Per-service migration ledger (Sprint I convention — see
+            // fleet-management/notification): the shared database's default
+            // `schema_migrations` table belongs to identity-service.
+            tableName: 'fleet_schema_migrations',
           },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
-        HealthModule,
+        HealthModule.forRoot(),
         FleetModule.forRoot(config),
       ],
     };

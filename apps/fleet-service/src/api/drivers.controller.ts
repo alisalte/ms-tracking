@@ -1,7 +1,5 @@
 import {
-  JwtAuthGuard,
   type PageRequestDto,
-  PermissionsGuard,
   RequirePermissions,
   type UuidParamDto,
   ZodValidationPipe,
@@ -25,12 +23,12 @@ import {
   Put,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { Driver } from '../domain/index.js';
 import { DriverNotFoundError, VehicleAlreadyAssignedError } from '../domain/index.js';
-import type { DriverRepository } from '../infrastructure/persistence/driver.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { DriverRepository } from '../infrastructure/persistence/driver.repository.js';
 import {
   type AssignVehicleDto,
   type CreateDriverDto,
@@ -41,7 +39,6 @@ import {
 } from './fleet.dto.js';
 
 @Controller('api/v1/fleet/drivers')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DriversController {
   constructor(private readonly drivers: DriverRepository) {}
 

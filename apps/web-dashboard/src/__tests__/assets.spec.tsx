@@ -12,6 +12,11 @@ import type { Device, Driver, Fleet, Vehicle } from '@/types/asset.types';
 import type { User } from '@/types/auth.types';
 
 import { i18n } from '@/i18n';
+import { downloadBlob } from '@/lib/video-stream';
+
+vi.mock('@/lib/video-stream', () => ({
+  downloadBlob: vi.fn(),
+}));
 
 /**
  * Sprint E — the Asset hub runs against the REAL fleet-management contracts
@@ -227,12 +232,14 @@ vi.mock('@/api/driver.api', () => {
     driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
     datetimeToDateInput: (v: string | null | undefined) => (v ? v.slice(0, 10) : ''),
     useDrivers: () => ok(fx.drivers),
-    useDriverDetail: (id: string | null) => ok(id ? fx.drivers.find((d) => d.id === id) : undefined),
+    useDriverDetail: (id: string | null) =>
+      ok(id ? fx.drivers.find((d) => d.id === id) : undefined),
     useCreateDriver: mutation,
     useUpdateDriver: mutation,
     useDeactivateDriver: mutation,
     useAssignDriverVehicle: mutation,
     useUnassignDriverVehicle: mutation,
+    useImportDrivers: mutation,
   };
 });
 
@@ -279,6 +286,7 @@ describe('AssetManagementPage', () => {
     await i18n.changeLanguage('en');
     // Full wildcard permissions so the permission-gated CRUD actions render.
     setUser(['*']);
+    vi.mocked(downloadBlob).mockClear();
   });
 
   it('renders the title + 4 real-registry tabs (no groups)', async () => {
@@ -448,11 +456,12 @@ describe('AssetManagementPage', () => {
     expect(screen.getByRole('button', { name: 'Download template' })).toBeInTheDocument();
   });
 
-  it('hides import on the fleets tab', async () => {
+  it('hides import on the fleets tab but still offers Excel export', async () => {
     renderAssets('/assets?tab=fleets');
     await waitFor(() => expect(screen.getByText('North Fleet')).toBeInTheDocument());
     expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
     expect(screen.getByText('Add Fleets')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export Excel' })).toBeInTheDocument();
   });
 
   it('switches to the drivers tab and renders driver rows', async () => {
@@ -464,6 +473,19 @@ describe('AssetManagementPage', () => {
     expect(screen.getByText('Truck One')).toBeInTheDocument();
     expect(screen.getByText(/490154203237518/)).toBeInTheDocument();
     expect(screen.getByText('Add Drivers')).toBeInTheDocument();
-    expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import Excel' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Import Excel' }));
+    expect(await screen.findByText('Import drivers')).toBeInTheDocument();
+  });
+
+  it('exports the current tab as a real .xlsx workbook', async () => {
+    renderAssets();
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Export Excel' }));
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
+    const filename = vi.mocked(downloadBlob).mock.calls[0]?.[1];
+    expect(filename).toMatch(/^vehicles-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    const blob = vi.mocked(downloadBlob).mock.calls[0]?.[0] as Blob;
+    expect(blob.type).toContain('spreadsheetml.sheet');
   });
 });
