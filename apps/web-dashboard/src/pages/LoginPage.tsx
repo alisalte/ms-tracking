@@ -27,12 +27,11 @@ const loginSchema = z.object({
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
-/** Compose bootstrap seed (`SEED_*` in infra/docker). Prefill so local sign-in
- *  isn't blocked by an empty org field or the browser autofilling a stale UUID. */
-const LOCAL_SEED_LOGIN: LoginForm = {
+/** Org name is prefilled so the browser does not autofill a stale tenant UUID. */
+const EMPTY_LOGIN: LoginForm = {
   tenantId: 'FleetVision',
-  email: 'admin@fleetvision.local',
-  password: 'ChangeMe!StrongPass123',
+  email: '',
+  password: '',
   rememberDevice: false,
 };
 
@@ -50,7 +49,7 @@ export function LoginPage() {
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: LOCAL_SEED_LOGIN,
+    defaultValues: EMPTY_LOGIN,
     mode: 'onSubmit',
   });
 
@@ -80,10 +79,6 @@ export function LoginPage() {
           {error}
         </Alert>
       )}
-
-      <Alert variant="info" className="mb-4">
-        {t('auth.localSeedHint')}
-      </Alert>
 
       <form
         onSubmit={handleSubmit(onSubmit)}

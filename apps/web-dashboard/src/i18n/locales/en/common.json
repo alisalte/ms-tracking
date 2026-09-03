@@ -44,7 +44,6 @@
       "networkError": "Unable to connect to server"
     },
     "tenantIdHelp": "Your organization name (e.g. FleetVision)",
-    "localSeedHint": "Local admin is pre-filled: FleetVision / admin@fleetvision.local / ChangeMe!StrongPass123. Clear the browser's saved password if Sign In still returns 401.",
     "brandHeadline": "Enterprise Fleet Intelligence",
     "brandSubline": "Real-time tracking, video telematics, maintenance, and compliance — unified in one calm, fast, secure dashboard.",
     "brandPill": {

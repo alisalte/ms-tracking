@@ -44,7 +44,6 @@
       "networkError": "اتصال به سرور ممکن نیست"
     },
     "tenantIdHelp": "نام سازمان شما (مثلاً FleetVision)",
-    "localSeedHint": "ادمین لوکال از قبل پر شده: FleetVision / admin@fleetvision.local / ChangeMe!StrongPass123. اگر باز هم 401 دیدید، پسورد ذخیره‌شده مرورگر را پاک کنید.",
     "brandHeadline": "هوش ناوگان سازمانی",
     "brandSubline": "رهگیری لحظه‌ای، تله‌ماتیک ویدیو، تعمیر و نگهداری و انطباق — یکپارچه در یک داشبورد آرام، سریع و امن.",
     "brandPill": {
