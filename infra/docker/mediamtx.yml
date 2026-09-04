@@ -1,0 +1,21 @@
+# MediaMTX — MD300/MDVR live ingest (AB2 RTMP push → HLS).
+# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300
+# Browser plays same-origin /media-hls/live/md300/index.m3u8 (nginx → :8888).
+
+logLevel: info
+
+rtmp: yes
+rtmpAddress: :1935
+
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigin: "*"
+
+rtsp: yes
+rtspAddress: :8554
+
+api: yes
+apiAddress: :9997
+
+paths:
+  all_others:

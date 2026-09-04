@@ -74,7 +74,7 @@ export interface CreateVehiclePayload {
   name: string;
   code: string;
   plate?: string;
-  /** 17 chars, no I/O/Q (ISO 3779). */
+  /** Optional chassis/VIN (letters/digits, no I/O/Q, max 17). */
   vin?: string;
   /** Current dashboard odometer in kilometres. */
   odometerKm?: number;
@@ -221,6 +221,8 @@ export type DeviceRole = 'TRACKER' | 'MDVR' | 'CAN' | 'SENSOR' | 'OTHER';
 /** Bind a device to a vehicle (POST /vehicles/:id/devices/:deviceId). */
 export interface BindDevicePayload {
   role?: DeviceRole;
+  /** Tracker + camera + sensor on the same physical unit. */
+  roles?: DeviceRole[];
   isPrimary?: boolean;
 }
 
@@ -234,6 +236,7 @@ export interface BoundDevice {
   /** Registry lifecycle status of the device (string — server enum). */
   deviceStatus: string;
   role: string;
+  roles?: DeviceRole[];
   isPrimary: boolean;
   boundAt: string;
 }

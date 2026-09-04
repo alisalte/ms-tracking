@@ -4,10 +4,9 @@
  * Two paths share this hook:
  *
  *  1. MDVR (real) — channels with `protocol === 'MEITRACK_MDVR'` + a bound
- *     deviceId/imei. The hook sends the A9A command through the platform
+ *     deviceId/imei. The hook sends the AB2 command through the platform
  *     command path (fleet-management → Kafka → device-gateway → device), then
- *     exposes the mdvr-streamer's binary MPEG-TS WebSocket URL for the
- *     JSMpeg canvas player. Teardown sends A9B (stop).
+ *     exposes the MediaMTX HLS URL for the HLS.js player. Teardown sends AB3.
  *
  *  2. Mock — every other channel: a synthetic canvas `MediaStream` driven by
  *     the MockMediaSignalingClient (honestly labelled DEMO by the tile).
@@ -17,25 +16,32 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { apiPost } from '@/api/client';
-import { mdvrStreamEndpoint, mdvrWsUrl } from '@/api/video.api';
+import { apiGet, apiPost } from '@/api/client';
+import { mdvrHlsUrl, mdvrRtmpUploadUrl } from '@/api/video.api';
 import { MockMediaSignalingClient, type StreamHandle, openStream } from '@/lib/video-stream';
 import { mockStreamSession } from '@/mock/video-data';
+import type { DeviceCommandRecord } from '@/types/command.types';
 import type { CameraChannel, StreamQuality, StreamSession } from '@/types/video.types';
+
+/** Console tag so `[MDVR]` is easy to filter/search in devtools. */
+function mdvrLog(...args: unknown[]): void {
+  // eslint-disable-next-line no-console
+  console.log('[MDVR]', ...args);
+}
 
 export interface StreamSessionHook {
   /** Session metadata (state, latency, signal) or null before open. */
   session: StreamSession | null;
   /** The synthetic MediaStream (mock path), or null while connecting. */
   stream: MediaStream | null;
-  /** Binary MPEG-TS WebSocket URL (MDVR path) for the JSMpeg canvas player. */
-  wsUrl: string | null;
+  /** HLS playlist URL (MDVR path) for the HLS.js player. */
+  hlsUrl: string | null;
   /** Which player the tile should mount for this session. */
   mode: 'mdvr' | 'mock' | null;
   /**
    * Honest stream classification:
    * - `stub` — synthetic canvas stream (mock path).
-   * - `real` — the MDVR media plane (A9A → dialback → mdvr-streamer).
+   * - `real` — the MDVR media plane (AB2 → RTMP → MediaMTX HLS).
    * - `unavailable` — the session could not be opened.
    */
   streamKind: 'real' | 'stub' | 'unavailable';
@@ -43,21 +49,83 @@ export interface StreamSessionHook {
   setQuality: (q: StreamQuality) => void;
   /** Manually retry the connection (after an error). */
   retry: () => void;
-  /** MDVR path: the JSMpeg player reports decoding started. */
+  /** MDVR path: the HLS player reports the playlist is ready. */
   onPlayerReady: () => void;
 }
 
 /** Heartbeat interval for live latency/signal refresh (simulated, mock path). */
 const STATS_REFRESH_MS = 2000;
 
-/** Connection timeout — if the stream doesn't start in 15s, fail + retry. */
-const CONNECTION_TIMEOUT_MS = 15_000;
+/** Connection timeout — RTMP ingest from the device can take ~10–20s; GPRS may lag. */
+const CONNECTION_TIMEOUT_MS = 120_000;
 
 /** Max automatic reconnect attempts. */
 const MAX_RETRIES = 3;
 
 /** Base backoff delay for reconnect. */
 const RECONNECT_BASE_MS = 1000;
+
+/** One AB2/AB3 pair per IMEI — four wall tiles must not start four pushes. */
+type MdvrShare = { count: number; start: Promise<void> };
+const mdvrShares = new Map<string, MdvrShare>();
+/** In-flight AB3 so a reconnect cannot send AB2 before stop is queued. */
+const mdvrStopping = new Map<string, Promise<void>>();
+
+function acquireMdvrLive(imei: string, start: () => Promise<void>): Promise<void> {
+  const existing = mdvrShares.get(imei);
+  if (existing) {
+    existing.count += 1;
+    return existing.start;
+  }
+  const afterStop = mdvrStopping.get(imei) ?? Promise.resolve();
+  const share: MdvrShare = {
+    count: 1,
+    start: afterStop.catch(() => undefined).then(() => start()),
+  };
+  mdvrShares.set(imei, share);
+  share.start.catch(() => {
+    if (mdvrShares.get(imei) === share) mdvrShares.delete(imei);
+  });
+  return share.start;
+}
+
+function releaseMdvrLive(imei: string, stop: () => Promise<void>): void {
+  const existing = mdvrShares.get(imei);
+  if (!existing) return;
+  existing.count -= 1;
+  if (existing.count > 0) return;
+  mdvrShares.delete(imei);
+  const stopping = stop().catch(() => undefined);
+  mdvrStopping.set(imei, stopping);
+  void stopping.finally(() => {
+    if (mdvrStopping.get(imei) === stopping) mdvrStopping.delete(imei);
+  });
+}
+
+/** Poll until the gateway actually wrote AB2 (QUEUED → SENT). HELD stays QUEUED. */
+async function waitForAb2OnWire(
+  commandId: string,
+  isCancelled: () => boolean,
+): Promise<'SENT' | 'ACKED' | 'QUEUED' | 'FAILED'> {
+  for (let i = 0; i < 45; i++) {
+    if (isCancelled()) return 'QUEUED';
+    try {
+      const rec = await apiGet<DeviceCommandRecord>(`/device-commands/${commandId}`);
+      if (i === 0 || i % 5 === 0 || rec.status !== 'QUEUED') {
+        mdvrLog(`AB2 ${commandId} status=${rec.status}`);
+      }
+      if (rec.status === 'SENT' || rec.status === 'ACKED') return rec.status;
+      if (rec.status === 'FAILED' || rec.status === 'EXPIRED') return 'FAILED';
+    } catch (err) {
+      if (i === 0 || i % 5 === 0) mdvrLog('AB2 status poll error:', err);
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  mdvrLog(
+    `AB2 ${commandId} still QUEUED — device-gateway has not written it (GPRS socket is not AUTHENTICATED; command is HELD).`,
+  );
+  return 'QUEUED';
+}
 
 /** A channel is live-streamable through the MDVR media plane. */
 export function isMdvrChannel(channel: CameraChannel | null): boolean {
@@ -76,7 +144,7 @@ export function useStreamSession(
 ): StreamSessionHook {
   const [session, setSession] = useState<StreamSession | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [wsUrl, setWsUrl] = useState<string | null>(null);
+  const [hlsUrl, setHlsUrl] = useState<string | null>(null);
   const [currentQuality, setCurrentQuality] = useState<StreamQuality>(quality);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [errorState, setErrorState] = useState(false);
@@ -115,7 +183,7 @@ export function useStreamSession(
       handleRef.current = null;
     }
     setStream(null);
-    setWsUrl(null);
+    setHlsUrl(null);
     setSession((prev) => (prev ? { ...prev, state: 'closed' } : prev));
   }, [stopTimers]);
 
@@ -131,16 +199,21 @@ export function useStreamSession(
     reconnectTimerRef.current = setTimeout(() => setRetryTrigger((n) => n + 1), delay);
   }, []);
 
-  /** Fire-and-forget A9B stop so the device tears down its media channel. */
-  const stopMdvr = useCallback(() => {
+  /** Fire-and-forget AB3 stop so the device tears down its RTMP push. */
+  const stopMdvr = useCallback(async () => {
     const ch = channelRef.current;
-    if (!ch?.deviceId || !ch.logicalChannel) return;
-    void apiPost(`/devices/${ch.deviceId}/commands`, {
-      commandCode: 'A9B',
-      params: { channel: ch.logicalChannel, control: '0', closeType: '0', switchType: '0' },
-    }).catch(() => {
-      /* best-effort — the device also stops on disconnect */
-    });
+    if (!ch?.deviceId) return;
+    mdvrLog(`AB3 stop → device=${ch.deviceId} imei=${ch.imei ?? '?'}`);
+    try {
+      await apiPost(`/devices/${ch.deviceId}/commands`, {
+        commandCode: 'AB3',
+        // md300-main live.js always stops channel 1 (the only working AV channel).
+        params: { channel: 1, control: '0', closeType: '0', switchType: '0' },
+      });
+      mdvrLog(`AB3 accepted for device=${ch.deviceId}`);
+    } catch (err) {
+      mdvrLog(`AB3 failed for device=${ch.deviceId} (best-effort):`, err);
+    }
   }, []);
 
   // Open / re-open whenever the channel, quality, or retry trigger changes.
@@ -163,41 +236,80 @@ export function useStreamSession(
 
     // ── MDVR real path ──────────────────────────────────────────────────────
     if (mdvr) {
-      const endpoint = mdvrStreamEndpoint();
+      const imei = channel.imei ?? '';
+      const deviceId = channel.deviceId ?? '';
+      const uploadUrl = mdvrRtmpUploadUrl(imei);
+      const url = mdvrHlsUrl(imei);
+      mdvrLog(
+        `opening channel=${channel.id} device=${deviceId} imei=${imei} → AB2 uploadUrl=${uploadUrl} hlsUrl=${url}`,
+      );
+
       timeoutTimerRef.current = setTimeout(() => {
         if (cancelled) return;
+        mdvrLog(
+          `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. Check: is the device connected to device-gateway (AUTHENTICATED)? Is AB2 still HELD (see device-gateway logs)? Is the device pushing RTMP to :1935?`,
+        );
         teardown();
         setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
         scheduleReconnect();
       }, CONNECTION_TIMEOUT_MS);
 
-      void apiPost(`/devices/${channel.deviceId}/commands`, {
-        commandCode: 'A9A',
-        params: {
-          server: endpoint.server,
-          tcpPort: endpoint.tcpPort,
-          udpPort: 0,
-          channel: channel.logicalChannel ?? 1,
-          dataType: '1', // video only
-          streamType: '1', // minor (sub) stream — the bandwidth-friendly default
-        },
+      void acquireMdvrLive(imei, async () => {
+        mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
+          uploadUrl,
+          channel: 1,
+          dataType: '0',
+          streamType: '0',
+        });
+        const record = await apiPost<
+          { commandCode: string; params: Record<string, string | number> },
+          DeviceCommandRecord
+        >(`/devices/${deviceId}/commands`, {
+          commandCode: 'AB2',
+          params: {
+            uploadUrl,
+            // md300-main live.js CHANNEL=1, dataType=0, streamType=0.
+            channel: 1,
+            dataType: '0',
+            streamType: '0',
+          },
+        });
+        const advertised = String(record.params?.uploadUrl ?? uploadUrl);
+        mdvrLog(
+          `AB2 queued id=${record.id} status=${record.status} advertisedUploadUrl=${advertised}`,
+        );
+        // Don't block HLS attach — poll in the background so the console tells
+        // the truth if the gateway is still HELD (device not AUTHENTICATED).
+        void waitForAb2OnWire(record.id, () => cancelled).then((wire) => {
+          if (cancelled) return;
+          if (wire === 'QUEUED') {
+            mdvrLog(
+              `AB2 still not on the GPRS socket — MediaMTX will stay empty until device ${deviceId} (imei=${imei}) authenticates on device-gateway :5023/:6180.`,
+            );
+          } else if (wire === 'FAILED') {
+            mdvrLog(`AB2 ${record.id} FAILED/EXPIRED — device will not push RTMP`);
+          } else {
+            mdvrLog(`AB2 ${wire} on the wire for device=${deviceId} — waiting for RTMP ingest`);
+          }
+        });
       })
         .then(() => {
           if (cancelled) return;
-          // Command accepted → the device will dial the streamer; open the
-          // player socket now. Decoding "active" is reported by onPlayerReady.
-          setWsUrl(mdvrWsUrl(channel.imei ?? ''));
+          mdvrLog(`AB2 accepted — attaching HLS player to ${url}`);
+          setHlsUrl(url);
         })
-        .catch(() => {
+        .catch((err) => {
+          mdvrLog(`AB2 request FAILED for device=${deviceId} imei=${imei}:`, err);
           if (cancelled) return;
           teardown();
           setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+          setErrorState(true);
           scheduleReconnect();
         });
 
       return () => {
         cancelled = true;
-        stopMdvr();
+        releaseMdvrLive(imei, stopMdvr);
         teardown();
       };
     }
@@ -259,8 +371,11 @@ export function useStreamSession(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, currentQuality, retryTrigger, mdvr]);
 
-  /** MDVR path: called by the JSMpeg player when decoding actually starts. */
+  /** MDVR path: called by the HLS player when the playlist is ready / playback starts. */
   const onPlayerReady = useCallback(() => {
+    mdvrLog(
+      `player ready — imei=${channelRef.current?.imei ?? '?'} (HLS attached, clearing timeout)`,
+    );
     if (timeoutTimerRef.current !== null) {
       clearTimeout(timeoutTimerRef.current);
       timeoutTimerRef.current = null;
@@ -287,5 +402,5 @@ export function useStreamSession(
         : 'stub'
       : 'unavailable';
 
-  return { session, stream, wsUrl, mode, streamKind, setQuality, retry, onPlayerReady };
+  return { session, stream, hlsUrl, mode, streamKind, setQuality, retry, onPlayerReady };
 }

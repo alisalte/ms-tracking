@@ -46,6 +46,9 @@ export class AppModule {
           client: { url: config.DBURL },
           migrations: {
             directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            // Per-service ledger — the shared database's `schema_migrations`
+            // table belongs to identity-service.
+            tableName: 'device_gateway_schema_migrations',
           },
           // Non-fatal: the gateway boots even if Postgres is down (06 §15.4).
           // Listener config is optional; the in-memory defaults apply meanwhile.

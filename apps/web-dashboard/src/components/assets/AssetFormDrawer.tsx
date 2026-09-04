@@ -147,11 +147,12 @@ const vehicleSchema = z.object({
     invalid: 'validation.vehicle.codeInvalid',
   }),
   plate: optionalText(32, 'validation.vehicle.plateTooLong'),
-  /** 17 chars, no I/O/Q (ISO 3779) — empty allowed. */
+  /** Optional chassis/VIN — empty allowed; when set, letters/digits only (no I/O/Q), max 17. */
   vin: z
     .string()
     .trim()
-    .refine((v) => v === '' || /^[A-HJ-NPR-Z0-9]{17}$/i.test(v), {
+    .max(17, { message: 'validation.vehicle.vinInvalid' })
+    .refine((v) => v === '' || /^[A-HJ-NPR-Z0-9]+$/i.test(v), {
       message: 'validation.vehicle.vinInvalid',
     }),
   odometerKm: z
@@ -706,12 +707,7 @@ function DeviceFields({
   );
 }
 
-function DriverFields({
-  control,
-  errors,
-  vehicles,
-  t,
-}: FieldProps & { vehicles: Vehicle[] }) {
+function DriverFields({ control, errors, vehicles, t }: FieldProps & { vehicles: Vehicle[] }) {
   const options = [...vehicles].sort(
     (a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE'),
   );
@@ -811,7 +807,8 @@ function DriverFields({
         placeholder={t('assets.driver.pickVehicle')}
         options={options.map((v) => ({
           value: v.id,
-          label: v.status === 'ACTIVE' ? v.name : `${v.name} (${t('assets.vehicle.status.ARCHIVED')})`,
+          label:
+            v.status === 'ACTIVE' ? v.name : `${v.name} (${t('assets.vehicle.status.ARCHIVED')})`,
         }))}
         error={errors.assignedVehicleId as FieldError | undefined}
         t={t}

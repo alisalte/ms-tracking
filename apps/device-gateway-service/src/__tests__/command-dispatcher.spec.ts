@@ -171,6 +171,45 @@ describe('CommandDispatcher (downstream command path, 06 §6.2)', () => {
     expect(events[0]).toMatchObject({ result: 'REJECTED', reason: 'DEVICE_OFFLINE' });
   });
 
+  it('holds AB2 while offline and writes it after flushHeld', async () => {
+    const written: Buffer[] = [];
+    const events: Array<Record<string, unknown>> = [];
+    let session: FakeSession | null = null;
+    const sessions = {
+      byDeviceId: (deviceId: string) =>
+        session && session.deviceId === deviceId ? (session as never as DeviceSession) : null,
+      writerFor: () => (data: Buffer) => {
+        written.push(data);
+        return true;
+      },
+    } as unknown as SessionManager;
+    const adapter = {
+      id: 'meitrack',
+      encode: (cmd: { payload: Record<string, unknown> }) =>
+        Buffer.from(`@@${String(cmd.payload.hex)}`, 'ascii'),
+    } as unknown as ProtocolAdapter;
+    const kafka = {
+      publishCommandEvent: async (event: Record<string, unknown>) => {
+        events.push(event);
+      },
+    } as unknown as DeviceGatewayKafkaProducer;
+    const dispatcher = new CommandDispatcher(
+      sessions,
+      { get: () => adapter } as unknown as AdapterRegistry,
+      kafka,
+      null,
+    );
+    const ab2 = { ...REQUEST, commandCode: 'AB2', payloadText: null, payloadHex: '4142322C' };
+    expect(await dispatcher.dispatch(ab2)).toEqual({ outcome: 'HELD' });
+    expect(written).toHaveLength(0);
+    expect(events).toHaveLength(0);
+
+    session = makeSession();
+    await dispatcher.flushHeld(DEVICE_ID);
+    expect(written).toHaveLength(1);
+    expect(events[0]).toMatchObject({ result: 'SENT', commandCode: 'AB2' });
+  });
+
   it('stays silent (ROUTED_ELSEWHERE) when another instance owns the session', async () => {
     const { dispatcher, events } = makeDeps({
       session: null,

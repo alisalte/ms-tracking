@@ -108,6 +108,12 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
   switch (frame.command) {
     case MEITRACK_COMMAND.TRACKING:
       return [decodeTracking(raw, frame.fields)];
+    case 'D00':
+      // Photo chunk (D00 download response) — hex payload, always text-safe.
+      return [decodePhotoChunk(raw, frame.fields)];
+    case 'D01':
+      // Photo filename listing (D01 response).
+      return [decodePhotoList(raw, frame.fields)];
     default:
       // Command-family code (AAC, D82, A##, B##, C##, D##, E##, F##) → ack.
       if (MEITRACK_RESPONSE_CODE.test(frame.command)) {
@@ -160,6 +166,64 @@ function decodeTracking(raw: RawPacket, fields: readonly string[]): DeviceMessag
       powerVoltage: io.powerVoltage,
     },
     io: io.raw,
+  });
+}
+
+/**
+ * Decode a D00 photo-download response → one PHOTO chunk message:
+ *   <imei>,D00,<filename>,<totalPackets>,<packetIndex>,<hexdata>
+ *
+ * `hexdata` is ASCII hex (no raw bytes), so it survives the text/comma-split
+ * path unlike CCE bodies. Chunks arrive in any order the device chooses; a
+ * consumer reassembles the full image with PhotoAssembler
+ * (meitrack.photo-assembler.ts) keyed on (imei, filename), sorted by
+ * packetIndex — see md300/server/capture_photo.py, the validated reference.
+ */
+function decodePhotoChunk(raw: RawPacket, fields: readonly string[]): DeviceMessage {
+  const imei = fields[0] ?? '';
+  const filename = fields[2] ?? '';
+  const totalPackets = Number.parseInt(fields[3] ?? '', 10) || 0;
+  const packetIndex = Number.parseInt(fields[4] ?? '', 10) || 0;
+  const hexData = fields[5] ?? '';
+  let chunkBase64 = '';
+  try {
+    chunkBase64 = hexData ? Buffer.from(hexData, 'hex').toString('base64') : '';
+  } catch {
+    chunkBase64 = '';
+  }
+  return message(raw, {
+    type: 'PHOTO',
+    serialOrImei: imei,
+    timestamp: raw.receivedAt,
+    telemetry: {
+      command: 'D00',
+      filename,
+      totalPackets,
+      packetIndex,
+      chunkBase64,
+      chunkBytes: hexData.length / 2,
+    },
+  });
+}
+
+/**
+ * Decode a D01 photo-listing response → COMMAND_ACK carrying the parsed names:
+ *   <imei>,D01,<totalPackets>,<packetIndex>,name1|name2|...|
+ */
+function decodePhotoList(raw: RawPacket, fields: readonly string[]): DeviceMessage {
+  const imei = fields[0] ?? '';
+  const totalPackets = Number.parseInt(fields[2] ?? '', 10) || 0;
+  const packetIndex = Number.parseInt(fields[3] ?? '', 10) || 0;
+  const namesField = fields.slice(4).join(',');
+  const photoNames = namesField
+    .split('|')
+    .map((n) => n.trim())
+    .filter(Boolean);
+  return message(raw, {
+    type: 'COMMAND_ACK',
+    serialOrImei: imei,
+    timestamp: raw.receivedAt,
+    telemetry: { command: 'D01', totalPackets, packetIndex, photoNames },
   });
 }
 
@@ -291,57 +355,116 @@ interface CceParam {
 }
 
 /**
- * Parse the CCE parameter stream: three length-prefixed groups — 2-byte IDs,
- * 4-byte IDs, then n-byte IDs (whose IDs are 2 bytes when the first byte is
- * 0xFE, e.g. 0xFE31 ADAS/DMS alarm info).
+ * MDVR CCE body starts with a cache/packet envelope (MDVR GPRS Protocol V2.0):
+ *   uint32 LE remaining cache records
+ *   uint16 LE number of packets in this frame
+ * then per packet:
+ *   uint16 LE packet length, uint16 LE id-count,
+ *   1-byte param group, 2-byte group, 4-byte group, n-byte group.
+ *
+ * Older unit tests (and some trackers) omit the envelope and 1-byte group.
+ * Detect the envelope when bytes 1–3 of the cache uint32 are zero.
  */
+function hasCceEnvelope(buf: Buffer): boolean {
+  if (buf.length < 10) return false;
+  if ((buf[1] ?? 1) !== 0 || (buf[2] ?? 1) !== 0 || (buf[3] ?? 1) !== 0) return false;
+  const nPkts = buf.readUInt16LE(4);
+  if (nPkts < 1 || nPkts > 64) return false;
+  const pktLen = buf.readUInt16LE(6);
+  return pktLen >= 8 && pktLen <= buf.length;
+}
+
 function parseCceParams(buf: Buffer): CceParam[] {
+  if (hasCceEnvelope(buf)) return parseEnvelopedCce(buf);
+  return parseCceGroups(buf, 0, buf.length, false);
+}
+
+function parseEnvelopedCce(buf: Buffer): CceParam[] {
   const params: CceParam[] = [];
-  let off = 0;
-  const readId = (): number => {
-    const b = buf[off++] ?? 0;
-    return b;
+  const nPkts = buf.readUInt16LE(4);
+  let off = 6;
+  for (let p = 0; p < nPkts && off + 4 <= buf.length; p++) {
+    const pktStart = off;
+    const pktLen = buf.readUInt16LE(off);
+    off += 2;
+    off += 2; // id-count (informational)
+    const pktEnd = Math.min(buf.length, pktStart + pktLen);
+    params.push(...parseCceGroups(buf, off, pktEnd, true));
+    off = pktEnd;
+  }
+  return params;
+}
+
+/**
+ * Parameter groups inside one CCE packet.
+ * `withOneByteGroup` is the MDVR wire order (1-byte IDs, then 2, 4, n).
+ */
+function parseCceGroups(
+  buf: Buffer,
+  start: number,
+  end: number,
+  withOneByteGroup: boolean,
+): CceParam[] {
+  const params: CceParam[] = [];
+  let off = start;
+  const remaining = () => end - off;
+  const readU8 = (): number => {
+    if (off >= end) return 0;
+    return buf[off++] ?? 0;
   };
   const readU16 = (): number => {
+    if (remaining() < 2) {
+      off = end;
+      return 0;
+    }
     const v = buf.readUInt16LE(off);
     off += 2;
     return v;
   };
   const readU32 = (): number => {
+    if (remaining() < 4) {
+      off = end;
+      return 0;
+    }
     const v = buf.readUInt32LE(off);
     off += 4;
     return v;
   };
 
-  // Group 1: N × (1-byte id + 2-byte LE value).
-  const n2 = readId();
-  for (let i = 0; i < n2 && off + 2 <= buf.length; i++) {
-    const id = readId();
+  if (withOneByteGroup) {
+    const n1 = readU8();
+    for (let i = 0; i < n1 && remaining() >= 2; i++) {
+      const id = readU8();
+      const v = readU8();
+      params.push({ id, value: Buffer.from([v]) });
+    }
+  }
+
+  const n2 = readU8();
+  for (let i = 0; i < n2 && remaining() >= 3; i++) {
+    const id = readU8();
     const v = readU16();
     params.push({ id, value: Buffer.from([v & 0xff, (v >> 8) & 0xff]) });
   }
-  // Group 2: N × (1-byte id + 4-byte LE value).
-  const n4 = readId();
-  for (let i = 0; i < n4 && off + 4 <= buf.length; i++) {
-    const id = readId();
+  const n4 = readU8();
+  for (let i = 0; i < n4 && remaining() >= 5; i++) {
+    const id = readU8();
     const v = readU32();
     params.push({
       id,
       value: Buffer.from([v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]),
     });
   }
-  // Group 3: N × (id + 1-byte length + value). An id whose first byte is 0xFE
-  // is TWO bytes (0xFE31 ADAS/DMS info, 0xFE2D fatigue info, 0x49 camera
-  // status is one byte) — per the protocol's worked examples.
-  const nn = readId();
-  for (let i = 0; i < nn && off < buf.length; i++) {
-    let id = readId();
-    if (id === 0xfe && off < buf.length) {
-      id = ((id << 8) | readId()) & 0xffff;
+  const nn = readU8();
+  for (let i = 0; i < nn && remaining() > 0; i++) {
+    let id = readU8();
+    if (id === 0xfe && remaining() > 0) {
+      id = ((id << 8) | readU8()) & 0xffff;
     }
-    const len = off < buf.length ? readId() : 0;
-    const value = buf.subarray(off, off + len);
-    off += len;
+    const len = remaining() > 0 ? readU8() : 0;
+    const take = Math.min(len, remaining());
+    const value = buf.subarray(off, off + take);
+    off += take;
     params.push({ id, value: Buffer.from(value) });
   }
   return params;
@@ -397,20 +520,32 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
     throw new ProtocolError('CCE frame has an empty body.', 'meitrack');
   }
 
-  const params = parseCceParams(body);
+  let params: CceParam[] = [];
+  try {
+    params = parseCceParams(body);
+  } catch {
+    params = [];
+  }
   const byId = new Map<number, CceParam>();
   for (const p of params) byId.set(p.id, p);
 
+  const u8 = (id: number): number | null => {
+    const p = byId.get(id);
+    return p && p.value.length >= 1 ? (p.value[0] ?? null) : null;
+  };
   const u16 = (id: number): number | null => {
     const p = byId.get(id);
-    return p ? p.value.readUInt16LE(0) : null;
+    if (!p) return null;
+    if (p.value.length >= 2) return p.value.readUInt16LE(0);
+    if (p.value.length === 1) return p.value[0] ?? null;
+    return null;
   };
   const u32 = (id: number): number | null => {
     const p = byId.get(id);
-    return p ? p.value.readUInt32LE(0) : null;
+    return p && p.value.length >= 4 ? p.value.readUInt32LE(0) : null;
   };
 
-  const event = u16(0x40) ?? 0;
+  const event = u16(0x40) ?? u8(0x01) ?? 0;
   // Coordinates: 4-byte LE, scaled 1e-6 (protocol examples).
   const lngRaw = u32(0x02);
   const latRaw = u32(0x03);
@@ -474,7 +609,16 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
     );
   }
   if (messages.length === 0) {
-    throw new ProtocolError('CCE frame carried neither an event nor a position.', 'meitrack');
+    // MD300 keepalives are CCE with IMEI but no GPS yet. Still authenticate
+    // so held AB2/AB3 can flush onto the GPRS socket.
+    messages.push(
+      message(raw, {
+        type: 'TELEMETRY',
+        serialOrImei: imei,
+        timestamp: new Date(raw.receivedAt),
+        telemetry: { command: 'CCE' },
+      }),
+    );
   }
   return messages;
 }

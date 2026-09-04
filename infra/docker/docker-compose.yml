@@ -256,6 +256,12 @@ services:
       FLEET_KAFKA_COMMAND_REQUEST_TOPIC: fleetvision.telemetry.command.request
       FLEET_KAFKA_COMMAND_ACK_TOPIC: fleetvision.telemetry.command.ack
       FLEET_KAFKA_SESSION_TOPIC: fleetvision.telemetry.session.lifecycle
+      # Host the physical MDVR pushes RTMP to after AB2 (not localhost —
+      # GPRS cannot reach the operator's browser origin). LAN/public IP.
+      MDVR_PUBLIC_HOST: ${MDVR_PUBLIC_HOST:-}
+      MDVR_PUBLIC_PORT: ${MDVR_VIDEO_PORT:-6182}
+      MDVR_RTMP_PORT: ${MDVR_RTMP_PORT:-1935}
+      MDVR_RTMP_PATH: ${MDVR_RTMP_PATH:-live/md300}
     ports:
       - "${FLEET_MGMT_PORT:-3006}:3006"
     healthcheck:
@@ -476,8 +482,9 @@ services:
       GATEWAY_ADMIN_PORT: "8081"
       GATEWAY_HOST: 0.0.0.0
       # Device protocol listeners (06 §9.3): meitrack TCP for MDVR/tracker GPRS.
-      GATEWAY_LISTENERS: meitrack:tcp:${GATEWAY_MEITRACK_PORT:-5023}
+      GATEWAY_LISTENERS: meitrack:tcp:${GATEWAY_MEITRACK_PORT:-5023},meitrack:tcp:6180
       REDISURL: redis://redis:6379/1
+      DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
@@ -488,8 +495,10 @@ services:
       FLEET_REGISTRY_URL: http://fleet-management-service:3006
       FLEET_REGISTRY_API_KEY: ${FLEET_REGISTRY_API_KEY:-}
     ports:
-      # Device-facing GPRS plane — must be reachable from the vehicles' APN.
+      # Device-facing GPRS plane — 5023 is the platform default; 6180 is the
+      # MD300 / Meitrack-tools default so a unit still A21'd to 6180 connects.
       - "${GATEWAY_MEITRACK_PORT:-5023}:${GATEWAY_MEITRACK_PORT:-5023}"
+      - "6180:6180"
       - "${GATEWAY_ADMIN_PORT:-8081}:8081"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8081/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -498,11 +507,20 @@ services:
       retries: 12
       start_period: 20s
 
-  # mdvr-streamer-service — the MDVR live-video media plane. Receives binary
-  # §3.12/§3.16 0x12 media packets on the video TCP port (the device dials
-  # back here after the A9A command tells it to), reassembles H.264/H.265
-  # access units, transcodes via ffmpeg to low-latency MPEG-TS, and fans the
-  # TS bytes out to browser players (JSMpeg) over a binary WebSocket.
+  # MediaMTX — MD300 live path (MEITRACK_LIVE_VIDEO_GUIDE): AB2 RTMP push
+  # from the device on :1935, HLS for the dashboard on :8888 (nginx /media-hls).
+  mediamtx:
+    image: bluenviron/mediamtx:1.11.3
+    container_name: fleetvision-mediamtx
+    restart: unless-stopped
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "${MDVR_RTMP_PORT:-1935}:1935"
+      - "${MDVR_HLS_PORT:-8888}:8888"
+
+  # mdvr-streamer-service — legacy A9A dialback media plane (JSMpeg). Kept
+  # for the native 0x12 path; the MD300 live wall uses MediaMTX above.
   mdvr-streamer-service:
     build:
       context: ../..
@@ -576,6 +594,9 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:8080"
+    volumes:
+      # Pick up nginx routing fixes without rebuilding the SPA image.
+      - ../../apps/web-dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   # ── Sprint G (G-0) — map-engine + optional routing/geocoding deps ──────────
   #

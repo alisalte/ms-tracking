@@ -220,6 +220,7 @@ function fetchVehicleDevices(vehicleId: string): Promise<BoundDevice[]> {
           protocol: d.protocol,
           deviceStatus: d.status,
           role: 'TRACKER',
+          roles: ['TRACKER'],
           isPrimary: true,
           boundAt: d.createdAt,
         })),
@@ -450,9 +451,10 @@ export function useBindDeviceToVehicle() {
     Error,
     { vehicleId: string; deviceId: string } & BindDevicePayload
   >({
-    mutationFn: ({ vehicleId, deviceId, role, isPrimary }) =>
+    mutationFn: ({ vehicleId, deviceId, role, roles, isPrimary }) =>
       apiPost<BindDevicePayload, BoundDevice>(`/vehicles/${vehicleId}/devices/${deviceId}`, {
         ...(role ? { role } : {}),
+        ...(roles && roles.length > 0 ? { roles } : {}),
         ...(isPrimary !== undefined ? { isPrimary } : {}),
       }),
     onSuccess: (_d, { vehicleId }) => {

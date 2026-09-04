@@ -88,6 +88,22 @@ describe('parseVehicleGrid', () => {
     ]);
     expect(parsed.issues.map((i) => i.code).sort()).toEqual(['invalidVin', 'missingFleetCode']);
   });
+
+  it('accepts an omitted or short VIN', () => {
+    const omitted = parseVehicleGrid([
+      ['name', 'code', 'fleetCode'],
+      ['Truck', 'V001', 'NORTH'],
+    ]);
+    expect(omitted.issues).toEqual([]);
+    expect(omitted.rows[0]?.vin).toBeUndefined();
+
+    const short = parseVehicleGrid([
+      ['name', 'code', 'fleetCode', 'vin'],
+      ['Truck', 'V001', 'NORTH', 'ABC123'],
+    ]);
+    expect(short.issues).toEqual([]);
+    expect(short.rows[0]?.vin).toBe('ABC123');
+  });
 });
 
 describe('parseDeviceGrid', () => {

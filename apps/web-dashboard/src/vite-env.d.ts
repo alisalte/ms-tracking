@@ -13,6 +13,11 @@ interface ImportMetaEnv {
   readonly VITE_GPS_WS_URL?: string;
   /** notification-service Socket.IO URL (alarms + notification bell). */
   readonly VITE_NOTIFICATION_WS_URL?: string;
+  /** MDVR RTMP ingest advertised to the device (rewritten server-side). */
+  readonly VITE_MDVR_PUBLIC_HOST?: string;
+  readonly VITE_MDVR_RTMP_PORT?: string;
+  /** Same as md300-main `RTMP_PATH` (default live/md300). */
+  readonly VITE_MDVR_RTMP_PATH?: string;
 }
 
 interface ImportMeta {

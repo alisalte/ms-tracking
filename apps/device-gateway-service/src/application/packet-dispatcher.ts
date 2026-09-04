@@ -15,6 +15,7 @@
  * Idempotency: messageId (UUIDv7) is the dedupe key (06 §8.4); consumers dedupe
  * on (device_id, message_id).
  */
+import { Logger } from '@nestjs/common';
 import { DeviceMessage } from '../domain/device-message.js';
 import type { DeviceSession } from '../domain/device-session.js';
 import { ProtocolError } from '../domain/errors.js';
@@ -23,6 +24,7 @@ import type { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/kafka-p
 import type { ProtocolAdapter } from '../infrastructure/protocol/protocol-adapter.js';
 import type { RawPacketStorage } from '../infrastructure/storage/raw-packet-storage.js';
 import type { AuthResolver } from './auth-resolver.js';
+import type { CommandDispatcher } from './command-dispatcher.js';
 import type { SessionManager } from './session-manager.js';
 
 export interface DispatchResult {
@@ -41,9 +43,13 @@ export interface PacketDispatcherDeps {
   readonly sessionManager: SessionManager;
   readonly kafka: DeviceGatewayKafkaProducer | null;
   readonly rawStorage: RawPacketStorage;
+  /** Optional — flush held AB2 once the MDVR GPRS session authenticates. */
+  readonly commandDispatcher?: CommandDispatcher;
 }
 
 export class PacketDispatcher {
+  private readonly logger = new Logger(PacketDispatcher.name);
+
   constructor(private readonly deps: PacketDispatcherDeps) {}
 
   /**
@@ -63,6 +69,11 @@ export class PacketDispatcher {
       messages = adapter.decode(raw);
     } catch (err) {
       if (err instanceof ProtocolError) {
+        const preview = raw.payload.subarray(0, 80);
+        this.logger.warn(
+          `Decode error session=${session.id} bytes=${raw.payload.length} ` +
+            `ascii=${JSON.stringify(preview.toString('latin1'))}: ${err.message}`,
+        );
         return { published: 0, authenticated: false, close: false, closeReason: null };
       }
       throw err;
@@ -77,6 +88,9 @@ export class PacketDispatcher {
         const outcome = await this.deps.authResolver.resolve(msg.serialOrImei);
         if (!outcome.ok) {
           // INVARIANT #1: never publish pre-auth — and here we cannot even auth.
+          this.logger.warn(
+            `Auth failed for imei=${msg.serialOrImei} reason=${outcome.reason} — closing session.`,
+          );
           return {
             published: 0,
             authenticated: false,
@@ -95,6 +109,10 @@ export class PacketDispatcher {
             now: raw.receivedAt,
           });
           await this.deps.sessionManager.registerAuthenticated(session);
+          this.logger.log(
+            `GPRS AUTHENTICATED imei=${msg.serialOrImei} device=${outcome.device.deviceId} ` +
+              `session=${session.id} from ${session.remoteAddress}:${session.remotePort}`,
+          );
         }
         authenticated = true;
         // LOGIN itself is published (telemetry.device.raw — 06 §11.5) now that we
@@ -120,6 +138,9 @@ export class PacketDispatcher {
         }
         const outcome = await this.deps.authResolver.resolve(msg.serialOrImei);
         if (!outcome.ok) {
+          this.logger.warn(
+            `Auth failed for imei=${msg.serialOrImei} reason=${outcome.reason} — closing session.`,
+          );
           return {
             published: 0,
             authenticated: false,
@@ -137,6 +158,10 @@ export class PacketDispatcher {
           now: raw.receivedAt,
         });
         await this.deps.sessionManager.registerAuthenticated(session);
+        this.logger.log(
+          `GPRS AUTHENTICATED imei=${msg.serialOrImei} device=${outcome.device.deviceId} ` +
+            `session=${session.id} from ${session.remoteAddress}:${session.remotePort}`,
+        );
         authenticated = true;
         // Fall through: publish the (now identity-bound) real payload.
       }
@@ -162,6 +187,10 @@ export class PacketDispatcher {
       // Stage 5: publish (06 §8). Fail-closed invariant enforced by canPublish().
       await this.publish(normalized, session, raw);
       published++;
+    }
+
+    if (authenticated && session.deviceId) {
+      await this.deps.commandDispatcher?.flushHeld(session.deviceId);
     }
 
     return { published, authenticated, close: false, closeReason: null };

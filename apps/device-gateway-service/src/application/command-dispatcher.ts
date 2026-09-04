@@ -14,8 +14,11 @@
  *
  * No local session → the command is either held by another gateway instance
  * (Redis snapshot carries a different instanceID — stay silent, that instance
- * also received the broadcast and owns the write) or the device is offline
- * (no snapshot at all → publish COMMAND_REJECTED DEVICE_OFFLINE).
+ * also received the broadcast and owns the write) or the device is not yet
+ * connected. MD300 `live.js` writes AB2 on the GPRS socket as soon as it
+ * exists; we keep AB2/AB3/AB4 in memory and flush on AUTHENTICATED instead of
+ * rejecting DEVICE_OFFLINE (the dashboard opens live video before the unit
+ * dials in).
  */
 import { Logger } from '@nestjs/common';
 import type { DeviceSession } from '../domain/index.js';
@@ -48,10 +51,23 @@ export type CommandDispatchResult =
   | { readonly outcome: 'SENT' }
   | { readonly outcome: 'REJECTED'; readonly reason: string }
   /** Another instance owns the session — it performs (or already performed) the write. */
-  | { readonly outcome: 'ROUTED_ELSEWHERE' };
+  | { readonly outcome: 'ROUTED_ELSEWHERE' }
+  /** No live socket yet — queued until the device authenticates (md300 live.js). */
+  | { readonly outcome: 'HELD' };
+
+/** Media commands that must wait for the GPRS socket, like md300 `sendStartStream`. */
+const HOLD_WHEN_OFFLINE = new Set(['AB2', 'AB3', 'AB4', 'A9A', 'A9B']);
+const HOLD_TTL_MS = 120_000;
+
+interface HeldCommand {
+  readonly request: DeviceCommandRequest;
+  readonly heldAt: number;
+}
 
 export class CommandDispatcher {
   private readonly logger = new Logger(CommandDispatcher.name);
+  /** deviceId → commandId → held request (last AB2 for a device wins). */
+  private readonly held = new Map<string, Map<string, HeldCommand>>();
 
   constructor(
     private readonly sessions: SessionManager,
@@ -71,6 +87,10 @@ export class CommandDispatcher {
       return result;
     }
     if (!session.canDispatchCommand()) {
+      if (HOLD_WHEN_OFFLINE.has(request.commandCode)) {
+        this.hold(request);
+        return { outcome: 'HELD' };
+      }
       return this.reject(request, 'DEVICE_NOT_AUTHENTICATED');
     }
 
@@ -107,6 +127,26 @@ export class CommandDispatcher {
     );
     await this.publishFeedback(request, 'SENT', null);
     return { outcome: 'SENT' };
+  }
+
+  /**
+   * Write any AB2/AB3 held while the MDVR had no GPRS socket (md300 live.js
+   * sends start-stream as soon as the command TCP session exists).
+   */
+  public async flushHeld(deviceId: string): Promise<void> {
+    const byCode = this.held.get(deviceId);
+    if (!byCode || byCode.size === 0) return;
+    this.held.delete(deviceId);
+    const now = Date.now();
+    for (const held of byCode.values()) {
+      if (now - held.heldAt > HOLD_TTL_MS) {
+        this.logger.warn(
+          `Dropping expired held command ${held.request.commandCode} (${held.request.commandId}).`,
+        );
+        continue;
+      }
+      await this.dispatch(held.request);
+    }
   }
 
   private encode(
@@ -154,7 +194,24 @@ export class CommandDispatcher {
         return { outcome: 'ROUTED_ELSEWHERE' };
       }
     }
+    if (HOLD_WHEN_OFFLINE.has(request.commandCode)) {
+      this.hold(request);
+      return { outcome: 'HELD' };
+    }
     return this.reject(request, 'DEVICE_OFFLINE');
+  }
+
+  /** Keep one pending command per code (latest AB2 wins) until the socket is up. */
+  private hold(request: DeviceCommandRequest): void {
+    let byCode = this.held.get(request.deviceId);
+    if (!byCode) {
+      byCode = new Map();
+      this.held.set(request.deviceId, byCode);
+    }
+    byCode.set(request.commandCode, { request, heldAt: Date.now() });
+    this.logger.log(
+      `Command ${request.commandCode} (${request.commandId}) held until device ${request.deviceId} connects.`,
+    );
   }
 
   private async reject(

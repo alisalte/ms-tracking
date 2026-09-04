@@ -27,6 +27,18 @@ const OUT_DATA_ID = 'A';
 const OUT_FLAG = '@@';
 const TAIL = '\r\n';
 
+/** md300 `buildGPRSCommand` data-ids for media commands. */
+function mediaDataId(body: Buffer): string {
+  if (body.length >= 3) {
+    const code = body.toString('ascii', 0, 3);
+    if (code === 'AB2') return 'u';
+    if (code === 'AB3') return 'v';
+    if (code === 'A9A') return 'y';
+    if (code === 'A9B') return 'w';
+  }
+  return OUT_DATA_ID;
+}
+
 /**
  * Build a complete server→device Meitrack frame for `content` (the comma-fields
  * after the length comma, i.e. `<imei>,<command>[,<args>]`). Computes length and
@@ -50,11 +62,15 @@ export function buildMeitrackFrame(content: string): Buffer {
  * the checksum sums the raw bytes from `@@` through `*` — identical rule to the
  * ASCII path, just byte-wise.
  */
-export function buildMeitrackBinaryFrame(asciiPrefix: string, body: Buffer): Buffer {
+export function buildMeitrackBinaryFrame(
+  asciiPrefix: string,
+  body: Buffer,
+  dataId = OUT_DATA_ID,
+): Buffer {
   const comma = Buffer.from(',', 'ascii');
   const star = Buffer.from('*', 'ascii');
   const tail = Buffer.from(TAIL, 'ascii');
-  const head = Buffer.from(OUT_FLAG + OUT_DATA_ID, 'ascii');
+  const head = Buffer.from(OUT_FLAG + dataId, 'ascii');
   const bodyBytes = Buffer.concat([comma, Buffer.from(asciiPrefix, 'ascii'), body, star]);
   // length = comma + prefix + body + '*' + checksum(2) + '\r\n'(2).
   const length = bodyBytes.length + 2 + 2;
@@ -95,7 +111,8 @@ function encodeConfigCommand(cmd: DeviceCommand, imei: string): Buffer {
   if (typeof cmd.payload.hex === 'string' && cmd.payload.hex.length > 0) {
     const body = Buffer.from(cmd.payload.hex, 'hex');
     if (body.length === 0) return Buffer.alloc(0);
-    return buildMeitrackBinaryFrame(`${imei},`, body);
+    // md300 live.js uses data-id 'u' for AB2 and 'v' for AB3.
+    return buildMeitrackBinaryFrame(`${imei},`, body, mediaDataId(body));
   }
 
   const command = String(cmd.payload.command ?? '');

@@ -14,6 +14,7 @@
  */
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { type Consumer, type EachMessagePayload, Kafka } from 'kafkajs';
+import type { DeviceCommandService } from '../../application/device-command.service.js';
 import type { FleetManagementConfig } from '../../config/fleet-management.config.js';
 import type { DeviceRepository } from '../persistence/device.repository.js';
 
@@ -38,6 +39,7 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
   constructor(
     private readonly config: FleetManagementConfig,
     private readonly devices: DeviceRepository,
+    private readonly commands: DeviceCommandService | null = null,
   ) {
     this.kafka = new Kafka({
       brokers: this.config.FLEET_KAFKA_BROKERS.split(','),
@@ -123,6 +125,10 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
         connectedAt: isConnect ? at : null,
         disconnectedAt: isDisconnect ? at : null,
       });
+      // md300-main live.js: send AB2 as soon as the command socket is up.
+      if (state === 'AUTHENTICATED') {
+        await this.commands?.startMdvrLiveOnConnect(env.tenantId, env.deviceId);
+      }
     } catch (err) {
       // Unknown device / DB down → log + advance offset (at-least-once; idempotent timestamps).
       this.logger.warn(

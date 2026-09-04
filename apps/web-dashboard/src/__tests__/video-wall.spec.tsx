@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockChannels } from '@/mock/video-data';
 import { VideoWallPage } from '@/pages/VideoWallPage';
@@ -292,6 +292,10 @@ vi.mock('@/api/video.api', async (importOriginal) => {
 });
 
 describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)', () => {
+  afterEach(() => {
+    mdvrOverride.channels = null;
+  });
+
   it('assigns the MDVR channel to a wall tile', async () => {
     mdvrOverride.channels = [mdvrMockChannel];
     renderWall();
@@ -303,6 +307,15 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     });
     const tile = document.querySelector('[data-tile="MD300 Sim · CH1"]');
     expect(tile).not.toBeNull();
+  });
+
+  it('auto-assigns cameras from the map deep-link ?device=', async () => {
+    mdvrOverride.channels = [mdvrMockChannel];
+    renderWall('/video?device=device-1');
+    await screen.findByText('Video Wall');
+    await waitFor(() => {
+      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+    });
   });
 });
 
@@ -379,5 +392,11 @@ describe('mapMediaChannel wire shape', () => {
     expect(ch.imei).toBe('867191086416152');
     expect(ch.online).toBe(true);
     expect(ch.protocol).toBe('MEITRACK_MDVR');
+  });
+
+  it('builds AB2 RTMP and HLS URLs from the IMEI', async () => {
+    const { mdvrRtmpUploadUrl, mdvrHlsUrl } = await import('@/api/video.api');
+    expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300$/);
+    expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/index.m3u8');
   });
 });

@@ -72,6 +72,8 @@ export function VideoWallPage() {
         next.set('d', String(division));
         if (spotlightSlot !== null) next.set('spotlight', String(spotlightSlot));
         else next.delete('spotlight');
+        const device = prev.get('device');
+        if (device) next.set('device', device);
         return next;
       },
       { replace: true },
@@ -122,6 +124,22 @@ export function VideoWallPage() {
       });
     });
   }, [channels]);
+
+  // Map popup deep-link: `/video?device=<deviceId>` assigns that device's cameras.
+  const focusDeviceId = params.get('device');
+  useEffect(() => {
+    if (!focusDeviceId || channels.length === 0) return;
+    const mine = channels.filter((c) => c.deviceId === focusDeviceId && c.online && c.consentGiven);
+    if (mine.length === 0) return;
+    setTiles((prev) => {
+      if (prev.some((t) => mine.some((c) => c.id === t.channelId))) return prev;
+      const next = prev.slice();
+      mine.forEach((ch, i) => {
+        if (i < next.length) next[i] = { ...next[i], channelId: ch.id };
+      });
+      return next;
+    });
+  }, [focusDeviceId, channels]);
 
   const removeTile = useCallback((slot: number) => {
     setTiles((prev) =>

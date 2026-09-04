@@ -237,7 +237,7 @@ function mapHeaders<K extends string>(
 }
 
 const CODE_RE = /^[A-Za-z0-9_-]+$/;
-const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
+const VIN_RE = /^[A-HJ-NPR-Z0-9]{1,17}$/i;
 const ODOMETER_KM_MAX = 10_000_000;
 const ENGINE_HOURS_MAX = 1_000_000;
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';

@@ -62,11 +62,40 @@ export interface DeviceCommandServiceOptions {
   readonly defaultTtlSeconds: number;
   /** TTL sweeper interval (seconds). */
   readonly sweepIntervalSeconds: number;
+  /** Advertised host for A9A/A9D dialback and AB2/AB4 RTMP (rewrites localhost). */
+  readonly mdvrPublicHost?: string;
+  readonly mdvrPublicPort?: number;
+  readonly mdvrRtmpPort?: number;
+  /** md300-main `RTMP_STREAM_PATH` (default `live/md300`). */
+  readonly mdvrRtmpPath?: string;
+}
+
+const LOOPBACK_HOSTS = new Set(['', 'localhost', '127.0.0.1', '::1', '0.0.0.0']);
+
+function isLoopbackHost(server: string): boolean {
+  return LOOPBACK_HOSTS.has(server.trim().toLowerCase());
+}
+
+function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hostname = host;
+    parsed.port = String(port);
+    if (streamPath) {
+      const path = streamPath.replace(/^\/+/, '');
+      parsed.pathname = `/${path}`;
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return url;
+  }
 }
 
 export class DeviceCommandService {
   private readonly logger = new Logger(DeviceCommandService.name);
   private sweepTimer: NodeJS.Timeout | null = null;
+  /** Debounce auto-AB2 per device (md300 sends once per GPRS session). */
+  private readonly autoAb2At = new Map<string, number>();
 
   constructor(
     private readonly knex: Knex,
@@ -75,7 +104,20 @@ export class DeviceCommandService {
     private readonly audit: AuditRepository,
     private readonly producer: CommandRequestProducer | null,
     private readonly options: DeviceCommandServiceOptions,
-  ) {}
+  ) {
+    if (options.mdvrPublicHost) {
+      this.logger.log(
+        `MDVR AB2 RTMP: rtmp://${options.mdvrPublicHost}:${options.mdvrRtmpPort ?? 1935}/${options.mdvrRtmpPath ?? 'live/md300'}`,
+      );
+    } else {
+      this.logger.warn(
+        'MDVR public host could not be resolved at boot (MDVR_PUBLIC_HOST unset and ipify ' +
+          'lookup failed) — auto-AB2-on-connect and dashboard-triggered AB2/A9A rewrite are ' +
+          'disabled until this service restarts. Set MDVR_PUBLIC_HOST explicitly or check ' +
+          'outbound internet access from this container.',
+      );
+    }
+  }
 
   // --- Catalog (UI form source of truth) ------------------------------------
 
@@ -112,7 +154,7 @@ export class DeviceCommandService {
     let validated: Record<string, string | number>;
     let payload: CommandPayload;
     try {
-      validated = validateParams(def, input.params ?? {});
+      validated = validateParams(def, this.resolveMediaDialback(def.code, input.params ?? {}));
       payload = buildPayload(def, validated);
     } catch (err) {
       if (err instanceof CommandValidationError) {
@@ -178,6 +220,88 @@ export class DeviceCommandService {
       throw new ServiceUnavailableException('Command queue unavailable — try again.');
     }
     return record;
+  }
+
+  /**
+   * md300-main `live.js` sends AB2 as soon as the GPRS socket has an IMEI.
+   * Mirror that on AUTHENTICATED: push `rtmp://PUBLIC_IP:1935/live/md300`.
+   */
+  public async startMdvrLiveOnConnect(tenantId: string, deviceId: string): Promise<void> {
+    const now = Date.now();
+    const prev = this.autoAb2At.get(deviceId) ?? 0;
+    if (now - prev < 15_000) return;
+
+    const host = this.options.mdvrPublicHost?.trim();
+    if (!host) {
+      this.logger.warn('Skipping auto-AB2: MDVR public host is unset.');
+      return;
+    }
+    const path = this.options.mdvrRtmpPath ?? 'live/md300';
+    const port = this.options.mdvrRtmpPort ?? 1935;
+    const ctx: ActorContext = {
+      tenantId,
+      actorId: null,
+      actorType: 'SYSTEM',
+      requestId: null,
+      ipAddress: null,
+      userAgent: null,
+    };
+    try {
+      await this.create(ctx, deviceId, {
+        commandCode: 'AB2',
+        params: {
+          uploadUrl: `rtmp://${host}:${port}/${path}`,
+          channel: 1,
+          dataType: '0',
+          streamType: '0',
+        },
+      });
+      this.autoAb2At.set(deviceId, now);
+      this.logger.log(`Auto AB2 sent for device ${deviceId} → rtmp://${host}:${port}/${path}`);
+    } catch (err) {
+      this.logger.warn(`Auto AB2 skipped for ${deviceId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A9A/A9D tell the device where to dial media. AB2/AB4 tell it where to
+   * push RTMP. The SPA uses `window.location.hostname`, which is localhost
+   * when the operator opens http://localhost:8080 — unusable from GPRS.
+   * Rewrite loopback (and always pin AB2/AB4 to the configured public host).
+   */
+  private resolveMediaDialback(
+    commandCode: string,
+    params: Record<string, string | number | boolean>,
+  ): Record<string, string | number | boolean> {
+    const host = this.options.mdvrPublicHost?.trim() ?? '';
+    if (!host) return params;
+
+    if (commandCode === 'A9A' || commandCode === 'A9D') {
+      const server = String(params.server ?? '');
+      if (!isLoopbackHost(server)) return params;
+      return {
+        ...params,
+        server: host,
+        tcpPort: params.tcpPort ?? this.options.mdvrPublicPort ?? 6182,
+      };
+    }
+
+    if (commandCode === 'AB2' || commandCode === 'AB4') {
+      const key = commandCode === 'AB2' ? 'uploadUrl' : 'url';
+      const raw = String(params[key] ?? '');
+      if (!raw) return params;
+      return {
+        ...params,
+        [key]: rewriteRtmpUrl(
+          raw,
+          host,
+          this.options.mdvrRtmpPort ?? 1935,
+          this.options.mdvrRtmpPath ?? 'live/md300',
+        ),
+      };
+    }
+
+    return params;
   }
 
   /**

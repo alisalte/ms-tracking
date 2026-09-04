@@ -9,7 +9,7 @@
  *     code chip + bilingual name/description + the shared dynamic param form
  *     (CommandParamForm) + an ACK-status chip fed by the polling command
  *     history (QUEUED → SENT → ACKED/FAILED).
- *  3. Live test — camera-channel registration + A9A/A9B stream test + the
+ *  3. Live test — camera-channel registration + AB2/AB3 stream test + the
  *     Persian SMS cheat-sheet (bring-up over SMS when TCP isn't up yet).
  *
  * Every command in the Meitrack MDVR catalog (fleet-management, GET
@@ -278,9 +278,14 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
                     variant="success"
                     onClick={() =>
                       deviceId &&
-                      startStream.mutate({ deviceId, logicalChannel: Number(channelNo) })
+                      device?.imei &&
+                      startStream.mutate({
+                        deviceId,
+                        logicalChannel: Number(channelNo),
+                        imei: device.imei,
+                      })
                     }
-                    disabled={!deviceId || startStream.isPending}
+                    disabled={!deviceId || !device?.imei || startStream.isPending}
                     loading={startStream.isPending}
                   >
                     {t('video.setup.startStream')}

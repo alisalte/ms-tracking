@@ -126,6 +126,7 @@ describe('BindingService invariants (§11, §26, §33)', () => {
       DEVICE_A,
       'TRACKER',
       true,
+      ['TRACKER'],
     );
     expect(appendMock).toHaveBeenCalledTimes(1);
     expect(appendMock).toHaveBeenCalledWith(
@@ -135,6 +136,24 @@ describe('BindingService invariants (§11, §26, §33)', () => {
     expect(view.deviceId).toBe(DEVICE_A);
     expect(view.isPrimary).toBe(true);
     expect(view.role).toBe('TRACKER');
+  });
+
+  it('stores tracker + camera + sensor on one binding', async () => {
+    const { service, bindMock } = makeService({ vehicle: vehicleRow, device: deviceRow });
+    const view = await service.bind(actor, VEHICLE_A, DEVICE_A, {
+      roles: ['TRACKER', 'MDVR', 'SENSOR'],
+    });
+    expect(bindMock).toHaveBeenCalledWith(
+      expect.anything(),
+      TENANT_A,
+      VEHICLE_A,
+      DEVICE_A,
+      'TRACKER',
+      true,
+      ['TRACKER', 'MDVR', 'SENSOR'],
+    );
+    expect(view.role).toBe('TRACKER');
+    expect(view.roles).toEqual(['TRACKER', 'MDVR', 'SENSOR']);
   });
 
   it('honors an explicit non-primary role', async () => {
@@ -147,6 +166,7 @@ describe('BindingService invariants (§11, §26, §33)', () => {
       DEVICE_A,
       'MDVR',
       false,
+      ['MDVR'],
     );
   });
 

@@ -162,55 +162,63 @@ export function useSnapshot() {
   });
 }
 
-// ── MDVR live stream (A9A/A9B over the platform command path) ────────────────
+// ── MDVR live stream (AB2 RTMP push + MediaMTX HLS) ─────────────────────────
 
-/** A9A server endpoint advertised to the device (its media dialback target). */
-export function mdvrStreamEndpoint(): { server: string; tcpPort: number } {
+/**
+ * md300-main `live.js` always publishes `live/md300` (not per-IMEI).
+ * Fleet-management rewrites AB2 to this same path so HLS and RTMP match.
+ */
+export const MDVR_RTMP_PATH =
+  import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
+
+/** Host:port the device is told to push RTMP to (rewritten off-loopback server-side). */
+export function mdvrRtmpUploadUrl(_imei?: string): string {
   const server = import.meta.env.VITE_MDVR_PUBLIC_HOST || window.location.hostname;
-  const tcpPort = Number(import.meta.env.VITE_MDVR_PUBLIC_PORT ?? 6182);
-  return { server, tcpPort };
+  const tcpPort = Number(import.meta.env.VITE_MDVR_RTMP_PORT ?? 1935);
+  return `rtmp://${server}:${tcpPort}/${MDVR_RTMP_PATH}`;
 }
 
-/** The browser-side binary MPEG-TS WebSocket for an IMEI (nginx → mdvr-streamer). */
-export function mdvrWsUrl(imei: string): string {
-  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${window.location.host}/media-live/ws?imei=${encodeURIComponent(imei)}`;
+/** Same-origin HLS playlist (nginx `/media-hls` → MediaMTX :8888). */
+export function mdvrHlsUrl(_imei?: string): string {
+  return `${window.location.protocol}//${window.location.host}/media-hls/${MDVR_RTMP_PATH}/index.m3u8`;
 }
 
 /**
- * Start a live stream: sends A9A (start real-time AV) through the existing
- * device-command path — fleet-management builds the §3.16 binary struct,
- * device-gateway writes it to the device, which then dials the mdvr-streamer.
+ * Start a live stream: sends AB2 (RTMP push) through the existing
+ * device-command path — fleet-management builds the binary struct,
+ * device-gateway writes it to the device, which then pushes to MediaMTX.
  */
 export function useStartMdvrStream() {
   return useMutation<
     unknown,
     Error,
-    { deviceId: string; logicalChannel: number; dataType?: string; streamType?: string }
+    {
+      deviceId: string;
+      logicalChannel: number;
+      dataType?: string;
+      streamType?: string;
+      imei: string;
+    }
   >({
-    mutationFn: ({ deviceId, logicalChannel, dataType, streamType }) => {
-      const { server, tcpPort } = mdvrStreamEndpoint();
-      return apiPost(`/devices/${deviceId}/commands`, {
-        commandCode: 'A9A',
+    mutationFn: ({ deviceId, logicalChannel, dataType, streamType, imei }) =>
+      apiPost(`/devices/${deviceId}/commands`, {
+        commandCode: 'AB2',
         params: {
-          server,
-          tcpPort,
-          udpPort: 0,
+          uploadUrl: mdvrRtmpUploadUrl(imei),
           channel: logicalChannel,
-          dataType: dataType ?? '1',
-          streamType: streamType ?? '1',
+          dataType: dataType ?? '0',
+          streamType: streamType ?? '0',
         },
-      });
-    },
+      }),
   });
 }
 
-/** Stop a live stream: A9B (control real-time AV, control=0 stop). */
+/** Stop a live stream: AB3 (RTMP stream control, control=0 stop). */
 export function useStopMdvrStream() {
   return useMutation<unknown, Error, { deviceId: string; logicalChannel: number }>({
     mutationFn: ({ deviceId, logicalChannel }) =>
       apiPost(`/devices/${deviceId}/commands`, {
-        commandCode: 'A9B',
+        commandCode: 'AB3',
         params: { channel: logicalChannel, control: '0', closeType: '0', switchType: '0' },
       }),
   });
@@ -240,4 +248,26 @@ export function useRegisterChannel() {
         endpoint: body.imei, // device IMEI — the mdvr-streamer room key
       }),
   });
+}
+
+/** Default MDVR camera numbers (CH1–CH4). */
+export const DEFAULT_MDVR_CHANNEL_NOS = [1, 2, 3, 4] as const;
+
+/** Register CH1–CH4 for a bound MDVR so the video wall has something to play. */
+export async function registerDefaultMdvrChannels(input: {
+  vehicleId: string;
+  deviceId: string;
+  imei: string;
+}): Promise<void> {
+  for (const n of DEFAULT_MDVR_CHANNEL_NOS) {
+    await apiPostRaw('/media/channels', {
+      vehicleId: input.vehicleId,
+      deviceId: input.deviceId,
+      label: `Camera ${n}`,
+      logicalChannel: n,
+      protocol: 'MEITRACK_MDVR',
+      codec: 'H264',
+      endpoint: input.imei,
+    });
+  }
 }

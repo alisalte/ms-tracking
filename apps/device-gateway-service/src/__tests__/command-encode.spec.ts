@@ -77,8 +77,7 @@ describe('meitrack downstream command encoding', () => {
       payload: { imei: IMEI, hex: '4139422C01010000' },
     });
     expect(frame.length).toBeGreaterThan(0);
-    expect(frame.toString('ascii').startsWith('@@A')).toBe(true);
-    // The binary body is embedded after <imei>, and the checksum covers it.
+    expect(frame.toString('ascii').startsWith('@@w')).toBe(true);
     const comma = frame.indexOf(0x2c);
     const star = frame.lastIndexOf(0x2a);
     expect(frame.subarray(comma + 1 + IMEI.length + 1, star).toString('hex')).toBe(
@@ -93,6 +92,40 @@ describe('meitrack downstream command encoding', () => {
       payload: { imei: IMEI, text: 'B05,1,22.913191,114.079882,1000,0,1' },
     });
     expect(frame.toString('ascii')).toContain(`${IMEI},B05,1,22.913191,114.079882,1000,0,1`);
+  });
+
+  it('encodes AB2 with md300 data-id u and raw RTMP struct', () => {
+    const url = 'rtmp://203.0.113.10:1935/live/867191086416152';
+    const up = Buffer.from(url, 'ascii');
+    const struct = Buffer.concat([Buffer.from([up.length]), up, Buffer.from([1, 0, 0])]);
+    const hex = Buffer.concat([Buffer.from('AB2,', 'ascii'), struct]).toString('hex');
+    const frame = encodeMeitrack({
+      deviceId: 'dev-uuid',
+      type: 'COMMAND',
+      payload: { imei: IMEI, hex },
+    });
+    expect(frame.toString('ascii', 0, 3)).toBe('@@u');
+    const comma = frame.indexOf(0x2c);
+    const star = frame.lastIndexOf(0x2a);
+    expect(frame.subarray(comma + 1 + IMEI.length + 1, star).toString('ascii', 0, 4)).toBe('AB2,');
+    expect(frame.includes(up)).toBe(true);
+  });
+
+  it('encodes A9A with md300 data-id y', () => {
+    const ip = Buffer.from('91.107.173.122', 'ascii');
+    const struct = Buffer.concat([
+      Buffer.from([ip.length]),
+      ip,
+      Buffer.from([0x18, 0x1e, 0x00, 0x00, 0x01, 0x00, 0x00]), // tcp 6182 BE, udp 0, ch1, A+V, main
+    ]);
+    const hex = Buffer.concat([Buffer.from('A9A,', 'ascii'), struct]).toString('hex');
+    const frame = encodeMeitrack({
+      deviceId: 'dev-uuid',
+      type: 'COMMAND',
+      payload: { imei: IMEI, hex },
+    });
+    expect(frame.toString('ascii', 0, 3)).toBe('@@y');
+    expect(frame.includes(ip)).toBe(true);
   });
 
   it('returns an empty buffer for invalid hex', () => {

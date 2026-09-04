@@ -237,9 +237,9 @@ export function DevicePopup({
               <ActionButton
                 icon={Video}
                 label={t('map.popup.liveVideo')}
-                disabled={!live || !data.deviceId}
-                title={live ? undefined : t('map.popup.offlineAction')}
-                onClick={() => data.deviceId && navigate(`/video?d=${data.deviceId}`)}
+                disabled={!data.deviceId}
+                title={!data.deviceId ? t('map.popup.offlineAction') : undefined}
+                onClick={() => data.deviceId && navigate(`/video?device=${data.deviceId}`)}
               />
               <ActionButton
                 icon={History}

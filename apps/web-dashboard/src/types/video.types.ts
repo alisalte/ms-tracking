@@ -55,14 +55,14 @@ export interface CameraChannel {
   streamKind?: 'real' | 'stub' | 'unavailable';
   /**
    * Stream protocol (media-service wire). `MEITRACK_MDVR` channels use the
-   * real live path: A9A command → device dialback → mdvr-streamer → JSMpeg.
+   * real live path: AB2 RTMP push → MediaMTX → HLS.
    */
   protocol?: string;
-  /** Platform device id owning this camera (command plane A9A/A9B target). */
+  /** Platform device id owning this camera (command plane AB2/AB3 target). */
   deviceId?: string;
-  /** MDVR logical channel number (1–4 cameras), sent in the A9A struct. */
+  /** MDVR logical channel number (1–4 cameras), sent in the AB2 struct. */
   logicalChannel?: number;
-  /** Device IMEI (the mdvr-streamer WebSocket room key). */
+  /** Device IMEI (AB2 addressing; HLS path is `live/md300`). */
   imei?: string;
 }
 

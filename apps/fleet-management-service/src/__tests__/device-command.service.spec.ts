@@ -72,6 +72,7 @@ function makeDeps(overrides?: {
   deviceFor?: (id: string) => DeviceRow | null;
   producerError?: Error;
   published?: unknown[];
+  mdvrPublicHost?: string;
 }) {
   const published = overrides?.published ?? [];
   const created: DeviceCommandRow[] = [];
@@ -116,7 +117,11 @@ function makeDeps(overrides?: {
     commands as unknown as DeviceCommandRepository,
     audit as unknown as AuditRepository,
     producer,
-    { defaultTtlSeconds: 120, sweepIntervalSeconds: 30 },
+    {
+      defaultTtlSeconds: 120,
+      sweepIntervalSeconds: 30,
+      mdvrPublicHost: overrides?.mdvrPublicHost,
+    },
   );
   return { service, published, created, audits };
 }
@@ -219,6 +224,62 @@ describe('DeviceCommandService', () => {
       service.createMany(CTX, { deviceIds: [DEVICE_ID], commandCode: 'ZZZ' }),
     ).rejects.toThrow(BadRequestException);
     expect(published).toHaveLength(0);
+  });
+
+  it('rewrites A9A loopback media host to MDVR_PUBLIC_HOST', async () => {
+    const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
+    await service.create(CTX, DEVICE_ID, {
+      commandCode: 'A9A',
+      params: {
+        server: 'localhost',
+        tcpPort: 6182,
+        udpPort: 0,
+        channel: 1,
+        dataType: '1',
+        streamType: '1',
+      },
+    });
+    const event = published[0] as { payloadHex?: string };
+    const hostHex = Buffer.from('203.0.113.10', 'ascii').toString('hex');
+    expect(event?.payloadHex?.toLowerCase()).toContain(hostHex);
+    expect(event?.payloadHex?.toLowerCase()).not.toContain(
+      Buffer.from('localhost', 'ascii').toString('hex'),
+    );
+  });
+
+  it('rewrites AB2 RTMP upload URL to MDVR_PUBLIC_HOST', async () => {
+    const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
+    await service.create(CTX, DEVICE_ID, {
+      commandCode: 'AB2',
+      params: {
+        uploadUrl: 'rtmp://localhost:1935/live/866854036516451',
+        channel: 1,
+        dataType: '0',
+        streamType: '0',
+      },
+    });
+    const event = published[0] as { payloadHex?: string };
+    const want = Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex');
+    expect(event?.payloadHex?.toLowerCase()).toContain(want);
+    expect(event?.payloadHex?.toLowerCase()).not.toContain(
+      Buffer.from('localhost', 'ascii').toString('hex'),
+    );
+    expect(event?.payloadHex?.toLowerCase()).not.toContain(
+      Buffer.from('live/866854036516451', 'ascii').toString('hex'),
+    );
+  });
+
+  it('auto-sends AB2 to live/md300 when the GPRS session authenticates', async () => {
+    const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
+    await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
+    expect(published).toHaveLength(1);
+    const event = published[0] as { commandCode?: string; payloadHex?: string };
+    expect(event.commandCode).toBe('AB2');
+    expect(event.payloadHex?.toLowerCase()).toContain(
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex'),
+    );
+    await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
+    expect(published).toHaveLength(1);
   });
 });
 

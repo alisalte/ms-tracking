@@ -19,6 +19,7 @@ import type { BoundDeviceView } from '../infrastructure/persistence/binding.repo
 import type { BindingRepository } from '../infrastructure/persistence/binding.repository.js';
 import type { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import type { VehicleRepository } from '../infrastructure/persistence/vehicle.repository.js';
+import { primaryBindingRole, resolveBindingRoles } from './binding-roles.js';
 import type { ActorContext } from './service-context.js';
 import type { BindDeviceInput } from './validation/schemas.js';
 
@@ -49,7 +50,8 @@ export class BindingService {
     const device = await this.devices.findById(ctx.tenantId, deviceId);
     if (!device) throw new NotFoundException('Device not found.');
 
-    const role = input.role ?? 'TRACKER';
+    const roles = resolveBindingRoles(input);
+    const role = primaryBindingRole(roles);
     const isPrimary = input.isPrimary ?? true;
 
     const alreadyToThis = await this.bindings.findBinding(ctx.tenantId, vehicleId, deviceId);
@@ -65,7 +67,7 @@ export class BindingService {
     }
 
     return await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
-      await this.bindings.bind(trx, ctx.tenantId, vehicleId, deviceId, role, isPrimary);
+      await this.bindings.bind(trx, ctx.tenantId, vehicleId, deviceId, role, isPrimary, roles);
       await this.audit.append(trx, {
         tenantId: ctx.tenantId,
         actorId: ctx.actorId,
@@ -79,7 +81,7 @@ export class BindingService {
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
         before: null,
-        after: { vehicleId, deviceId, role, isPrimary },
+        after: { vehicleId, deviceId, role, roles, isPrimary },
       });
       // Build the joined view from the device we already loaded (avoids a re-query).
       const view: BoundDeviceView = {
@@ -90,6 +92,7 @@ export class BindingService {
         protocol: device.protocol,
         deviceStatus: device.status,
         role,
+        roles,
         isPrimary,
         boundAt: new Date(),
       };

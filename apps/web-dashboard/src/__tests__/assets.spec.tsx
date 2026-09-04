@@ -342,6 +342,21 @@ describe('AssetManagementPage', () => {
     });
   });
 
+  it('keeps Assign disabled until a device is picked from the placeholder', async () => {
+    renderAssets();
+    await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Truck One'));
+
+    const picker = (await screen.findByRole('combobox', { name: 'IMEI' })) as HTMLSelectElement;
+    const assignBtn = await screen.findByRole('button', { name: 'Assign' });
+    expect(picker.value).toBe('');
+    expect(assignBtn).toBeDisabled();
+
+    fireEvent.change(picker, { target: { value: 'dev-2' } });
+    expect(assignBtn).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Tracker' })).toBeChecked();
+  });
+
   it('create-vehicle form keeps the fleet select on its placeholder until picked', async () => {
     renderAssets();
     await waitFor(() => expect(screen.getByText('Truck One')).toBeInTheDocument());
@@ -368,6 +383,9 @@ describe('AssetManagementPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(await screen.findByText('Select a fleet')).toBeInTheDocument();
+    expect(screen.queryByText(/VIN must/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^VIN/)).toBeInTheDocument();
+    expect(screen.getAllByText('Optional').length).toBeGreaterThan(0);
 
     // Picking a fleet changes '' → id (a real change event) and the submit passes.
     fireEvent.change(fleetSelect, { target: { value: 'fleet-1' } });

@@ -52,6 +52,9 @@ describe('meitrack command catalog', () => {
       'B35',
       'B36',
       'B64',
+      'D03',
+      'D01',
+      'D00',
       'B91',
       'B99',
       'BB8',
@@ -139,6 +142,31 @@ describe('meitrack command catalog', () => {
 
   it('A14 formats distance meters (§3.5 example: A14,1000)', () => {
     expect(build('A14', { distance: 1000 })).toEqual({ kind: 'text', text: 'A14,1000' });
+  });
+
+  // --- media: on-demand photo capture (D03 trigger / D01 list / D00 download) —
+  // ported from the validated md300/server/capture_photo.py reference.
+  it('D03 formats the camera + image name', () => {
+    expect(build('D03', { camera: 1, imagename: 'photo.jpg' })).toEqual({
+      kind: 'text',
+      text: 'D03,1,photo.jpg',
+    });
+  });
+
+  it('D01 defaults the start index to 0', () => {
+    expect(build('D01', {})).toEqual({ kind: 'text', text: 'D01,0' });
+    expect(build('D01', { startIndex: 5 })).toEqual({ kind: 'text', text: 'D01,5' });
+  });
+
+  it('D00 defaults the start packet to 0', () => {
+    expect(build('D00', { filename: 'photo.jpg' })).toEqual({
+      kind: 'text',
+      text: 'D00,photo.jpg,0',
+    });
+    expect(build('D00', { filename: 'photo.jpg', startPacket: 8 })).toEqual({
+      kind: 'text',
+      text: 'D00,photo.jpg,8',
+    });
   });
 
   // --- network (§3.9–§3.11, §3.32) -------------------------------------------

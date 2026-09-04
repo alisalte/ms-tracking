@@ -2937,6 +2937,105 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     expectResponse: true,
     supportsReadback: true,
   },
+  // --------------------------------------------------------------------------
+  // On-demand photo capture (D03 trigger → D01 list → D00 chunked download).
+  // Rides the existing command channel (no dialback IP needed — works behind
+  // CGNAT, unlike A9A/AB2 live video). Validated against a real MD300 in the
+  // standalone md300/server/capture_photo.py pipeline this catalog ports.
+  // --------------------------------------------------------------------------
+  {
+    code: 'D03',
+    name: 'Capture Photo',
+    nameFa: 'گرفتن عکس',
+    category: 'media',
+    description:
+      'Trigger a snapshot on one camera; device replies D03,OK then the file ' +
+      'appears in the D01 listing.',
+    descriptionFa:
+      'گرفتن عکس از یک دوربین؛ دستگاه با D03,OK پاسخ می‌دهد و فایل در فهرست D01 ظاهر می‌شود.',
+    params: [
+      {
+        key: 'camera',
+        label: 'Camera',
+        labelFa: 'دوربین',
+        type: 'number',
+        min: 1,
+        max: 8,
+        required: true,
+        defaultValue: 1,
+      },
+      {
+        key: 'imagename',
+        label: 'Image name',
+        labelFa: 'نام فایل',
+        type: 'string',
+        maxLength: 60,
+        required: true,
+        defaultValue: 'photo.jpg',
+        hint: 'Filename the device stores the capture under.',
+        hintFa: 'نامی که دستگاه عکس را با آن ذخیره می‌کند.',
+      },
+    ],
+    expectResponse: true,
+    supportsReadback: false,
+  },
+  {
+    code: 'D01',
+    name: 'List Photos',
+    nameFa: 'فهرست عکس‌ها',
+    category: 'media',
+    description: 'List captured photo filenames stored on the device.',
+    descriptionFa: 'فهرست نام فایل‌های عکس ذخیره‌شده روی دستگاه.',
+    params: [
+      {
+        key: 'startIndex',
+        label: 'Start index',
+        labelFa: 'اندیس شروع',
+        type: 'number',
+        min: 0,
+        required: false,
+        defaultValue: 0,
+        hint: '0 = list from the first file.',
+        hintFa: '۰ = فهرست از اولین فایل.',
+      },
+    ],
+    expectResponse: true,
+    supportsReadback: false,
+  },
+  {
+    code: 'D00',
+    name: 'Download Photo',
+    nameFa: 'دانلود عکس',
+    category: 'media',
+    description:
+      'Download a photo named by D01, in packets of raw command-channel chunks ' +
+      '(reassemble the D00 responses in filename+packet order).',
+    descriptionFa:
+      'دانلود عکسی که با D01 نام‌گذاری شده، به‌صورت بسته‌های کانال دستور (پاسخ‌های D00 را به ترتیب بازچینی کنید).',
+    params: [
+      {
+        key: 'filename',
+        label: 'Filename',
+        labelFa: 'نام فایل',
+        type: 'string',
+        maxLength: 60,
+        required: true,
+        hint: 'A name reported by D01.',
+        hintFa: 'یکی از نام‌های گزارش‌شده توسط D01.',
+      },
+      {
+        key: 'startPacket',
+        label: 'Start packet',
+        labelFa: 'بسته شروع',
+        type: 'number',
+        min: 0,
+        required: false,
+        defaultValue: 0,
+      },
+    ],
+    expectResponse: true,
+    supportsReadback: false,
+  },
   {
     code: 'CB8',
     name: 'Event Video Playing',
@@ -3297,6 +3396,14 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       return text(`A16,${str(raw, 'status')}`);
     case 'A17':
       return text(`A17,${str(raw, 'enabled')}`);
+
+    // --- media: on-demand photo capture ------------------------------------
+    case 'D03':
+      return text(`D03,${num(raw, 'camera')},${str(raw, 'imagename')}`);
+    case 'D01':
+      return text(`D01,${num(raw, 'startIndex') ?? 0}`);
+    case 'D00':
+      return text(`D00,${str(raw, 'filename')},${num(raw, 'startPacket') ?? 0}`);
 
     // --- network -----------------------------------------------------------
     case 'A21':

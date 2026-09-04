@@ -55,6 +55,26 @@ describe('validation schemas (§16, INV-I02)', () => {
     expect(parsed.vin).toBeUndefined();
   });
 
+  it('createVehicleSchema treats empty vin as omitted', () => {
+    const parsed = createVehicleSchema.parse({
+      fleetId: '11111111-1111-1111-1111-111111111111',
+      name: 'Truck 1',
+      code: 'TRK-1',
+      vin: '',
+    });
+    expect(parsed.vin).toBeUndefined();
+  });
+
+  it('createVehicleSchema accepts a short chassis VIN', () => {
+    const parsed = createVehicleSchema.parse({
+      fleetId: '11111111-1111-1111-1111-111111111111',
+      name: 'Truck 1',
+      code: 'TRK-1',
+      vin: 'abc123',
+    });
+    expect(parsed.vin).toBe('abc123');
+  });
+
   it('createVehicleSchema rejects a VIN containing forbidden letters (I/O/Q)', () => {
     const r = createVehicleSchema.safeParse({
       fleetId: '11111111-1111-1111-1111-111111111111',
@@ -95,9 +115,15 @@ describe('validation schemas (§16, INV-I02)', () => {
     }
   });
 
+  it('bindBodySchema accepts a multi-role payload', () => {
+    const parsed = bindBodySchema.parse({ roles: ['TRACKER', 'MDVR', 'SENSOR'] });
+    expect(parsed.roles).toEqual(['TRACKER', 'MDVR', 'SENSOR']);
+  });
+
   it('bindBodySchema allows an empty body (role/isPrimary optional)', () => {
     const parsed = bindBodySchema.parse({});
     expect(parsed.role).toBeUndefined();
+    expect(parsed.roles).toBeUndefined();
     expect(parsed.isPrimary).toBeUndefined();
   });
 

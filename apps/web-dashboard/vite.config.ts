@@ -94,6 +94,11 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3000',
         changeOrigin: true,
       },
+      '/media-hls': {
+        target: process.env.VITE_MEDIAMTX_HLS_PROXY_TARGET ?? 'http://localhost:8888',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/media-hls/, ''),
+      },
     },
   },
   build: {
@@ -112,7 +117,7 @@ export default defineConfig({
           'vendor-echarts': ['echarts', 'echarts-for-react'],
           'vendor-map': ['maplibre-gl', 'supercluster'],
           'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
-          'vendor-utils': ['axios', 'socket.io-client', 'zustand', 'lucide-react'],
+          'vendor-utils': ['axios', 'socket.io-client', 'zustand', 'lucide-react', 'hls.js'],
         },
       },
     },

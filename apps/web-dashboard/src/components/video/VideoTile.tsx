@@ -36,10 +36,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useSnapshot } from '@/api/video.api';
 import { Dropdown, DropdownItem, Spinner, Tooltip } from '@/components/tailwind-ui';
-import { JSMpegLivePlayer } from '@/components/video/JSMpegLivePlayer';
+import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { LiveVideoPlayer } from '@/components/video/LiveVideoPlayer';
 import { useStreamSession } from '@/components/video/useStreamSession';
-import { captureCanvasSnapshot, downloadBlob, toggleFullscreen } from '@/lib/video-stream';
+import { toggleFullscreen } from '@/lib/video-stream';
 import type { CameraChannel, StreamQuality } from '@/types/video.types';
 
 /** Quality menu options (10 §2.3 table). */
@@ -84,7 +84,6 @@ export function VideoTile({
 }: VideoTileProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const snapshot = useSnapshot();
 
@@ -97,10 +96,11 @@ export function VideoTile({
   const {
     session,
     stream,
-    wsUrl,
+    hlsUrl,
     mode,
     streamKind,
     setQuality: changeQuality,
+    onPlayerReady,
   } = useStreamSession(activeChannel, quality);
 
   // Empty slot.
@@ -153,13 +153,13 @@ export function VideoTile({
   // Live tile.
   const connecting =
     mode === 'mdvr'
-      ? !wsUrl || session?.state === 'connecting'
+      ? !hlsUrl || session?.state === 'connecting'
       : !stream || session?.state === 'connecting';
   return (
     <TileFrame label={channel.label} alert={alert}>
       <div ref={containerRef} className="absolute inset-0 bg-black">
         {mode === 'mdvr' ? (
-          <JSMpegLivePlayer ref={canvasRef} wsUrl={wsUrl} />
+          <HLSLivePlayer ref={videoRef} hlsUrl={hlsUrl} muted={muted} onReady={onPlayerReady} />
         ) : (
           <LiveVideoPlayer ref={videoRef} stream={stream} muted={muted} active />
         )}
@@ -167,7 +167,10 @@ export function VideoTile({
         {/* Connecting overlay */}
         {connecting && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-            <Spinner size={compact ? 'sm' : 'lg'} label={t('common.loading')} />
+            <Spinner
+              size={compact ? 'sm' : 'lg'}
+              label={mode === 'mdvr' ? t('video.tile.waitingDevice') : t('common.loading')}
+            />
           </div>
         )}
 
@@ -261,16 +264,6 @@ export function VideoTile({
 
   function handleSnapshot() {
     if (!channel) return;
-    // MDVR path: capture the JSMpeg canvas directly. Mock path: <video> frame.
-    if (mode === 'mdvr' && canvasRef.current) {
-      void captureCanvasSnapshot(canvasRef.current).then((blob) => {
-        if (blob) {
-          const ts = new Date().toISOString().replace(/[:.]/g, '-');
-          downloadBlob(blob, `snapshot-${channel.id}-${ts}.jpg`);
-        }
-      });
-      return;
-    }
     if (!videoRef.current) return;
     snapshot.mutate({ video: videoRef.current, channelId: channel.id });
   }

@@ -20,6 +20,20 @@ import { IMEI_LENGTH, isValidImei, normalizeImei } from '../../domain/device/ime
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(200);
+/** Optional VIN/chassis. Empty/null omitted; when set, 1–17 chars, no I/O/Q. */
+const vin = z.preprocess(
+  (v) => {
+    if (v === '' || v === null || v === undefined) return undefined;
+    return v;
+  },
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(17)
+    .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
+    .optional(),
+);
 /** Code: tenant-visible short identifier. Alnum + dash/underscore, max 64. */
 const code = z
   .string()
@@ -92,13 +106,7 @@ export const createVehicleSchema = z.object({
   name,
   code,
   plate: z.string().trim().min(1).max(32).optional(),
-  vin: z
-    .string()
-    .trim()
-    .min(1)
-    .max(17)
-    .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
-    .optional(),
+  vin,
   odometerKm,
   engineHours,
 });
@@ -118,13 +126,7 @@ export const importVehicleRowSchema = z.object({
   /** Tenant-visible fleet code or name (Excel); resolved in the service. */
   fleetCode: z.string().trim().min(1).max(200),
   plate: z.string().trim().min(1).max(32).optional(),
-  vin: z
-    .string()
-    .trim()
-    .min(1)
-    .max(17)
-    .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
-    .optional(),
+  vin,
   odometerKm,
   engineHours,
 });
@@ -141,13 +143,7 @@ export const updateVehicleSchema = z.object({
   name,
   code,
   plate: z.string().trim().min(1).max(32).optional(),
-  vin: z
-    .string()
-    .trim()
-    .min(1)
-    .max(17)
-    .regex(/^[A-HJ-NPR-Z0-9]+$/i, 'vin may only contain letters and numbers (no I/O/Q)')
-    .optional(),
+  vin,
   odometerKm: odometerKmPatch,
   engineHours: engineHoursPatch,
 });
@@ -214,6 +210,8 @@ export const deviceListQuerySchema = listQuerySchema.extend({
 /** Bind request body. `deviceId` comes from the URL path, NOT the body. */
 export const bindBodySchema = z.object({
   role: z.enum(DEVICE_ROLES).optional(),
+  /** Full capability set (tracker + camera + sensor on one unit). */
+  roles: z.array(z.enum(DEVICE_ROLES)).min(1).max(DEVICE_ROLES.length).optional(),
   isPrimary: z.boolean().optional(),
 });
 export type BindDeviceInput = z.infer<typeof bindBodySchema>;

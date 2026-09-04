@@ -21,6 +21,7 @@ import { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-
 import { CommandAckConsumer } from '../infrastructure/kafka/command-ack-consumer.js';
 import { CommandRequestProducer } from '../infrastructure/kafka/command-request-producer.js';
 import { SessionLifecycleConsumer } from '../infrastructure/kafka/session-lifecycle-consumer.js';
+import { resolveMdvrPublicHost } from '../infrastructure/mdvr-public-host.js';
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { BindingRepository } from '../infrastructure/persistence/binding.repository.js';
 import { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
@@ -163,13 +164,6 @@ export class FleetManagementModule {
             devices: DeviceRepository,
           ) => new SummaryService(fleets, vehicles, devices),
         },
-        // Kafka session-lifecycle consumer (non-fatal at boot).
-        {
-          provide: SESSION_LIFECYCLE_CONSUMER,
-          inject: [FLEET_MANAGEMENT_CONFIG, DEVICE_REPOSITORY],
-          useFactory: (cfg: FleetManagementConfig, devices: DeviceRepository) =>
-            new SessionLifecycleConsumer(cfg, devices),
-        },
         // --- Device commands (downstream TCP configuration, 06 §11.3) ---
         {
           provide: DEVICE_COMMAND_REPOSITORY,
@@ -195,7 +189,7 @@ export class FleetManagementModule {
             COMMAND_REQUEST_PRODUCER,
             FLEET_MANAGEMENT_CONFIG,
           ],
-          useFactory: (
+          useFactory: async (
             knex: unknown,
             devices: DeviceRepository,
             commands: DeviceCommandRepository,
@@ -203,6 +197,9 @@ export class FleetManagementModule {
             producer: CommandRequestProducer,
             cfg: FleetManagementConfig,
           ) => {
+            // md300 live.js: empty / LAN MDVR_PUBLIC_HOST is upgraded to the
+            // egress IPv4 so a cellular MDVR can push RTMP to :1935.
+            const mdvrPublicHost = await resolveMdvrPublicHost(cfg.MDVR_PUBLIC_HOST);
             const service = new DeviceCommandService(
               knex as never,
               devices,
@@ -212,11 +209,26 @@ export class FleetManagementModule {
               {
                 defaultTtlSeconds: cfg.FLEET_COMMAND_TTL_SECONDS,
                 sweepIntervalSeconds: cfg.FLEET_COMMAND_SWEEP_SECONDS,
+                mdvrPublicHost,
+                mdvrPublicPort: cfg.MDVR_PUBLIC_PORT,
+                mdvrRtmpPort: cfg.MDVR_RTMP_PORT,
+                mdvrRtmpPath: cfg.MDVR_RTMP_PATH,
               },
             );
             service.startSweeper();
             return service;
           },
+        },
+        // Kafka session-lifecycle consumer — after commands so AUTHENTICATED
+        // can auto-send AB2 (md300-main live.js onGPRSFrame).
+        {
+          provide: SESSION_LIFECYCLE_CONSUMER,
+          inject: [FLEET_MANAGEMENT_CONFIG, DEVICE_REPOSITORY, DEVICE_COMMAND_SERVICE],
+          useFactory: (
+            cfg: FleetManagementConfig,
+            devices: DeviceRepository,
+            commands: DeviceCommandService,
+          ) => new SessionLifecycleConsumer(cfg, devices, commands),
         },
         // Command-ack consumer (non-fatal at boot).
         {

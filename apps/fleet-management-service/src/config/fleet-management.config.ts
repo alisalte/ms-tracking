@@ -58,6 +58,16 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     FLEET_COMMAND_TTL_SECONDS: z.coerce.number().int().min(5).max(600).default(120),
     /** TTL sweeper interval (seconds). */
     FLEET_COMMAND_SWEEP_SECONDS: z.coerce.number().int().min(5).default(20),
+    /**
+     * Host the MDVR pushes RTMP to after AB2 (and A9A/A9D dialback host).
+     * Same rule as md300 `live.js`: a public IPv4 is used as-is; empty or
+     * RFC1918 is upgraded via ipify at boot so a cellular unit can reach :1935.
+     */
+    MDVR_PUBLIC_HOST: z.string().default(''),
+    MDVR_PUBLIC_PORT: z.coerce.number().int().min(1).max(65535).default(6182),
+    MDVR_RTMP_PORT: z.coerce.number().int().min(1).max(65535).default(1935),
+    /** RTMP/HLS path advertised to the MDVR — md300-main uses `live/md300`. */
+    MDVR_RTMP_PATH: z.string().min(1).default('live/md300'),
   }),
 );
 

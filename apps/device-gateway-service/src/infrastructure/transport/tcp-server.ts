@@ -131,6 +131,9 @@ export class TcpListener implements OnApplicationShutdown {
     // Register the transport terminator so manager-initiated closes (duplicate
     // session, sweep, shutdown) also destroy this socket (Sprint D §7/§36).
     onOpen?.(ctx);
+    this.logger.log(
+      `TCP accept ${remoteAddress}:${remotePort} session=${session.id} [${adapter.id}]`,
+    );
 
     const cleanup = (reason: string) => {
       if (closed) return;
@@ -139,7 +142,16 @@ export class TcpListener implements OnApplicationShutdown {
       socket.destroy();
     };
 
+    let loggedFirstBytes = false;
     socket.on('data', (chunk: Buffer) => {
+      if (!loggedFirstBytes) {
+        loggedFirstBytes = true;
+        const preview = chunk.subarray(0, 80);
+        this.logger.log(
+          `First ${chunk.length}B from ${remoteAddress}:${remotePort} session=${session.id}: ` +
+            `hex=${preview.toString('hex')} ascii=${JSON.stringify(preview.toString('latin1'))}`,
+        );
+      }
       reader.append(chunk);
       // Drain all complete frames in the buffer before yielding to the event loop.
       this.drainFrames(reader, ctx).catch((err) => onError?.(ctx, err as Error));

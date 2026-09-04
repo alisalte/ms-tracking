@@ -219,6 +219,36 @@ describe('MeitrackAdapter.decode', () => {
     expect(msg.telemetry?.response).toBe('A11,OK');
   });
 
+  it('decodes a D00 photo chunk as PHOTO with base64 payload + indices', () => {
+    const hex = Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x01]).toString('hex').toUpperCase();
+    const frame = meitrackFrame(`${IMEI},D00,photo.jpg,3,0,${hex}`);
+    const r = new ByteReader();
+    r.append(frame);
+    const raw = unwrap(adapter.frame(r, NOW));
+    const msg = adapter.decode(raw)[0];
+    if (!msg) throw new Error('decode produced no message');
+    expect(msg.type).toBe('PHOTO');
+    expect(msg.serialOrImei).toBe(IMEI);
+    expect(msg.telemetry?.filename).toBe('photo.jpg');
+    expect(msg.telemetry?.totalPackets).toBe(3);
+    expect(msg.telemetry?.packetIndex).toBe(0);
+    expect(Buffer.from(msg.telemetry?.chunkBase64 as string, 'base64').toString('hex')).toBe(
+      hex.toLowerCase(),
+    );
+  });
+
+  it('decodes a D01 photo list into parsed filenames', () => {
+    const frame = meitrackFrame(`${IMEI},D01,1,0,photo1.jpg|photo2.jpg|`);
+    const r = new ByteReader();
+    r.append(frame);
+    const raw = unwrap(adapter.frame(r, NOW));
+    const msg = adapter.decode(raw)[0];
+    if (!msg) throw new Error('decode produced no message');
+    expect(msg.type).toBe('COMMAND_ACK');
+    expect(msg.telemetry?.command).toBe('D01');
+    expect(msg.telemetry?.photoNames).toEqual(['photo1.jpg', 'photo2.jpg']);
+  });
+
   it('throws ProtocolError on an unsupported command', () => {
     const frame = meitrackFrame(`${IMEI},ZZZ,foo`);
     const r = new ByteReader();
@@ -422,5 +452,51 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     const params = cceParams([[0x40, 126]], [], [[0xfe31, fe31]]);
     const msgs = decodeFrame(cceFrame(params));
     expect(first(msgs).alarms?.[0]?.code).toBe('ADAS_DMS_ALARM');
+  });
+
+  /** MDVR envelope: cache uint32 + packet-count uint16 + per-packet (len, id-count). */
+  function enveloped(groups: Buffer): Buffer {
+    const pktLen = 4 + groups.length;
+    const env = Buffer.alloc(10);
+    env.writeUInt32LE(0, 0);
+    env.writeUInt16LE(1, 4);
+    env.writeUInt16LE(pktLen, 6);
+    env.writeUInt16LE(0, 8);
+    return Buffer.concat([env, groups]);
+  }
+
+  it('decodes an MDVR-enveloped CCE position (cache header + 1-byte group)', () => {
+    const groups = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]), // 1-byte group: GPS valid
+      cceParams(
+        [
+          [0x08, 42],
+          [0x40, 0],
+        ],
+        [
+          [0x02, LNG],
+          [0x03, LAT],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const msgs = decodeFrame(cceFrame(enveloped(groups)));
+    expect(first(msgs).type).toBe('POSITION');
+    expect(first(msgs).serialOrImei).toBe(IMEI);
+    expect(first(msgs).position?.latitude).toBeCloseTo(35.7, 5);
+  });
+
+  it('authenticates an MDVR CCE keepalive that has IMEI but no GPS', () => {
+    const groups = Buffer.concat([Buffer.from([0]), cceParams([], [])]);
+    const msgs = decodeFrame(cceFrame(enveloped(groups)));
+    expect(first(msgs).serialOrImei).toBe(IMEI);
+    expect(first(msgs).type).toBe('TELEMETRY');
+  });
+
+  it('does not throw on a truncated MDVR CCE envelope', () => {
+    const truncated = Buffer.from([0, 0, 0, 0, 1, 0, 0xff, 0xff, 0, 0]);
+    expect(() => decodeFrame(cceFrame(truncated))).not.toThrow();
+    const msgs = decodeFrame(cceFrame(truncated));
+    expect(first(msgs).serialOrImei).toBe(IMEI);
   });
 });

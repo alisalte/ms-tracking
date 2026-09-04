@@ -79,8 +79,11 @@ export const vehicleSchema = z.object({
   vin: z
     .string()
     .trim()
-    .min(1, { message: 'validation.vehicle.vin.required' })
-    .length(17, { message: 'validation.vehicle.vin.length' }),
+    .max(17, { message: 'validation.vehicle.vinInvalid' })
+    .refine((v) => v === '' || /^[A-HJ-NPR-Z0-9]+$/i.test(v), {
+      message: 'validation.vehicle.vinInvalid',
+    })
+    .optional(),
   make: reqStr('validation.vehicle.make.required'),
   model: reqStr('validation.vehicle.model.required'),
   year: z

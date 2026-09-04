@@ -11,6 +11,12 @@
 export async function up(knex) {
   await knex.raw('CREATE SCHEMA IF NOT EXISTS fleet');
 
+  const hasDrivers = await knex.schema.withSchema('fleet').hasTable('drivers');
+  if (hasDrivers) {
+    // Already applied under the older `fleet_ops_schema_migrations` ledger.
+    return;
+  }
+
   // ── fleet.drivers ──
   await knex.schema.withSchema('fleet').createTable('drivers', (t) => {
     t.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));

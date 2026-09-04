@@ -212,25 +212,6 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
         { provide: 'GATEWAY_RAW_STORAGE', useValue: new RawPacketStorage() },
         // Packet dispatcher.
         {
-          provide: PACKET_DISPATCHER,
-          inject: ['GATEWAY_AUTH_RESOLVER', SESSION_MANAGER, KAFKA_PRODUCER, 'GATEWAY_RAW_STORAGE'],
-          useFactory: (
-            authResolver: AuthResolver,
-            sessions: SessionManager,
-            kafka: DeviceGatewayKafkaProducer,
-            raw: RawPacketStorage,
-          ) =>
-            new PacketDispatcher({
-              authResolver,
-              sessionManager: sessions,
-              kafka,
-              rawStorage: raw,
-            }),
-        },
-        // Downstream command dispatcher (06 §11.3 SendDeviceCommand) — session
-        // lookup + adapter encode + socket write, with SENT/REJECTED feedback
-        // on the command topic.
-        {
           provide: COMMAND_DISPATCHER,
           inject: [SESSION_MANAGER, ADAPTER_REGISTRY, KAFKA_PRODUCER, 'GATEWAY_SESSION_REDIS'],
           useFactory: (
@@ -239,6 +220,31 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
             kafka: DeviceGatewayKafkaProducer,
             redisStore: SessionRedisStore,
           ) => new CommandDispatcher(sessions, adapters, kafka, redisStore),
+        },
+        // Packet dispatcher (after command dispatcher so held AB2 can flush on auth).
+        {
+          provide: PACKET_DISPATCHER,
+          inject: [
+            'GATEWAY_AUTH_RESOLVER',
+            SESSION_MANAGER,
+            KAFKA_PRODUCER,
+            'GATEWAY_RAW_STORAGE',
+            COMMAND_DISPATCHER,
+          ],
+          useFactory: (
+            authResolver: AuthResolver,
+            sessions: SessionManager,
+            kafka: DeviceGatewayKafkaProducer,
+            raw: RawPacketStorage,
+            commands: CommandDispatcher,
+          ) =>
+            new PacketDispatcher({
+              authResolver,
+              sessionManager: sessions,
+              kafka,
+              rawStorage: raw,
+              commandDispatcher: commands,
+            }),
         },
         // Kafka command.request consumer — broadcast to all instances; only
         // the session owner writes (06 §6.2). Non-fatal at boot.
@@ -313,7 +319,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
         }
         if (l.transport === 'tcp') {
           tcpServer.add(
-            `${l.adapterId}:tcp`,
+            `${l.adapterId}:tcp:${l.port}`,
             new TcpListener({
               adapter,
               port: l.port,
@@ -331,12 +337,30 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
                 );
               },
               onPacket: async (ctx, payload) => this.onPacket(ctx, adapter, payload),
-              onClose: (ctx, reason) => this.onClose(ctx.session, reason),
+              onClose: (ctx, reason) => {
+                if (ctx.session.state === 'NEW' || ctx.session.state === 'IDENTIFY') {
+                  this.logger.warn(
+                    `Unauthenticated close (${reason}) session=${ctx.session.id} ` +
+                      `from ${ctx.remoteAddress}:${ctx.remotePort} [${adapter.id}] ` +
+                      `state=${ctx.session.state} — no IMEI resolved; AB2 stays HELD.`,
+                  );
+                }
+                void this.onClose(ctx.session, reason);
+              },
+              // Diagnostic: frame()-stage errors (bad checksum, malformed tail,
+              // oversize) were previously silent — a device stuck failing to frame
+              // never authenticates and never shows up in any log (debug aid for
+              // the live-video AB2 investigation).
+              onError: (ctx, err) => {
+                this.logger.warn(
+                  `Frame error on session ${ctx.session.id} from ${ctx.remoteAddress}:${ctx.remotePort} [${adapter.id}]: ${err.message}`,
+                );
+              },
             }),
           );
         } else {
           udpServer.add(
-            `${l.adapterId}:udp`,
+            `${l.adapterId}:udp:${l.port}`,
             new UdpListener({
               adapter,
               port: l.port,

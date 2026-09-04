@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 /**
  * Asset detail drawers — slide-overs for the three REAL asset classes
  * (fleet / vehicle / device). One file holds all three because they share the
@@ -25,7 +26,7 @@ import {
   Truck,
   UserRound,
 } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -43,6 +44,8 @@ import {
   useUnassignDriverVehicle,
 } from '@/api/driver.api';
 import { ConflictError, getApiErrorMessage } from '@/api/errors';
+import { queryKeys } from '@/api/query-keys';
+import { registerDefaultMdvrChannels } from '@/api/video.api';
 import { PermissionGate } from '@/auth/permissions';
 import {
   deviceProtocolColor,
@@ -64,11 +67,18 @@ import {
   Alert,
   Badge,
   Button,
+  Checkbox,
   Drawer,
   IconButton,
   Select,
   Spinner,
 } from '@/components/tailwind-ui';
+import {
+  DEVICE_ROLE_OPTIONS,
+  defaultDeviceRoles,
+  displayDeviceRoles,
+  primaryDeviceRole,
+} from '@/lib/device-roles';
 import type { AssetTab } from '@/pages/AssetManagementPage';
 import type {
   BoundDevice,
@@ -303,7 +313,7 @@ function FleetDetailDrawer({
 
 // ── Vehicle drawer (incl. the device-binding surface, §11) ──────────────────
 
-const ROLE_OPTIONS: DeviceRole[] = ['TRACKER', 'MDVR', 'CAN', 'SENSOR', 'OTHER'];
+const ROLE_OPTIONS: DeviceRole[] = DEVICE_ROLE_OPTIONS;
 
 function VehicleDetailDrawer({
   vehicleId,
@@ -320,6 +330,7 @@ function VehicleDetailDrawer({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { data: vehicle, isLoading } = useVehicleDetail(vehicleId);
   const bound = useVehicleDevices(vehicleId);
   const bind = useBindDeviceToVehicle();
@@ -327,28 +338,71 @@ function VehicleDetailDrawer({
   const open = Boolean(vehicleId);
 
   const [assignDeviceId, setAssignDeviceId] = useState('');
-  const [assignRole, setAssignRole] = useState<DeviceRole>('TRACKER');
+  const [assignRoles, setAssignRoles] = useState<DeviceRole[]>(['TRACKER']);
   const [bindError, setBindError] = useState<string | null>(null);
   const [unbindTarget, setUnbindTarget] = useState<BoundDevice | null>(null);
+
+  useEffect(() => {
+    if (!vehicleId) return;
+    setAssignDeviceId('');
+    setAssignRoles(['TRACKER']);
+    setBindError(null);
+  }, [vehicleId]);
 
   const fleetName = useMemo(
     () => fleets.find((f) => f.id === vehicle?.fleetId)?.name ?? '—',
     [fleets, vehicle?.fleetId],
   );
   const assignedDriver = useMemo(() => driverOnVehicle(drivers, vehicleId), [drivers, vehicleId]);
-  // Assignable devices: unbound (vehicleId === null) and not decommissioned.
+  // Assignable devices: unbound and not decommissioned. `!vehicleId` covers
+  // both null and a missing field so a device still appears in the picker.
   const unboundDevices = useMemo(
-    () => devices.filter((d) => d.vehicleId === null && d.status !== 'DECOMMISSIONED'),
+    () => devices.filter((d) => !d.vehicleId && d.status !== 'DECOMMISSIONED'),
     [devices],
   );
 
+  const onPickDevice = (deviceId: string) => {
+    setAssignDeviceId(deviceId);
+    const picked = unboundDevices.find((d) => d.id === deviceId);
+    setAssignRoles(defaultDeviceRoles(picked?.protocol));
+  };
+
+  const toggleRole = (role: DeviceRole) => {
+    setAssignRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    );
+  };
+
   const onAssign = async () => {
-    if (!vehicleId || !assignDeviceId) return;
+    if (!vehicleId || !assignDeviceId || assignRoles.length === 0) return;
     setBindError(null);
+    const hasPrimary = (bound.data ?? []).some((d) => d.isPrimary);
     try {
-      await bind.mutateAsync({ vehicleId, deviceId: assignDeviceId, role: assignRole });
+      await bind.mutateAsync({
+        vehicleId,
+        deviceId: assignDeviceId,
+        roles: assignRoles,
+        role: primaryDeviceRole(assignRoles),
+        isPrimary: !hasPrimary,
+      });
+      if (assignRoles.includes('MDVR')) {
+        const picked = devices.find((d) => d.id === assignDeviceId);
+        if (picked?.imei) {
+          try {
+            await registerDefaultMdvrChannels({
+              vehicleId,
+              deviceId: assignDeviceId,
+              imei: picked.imei,
+            });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.video.channels() });
+          } catch {
+            /* catalog register is best-effort — the wizard can add cameras later */
+          }
+        }
+      }
       toast.success(t('assets.crud.updateSuccess', { name: t('assets.device.devices') }));
       setAssignDeviceId('');
+      setAssignRoles(['TRACKER']);
     } catch (err) {
       // 409 → the device is already bound elsewhere (or primary clash).
       setBindError(
@@ -448,9 +502,13 @@ function VehicleDetailDrawer({
                             {[d.manufacturer, d.model].filter(Boolean).join(' ') || '—'}
                           </p>
                         </div>
-                        <Badge color="gray">
-                          {t(`assets.device.roles.${d.role}`, { defaultValue: d.role })}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {displayDeviceRoles(d.role, d.roles).map((role) => (
+                            <Badge key={role} color="gray">
+                              {t(`assets.device.roles.${role}`, { defaultValue: role })}
+                            </Badge>
+                          ))}
+                        </div>
                         {d.isPrimary && <Badge color="brand">{t('assets.device.primary')}</Badge>}
                         <Badge color={deviceStatusColor(d.deviceStatus as DeviceStatus)} dot>
                           {t(`assets.device.statusValues.${d.deviceStatus}`, {
@@ -481,36 +539,48 @@ function VehicleDetailDrawer({
                         {t('assets.device.noUnbound')}
                       </p>
                     ) : (
-                      <div className="flex flex-wrap items-start gap-2">
-                        <Select
-                          value={assignDeviceId}
-                          onChange={(e) => setAssignDeviceId(e.target.value)}
-                          wrapperClassName="min-w-40 flex-1"
-                          aria-label={t('assets.device.imei')}
-                          options={unboundDevices.map((d) => ({
-                            value: d.id,
-                            label: d.model ? `${d.imei} · ${d.model}` : d.imei,
-                          }))}
-                        />
-                        <Select
-                          value={assignRole}
-                          onChange={(e) => setAssignRole(e.target.value as DeviceRole)}
-                          wrapperClassName="w-32"
-                          aria-label={t('assets.device.role')}
-                          options={ROLE_OPTIONS.map((r) => ({
-                            value: r,
-                            label: t(`assets.device.roles.${r}`),
-                          }))}
-                        />
-                        <Button
-                          size="sm"
-                          leftIcon={<Link2 size={14} />}
-                          disabled={!assignDeviceId || bind.isPending}
-                          loading={bind.isPending}
-                          onClick={onAssign}
-                        >
-                          {t('assets.device.assignAction')}
-                        </Button>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap items-start gap-2">
+                          <Select
+                            value={assignDeviceId}
+                            onChange={(e) => onPickDevice(e.target.value)}
+                            wrapperClassName="min-w-40 flex-1"
+                            aria-label={t('assets.device.imei')}
+                            placeholder={t('assets.device.pickDevice')}
+                            options={unboundDevices.map((d) => ({
+                              value: d.id,
+                              label: d.model ? `${d.imei} · ${d.model}` : d.imei,
+                            }))}
+                          />
+                          <Button
+                            size="sm"
+                            leftIcon={<Link2 size={14} />}
+                            disabled={!assignDeviceId || assignRoles.length === 0 || bind.isPending}
+                            loading={bind.isPending}
+                            onClick={onAssign}
+                          >
+                            {t('assets.device.assignAction')}
+                          </Button>
+                        </div>
+                        <fieldset className="flex flex-col gap-1.5">
+                          <legend className="text-xs font-medium text-gray-600 dark:text-graydark-700">
+                            {t('assets.device.capabilities')}
+                          </legend>
+                          <p className="text-xs text-gray-500 dark:text-graydark-600">
+                            {t('assets.device.capabilitiesHint')}
+                          </p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            {ROLE_OPTIONS.map((r) => (
+                              <Checkbox
+                                key={r}
+                                checked={assignRoles.includes(r)}
+                                onChange={() => toggleRole(r)}
+                                label={t(`assets.device.roles.${r}`)}
+                                className="w-auto"
+                              />
+                            ))}
+                          </div>
+                        </fieldset>
                       </div>
                     )}
                   </div>

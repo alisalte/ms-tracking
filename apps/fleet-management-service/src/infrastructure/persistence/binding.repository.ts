@@ -18,6 +18,7 @@ export interface VehicleDeviceRow {
   readonly vehicle_id: string;
   readonly device_id: string;
   readonly role: DeviceRole;
+  readonly roles: DeviceRole[];
   readonly is_primary: boolean;
   readonly bound_at: Date;
   readonly version: number;
@@ -34,6 +35,7 @@ export interface BoundDeviceView {
   readonly protocol: string;
   readonly deviceStatus: string;
   readonly role: DeviceRole;
+  readonly roles: DeviceRole[];
   readonly isPrimary: boolean;
   readonly boundAt: Date;
 }
@@ -106,10 +108,14 @@ export class BindingRepository {
         'd.protocol as protocol',
         'd.status as deviceStatus',
         'vd.role as role',
+        'vd.roles as roles',
         'vd.is_primary as isPrimary',
         'vd.bound_at as boundAt',
       );
-    return rows;
+    return rows.map((r) => ({
+      ...r,
+      roles: Array.isArray(r.roles) && r.roles.length > 0 ? r.roles : [r.role],
+    }));
   }
 
   /** Bind a device to a vehicle (insert). Enforced constraints: unique device_id, ≤1 primary. */
@@ -120,6 +126,7 @@ export class BindingRepository {
     deviceId: string,
     role: DeviceRole,
     isPrimary: boolean,
+    roles: readonly DeviceRole[] = [role],
   ): Promise<VehicleDeviceRow> {
     const [row] = await trx
       .withSchema(SCHEMA)
@@ -129,6 +136,7 @@ export class BindingRepository {
         vehicle_id: trx.raw('?::uuid', [vehicleId]),
         device_id: trx.raw('?::uuid', [deviceId]),
         role,
+        roles: roles.length > 0 ? [...roles] : [role],
         is_primary: isPrimary,
       })
       .returning('*');
@@ -160,6 +168,7 @@ export class BindingRepository {
       vehicleId: row.vehicle_id,
       deviceId: row.device_id,
       role: row.role,
+      roles: Array.isArray(row.roles) && row.roles.length > 0 ? row.roles : [row.role],
       isPrimary: row.is_primary,
       boundAt: new Date(row.bound_at),
       version: row.version,

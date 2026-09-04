@@ -12,6 +12,8 @@ export interface VehicleDeviceRecord {
   readonly vehicleId: string;
   readonly deviceId: string;
   readonly role: DeviceRole;
+  /** All functions this unit provides on the vehicle (tracker + MDVR + …). */
+  readonly roles: readonly DeviceRole[];
   readonly isPrimary: boolean;
   readonly boundAt: Date;
   readonly version: number;

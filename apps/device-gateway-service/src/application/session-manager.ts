@@ -270,7 +270,11 @@ export class SessionManager {
         this.logger.warn(`Terminator for session ${id} failed: ${(err as Error).message}`);
       }
     }
-    if (wasLive) {
+    // Consumers key session-lifecycle events on deviceId (device_status is a
+    // per-device record) — a session that never reached AUTHENTICATED has none,
+    // so publishing would just DLQ downstream (envelope deviceId missing).
+    // Mirrors the DeviceMessage fail-closed invariant (06 §6.1 #1) for this event.
+    if (wasLive && session.deviceId) {
       await this.emitLifecycle(session, 'DISCONNECTED', reason);
     }
   }

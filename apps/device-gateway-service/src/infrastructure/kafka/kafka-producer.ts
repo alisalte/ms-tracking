@@ -21,8 +21,13 @@ import type { TelemetryMetrics } from '@fleetvision/observability';
  * Topic selection follows ADR-016 / 06 §11.5:
  *   POSITION     → fleetvision.telemetry.position.raw
  *   ALARM        → fleetvision.telemetry.alarm.raw
- *   LOGIN / HB / TELEMETRY → fleetvision.telemetry.device.raw
+ *   LOGIN / HB / TELEMETRY / PHOTO → fleetvision.telemetry.device.raw
  *   COMMAND_ACK  → fleetvision.telemetry.command.ack
+ *
+ * PHOTO carries one D00 chunk per message (see meitrack.decode.ts
+ * decodePhotoChunk); a consumer reassembles a device's chunks into a complete
+ * image with PhotoAssembler (meitrack.photo-assembler.ts) — no dedicated topic
+ * yet, chunk volume is low (one on-demand capture at a time per device).
  *
  * Sprint 3 sends JSON values; Avro + Schema Registry is a later cross-cutting
  * `bus-kafka` package (06 §13.2 — deferred per plan; documented in Sprint D).
@@ -310,6 +315,8 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
         return 'telemetry.alarm.raw.v1';
       case 'COMMAND_ACK':
         return 'telemetry.command.ack.v1';
+      case 'PHOTO':
+        return 'telemetry.photo.raw.v1';
       default:
         return 'telemetry.device.raw.v1';
     }
