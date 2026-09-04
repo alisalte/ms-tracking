@@ -260,6 +260,35 @@ describe('VideoWallPage — view tabs', () => {
 
 const mdvrOverride = vi.hoisted(() => ({ channels: null as null | unknown[] }));
 
+const resourcesOverride = vi.hoisted(() => ({
+  status: 'idle' as 'idle' | 'listing' | 'ready' | 'error',
+  error: null as string | null,
+  videos: [] as Array<{
+    channel: number;
+    startTime: string;
+    endTime: string;
+    avType: number;
+    streamType: number;
+    capType: number;
+    fileLen: number;
+    eventCode: number;
+    subEventCode: number;
+  }>,
+  photos: [] as Array<{
+    channel: number;
+    startTime: string;
+    endTime: string;
+    avType: number;
+    streamType: number;
+    capType: number;
+    fileLen: number;
+    eventCode: number;
+    subEventCode: number;
+  }>,
+  search: vi.fn(),
+  reset: vi.fn(),
+}));
+
 const mdvrMockChannel = vi.hoisted(() => ({
   id: 'ch-mdvr-1',
   label: 'MD300 Sim · CH1',
@@ -291,9 +320,18 @@ vi.mock('@/api/video.api', async (importOriginal) => {
   };
 });
 
+vi.mock('@/components/video/useMdvrResources', () => ({
+  useMdvrResources: () => resourcesOverride,
+}));
+
 describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)', () => {
   afterEach(() => {
     mdvrOverride.channels = null;
+    resourcesOverride.status = 'idle';
+    resourcesOverride.error = null;
+    resourcesOverride.videos = [];
+    resourcesOverride.photos = [];
+    resourcesOverride.search.mockClear();
   });
 
   it('assigns the MDVR channel to a wall tile', async () => {
@@ -315,6 +353,55 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     await screen.findByText('Video Wall');
     await waitFor(() => {
       expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+    });
+  });
+
+  it('searches the MDVR date window and plays a listed clip', async () => {
+    mdvrOverride.channels = [mdvrMockChannel];
+    resourcesOverride.status = 'ready';
+    resourcesOverride.videos = [
+      {
+        channel: 1,
+        startTime: '260904100000',
+        endTime: '260904100500',
+        avType: 3,
+        streamType: 0,
+        capType: 0,
+        fileLen: 1_048_576,
+        eventCode: 0,
+        subEventCode: 0,
+      },
+    ];
+    resourcesOverride.photos = [
+      {
+        channel: 1,
+        startTime: '260904110000',
+        endTime: '260904110001',
+        avType: 4,
+        streamType: 0,
+        capType: 0,
+        fileLen: 2048,
+        eventCode: 0,
+        subEventCode: 0,
+      },
+    ];
+    renderWall('/video?view=playback');
+    await screen.findByTestId('playback-load');
+
+    const channelSelect = screen.getByRole('combobox');
+    fireEvent.change(channelSelect, { target: { value: mdvrMockChannel.id } });
+
+    expect(screen.getByTestId('playback-search')).toBeTruthy();
+    expect(screen.getByTestId('playback-resource-list').textContent).toMatch(/videos/i);
+    expect(screen.getByTestId('playback-clip-video-0')).toBeTruthy();
+    expect(screen.getByTestId('playback-clip-photo-0')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('playback-search'));
+    expect(resourcesOverride.search).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('playback-clip-video-0'));
+    await waitFor(() => {
+      expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).toBeNull();
     });
   });
 });
@@ -392,11 +479,62 @@ describe('mapMediaChannel wire shape', () => {
     expect(ch.imei).toBe('867191086416152');
     expect(ch.online).toBe(true);
     expect(ch.protocol).toBe('MEITRACK_MDVR');
+    expect(ch.sourceId).toBe('dev-1');
+    expect(ch.sourceLabel).toBe('MDVR 867191086416152');
   });
 
   it('builds AB2 RTMP and HLS URLs from the IMEI', async () => {
     const { mdvrRtmpUploadUrl, mdvrHlsUrl } = await import('@/api/video.api');
-    expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300$/);
-    expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/index.m3u8');
+    expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300\/1$/);
+    expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/1/index.m3u8');
+    expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300\/2$/);
+    expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300/2/index.m3u8');
+  });
+
+  it('builds a sibling playback RTMP/HLS path so AB4 does not clobber live', async () => {
+    const { mdvrPlaybackRtmpUrl, mdvrPlaybackHlsUrl, toMdvrBcdTime } = await import(
+      '@/api/video.api'
+    );
+    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300\/2\/pb$/);
+    expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain(
+      '/media-hls/live/md300/1/index.m3u8',
+    );
+    expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toMatch(/^\d{12}$/);
+  });
+
+  it('round-trips MDVR BCD timestamps and parses an AB8 ack JSON', async () => {
+    const { fromMdvrBcdTime, toMdvrBcdTime, parseMdvrResourceAck, mdvrResourceKind } = await import(
+      '@/api/video.api'
+    );
+    const ms = new Date(2026, 8, 4, 11, 30, 5).getTime();
+    expect(fromMdvrBcdTime(toMdvrBcdTime(ms))).toBe(ms);
+    const rows = parseMdvrResourceAck(
+      JSON.stringify({
+        resources: [
+          {
+            channel: 1,
+            startTime: '260904100000',
+            endTime: '260904100500',
+            avType: 3,
+            streamType: 0,
+            capType: 0,
+            fileLen: 1024,
+            eventCode: 0,
+            subEventCode: 0,
+          },
+          {
+            channel: 1,
+            startTime: '260904110000',
+            endTime: '260904110001',
+            avType: 4,
+            fileLen: 2048,
+          },
+        ],
+      }),
+    );
+    expect(rows).toHaveLength(2);
+    expect(mdvrResourceKind(rows[0]?.avType ?? 0)).toBe('video');
+    expect(mdvrResourceKind(rows[1]?.avType ?? 0)).toBe('photo');
+    expect(parseMdvrResourceAck('not-json')).toEqual([]);
   });
 });

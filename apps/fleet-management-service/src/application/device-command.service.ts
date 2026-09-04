@@ -91,6 +91,18 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
   }
 }
 
+/** `live/md300/2` live; AB4 URL is `live/md300/2/pb` (device still publishes the live key). */
+function mdvrChannelStreamPath(
+  base: string,
+  channel: unknown,
+  kind: 'live' | 'playback' = 'live',
+): string {
+  const root = (base || 'live/md300').replace(/^\/+|\/+$/g, '');
+  const n = Number(channel);
+  const ch = Number.isInteger(n) && n >= 1 && n <= 129 ? n : 1;
+  return kind === 'playback' ? `${root}/${ch}/pb` : `${root}/${ch}`;
+}
+
 export class DeviceCommandService {
   private readonly logger = new Logger(DeviceCommandService.name);
   private sweepTimer: NodeJS.Timeout | null = null;
@@ -107,7 +119,7 @@ export class DeviceCommandService {
   ) {
     if (options.mdvrPublicHost) {
       this.logger.log(
-        `MDVR AB2 RTMP: rtmp://${options.mdvrPublicHost}:${options.mdvrRtmpPort ?? 1935}/${options.mdvrRtmpPath ?? 'live/md300'}`,
+        `MDVR AB2 RTMP: rtmp://${options.mdvrPublicHost}:${options.mdvrRtmpPort ?? 1935}/${options.mdvrRtmpPath ?? 'live/md300'}/{channel}`,
       );
     } else {
       this.logger.warn(
@@ -236,7 +248,7 @@ export class DeviceCommandService {
       this.logger.warn('Skipping auto-AB2: MDVR public host is unset.');
       return;
     }
-    const path = this.options.mdvrRtmpPath ?? 'live/md300';
+    const path = mdvrChannelStreamPath(this.options.mdvrRtmpPath ?? 'live/md300', 1);
     const port = this.options.mdvrRtmpPort ?? 1935;
     const ctx: ActorContext = {
       tenantId,
@@ -296,7 +308,11 @@ export class DeviceCommandService {
           raw,
           host,
           this.options.mdvrRtmpPort ?? 1935,
-          this.options.mdvrRtmpPath ?? 'live/md300',
+          mdvrChannelStreamPath(
+            this.options.mdvrRtmpPath ?? 'live/md300',
+            params.channel,
+            commandCode === 'AB4' ? 'playback' : 'live',
+          ),
         ),
       };
     }

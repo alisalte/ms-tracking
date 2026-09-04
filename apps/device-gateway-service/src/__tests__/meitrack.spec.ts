@@ -30,7 +30,7 @@ function meitrackFrame(content: string): Buffer {
 }
 
 /** A canonical AAA tracking body with explicit field positions (see decode.ts). */
-function trackingBody(event: number, lat = '22.93820', lng = '113.38270'): string {
+function trackingBody(event: number, lat = '22.93820', lng = '113.38270', validity = 'A'): string {
   // imei, command, event, lat, lng, YYMMDDHHMMSS, validity, sats, rssi, speed,
   // heading, hdop, alt, odo, runtime, mcc|mnc|lac|cid, input, output, batt|power|...
   return [
@@ -40,7 +40,7 @@ function trackingBody(event: number, lat = '22.93820', lng = '113.38270'): strin
     lat,
     lng,
     '260805100000',
-    'A',
+    validity,
     '8',
     '31',
     '0.0',
@@ -186,6 +186,26 @@ describe('MeitrackAdapter.decode', () => {
     expect(msg.alarms?.[0]?.severity).toBe('CRITICAL');
     expect(msg.alarms?.[0]?.source).toBe('1');
     expect(msg.position).toBeDefined();
+  });
+
+  it('does not publish AAA heartbeat (event 31, validity V) as a map position', () => {
+    const frame = meitrackFrame(trackingBody(31, '67.28000', '0.20000', 'V'));
+    const r = new ByteReader();
+    r.append(frame);
+    const raw = unwrap(adapter.frame(r, NOW));
+    const msgs = adapter.decode(raw);
+    expect(msgs.map((m) => m.type)).toEqual(['TELEMETRY']);
+  });
+
+  it('ACKs A10 from an AAA event-34 location reply', () => {
+    const frame = meitrackFrame(trackingBody(34, '22.93820', '113.38270', 'V'));
+    const r = new ByteReader();
+    r.append(frame);
+    const raw = unwrap(adapter.frame(r, NOW));
+    const msgs = adapter.decode(raw);
+    expect(msgs.map((m) => m.type)).toEqual(['COMMAND_ACK', 'POSITION']);
+    expect(msgs[0]?.telemetry).toMatchObject({ command: 'A10', response: 'OK' });
+    expect(msgs[1]?.position?.latitude).toBeCloseTo(22.9382, 4);
   });
 
   it('maps a power-cut event to CRITICAL and an unknown event to a generic label', () => {
@@ -401,7 +421,7 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
       [[0xfe31, fe31]],
     );
     const msgs = decodeFrame(cceFrame(params));
-    expect(msgs).toHaveLength(1);
+    expect(msgs.map((m) => m.type)).toEqual(['ALARM', 'POSITION']);
     const msg = first(msgs);
     expect(msg.type).toBe('ALARM');
     expect(msg.alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
@@ -486,6 +506,73 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(first(msgs).position?.latitude).toBeCloseTo(35.7, 5);
   });
 
+  it('does not publish a POSITION when GPS validity (0x05) is invalid', () => {
+    const groups = Buffer.concat([
+      Buffer.from([1, 0x05, 0x00]),
+      cceParams(
+        [[0x40, 0]],
+        [
+          [0x02, LNG],
+          [0x03, LAT],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const msgs = decodeFrame(cceFrame(enveloped(groups)));
+    expect(msgs.map((m) => m.type)).toEqual(['TELEMETRY']);
+  });
+
+  it('does not treat a GPRS heartbeat (event 31) as a map position', () => {
+    const groups = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [[0x40, 31]],
+        [
+          [0x02, Math.round(67.28 * 1e6)],
+          [0x03, Math.round(0.2 * 1e6)],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const msgs = decodeFrame(cceFrame(enveloped(groups)));
+    expect(msgs.map((m) => m.type)).toEqual(['TELEMETRY']);
+  });
+
+  it('ACKs A10 when the device replies with event 34', () => {
+    const groups = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [[0x40, 34]],
+        [
+          [0x02, LNG],
+          [0x03, LAT],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const msgs = decodeFrame(cceFrame(enveloped(groups)));
+    expect(msgs.map((m) => m.type)).toEqual(['COMMAND_ACK', 'POSITION']);
+    expect(msgs[0]?.telemetry).toMatchObject({ command: 'A10', response: 'OK' });
+  });
+
+  it('records an A10 (event 34) fix even when GPS validity is 0', () => {
+    const groups = Buffer.concat([
+      Buffer.from([1, 0x05, 0x00]),
+      cceParams(
+        [[0x40, 34]],
+        [
+          [0x02, LNG],
+          [0x03, LAT],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const msgs = decodeFrame(cceFrame(enveloped(groups)));
+    expect(msgs.map((m) => m.type)).toEqual(['COMMAND_ACK', 'POSITION']);
+    expect(msgs[1]?.position?.latitude).toBeCloseTo(35.7, 5);
+    expect(msgs[1]?.position?.timestamp.toISOString()).toBe(NOW.toISOString());
+  });
+
   it('authenticates an MDVR CCE keepalive that has IMEI but no GPS', () => {
     const groups = Buffer.concat([Buffer.from([0]), cceParams([], [])]);
     const msgs = decodeFrame(cceFrame(enveloped(groups)));
@@ -498,5 +585,110 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(() => decodeFrame(cceFrame(truncated))).not.toThrow();
     const msgs = decodeFrame(cceFrame(truncated));
     expect(first(msgs).serialOrImei).toBe(IMEI);
+  });
+});
+
+// ── AB8 resource-list replies (binary body — never comma-split) ─────────────
+
+/** Build an AB8 frame with a binary resource-list body. */
+function ab8Frame(params: Buffer): Buffer {
+  const body = Buffer.concat([Buffer.from(`${IMEI},AB8,`, 'ascii'), params]);
+  const commaBlock = Buffer.concat([Buffer.from(',', 'ascii'), body]);
+  const length = commaBlock.length + 1 + 2 + 2;
+  const head = `$$A${String(length)}`;
+  const checksumRegion = Buffer.concat([
+    Buffer.from(head, 'ascii'),
+    commaBlock,
+    Buffer.from('*', 'ascii'),
+  ]);
+  const checksum = meitrackChecksum(checksumRegion);
+  return Buffer.concat([
+    checksumRegion,
+    Buffer.from(checksum, 'ascii'),
+    Buffer.from('\r\n', 'ascii'),
+  ]);
+}
+
+function ab8File(opts: {
+  channel: number;
+  start: number[];
+  end: number[];
+  avType: number;
+  fileLen: number;
+}): Buffer {
+  const rec = Buffer.alloc(30);
+  rec[0] = opts.channel;
+  Buffer.from(opts.start).copy(rec, 1);
+  Buffer.from(opts.end).copy(rec, 7);
+  rec[23] = opts.avType;
+  rec.writeUInt32LE(opts.fileLen, 26);
+  return rec;
+}
+
+describe('MeitrackAdapter AB8 resource list', () => {
+  const adapter = new MeitrackAdapter();
+
+  function decodeFrame(buf: Buffer) {
+    const reader = new ByteReader();
+    reader.append(buf);
+    const raw = unwrap(adapter.frame(reader, NOW));
+    return adapter.decode(raw);
+  }
+
+  it('decodes a binary AB8 packet into COMMAND_ACK resources', () => {
+    const header = Buffer.alloc(12);
+    header.writeUInt16LE(1, 0);
+    header.writeUInt16LE(1, 2);
+    header.writeUInt32LE(2, 4);
+    header.writeUInt32LE(2, 8);
+    const video = ab8File({
+      channel: 1,
+      start: [0x26, 0x09, 0x04, 0x10, 0x00, 0x00],
+      end: [0x26, 0x09, 0x04, 0x10, 0x05, 0x00],
+      avType: 3,
+      fileLen: 1_048_576,
+    });
+    const photo = ab8File({
+      channel: 1,
+      start: [0x26, 0x09, 0x04, 0x11, 0x00, 0x00],
+      end: [0x26, 0x09, 0x04, 0x11, 0x00, 0x01],
+      avType: 4,
+      fileLen: 0x2c2c2c2c, // commas in binary must not break the parser
+    });
+    const msgs = decodeFrame(ab8Frame(Buffer.concat([header, video, photo])));
+    expect(msgs).toHaveLength(1);
+    const msg = msgs[0];
+    if (!msg) throw new Error('expected AB8 ack');
+    expect(msg.type).toBe('COMMAND_ACK');
+    expect(msg.serialOrImei).toBe(IMEI);
+    expect(msg.telemetry).toMatchObject({
+      command: 'AB8',
+      response: 'OK',
+      allPack: 1,
+      curPack: 1,
+      allFileNum: 2,
+    });
+    expect(msg.telemetry?.resources).toEqual([
+      expect.objectContaining({
+        channel: 1,
+        startTime: '260904100000',
+        endTime: '260904100500',
+        avType: 3,
+        fileLen: 1_048_576,
+      }),
+      expect.objectContaining({
+        avType: 4,
+        startTime: '260904110000',
+        fileLen: 0x2c2c2c2c,
+      }),
+    ]);
+  });
+
+  it('leaves ASCII AB8,OK on the text ack path', () => {
+    const msgs = decodeFrame(meitrackFrame(`${IMEI},AB8,OK`));
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]?.type).toBe('COMMAND_ACK');
+    expect(msgs[0]?.telemetry).toMatchObject({ command: 'AB8', response: 'OK' });
+    expect(msgs[0]?.telemetry?.resources).toBeUndefined();
   });
 });

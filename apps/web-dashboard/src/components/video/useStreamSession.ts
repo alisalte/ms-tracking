@@ -65,7 +65,10 @@ const MAX_RETRIES = 3;
 /** Base backoff delay for reconnect. */
 const RECONNECT_BASE_MS = 1000;
 
-/** One AB2/AB3 pair per IMEI — four wall tiles must not start four pushes. */
+/** One AB2/AB3 pair per IMEI+camera — two wall tiles must start two RTMP pushes. */
+function mdvrLiveKey(imei: string, logicalChannel: number): string {
+  return `${imei}:${logicalChannel}`;
+}
 type MdvrShare = { count: number; start: Promise<void> };
 const mdvrShares = new Map<string, MdvrShare>();
 /** In-flight AB3 so a reconnect cannot send AB2 before stop is queued. */
@@ -203,14 +206,14 @@ export function useStreamSession(
   const stopMdvr = useCallback(async () => {
     const ch = channelRef.current;
     if (!ch?.deviceId) return;
-    mdvrLog(`AB3 stop → device=${ch.deviceId} imei=${ch.imei ?? '?'}`);
+    const logicalChannel = ch.logicalChannel ?? 1;
+    mdvrLog(`AB3 stop → device=${ch.deviceId} imei=${ch.imei ?? '?'} channel=${logicalChannel}`);
     try {
       await apiPost(`/devices/${ch.deviceId}/commands`, {
         commandCode: 'AB3',
-        // md300-main live.js always stops channel 1 (the only working AV channel).
-        params: { channel: 1, control: '0', closeType: '0', switchType: '0' },
+        params: { channel: logicalChannel, control: '0', closeType: '0', switchType: '0' },
       });
-      mdvrLog(`AB3 accepted for device=${ch.deviceId}`);
+      mdvrLog(`AB3 accepted for device=${ch.deviceId} channel=${logicalChannel}`);
     } catch (err) {
       mdvrLog(`AB3 failed for device=${ch.deviceId} (best-effort):`, err);
     }
@@ -238,10 +241,11 @@ export function useStreamSession(
     if (mdvr) {
       const imei = channel.imei ?? '';
       const deviceId = channel.deviceId ?? '';
-      const uploadUrl = mdvrRtmpUploadUrl(imei);
-      const url = mdvrHlsUrl(imei);
+      const logicalChannel = channel.logicalChannel ?? 1;
+      const uploadUrl = mdvrRtmpUploadUrl(imei, logicalChannel);
+      const url = mdvrHlsUrl(imei, logicalChannel);
       mdvrLog(
-        `opening channel=${channel.id} device=${deviceId} imei=${imei} → AB2 uploadUrl=${uploadUrl} hlsUrl=${url}`,
+        `opening channel=${channel.id} device=${deviceId} imei=${imei} cam=${logicalChannel} → AB2 uploadUrl=${uploadUrl} hlsUrl=${url}`,
       );
 
       timeoutTimerRef.current = setTimeout(() => {
@@ -254,10 +258,10 @@ export function useStreamSession(
         scheduleReconnect();
       }, CONNECTION_TIMEOUT_MS);
 
-      void acquireMdvrLive(imei, async () => {
+      void acquireMdvrLive(mdvrLiveKey(imei, logicalChannel), async () => {
         mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
           uploadUrl,
-          channel: 1,
+          channel: logicalChannel,
           dataType: '0',
           streamType: '0',
         });
@@ -268,8 +272,7 @@ export function useStreamSession(
           commandCode: 'AB2',
           params: {
             uploadUrl,
-            // md300-main live.js CHANNEL=1, dataType=0, streamType=0.
-            channel: 1,
+            channel: logicalChannel,
             dataType: '0',
             streamType: '0',
           },
@@ -309,7 +312,7 @@ export function useStreamSession(
 
       return () => {
         cancelled = true;
-        releaseMdvrLive(imei, stopMdvr);
+        releaseMdvrLive(mdvrLiveKey(imei, logicalChannel), stopMdvr);
         teardown();
       };
     }

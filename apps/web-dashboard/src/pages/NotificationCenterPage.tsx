@@ -27,6 +27,11 @@ import {
 } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Button, Card, PageHeader, Spinner, Tooltip } from '@/components/tailwind-ui';
+import {
+  localizeEventType,
+  localizeNotificationBody,
+  localizeNotificationTitle,
+} from '@/lib/alarm-copy';
 import { relativeTime } from '@/lib/relative-time';
 import type { Notification, NotificationChannel } from '@/types/notification.types';
 
@@ -46,6 +51,21 @@ const EVENT_TYPES = [
   'trip_ended',
   'excessive_trip_duration',
   'excessive_stop_duration',
+  'sos',
+  'dms',
+  'geofence',
+  'fuel-theft',
+  'camera',
+  'collision',
+  'temperature',
+  'offline',
+  'idle',
+  'ignition',
+  'battery',
+  'tow',
+  'power',
+  'jamming',
+  'other',
 ] as const;
 
 const SEVERITIES = ['critical', 'high', 'normal', 'low'] as const;
@@ -182,7 +202,7 @@ export function NotificationCenterPage() {
               <option value="">{t('common.all', { defaultValue: 'All' })}</option>
               {EVENT_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {t(`notifications.eventTypes.${type}`, { defaultValue: type.replace(/_/g, ' ') })}
+                  {localizeEventType(t, type)}
                 </option>
               ))}
             </select>
@@ -269,7 +289,7 @@ export function NotificationCenterPage() {
                               : 'font-semibold text-gray-900 dark:text-white'
                           }`}
                         >
-                          {n.title}
+                          {localizeNotificationTitle(t, n)}
                         </span>
                         <span
                           className={`inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[0.7rem] font-semibold ${severityTone(n.severity)}`}
@@ -277,14 +297,12 @@ export function NotificationCenterPage() {
                           {t(`notifications.severity.${n.severity}`, { defaultValue: n.severity })}
                         </span>
                         <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-gray-300 px-2 text-[0.7rem] font-medium text-gray-600 dark:border-white/10 dark:text-graydark-700">
-                          {t(`notifications.eventTypes.${n.eventType}`, {
-                            defaultValue: n.eventType.replace(/_/g, ' '),
-                          })}
+                          {localizeEventType(t, n.eventType)}
                         </span>
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-xs">
                         <span className="min-w-0 truncate text-gray-500 dark:text-graydark-600">
-                          {n.body}
+                          {localizeNotificationBody(t, n)}
                         </span>
                         {' · '}
                         <span className="shrink-0 text-gray-400 dark:text-graydark-600">
@@ -365,16 +383,22 @@ function NotificationDetailContent({
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-bold text-gray-900 dark:text-white">{notification.title}</h2>
-      <p className="text-sm text-gray-500 dark:text-graydark-600">{notification.body}</p>
+      <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+        {localizeNotificationTitle(t, notification)}
+      </h2>
+      <p className="text-sm text-gray-500 dark:text-graydark-600">
+        {localizeNotificationBody(t, notification)}
+      </p>
       <div className="flex flex-wrap gap-1.5">
         <span
           className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${severityTone(notification.severity)}`}
         >
-          {notification.severity}
+          {t(`notifications.severity.${notification.severity}`, {
+            defaultValue: notification.severity,
+          })}
         </span>
         <span className="inline-flex h-6 items-center rounded-full border border-gray-300 px-2.5 text-xs font-medium text-gray-600 dark:border-white/10 dark:text-graydark-700">
-          {notification.eventType.replace(/_/g, ' ')}
+          {localizeEventType(t, notification.eventType)}
         </span>
         <span className="inline-flex h-6 items-center rounded-full border border-gray-300 px-2.5 text-xs font-medium text-gray-600 dark:border-white/10 dark:text-graydark-700">
           {notification.read ? t('notifications.status.READ') : t('notifications.status.UNREAD')}

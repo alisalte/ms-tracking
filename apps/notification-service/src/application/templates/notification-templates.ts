@@ -171,6 +171,156 @@ const TEMPLATES: Record<string, TemplateEntry> = {
       body: 'خودرو {{vehicleName}} بیش از حد مجاز متوقف مانده است.',
     },
   },
+  sos: {
+    en: {
+      title: 'SOS: {{vehicleName}}',
+      body: 'Emergency SOS from {{vehicleName}}{{alarmDetail}}.',
+    },
+    fa: {
+      title: 'اضطراری SOS: {{vehicleName}}',
+      body: 'هشدار اضطراری از {{vehicleName}}{{alarmDetail}}.',
+    },
+  },
+  dms: {
+    en: {
+      title: 'Driver monitoring: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'پایش راننده: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  geofence: {
+    en: {
+      title: 'Geofence: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'محدوده جغرافیایی: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  'fuel-theft': {
+    en: {
+      title: 'Fuel alert: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'هشدار سوخت: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  camera: {
+    en: {
+      title: 'Camera alert: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'هشدار دوربین: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  collision: {
+    en: {
+      title: 'Collision: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'تصادف: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  temperature: {
+    en: {
+      title: 'Temperature: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'دما: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  offline: {
+    en: {
+      title: 'Device offline: {{vehicleName}}',
+      body: 'The tracking device on vehicle {{vehicleName}} went offline.',
+    },
+    fa: {
+      title: 'قطع ارتباط دستگاه: {{vehicleName}}',
+      body: 'دستگاه ردیابی خودرو {{vehicleName}} از دسترس خارج شد.',
+    },
+  },
+  idle: {
+    en: {
+      title: 'Prolonged idle: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'کارکرد بیهوده طولانی: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  ignition: {
+    en: {
+      title: 'Ignition: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'احتراق: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  battery: {
+    en: {
+      title: 'Low battery: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'باتری ضعیف: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  tow: {
+    en: {
+      title: 'Tow / movement: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'یدک‌کشی / جابه‌جایی: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  power: {
+    en: {
+      title: 'Power alert: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'هشدار برق: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  jamming: {
+    en: {
+      title: 'GPS jamming: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'اختلال GPS: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
+  other: {
+    en: {
+      title: 'Device alert: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'هشدار دستگاه: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
 };
 
 export interface RenderedNotificationContent {

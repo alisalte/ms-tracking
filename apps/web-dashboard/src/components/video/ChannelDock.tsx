@@ -12,16 +12,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/tailwind-ui';
-import type { CameraChannel, CameraFacing } from '@/types/video.types';
-
-/** Facing → i18n key. */
-const FACING_KEY: Record<CameraFacing, string> = {
-  forward: 'video.facing.forward',
-  driver: 'video.facing.driver',
-  rear: 'video.facing.rear',
-  cargo: 'video.facing.cargo',
-  site: 'video.facing.site',
-};
+import type { CameraChannel } from '@/types/video.types';
 
 interface ChannelDockProps {
   /** The full channel catalog. */
@@ -51,15 +42,22 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
     });
   }, [channels, query, onlineOnly]);
 
-  // Group by source label so the list is readable.
+  // Group by vehicle/device so both MDVR cameras sit under one header.
   const grouped = useMemo(() => {
     const m = new Map<string, CameraChannel[]>();
     for (const c of filtered) {
-      const arr = m.get(c.sourceLabel) ?? [];
+      const key = c.sourceId || c.sourceLabel;
+      const arr = m.get(key) ?? [];
       arr.push(c);
-      m.set(c.sourceLabel, arr);
+      m.set(key, arr);
     }
-    return Array.from(m.entries());
+    return Array.from(m.entries()).map(([key, cams]) => {
+      const sorted = [...cams].sort(
+        (a, b) =>
+          (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
+      );
+      return { key, label: sorted[0]?.sourceLabel || key, cams: sorted };
+    });
   }, [filtered]);
 
   const toggleGroup = (key: string) => {
@@ -125,13 +123,13 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
             {t('video.dock.noResults')}
           </p>
         ) : (
-          grouped.map(([sourceLabel, cams]) => {
-            const isCollapsed = collapsed.has(sourceLabel);
+          grouped.map(({ key, label: sourceLabel, cams }) => {
+            const isCollapsed = collapsed.has(key);
             return (
-              <div key={sourceLabel}>
+              <div key={key}>
                 <button
                   type="button"
-                  onClick={() => toggleGroup(sourceLabel)}
+                  onClick={() => toggleGroup(key)}
                   aria-expanded={!isCollapsed}
                   className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
                 >
@@ -176,7 +174,7 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
                         style={{ background: c.online && c.consentGiven ? '#22d3ee' : '#64748b' }}
                       />
                       <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-graydark-700">
-                        {t(FACING_KEY[c.facing])}
+                        {c.label}
                       </span>
                       {c.cabinCam && (
                         <span className="inline-flex h-3.5 items-center rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">

@@ -26,7 +26,13 @@ import { useCommandCatalog, useCommandHistory, useSendDeviceCommand } from '@/ap
 import { useRegisterChannel, useStartMdvrStream, useStopMdvrStream } from '@/api/video.api';
 import { CommandParamForm } from '@/components/commands/CommandParamForm';
 import { Alert, Badge, Button, Drawer, Input, Select } from '@/components/tailwind-ui';
-import type { CommandCategory, CommandDef, CommandStatus } from '@/types/command.types';
+import { lastStoredSettings } from '@/lib/meitrack-readback';
+import type {
+  CommandCategory,
+  CommandDef,
+  CommandStatus,
+  DeviceCommandRecord,
+} from '@/types/command.types';
 
 /** Wizard step ids: 'device' | a catalog category | 'test'. */
 type StepId = 'device' | CommandCategory | 'test';
@@ -79,11 +85,11 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
     [byCategory],
   );
 
-  /** Latest record per commandCode (for the per-card status chip). */
+  /** Latest record per commandCode (status chip + last ACK body). */
   const latestByCode = useMemo(() => {
-    const map = new Map<string, CommandStatus>();
+    const map = new Map<string, DeviceCommandRecord>();
     for (const rec of history.data ?? []) {
-      if (!map.has(rec.commandCode)) map.set(rec.commandCode, rec.status); // history is newest-first
+      if (!map.has(rec.commandCode)) map.set(rec.commandCode, rec);
     }
     return map;
   }, [history.data]);
@@ -97,8 +103,12 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
 
   const commands = step !== 'device' && step !== 'test' ? (byCategory.get(step) ?? []) : [];
 
-  function send(cmd: CommandDef, params: Record<string, string | number>): Promise<void> {
-    return sendCommand.mutateAsync({ commandCode: cmd.code, params }).then(() => undefined);
+  function send(
+    cmd: CommandDef,
+    params: Record<string, string | number>,
+    commandCode = cmd.code,
+  ): Promise<void> {
+    return sendCommand.mutateAsync({ commandCode, params }).then(() => undefined);
   }
 
   return (
@@ -195,12 +205,25 @@ export function DeviceConfigWizard({ open, onClose }: DeviceConfigWizardProps) {
                       <h4 className="text-sm font-semibold text-gray-800 dark:text-graydark-800">
                         {fa ? cmd.nameFa : cmd.name}
                       </h4>
-                      <StatusChip status={latestByCode.get(cmd.code)} />
+                      <StatusChip status={latestByCode.get(cmd.code)?.status} />
                     </header>
                     <p className="mb-3 text-xs text-gray-500 dark:text-graydark-600">
                       {fa ? cmd.descriptionFa : cmd.description}
                     </p>
-                    <CommandParamForm command={cmd} onSend={(params) => send(cmd, params)} />
+                    <CommandParamForm
+                      command={cmd}
+                      prefill={lastStoredSettings(cmd.code, history.data ?? [])}
+                      lastAckText={
+                        latestByCode.get(cmd.code)?.status === 'ACKED'
+                          ? latestByCode.get(cmd.code)?.responseText
+                          : latestByCode.get('DB4')?.status === 'ACKED'
+                            ? latestByCode.get('DB4')?.responseText
+                            : latestByCode.get('DA6')?.status === 'ACKED'
+                              ? latestByCode.get('DA6')?.responseText
+                              : null
+                      }
+                      onSend={(params, code) => send(cmd, params, code)}
+                    />
                   </article>
                 ))}
             </section>

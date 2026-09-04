@@ -23,6 +23,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { localizeEventType, localizeNotificationTitle } from '@/lib/alarm-copy';
 import { relativeTime } from '@/lib/relative-time';
 import type { Geofence } from '@/types/geofence.types';
 import type {
@@ -41,9 +42,17 @@ export function NotificationsSection() {
       id: 'title',
       headerKey: 'admin.notifications.colTitle',
       sortBy: (n) => n.title,
-      render: (n) => <span className="font-medium">{n.title || n.eventType}</span>,
+      render: (n) => (
+        <span className="font-medium">
+          {localizeNotificationTitle(t, n) || localizeEventType(t, n.eventType)}
+        </span>
+      ),
     },
-    { id: 'severity', headerKey: 'admin.notifications.colSeverity', render: (n) => n.severity },
+    {
+      id: 'severity',
+      headerKey: 'admin.notifications.colSeverity',
+      render: (n) => t(`notifications.severity.${n.severity}`, { defaultValue: n.severity }),
+    },
     {
       id: 'read',
       headerKey: 'admin.notifications.colRead',

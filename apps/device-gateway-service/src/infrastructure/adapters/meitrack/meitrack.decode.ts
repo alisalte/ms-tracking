@@ -97,17 +97,19 @@ function message(
  * code) + `telemetry.response` (the result payload, e.g. 'OK').
  */
 export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
-  const frame = parseFrame(raw.payload);
-
-  // CCE bodies are BINARY (comma-splitting is invalid) — parse from the raw
-  // buffer before the text path.
+  // Binary bodies (CCE / AB8) must be detected before comma-splitting.
   if (isCceFrame(raw.payload)) {
     return decodeCce(raw);
   }
+  if (isAb8Reply(raw.payload)) {
+    return [decodeAb8(raw)];
+  }
+
+  const frame = parseFrame(raw.payload);
 
   switch (frame.command) {
     case MEITRACK_COMMAND.TRACKING:
-      return [decodeTracking(raw, frame.fields)];
+      return decodeTracking(raw, frame.fields);
     case 'D00':
       // Photo chunk (D00 download response) — hex payload, always text-safe.
       return [decodePhotoChunk(raw, frame.fields)];
@@ -129,8 +131,21 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
 /** 3-char command-family code (letter + 2 alphanumerics), excluding AAA. */
 const MEITRACK_RESPONSE_CODE = /^(?!AAA)[A-F][0-9A-Z]{2}$/;
 
+/** Periodic / keepalive / A10-reply event codes — not alarms (GPRS V2.0 §3.1–§3.2). */
+const MEITRACK_TRACK_EVENTS = new Set([0, 31, 34]);
+/** Live CCE/A10: if the GPS clock is this far off, stamp the packet with receive time. */
+const GPS_CLOCK_SKEW_MS = 5 * 60_000;
+
+function stampIfSkewed(gpsTs: Date, receivedAt: Date): Date {
+  if (Number.isNaN(gpsTs.getTime())) return new Date(receivedAt);
+  if (Math.abs(gpsTs.getTime() - receivedAt.getTime()) > GPS_CLOCK_SKEW_MS) {
+    return new Date(receivedAt);
+  }
+  return gpsTs;
+}
+
 /** Decode an AAA tracking packet → POSITION (event 0) or ALARM (event≠0). */
-function decodeTracking(raw: RawPacket, fields: readonly string[]): DeviceMessage {
+function decodeTracking(raw: RawPacket, fields: readonly string[]): DeviceMessage[] {
   // fields[0] = imei; fields[1] = command (AAA); fields[2] = event; then position.
   const imei = fields[0] ?? '';
   if (!imei) {
@@ -144,29 +159,80 @@ function decodeTracking(raw: RawPacket, fields: readonly string[]): DeviceMessag
     );
   }
 
-  const pos = parsePosition(fields);
-  const isAlarm = event !== 0;
-  const type = isAlarm ? 'ALARM' : 'POSITION';
-  const alarms = isAlarm ? [mapMeitrackEvent(event)] : undefined;
-
-  // Extra IO/telemetry retained for traceability (06 §10.2 raw IO map).
+  const gpsOk = (fields[6] ?? 'V') === 'A';
+  // Event 31 = GPRS heartbeat: protocol says GPS in that packet is invalid.
+  // Event 34 = A10 on-demand location — record the reported fix even if the
+  // validity flag is V (last-known coords); that is the locate-now reply.
+  let pos = event === 31 || (!gpsOk && event !== 34) ? undefined : parsePosition(fields);
+  if (pos && event === 34) {
+    pos = { ...pos, timestamp: stampIfSkewed(pos.timestamp, raw.receivedAt) };
+  }
+  const isAlarm = !MEITRACK_TRACK_EVENTS.has(event);
   const io = parseIo(fields);
+  const messages: DeviceMessage[] = [];
 
-  return message(raw, {
-    type,
-    serialOrImei: imei,
-    timestamp: pos.timestamp,
-    position: pos,
-    alarms,
-    telemetry: {
-      ignitionOn: pos.ignitionOn,
-      hdop: io.hdop,
-      odometerKm: io.odometerKm,
-      batteryVoltage: io.batteryVoltage,
-      powerVoltage: io.powerVoltage,
-    },
-    io: io.raw,
-  });
+  if (event === 34) {
+    messages.push(
+      message(raw, {
+        type: 'COMMAND_ACK',
+        serialOrImei: imei,
+        timestamp: pos?.timestamp ?? raw.receivedAt,
+        telemetry: { command: 'A10', response: 'OK' },
+      }),
+    );
+  }
+
+  if (isAlarm) {
+    messages.push(
+      message(raw, {
+        type: 'ALARM',
+        serialOrImei: imei,
+        timestamp: pos?.timestamp ?? raw.receivedAt,
+        position: pos,
+        alarms: [mapMeitrackEvent(event)],
+        telemetry: {
+          ignitionOn: pos?.ignitionOn,
+          hdop: io.hdop,
+          odometerKm: io.odometerKm,
+          batteryVoltage: io.batteryVoltage,
+          powerVoltage: io.powerVoltage,
+        },
+        io: io.raw,
+      }),
+    );
+  }
+
+  if (pos && event !== 31) {
+    messages.push(
+      message(raw, {
+        type: 'POSITION',
+        serialOrImei: imei,
+        timestamp: pos.timestamp,
+        position: pos,
+        telemetry: {
+          ignitionOn: pos.ignitionOn,
+          hdop: io.hdop,
+          odometerKm: io.odometerKm,
+          batteryVoltage: io.batteryVoltage,
+          powerVoltage: io.powerVoltage,
+        },
+        io: io.raw,
+      }),
+    );
+  }
+
+  if (messages.length === 0) {
+    messages.push(
+      message(raw, {
+        type: 'TELEMETRY',
+        serialOrImei: imei,
+        timestamp: raw.receivedAt,
+        telemetry: { command: 'AAA', event },
+        io: io.raw,
+      }),
+    );
+  }
+  return messages;
 }
 
 /**
@@ -333,6 +399,80 @@ function parseIo(fields: readonly string[]): {
     output: fields[17] ?? null,
   };
   return { hdop, odometerKm, batteryVoltage, powerVoltage, raw };
+}
+
+/** Detect `$$…,<imei>,AB8,` frames (the AB8 body is binary — never comma-split). */
+function isAb8Reply(payload: Buffer): boolean {
+  const head = payload.subarray(0, Math.min(payload.length, 80)).toString('binary');
+  const firstComma = head.indexOf(',');
+  const secondComma = head.indexOf(',', firstComma + 1);
+  const thirdComma = head.indexOf(',', secondComma + 1);
+  if (firstComma === -1 || secondComma === -1 || thirdComma === -1) return false;
+  if (head.substring(secondComma + 1, thirdComma) !== 'AB8') return false;
+  const star = payload.lastIndexOf(0x2a);
+  if (star < 0) return false;
+  const body = payload.subarray(thirdComma + 1, star);
+  if (body.length >= 2 && body[0] === 0x4f && body[1] === 0x4b) return false; // ASCII AB8,OK
+  return body.length >= 12;
+}
+
+const AB8_FILE_BYTES = 30;
+
+function bcd6ToDigits(buf: Buffer, offset: number): string {
+  return buf.subarray(offset, offset + 6).toString('hex');
+}
+
+/**
+ * Decode an AB8 resource-list reply (MDVR GPRS Protocol V2.0 §3.31).
+ * Header (12B LE) + ReplyMsg_t[Number] (30B each).
+ */
+function decodeAb8(raw: RawPacket): DeviceMessage {
+  const starIdx = raw.payload.lastIndexOf(0x2a);
+  if (starIdx < 0) {
+    throw new ProtocolError('AB8 frame missing checksum separator.', 'meitrack');
+  }
+  let off = raw.payload.indexOf(0x2c) + 1;
+  const imeiEnd = raw.payload.indexOf(0x2c, off);
+  const imei = raw.payload.subarray(off, imeiEnd).toString('ascii');
+  off = raw.payload.indexOf(0x2c, imeiEnd + 1) + 1;
+  const body = raw.payload.subarray(off, starIdx);
+  if (body.length < 12) {
+    throw new ProtocolError('AB8 reply shorter than the packet header.', 'meitrack');
+  }
+  const allPack = body.readUInt16LE(0);
+  const curPack = body.readUInt16LE(2);
+  const allFileNum = body.readUInt32LE(4);
+  const count = Math.min(body.readUInt32LE(8), 500);
+  const resources: Array<Record<string, number | string>> = [];
+  let cursor = 12;
+  for (let i = 0; i < count && cursor + AB8_FILE_BYTES <= body.length; i++) {
+    const rec = body.subarray(cursor, cursor + AB8_FILE_BYTES);
+    resources.push({
+      channel: rec[0] ?? 0,
+      startTime: bcd6ToDigits(rec, 1),
+      endTime: bcd6ToDigits(rec, 7),
+      eventCode: rec.readUInt16LE(19),
+      subEventCode: rec.readUInt16LE(21),
+      avType: rec[23] ?? 0,
+      streamType: rec[24] ?? 0,
+      capType: rec[25] ?? 0,
+      fileLen: rec.readUInt32LE(26),
+    });
+    cursor += AB8_FILE_BYTES;
+  }
+  return message(raw, {
+    type: 'COMMAND_ACK',
+    serialOrImei: imei,
+    timestamp: raw.receivedAt,
+    telemetry: {
+      command: 'AB8',
+      response: 'OK',
+      allPack,
+      curPack,
+      allFileNum,
+      resources,
+    },
+  });
 }
 
 // ── CCE (MDVR binary telemetry/alarm frame, MDVR GPRS Protocol V2.0 §2) ──────
@@ -545,33 +685,72 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
     return p && p.value.length >= 4 ? p.value.readUInt32LE(0) : null;
   };
 
+  const i32 = (id: number): number | null => {
+    const p = byId.get(id);
+    return p && p.value.length >= 4 ? p.value.readInt32LE(0) : null;
+  };
+
   const event = u16(0x40) ?? u8(0x01) ?? 0;
-  // Coordinates: 4-byte LE, scaled 1e-6 (protocol examples).
-  const lngRaw = u32(0x02);
-  const latRaw = u32(0x03);
+  // MD300 CCE 4-byte IDs on this firmware: 0x02 = longitude, 0x03 = latitude
+  // (signed millionths). Live Tehran fixes match this mapping.
+  const lngRaw = i32(0x02);
+  const latRaw = i32(0x03);
   const speed = u16(0x08) ?? 0;
   const heading = u16(0x09) ?? 0;
   const timeRaw = u32(0x04);
-  // GPS time = seconds since 2000-01-01.
-  const timestamp =
+  const gpsFlag = u8(0x05);
+  // 0x05: 0 = invalid, 1 = valid. Missing (older frames / unit tests) → trust coords.
+  // Event 31 is a GPRS heartbeat — GPS in that packet is defined invalid.
+  const gpsValid = event !== 31 && gpsFlag !== 0;
+  const cacheRemaining = hasCceEnvelope(body) ? body.readUInt32LE(0) : 0;
+  const livePacket = cacheRemaining === 0;
+  // GPS time = seconds since 2000-01-01. Live packets with a skewed GPS clock
+  // must use receive time so gps-engine does not tag them STALE and drop them
+  // from the live map.
+  const gpsTimestamp =
     timeRaw !== null ? new Date(Date.UTC(2000, 0, 1) + timeRaw * 1000) : new Date(raw.receivedAt);
+  const timestamp = livePacket
+    ? stampIfSkewed(
+        Number.isNaN(gpsTimestamp.getTime()) ? new Date(raw.receivedAt) : gpsTimestamp,
+        raw.receivedAt,
+      )
+    : gpsTimestamp;
 
-  const hasFix = latRaw !== null && lngRaw !== null;
+  const latitude = (latRaw ?? 0) / 1e6;
+  const longitude = (lngRaw ?? 0) / 1e6;
+  const inRange =
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    Math.abs(latitude) <= 90 &&
+    Math.abs(longitude) <= 180;
+  const coordsOk = latRaw !== null && lngRaw !== null && !(latRaw === 0 && lngRaw === 0) && inRange;
+  // A10 (event 34) always records an in-range fix so locate-now lands on the map.
+  const hasFix = coordsOk && (gpsValid || event === 34);
   const position: Position | undefined = hasFix
     ? {
-        latitude: (latRaw ?? 0) / 1e6,
-        longitude: (lngRaw ?? 0) / 1e6,
+        latitude,
+        longitude,
         speedKph: speed,
         headingDeg: heading,
         altitudeM: null,
-        satellites: null,
+        satellites: u8(0x06),
         timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
         ignitionOn: true,
       }
     : undefined;
 
   const messages: DeviceMessage[] = [];
-  if (event !== 0) {
+  if (event === 34) {
+    messages.push(
+      message(raw, {
+        type: 'COMMAND_ACK',
+        serialOrImei: imei,
+        timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+        telemetry: { command: 'A10', response: 'OK' },
+      }),
+    );
+  }
+  if (event !== 0 && event !== 31 && event !== 34) {
     let alarm = mapMeitrackEvent(event);
     let detail: Record<string, unknown> | undefined;
     const fe31 = byId.get(0xfe31);
@@ -598,7 +777,8 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
         telemetry: detail,
       }),
     );
-  } else if (position) {
+  }
+  if (position) {
     messages.push(
       message(raw, {
         type: 'POSITION',

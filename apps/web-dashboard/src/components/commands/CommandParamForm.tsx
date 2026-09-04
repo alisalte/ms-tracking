@@ -12,17 +12,22 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button, Input, Select, Textarea } from '@/components/tailwind-ui';
+import { parseMeitrackReadback } from '@/lib/meitrack-readback';
 import type { CommandDef, CommandParamDef } from '@/types/command.types';
 
 interface CommandParamFormProps {
   /** The command whose fields are rendered. */
   command: CommandDef;
-  /** Submit — receives the typed param map ({} for parameter-less commands). */
-  onSend: (params: Record<string, string | number>) => Promise<void>;
+  /** Submit — receives the typed param map. Optional code override is used on Read (DB4). */
+  onSend: (params: Record<string, string | number>, commandCode?: string) => Promise<void>;
   /** Disable the send button (e.g. no device selected / already submitting). */
   disabled?: boolean;
   /** Override the send label (defaults to the shared "Send command"). */
   sendLabel?: string;
+  /** Latest ACK body for this command — shown as raw text. */
+  lastAckText?: string | null;
+  /** Parsed settings to prefill the form (DB4 dump or last SET params). */
+  prefill?: Record<string, string> | null;
 }
 
 type Values = Record<string, string>;
@@ -32,6 +37,8 @@ export function CommandParamForm({
   onSend,
   disabled = false,
   sendLabel,
+  lastAckText,
+  prefill,
 }: CommandParamFormProps) {
   const { t, i18n } = useTranslation();
   const fa = i18n.language?.startsWith('fa');
@@ -40,16 +47,37 @@ export function CommandParamForm({
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Reset per command; prefill defaults.
+  const prefillSig = prefill ? JSON.stringify(prefill) : '';
+
+  // Reset per command; overlay last known device/SET values when they change.
   useEffect(() => {
+    const parsed = prefillSig ? (JSON.parse(prefillSig) as Record<string, string>) : null;
     const initial: Values = {};
     for (const p of command.params) {
       initial[p.key] = p.defaultValue !== undefined ? String(p.defaultValue) : '';
     }
+    if (parsed) {
+      for (const p of command.params) {
+        if (parsed[p.key] !== undefined) initial[p.key] = parsed[p.key] ?? '';
+      }
+    }
     setValues(initial);
     setErrors({});
     setServerError(null);
-  }, [command]);
+  }, [command, prefillSig]);
+
+  useEffect(() => {
+    if (!lastAckText) return;
+    const parsed = parseMeitrackReadback(command.code, lastAckText);
+    if (!parsed || Object.keys(parsed).length === 0) return;
+    setValues((prev) => {
+      const next = { ...prev };
+      for (const p of command.params) {
+        if (parsed[p.key] !== undefined) next[p.key] = parsed[p.key] ?? '';
+      }
+      return next;
+    });
+  }, [command, lastAckText]);
 
   const label = (p: CommandParamDef) => (fa ? p.labelFa : p.label) + (p.required ? ' *' : '');
   const hint = (p: CommandParamDef) => (fa ? p.hintFa : p.hint) ?? undefined;
@@ -100,6 +128,19 @@ export function CommandParamForm({
     }
     setErrors(errs);
     return Object.keys(errs).length > 0 ? null : out;
+  };
+
+  const handleRead = async () => {
+    setSubmitting(true);
+    setServerError(null);
+    try {
+      // A11/A21 only ACK OK — send DB4 (or the catalog readbackCommand) instead.
+      await onSend({}, command.readbackCommand ?? command.code);
+    } catch (err) {
+      setServerError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -176,7 +217,27 @@ export function CommandParamForm({
         );
       })}
       {serverError && <p className="text-xs text-danger-600">{serverError}</p>}
-      <div>
+      {lastAckText ? (
+        <p
+          className="break-all font-mono text-xs text-gray-500 dark:text-graydark-600"
+          data-testid="command-last-ack"
+        >
+          {lastAckText}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {command.supportsReadback && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleRead()}
+            disabled={disabled}
+            loading={submitting}
+            data-testid="command-read"
+          >
+            {t('commands.form.read', { defaultValue: 'Read current' })}
+          </Button>
+        )}
         <Button
           size="sm"
           onClick={() => void handleSubmit()}

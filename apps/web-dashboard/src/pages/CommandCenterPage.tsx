@@ -95,10 +95,14 @@ export function CommandCenterPage() {
     setSearchParams(params, { replace: true });
   };
 
-  const dispatch = async (command: CommandDef, params: Record<string, string | number>) => {
+  const dispatch = async (
+    command: CommandDef,
+    params: Record<string, string | number>,
+    commandCode = command.code,
+  ) => {
     const result = await sendMutation.mutateAsync({
       deviceIds: selectedIds,
-      commandCode: command.code,
+      commandCode,
       params,
     });
     if (result.failed.length > 0) {
@@ -216,7 +220,12 @@ export function CommandCenterPage() {
         deviceCount={selectedCount}
         onSubmit={(params) => {
           if (!configuring) return Promise.resolve();
-          return dispatch(configuring, params);
+          const isRead = Object.keys(params).length === 0 && configuring.readbackCommand;
+          return dispatch(
+            configuring,
+            params,
+            isRead ? configuring.readbackCommand : configuring.code,
+          );
         }}
         onClose={() => setConfiguring(null)}
       />

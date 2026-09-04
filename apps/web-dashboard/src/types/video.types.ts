@@ -62,7 +62,7 @@ export interface CameraChannel {
   deviceId?: string;
   /** MDVR logical channel number (1–4 cameras), sent in the AB2 struct. */
   logicalChannel?: number;
-  /** Device IMEI (AB2 addressing; HLS path is `live/md300`). */
+  /** Device IMEI (AB2 addressing; HLS path is `live/md300/{channel}`). */
   imei?: string;
 }
 

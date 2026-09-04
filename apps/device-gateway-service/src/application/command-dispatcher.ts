@@ -56,8 +56,34 @@ export type CommandDispatchResult =
   | { readonly outcome: 'HELD' };
 
 /** Media commands that must wait for the GPRS socket, like md300 `sendStartStream`. */
-const HOLD_WHEN_OFFLINE = new Set(['AB2', 'AB3', 'AB4', 'A9A', 'A9B']);
-const HOLD_TTL_MS = 120_000;
+const HOLD_WHEN_OFFLINE = new Set([
+  'AB2',
+  'AB3',
+  'AB4',
+  'AB5',
+  'AB8',
+  'A9A',
+  'A9B',
+  'A10',
+  'A11',
+  'A12',
+  'A13',
+  'A14',
+  'A15',
+  'A16',
+  'A17',
+  'A21',
+  'A23',
+  'A25',
+  'A70',
+  'AA3',
+  'ABB',
+  'DA6',
+  'DB4',
+  'E91',
+]);
+/** Match fleet-management max command TTL (600s) so A10 locate survives until GPRS. */
+const HOLD_TTL_MS = 600_000;
 
 interface HeldCommand {
   readonly request: DeviceCommandRequest;
@@ -66,7 +92,7 @@ interface HeldCommand {
 
 export class CommandDispatcher {
   private readonly logger = new Logger(CommandDispatcher.name);
-  /** deviceId → commandId → held request (last AB2 for a device wins). */
+  /** deviceId → holdKey → held request (AB2/AB3 keyed by payload so two cameras both flush). */
   private readonly held = new Map<string, Map<string, HeldCommand>>();
 
   constructor(
@@ -201,14 +227,17 @@ export class CommandDispatcher {
     return this.reject(request, 'DEVICE_OFFLINE');
   }
 
-  /** Keep one pending command per code (latest AB2 wins) until the socket is up. */
+  /** Keep one pending command per code (AB2/AB3 per payload so two cameras both flush). */
   private hold(request: DeviceCommandRequest): void {
     let byCode = this.held.get(request.deviceId);
     if (!byCode) {
       byCode = new Map();
       this.held.set(request.deviceId, byCode);
     }
-    byCode.set(request.commandCode, { request, heldAt: Date.now() });
+    const holdKey = HOLD_WHEN_OFFLINE.has(request.commandCode)
+      ? `${request.commandCode}:${request.payloadHex ?? request.payloadText ?? request.commandId}`
+      : request.commandCode;
+    byCode.set(holdKey, { request, heldAt: Date.now() });
     this.logger.log(
       `Command ${request.commandCode} (${request.commandId}) held until device ${request.deviceId} connects.`,
     );

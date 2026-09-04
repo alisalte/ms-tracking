@@ -13,6 +13,7 @@ interface HLSLivePlayerProps {
   muted?: boolean;
   /** Fires once the playlist is parsed / native HLS has a source. */
   onReady?: () => void;
+  objectFit?: 'cover' | 'contain';
 }
 
 const POLL_MS = 2000;
@@ -56,7 +57,7 @@ async function waitForPlaylist(url: string, signal: AbortSignal): Promise<boolea
 }
 
 export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
-  function HLSLivePlayer({ hlsUrl, muted = true, onReady }, ref) {
+  function HLSLivePlayer({ hlsUrl, muted = true, onReady, objectFit = 'cover' }, ref) {
     const innerRef = useRef<HTMLVideoElement | null>(null);
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
@@ -154,7 +155,7 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
         muted={muted}
         playsInline
         autoPlay
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        style={{ width: '100%', height: '100%', objectFit, display: 'block' }}
       />
     );
   },

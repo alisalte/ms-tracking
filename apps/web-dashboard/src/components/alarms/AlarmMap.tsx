@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { severityColor } from '@/components/alarms/AlarmTypeIcon';
 import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
 import { NO_OVERLAY_LAYERS, useFollowBasemap } from '@/hooks/useBasemap';
+import { localizeAlarmMessage } from '@/lib/alarm-copy';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { markerDataUrl, selectedMarkerDataUrl } from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
@@ -79,7 +80,7 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
         el.src = isSel ? selectedMarkerDataUrl(color) : markerDataUrl(color);
         el.style.cursor = 'pointer';
         el.dataset.alarmId = a.id;
-        el.title = `${a.vehicleLabel} · ${a.message}`;
+        el.title = `${a.vehicleLabel} · ${localizeAlarmMessage(t, a)}`;
         const marker = new MaplibreMarker({ element: el }).setLngLat([a.lng, a.lat]).addTo(map);
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
@@ -91,7 +92,7 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
 
     if (map.loaded()) render();
     else runWhenStyleReady(map, render);
-  }, [alarms, selectedId]);
+  }, [alarms, selectedId, t]);
 
   if (alarms.length === 0) {
     return (

@@ -156,6 +156,9 @@ const query = (
   supportsReadback: true,
 });
 
+/** A11/A21 family: GPRS set replies `OK`; Read must query DB4 instead. */
+const READ_VIA_DB4 = 'DB4' as const;
+
 export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
   // ==========================================================================
   // TRACKING (§3.1–§3.8)
@@ -176,8 +179,9 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     name: 'Heartbeat Interval',
     nameFa: 'بازه هارت‌بیت',
     category: 'tracking',
-    description: 'Heartbeat packet interval; 0 disables (deep-sleep keep-alive).',
-    descriptionFa: 'بازه پکت هارت‌بیت؛ صفر غیرفعال می‌کند.',
+    description: 'Heartbeat packet interval; 0 disables. Read uses DB4 (empty A11 only ACKs OK).',
+    descriptionFa:
+      'بازه پکت هارت‌بیت؛ صفر غیرفعال می‌کند. خواندن با DB4 است (A11 خالی فقط OK برمی‌گرداند).',
     params: [
       {
         key: 'minutes',
@@ -187,12 +191,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         min: 0,
         max: 65535,
         unit: 'min',
-        required: true,
+        required: false,
         defaultValue: 10,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A12',
@@ -210,12 +215,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         min: 0,
         max: 65535,
         unit: '×10s',
-        required: true,
+        required: false,
         defaultValue: 6,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A13',
@@ -233,12 +239,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         min: 0,
         max: 359,
         unit: '°',
-        required: true,
+        required: false,
         defaultValue: 30,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A14',
@@ -256,12 +263,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         min: 0,
         max: 65535,
         unit: 'm',
-        required: true,
+        required: false,
         defaultValue: 300,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A15',
@@ -279,12 +287,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         min: 0,
         max: 65535,
         unit: '×10s',
-        required: true,
+        required: false,
         defaultValue: 6,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A16',
@@ -300,12 +309,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         labelFa: 'وضعیت',
         type: 'enum',
         options: ON_OFF(),
-        required: true,
+        required: false,
         defaultValue: '1',
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A17',
@@ -321,12 +331,13 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         labelFa: 'قابلیت',
         type: 'enum',
         options: ON_OFF(),
-        required: true,
+        required: false,
         defaultValue: '0',
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
 
   // ==========================================================================
@@ -337,8 +348,10 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     name: 'GPRS Server Parameters',
     nameFa: 'پارامترهای سرور GPRS',
     category: 'network',
-    description: 'Primary server connection mode, address, port and APN.',
-    descriptionFa: 'حالت اتصال، آدرس، پورت و APN سرور اصلی.',
+    description:
+      'Primary server connection mode, address, port and APN. Read uses DB4 — empty A21 only ACKs OK.',
+    descriptionFa:
+      'حالت اتصال، آدرس، پورت و APN سرور اصلی. خواندن با DB4 است — A21 خالی فقط OK برمی‌گرداند.',
     params: [
       {
         key: 'mode',
@@ -350,7 +363,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
           { value: '1', label: 'TCP', labelFa: 'TCP' },
           { value: '2', label: 'UDP', labelFa: 'UDP' },
         ],
-        required: true,
+        required: false,
         defaultValue: '1',
       },
       {
@@ -359,7 +372,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         labelFa: 'IP / دامنه',
         type: 'string',
         maxLength: 32,
-        required: true,
+        required: false,
       },
       {
         key: 'port',
@@ -368,7 +381,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         type: 'number',
         min: 1,
         max: 65535,
-        required: true,
+        required: false,
       },
       { key: 'apn', label: 'APN', labelFa: 'APN', type: 'string', maxLength: 32, required: false },
       {
@@ -388,8 +401,9 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         required: false,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A23',
@@ -405,7 +419,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         labelFa: 'IP / دامنه',
         type: 'string',
         maxLength: 32,
-        required: true,
+        required: false,
       },
       {
         key: 'port',
@@ -414,11 +428,12 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         type: 'number',
         min: 1,
         max: 65535,
-        required: true,
+        required: false,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'A25',
@@ -438,7 +453,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
           { value: '1', label: 'TCP', labelFa: 'TCP' },
           { value: '2', label: 'UDP', labelFa: 'UDP' },
         ],
-        required: true,
+        required: false,
         defaultValue: '1',
       },
       {
@@ -447,7 +462,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         labelFa: 'IP / دامنه',
         type: 'string',
         maxLength: 32,
-        required: true,
+        required: false,
       },
       {
         key: 'port',
@@ -456,7 +471,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         type: 'number',
         min: 1,
         max: 65535,
-        required: true,
+        required: false,
       },
       { key: 'apn', label: 'APN', labelFa: 'APN', type: 'string', maxLength: 32, required: false },
       {
@@ -476,8 +491,9 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         required: false,
       },
     ],
-    expectResponse: false,
-    supportsReadback: false,
+    expectResponse: true,
+    supportsReadback: true,
+    readbackCommand: READ_VIA_DB4,
   },
   {
     code: 'ABB',
@@ -3148,6 +3164,20 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     'Read the device firmware version and serial number.',
     'خواندن نسخه فریم‌ور و شماره سریال دستگاه.',
   ),
+  query(
+    'DA6',
+    'Query Device Status',
+    'وضعیت دستگاه',
+    'Network, GPRS interval, GPS satellite count, voltages (GPRS V2.0 §3.165).',
+    'شبکه، بازه GPRS، تعداد ماهواره و ولتاژ (§۳.۱۶۵).',
+  ),
+  query(
+    'DB4',
+    'Query Device Parameters',
+    'پارامترهای دستگاه',
+    'Dump of GPRS server, APN, heartbeat, tracking intervals and related settings (GPRS V2.0 §3.168).',
+    'خروجی سرور GPRS، APN، هارت‌بیت، بازه‌های ردیابی و تنظیمات مرتبط (§۳.۱۶۸).',
+  ),
   {
     code: 'F00',
     name: 'Restart GSM + GPS',
@@ -3383,18 +3413,25 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
     case 'A10':
       return text('A10');
     case 'A11':
+      if (!anyParam) return text('A11');
       return text(`A11,${num(raw, 'minutes')}`);
     case 'A12':
+      if (!anyParam) return text('A12');
       return text(`A12,${num(raw, 'interval')}`);
     case 'A13':
+      if (!anyParam) return text('A13');
       return text(`A13,${num(raw, 'angle')}`);
     case 'A14':
+      if (!anyParam) return text('A14');
       return text(`A14,${num(raw, 'distance')}`);
     case 'A15':
+      if (!anyParam) return text('A15');
       return text(`A15,${num(raw, 'interval')}`);
     case 'A16':
+      if (!anyParam) return text('A16');
       return text(`A16,${str(raw, 'status')}`);
     case 'A17':
+      if (!anyParam) return text('A17');
       return text(`A17,${str(raw, 'enabled')}`);
 
     // --- media: on-demand photo capture ------------------------------------
@@ -3407,12 +3444,15 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
 
     // --- network -----------------------------------------------------------
     case 'A21':
-    case 'A25':
+    case 'A25': {
+      if (!anyParam) return text(code);
       return text(
         `${code},${str(raw, 'mode')},${str(raw, 'host')},${num(raw, 'port')}` +
           `,${str(raw, 'apn') ?? ''},${str(raw, 'apnUser') ?? ''},${str(raw, 'apnPassword') ?? ''}`,
       );
+    }
     case 'A23':
+      if (!anyParam) return text('A23');
       return text(`A23,${str(raw, 'host')},${num(raw, 'port')}`);
     case 'ABB': {
       if (!anyParam) return text('ABB');
@@ -3625,8 +3665,7 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       ];
       return hexBody(code, struct);
     }
-    case 'A9C':
-    case 'AB8': {
+    case 'A9C': {
       const codes = list(str(raw, 'alarmCodes')).map((c) => Number.parseInt(c, 10));
       const struct = [
         ...byte(num(raw, 'channel') ?? 0),
@@ -3640,6 +3679,22 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
         ...codes.flatMap((c) => u16le(c)),
       ];
       return hexBody(code, struct);
+    }
+    case 'AB8': {
+      const codes = list(str(raw, 'alarmCodes')).map((c) => Number.parseInt(c, 10));
+      const struct = [
+        ...byte(num(raw, 'channel') ?? 0),
+        ...bcdTime(str(raw, 'startTime')),
+        ...bcdTime(str(raw, 'endTime')),
+        ...new Array<number>(8).fill(0),
+        ...byte(Number(str(raw, 'avType'))),
+        ...byte(Number(str(raw, 'streamType'))),
+        ...byte(Number(str(raw, 'capType'))),
+        ...u16le(codes.length),
+        ...codes.flatMap((c) => u16le(c)),
+        ...u16le(0), // Appoint_PACK N=0 → all packets (§3.31)
+      ];
+      return hexBody('AB8', struct);
     }
     case 'A9D': {
       const struct = [
@@ -3761,6 +3816,10 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       return text(`CFF,${str(raw, 'count')}`);
     case 'E91':
       return text('E91');
+    case 'DA6':
+      return text('DA6');
+    case 'DB4':
+      return text('DB4');
     case 'F00':
       return text(`F00,${str(raw, 'gsm')},${str(raw, 'gps')}`);
     case 'F01':

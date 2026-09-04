@@ -273,7 +273,11 @@ export function useLatestPositions() {
 
 /** The live map's base layer (registry × status × position). */
 export function useMapVehicles() {
-  return useQuery({ queryKey: queryKeys.fleet.mapVehicles(), queryFn: fetchMapVehicles });
+  return useQuery({
+    queryKey: queryKeys.fleet.mapVehicles(),
+    queryFn: fetchMapVehicles,
+    refetchInterval: 20_000,
+  });
 }
 
 /** Enriched vehicle detail for the map popup drawer. */
@@ -464,7 +468,7 @@ export function useActiveAlarms() {
         .map(
           (a: Alarm): FleetAlert => ({
             id: a.id,
-            type: a.type === 'overspeed' || a.type === 'geofence' ? a.type : 'geofence',
+            type: a.type,
             severity:
               a.severity === 'critical' ? 'critical' : a.severity === 'major' ? 'warning' : 'info',
             vehicleLabel: a.vehicleLabel || a.vehicleId,

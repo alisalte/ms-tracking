@@ -107,6 +107,8 @@ describe('meitrack command catalog', () => {
       'AB5',
       'AB8',
       'E91',
+      'DA6',
+      'DB4',
       'F00',
       'F01',
       'F02',
@@ -372,6 +374,40 @@ describe('meitrack command catalog', () => {
     expect([...body.subarray(1, 7)]).toEqual([0x19, 0x07, 0x24, 0, 0, 0]); // BCD start
     expect([...body.subarray(7, 13)]).toEqual([0x19, 0x07, 0x24, 0x23, 0x59, 0x59]); // BCD end
     expect(body.readUInt16LE(body.length - 2)).toBe(1); // one alarm code
+  });
+
+  it('A11/A21 with no params query the current device settings', () => {
+    expect(build('A11', {})).toEqual({ kind: 'text', text: 'A11' });
+    expect(build('A21', {})).toEqual({ kind: 'text', text: 'A21' });
+    expect(build('A12', {})).toEqual({ kind: 'text', text: 'A12' });
+  });
+
+  it('DB4/DA6 are bare parameter dumps and A11 Read is routed through DB4', () => {
+    expect(build('DB4', {})).toEqual({ kind: 'text', text: 'DB4' });
+    expect(build('DA6', {})).toEqual({ kind: 'text', text: 'DA6' });
+    expect(getCommandDef('A11')?.readbackCommand).toBe('DB4');
+    expect(getCommandDef('A21')?.readbackCommand).toBe('DB4');
+  });
+
+  it('AB8 is A9C plus Appoint_PACK N=0 (§3.31)', () => {
+    const params = {
+      channel: 1,
+      startTime: '190724000000',
+      endTime: '190724235959',
+      avType: '3',
+      streamType: '0',
+      capType: '0',
+    };
+    const a9c = build('A9C', params);
+    const ab8 = build('AB8', params);
+    expect(a9c.kind).toBe('hex');
+    expect(ab8.kind).toBe('hex');
+    if (a9c.kind !== 'hex' || ab8.kind !== 'hex') return;
+    const a9cBody = Buffer.from(a9c.hex.slice(8), 'hex');
+    const ab8Body = Buffer.from(ab8.hex.slice(8), 'hex');
+    expect(ab8Body.length).toBe(a9cBody.length + 2);
+    expect(ab8Body.subarray(0, a9cBody.length).equals(a9cBody)).toBe(true);
+    expect(ab8Body.readUInt16LE(ab8Body.length - 2)).toBe(0);
   });
 
   it('AA0 prefixes the flag byte to the file name (§4.7 example)', () => {

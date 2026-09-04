@@ -18,7 +18,7 @@
  * engine's full 4-level matrix per §2.11.
  */
 
-/** The 8 catalog alarm types (12_Alarm_Engine.md §2.1) + DMS/ADAS + "other". */
+/** Catalog alarm types (12_Alarm_Engine.md §2.1) plus MDVR device families. */
 export type AlarmType =
   | 'sos'
   | 'overspeed'
@@ -29,6 +29,12 @@ export type AlarmType =
   | 'collision'
   | 'camera'
   | 'dms'
+  | 'idle'
+  | 'ignition'
+  | 'battery'
+  | 'tow'
+  | 'power'
+  | 'jamming'
   | 'other';
 
 /** The 4-level severity matrix (§2.11). */
@@ -82,6 +88,10 @@ export interface Alarm {
   message: string;
   /** Longer detail, e.g. "Sustained 18s on Hemmat Hwy". */
   detail: string;
+  /** Device/Meitrack code when known (SOS, DMS_EYES_CLOSED, TOW, …). */
+  code?: string;
+  /** Backend rule/device type before catalog mapping (geofence_enter, sos, …). */
+  rawType?: string;
   /** Triggering source events (immutable, §6.1). */
   sourceEvents: AlarmSourceEvent[];
   /** Linked video clip id (auto-captured on collision/AI, §5.4). */

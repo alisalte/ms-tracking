@@ -67,6 +67,8 @@ export interface CommandDef {
   readonly params: readonly CommandParamDef[];
   readonly expectResponse: boolean;
   readonly supportsReadback: boolean;
+  /** Command sent on Read (e.g. DB4) when the code itself only ACKs OK. */
+  readonly readbackCommand?: string;
 }
 
 /** A persisted device-command record (camelCase, ISO date strings on the wire). */

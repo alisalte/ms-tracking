@@ -64,6 +64,11 @@ async function sendCommand(
   return apiPost<SendCommandPayload, DeviceCommandRecord>(`/devices/${deviceId}/commands`, payload);
 }
 
+/** GET /device-commands/:id — poll a single in-flight command until ACKED/FAILED. */
+export async function fetchDeviceCommand(id: string): Promise<DeviceCommandRecord> {
+  return apiGet<DeviceCommandRecord>(`/device-commands/${id}`);
+}
+
 async function sendCommandBulk(payload: BulkSendCommandPayload): Promise<BulkCommandResult> {
   return apiPost<BulkSendCommandPayload, BulkCommandResult>('/device-commands/bulk', payload, {
     timeout: 120_000,

@@ -8,7 +8,8 @@
  *   The wall's cap+rotate bandwidth model lives in `useWallRotation`; tiles
  *   within the live budget stream, the rest rotate on a 30s cadence.
  * - CAMERAS: the camera/channel management table (status + availability).
- * - PLAYBACK: the recorded-playback shell (honest pending-backend state).
+ * - PLAYBACK: MDVR SD-card review (AB4 → MediaMTX HLS) plus an honest empty
+ *   state for channels that have no device recording path.
  *
  * Keyboard: `f` toggles whole-wall fullscreen; `1..6` pick the division
  * presets (wall view only). Shortcuts are ignored while typing in inputs.
@@ -129,7 +130,9 @@ export function VideoWallPage() {
   const focusDeviceId = params.get('device');
   useEffect(() => {
     if (!focusDeviceId || channels.length === 0) return;
-    const mine = channels.filter((c) => c.deviceId === focusDeviceId && c.online && c.consentGiven);
+    const mine = channels
+      .filter((c) => c.deviceId === focusDeviceId && c.online && c.consentGiven)
+      .sort((a, b) => (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99));
     if (mine.length === 0) return;
     setTiles((prev) => {
       if (prev.some((t) => mine.some((c) => c.id === t.channelId))) return prev;
@@ -343,7 +346,11 @@ export function VideoWallPage() {
         <CamerasPanel channels={channels} loading={channelsLoading} onAddToWall={pickChannel} />
       )}
 
-      {tab === 'playback' && <PlaybackPanel channels={channels} />}
+      {tab === 'playback' && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <PlaybackPanel channels={channels} />
+        </div>
+      )}
 
       <DeviceConfigWizard open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>

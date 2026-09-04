@@ -130,7 +130,8 @@ export class AlarmEvaluatorService {
       const type = deviceAlarmCatalogType(alarm.code);
       const severity = DEVICE_ALARM_SEVERITY[alarm.severity] ?? 'MEDIUM';
       const id = randomUUID();
-      const message = `Device alarm ${alarm.code}${alarm.detail?.dmsDetail ? ` — ${String(alarm.detail.dmsDetail)}` : ''}`;
+      const dmsDetail = alarm.detail?.dmsDetail ? String(alarm.detail.dmsDetail) : '';
+      const message = `Device alarm ${alarm.code}${dmsDetail ? ` — ${dmsDetail}` : ''}`;
       const occurrence = AlarmOccurrence.create(id, {
         tenantId: alarm.tenantId,
         ruleId,
@@ -140,7 +141,12 @@ export class AlarmEvaluatorService {
         lat: alarm.lat,
         lng: alarm.lng,
         message,
-        detail: { deviceAlarm: true, ...(alarm.detail ?? {}) },
+        detail: {
+          deviceAlarm: true,
+          alarmCode: alarm.code,
+          alarmDetail: dmsDetail,
+          ...(alarm.detail ?? {}),
+        },
         sourceEvents: [
           {
             type: `device.alarm.${alarm.code}.v1`,
@@ -624,6 +630,7 @@ function deviceAlarmCatalogType(code: string): string {
   if (code.startsWith('DMS_') || code.startsWith('ADAS_') || code.startsWith('FATIGUE')) {
     return 'dms';
   }
+  if (code.startsWith('VIDEO_') || code.startsWith('STORAGE_')) return 'camera';
   switch (code) {
     case 'SOS':
       return 'sos';
@@ -633,19 +640,29 @@ function deviceAlarmCatalogType(code: string): string {
     case 'GEOFENCE_EXIT':
       return 'geofence';
     case 'FUEL_THEFT':
+    case 'FUEL_LOW':
+    case 'FUEL_FULL':
+    case 'FUEL_FILLING':
       return 'fuel-theft';
     case 'TEMPERATURE_HIGH':
     case 'TEMPERATURE_LOW':
       return 'temperature';
     case 'ACCIDENT':
+    case 'BRAKING':
+    case 'ACCELERATION':
+    case 'CORNERING':
+    case 'DRIVING_BEHAVIOR':
       return 'collision';
-    case 'VIDEO_LOSS_CH1':
-    case 'VIDEO_LOSS_CH2':
-    case 'VIDEO_LOSS_CH3':
-    case 'VIDEO_LOSS_CH4':
-    case 'STORAGE_FAILURE':
-    case 'STORAGE_FULL':
-      return 'camera';
+    case 'TOW':
+      return 'tow';
+    case 'JAMMING':
+      return 'jamming';
+    case 'POWER_CUT':
+    case 'POWER_RESTORED':
+    case 'LOW_POWER':
+      return 'power';
+    case 'LOW_BATTERY':
+      return 'battery';
     default:
       return 'other';
   }

@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Badge, Button } from '@/components/tailwind-ui';
+import { localizeEventType } from '@/lib/alarm-copy';
 import { Bell, Download } from 'lucide-react';
 
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
@@ -28,7 +29,11 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
 
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label ?? '—' },
-    { id: 'type', headerKey: 'reports.cols.alarmType', render: (r) => r.type },
+    {
+      id: 'type',
+      headerKey: 'reports.cols.alarmType',
+      render: (r) => localizeEventType(t, r.type),
+    },
     {
       id: 'severity',
       headerKey: 'reports.cols.severity',
@@ -42,7 +47,7 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
                 : 'gray'
           }
         >
-          {r.severity}
+          {t(`rules.severities.${r.severity}`, { defaultValue: r.severity })}
         </Badge>
       ),
     },
@@ -86,7 +91,7 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
         <Badge color="danger">{`${t('reports.kpi.open')}: ${q.data?.summary.open ?? 0}`}</Badge>
         {SEVERITIES.map((s) => (
           <Badge key={s} color="gray">
-            {`${s}: ${(q.data?.summary as unknown as Record<string, number>)?.[s.toLowerCase()] ?? 0}`}
+            {`${t(`rules.severities.${s}`, { defaultValue: s })}: ${(q.data?.summary as unknown as Record<string, number>)?.[s.toLowerCase()] ?? 0}`}
           </Badge>
         ))}
       </div>
@@ -101,7 +106,7 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
           <option value="">{t('reports.filters.allSeverities')}</option>
           {SEVERITIES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {t(`rules.severities.${s}`, { defaultValue: s })}
             </option>
           ))}
         </select>

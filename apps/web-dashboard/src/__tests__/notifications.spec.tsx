@@ -165,7 +165,7 @@ beforeEach(async () => {
 describe('NotificationBell', () => {
   it('renders the unread badge from the real unread count', async () => {
     renderBell();
-    const bellButton = screen.getByRole('button', { name: 'notifications' });
+    const bellButton = screen.getByRole('button', { name: /notifications/i });
     expect(bellButton).toBeDefined();
     // The badge carries the numeric unread count (3). (Phase 6: the Tailwind
     // bell exposes the count via data-testid instead of the MUI badge class.)
@@ -174,8 +174,8 @@ describe('NotificationBell', () => {
 
   it('opens the dropdown, lists notifications, and marks all read', async () => {
     renderBell();
-    fireEvent.click(screen.getByRole('button', { name: 'notifications' }));
-    expect(await screen.findByText('Speeding: TRK-1')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+    expect(await screen.findByText('Overspeed: TRK-1')).toBeDefined();
     expect(screen.getByText('Device offline: TRK-2')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: /mark all read/i }));
@@ -184,15 +184,15 @@ describe('NotificationBell', () => {
 
   it('links to the Notification Center via "view all"', async () => {
     renderBell();
-    fireEvent.click(screen.getByRole('button', { name: 'notifications' }));
+    fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
     const viewAll = await screen.findByRole('button', { name: /view all notifications/i });
     expect(viewAll).toBeDefined();
   });
 
   it('marks a notification read when clicked', async () => {
     renderBell();
-    fireEvent.click(screen.getByRole('button', { name: 'notifications' }));
-    const item = await screen.findByText('Speeding: TRK-1');
+    fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+    const item = await screen.findByText('Overspeed: TRK-1');
     fireEvent.click(item);
     await waitFor(() => expect(markAsRead).toHaveBeenCalledWith('n1'));
   });
@@ -201,7 +201,7 @@ describe('NotificationBell', () => {
 describe('NotificationCenterPage', () => {
   it('renders the filter bar and history list', async () => {
     renderCenter();
-    expect(await screen.findByText('Speeding: TRK-1')).toBeDefined();
+    expect(await screen.findByText('Overspeed: TRK-1')).toBeDefined();
     // Filter controls exist (type/severity/unread-only).
     expect(screen.getByLabelText(/type/i)).toBeDefined();
     expect(screen.getByLabelText(/severity/i)).toBeDefined();

@@ -29,6 +29,7 @@ import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 import { alarmTypeIcon, severityBg } from '@/components/alarms/AlarmTypeIcon';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Drawer, Spinner } from '@/components/tailwind-ui';
+import { localizeAlarmDetail, localizeAlarmMessage, localizePhrase } from '@/lib/alarm-copy';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmDetailDrawerProps {
@@ -76,7 +77,7 @@ export function AlarmDetailDrawer({ alarmId, onClose }: AlarmDetailDrawerProps) 
                 <Icon size={15} aria-hidden />
               </span>
             )}
-            <span className="truncate">{alarm.message}</span>
+            <span className="truncate">{localizeAlarmMessage(t, alarm)}</span>
             <span className="shrink-0">
               <AlarmStatusBadge status={alarm.status} label={t(`alarms.status.${alarm.status}`)} />
             </span>
@@ -175,10 +176,12 @@ function AlarmDetailContent({
       </div>
 
       {/* Detail / description */}
-      {alarm.detail && (
+      {localizeAlarmDetail(t, alarm) && (
         <div>
           <SectionLabel>{t('alarms.detail.description')}</SectionLabel>
-          <p className="mt-1 text-sm text-gray-700 dark:text-graydark-700">{alarm.detail}</p>
+          <p className="mt-1 text-sm text-gray-700 dark:text-graydark-700">
+            {localizeAlarmDetail(t, alarm)}
+          </p>
         </div>
       )}
 
@@ -194,7 +197,7 @@ function AlarmDetailContent({
               <span className="inline-flex h-[18px] items-center rounded-full bg-gray-100 px-1.5 font-mono text-[0.6rem] dark:bg-white/5">
                 {e.type}
               </span>
-              <span className="min-w-0 truncate">{e.detail}</span>
+              <span className="min-w-0 truncate">{localizePhrase(t, e.detail)}</span>
             </div>
           ))}
         </div>

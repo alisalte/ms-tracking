@@ -259,13 +259,50 @@ describe('DeviceCommandService', () => {
       },
     });
     const event = published[0] as { payloadHex?: string };
-    const want = Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex');
+    const want = Buffer.from('rtmp://203.0.113.10:1935/live/md300/1', 'ascii').toString('hex');
     expect(event?.payloadHex?.toLowerCase()).toContain(want);
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
       Buffer.from('localhost', 'ascii').toString('hex'),
     );
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
       Buffer.from('live/866854036516451', 'ascii').toString('hex'),
+    );
+  });
+
+  it('rewrites AB2 channel 2 to live/md300/2', async () => {
+    const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
+    await service.create(CTX, DEVICE_ID, {
+      commandCode: 'AB2',
+      params: {
+        uploadUrl: 'rtmp://localhost:1935/live/md300',
+        channel: 2,
+        dataType: '0',
+        streamType: '0',
+      },
+    });
+    const event = published[0] as { payloadHex?: string };
+    expect(event?.payloadHex?.toLowerCase()).toContain(
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300/2', 'ascii').toString('hex'),
+    );
+  });
+
+  it('rewrites AB4 playback URL to live/md300/{channel}/pb', async () => {
+    const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
+    await service.create(CTX, DEVICE_ID, {
+      commandCode: 'AB4',
+      params: {
+        url: 'rtmp://localhost:1935/live/md300',
+        channel: 2,
+        avType: '3',
+        streamType: '0',
+        capType: '0',
+        startTime: '260904120000',
+        endTime: '260904130000',
+      },
+    });
+    const event = published[0] as { payloadHex?: string };
+    expect(event?.payloadHex?.toLowerCase()).toContain(
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300/2/pb', 'ascii').toString('hex'),
     );
   });
 
@@ -276,7 +313,7 @@ describe('DeviceCommandService', () => {
     const event = published[0] as { commandCode?: string; payloadHex?: string };
     expect(event.commandCode).toBe('AB2');
     expect(event.payloadHex?.toLowerCase()).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex'),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300/1', 'ascii').toString('hex'),
     );
     await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
     expect(published).toHaveLength(1);

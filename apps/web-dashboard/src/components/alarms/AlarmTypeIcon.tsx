@@ -8,16 +8,22 @@
  */
 import {
   AlertTriangle,
+  BatteryWarning,
   Camera,
   CarFront,
   Fuel,
   Gauge,
+  KeyRound,
   type LucideIcon,
   MapPin,
+  PauseCircle,
+  Radio,
   ScanFace,
   Siren,
   Thermometer,
+  Truck,
   WifiOff,
+  Zap,
 } from 'lucide-react';
 
 import { status } from '@/theme/palette';
@@ -34,6 +40,12 @@ const TYPE_ICON: Record<AlarmType, LucideIcon> = {
   temperature: Thermometer,
   collision: CarFront,
   camera: Camera,
+  idle: PauseCircle,
+  ignition: KeyRound,
+  battery: BatteryWarning,
+  tow: Truck,
+  power: Zap,
+  jamming: Radio,
   other: AlertTriangle,
 };
 

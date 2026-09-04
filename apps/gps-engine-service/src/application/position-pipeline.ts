@@ -18,9 +18,10 @@ import type { TelemetryMetrics } from '@fleetvision/observability';
  *                     also skips cache + broadcast — it must not regress the
  *                     latest-position view nor hit the live map.
  *   5. CACHE        — write-through Redis last-position (07 §13.5), only for
- *                     in-order positions.
+ *                     in-order, non-STALE positions (stale GPS-clock must not
+ *                     become the map's last-known).
  *   6. BROADCAST    — emit to the signal bus → WS broadcaster. STALE positions are
- *                     persisted + cached but NOT broadcast (07 §3.4 — stale
+ *                     persisted but NOT cached or broadcast (07 §3.4 — stale
  *                     misleads the live map).
  *
  * Sprint D §9 — device liveness: last-seen is flushed to
@@ -127,10 +128,11 @@ export class PositionPipeline {
       await this.deps.geofenceEvaluator.process(validated);
     }
 
-    // 5. Cache (best-effort, never throws) — only in-order positions: an older
-    //    packet must not regress the latest-position view (Sprint D §21).
+    // 5. Cache (best-effort, never throws) — only in-order, non-STALE
+    //    positions: an older packet must not regress the latest-position view
+    //    (Sprint D §21), and a stale GPS clock must not become last-known.
     //    (`outcome?.` — a void-returning engine degrades to in-order.)
-    if (outcome?.skipped !== 'OUT_OF_ORDER') {
+    if (validated.quality !== 'STALE' && outcome?.skipped !== 'OUT_OF_ORDER') {
       await this.deps.cache.setLatest(validated);
     }
 

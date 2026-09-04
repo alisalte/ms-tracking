@@ -26,7 +26,7 @@ const now = Date.now();
 const eventsFixture: Notification[] = [
   {
     id: 'e1',
-    title: 'Speeding: TRK-1',
+    title: 'Overspeed: TRK-1',
     body: 'Vehicle TRK-1 exceeded the speed limit',
     severity: 'critical',
     priority: 'high',
@@ -141,12 +141,12 @@ describe('EventCenterPage — timeline rendering', () => {
   it('renders title, subtitle, and the events with vehicle + severity + type', () => {
     renderEvents();
     expect(screen.getByText('Event Center')).toBeTruthy();
-    expect(screen.getByText('Speeding: TRK-1')).toBeTruthy();
+    expect(screen.getByText('Overspeed: TRK-1')).toBeTruthy();
     expect(screen.getByText(/v-trk-1/)).toBeTruthy();
     // "Overspeed"/"Geofence Entry" appear in the type-filter options AND the
     // event chips.
     expect(screen.getAllByText('Overspeed').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('Geofence Entry').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Geofence entry').length).toBeGreaterThanOrEqual(2);
   });
 
   it('groups events into day buckets', () => {
@@ -168,7 +168,7 @@ describe('EventCenterPage — timeline rendering', () => {
 
   it('navigates to the source entity when an event with a link is clicked', () => {
     renderEvents();
-    fireEvent.click(screen.getByText('Speeding: TRK-1'));
+    fireEvent.click(screen.getByText('Overspeed: TRK-1'));
     expect(screen.getByTestId('page').textContent).toBe('alarms');
   });
 
@@ -177,7 +177,7 @@ describe('EventCenterPage — timeline rendering', () => {
     const selects = screen.getAllByRole('combobox');
     fireEvent.change(selects[0], { target: { value: 'overspeed' } });
     await waitFor(() => expect(screen.queryByText('Device offline: BUS-3')).toBeNull());
-    expect(screen.getByText('Speeding: TRK-1')).toBeTruthy();
+    expect(screen.getByText('Overspeed: TRK-1')).toBeTruthy();
   });
 
   it('searches across title/body/vehicle client-side', () => {
@@ -187,7 +187,7 @@ describe('EventCenterPage — timeline rendering', () => {
       target: { value: 'BUS-3' },
     });
     expect(screen.getByText('Device offline: BUS-3')).toBeTruthy();
-    expect(screen.queryByText('Speeding: TRK-1')).toBeNull();
+    expect(screen.queryByText('Overspeed: TRK-1')).toBeNull();
   });
 
   it('shows the empty state when no events exist', () => {

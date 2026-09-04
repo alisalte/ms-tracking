@@ -8,8 +8,8 @@
  *
  * Ack correlation: the Meitrack D82 reply carries only the command code (§1.1
  * — `$$..,D82,A11,OK`), no command id, so the consumer matches the LATEST
- * non-terminal row for (tenant, device, code). A response containing OK →
- * ACKED; anything else → FAILED with the raw response preserved.
+ * non-terminal row for (tenant, device, code). Explicit device errors
+ * (`Error`, `FFF5`, …) → FAILED; OK and value-bearing readbacks (`A11,10`) → ACKED.
  *
  * Non-fatal at boot (mirrors SessionLifecycleConsumer): at-least-once,
  * idempotent via the repository's status guards.
@@ -29,7 +29,26 @@ interface CommandEventEnvelope {
   readonly result?: string | null;
   readonly reason?: string | null;
   // COMMAND_ACK (device) message envelope (06 §13.2 toEnvelope):
-  readonly telemetry?: { readonly command?: string; readonly response?: string } | null;
+  readonly telemetry?: {
+    readonly command?: string;
+    readonly response?: string;
+    readonly resources?: unknown;
+    readonly photoNames?: unknown;
+    readonly allPack?: number;
+    readonly curPack?: number;
+    readonly allFileNum?: number;
+  } | null;
+}
+
+/** True when the device payload is an explicit failure, not a value-bearing readback. */
+export function isDeviceErrorResponse(payload: string): boolean {
+  const p = payload.trim();
+  if (!p) return false;
+  if (/^(ok)(\b|,|$)/i.test(p)) return false;
+  if (/^(error|fail|failed|err)(\b|,|$)/i.test(p)) return true;
+  if (/^fff[0-9a-f]{1,2}$/i.test(p)) return true;
+  if (/^not support/i.test(p)) return true;
+  return false;
 }
 
 export class CommandAckConsumer implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -151,7 +170,27 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
     const pending = await this.commands.latestPendingByCode(tenantId, deviceId, code);
     if (!pending) return; // already terminal or unknown — nothing to do.
 
-    if (/^ok/i.test(payload.trim())) {
+    const resources = env.telemetry?.resources;
+    if (Array.isArray(resources)) {
+      await this.commands.markAcked(
+        tenantId,
+        pending.id,
+        JSON.stringify({
+          resources,
+          allPack: env.telemetry?.allPack ?? 1,
+          curPack: env.telemetry?.curPack ?? 1,
+          allFileNum: env.telemetry?.allFileNum ?? resources.length,
+        }),
+      );
+      return;
+    }
+    const photoNames = env.telemetry?.photoNames;
+    if (Array.isArray(photoNames)) {
+      await this.commands.markAcked(tenantId, pending.id, JSON.stringify({ photoNames }));
+      return;
+    }
+
+    if (/^ok/i.test(payload.trim()) || !isDeviceErrorResponse(payload)) {
       await this.commands.markAcked(tenantId, pending.id, `${code},${payload}`);
     } else {
       await this.commands.markFailed(

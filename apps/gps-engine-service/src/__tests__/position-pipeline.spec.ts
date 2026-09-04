@@ -118,7 +118,7 @@ describe('PositionPipeline (07 §2, §3)', () => {
     expect(signals).toHaveLength(0);
   });
 
-  it('persists + caches a STALE position but does NOT broadcast it', async () => {
+  it('persists a STALE position but does NOT cache or broadcast it', async () => {
     const { pipeline, repo, cache, signalBus } = buildPipeline();
     const signals: PositionSignal[] = [];
     signalBus.onPosition((s) => signals.push(s));
@@ -128,7 +128,7 @@ describe('PositionPipeline (07 §2, §3)', () => {
 
     expect(repo.inserted).toHaveLength(1);
     expect(repo.inserted[0]?.quality).toBe('STALE');
-    expect(cache.lastSet).not.toBeNull(); // cached
+    expect(cache.lastSet).toBeNull();
     expect(signals).toHaveLength(0); // NOT broadcast (07 §3.4)
   });
 

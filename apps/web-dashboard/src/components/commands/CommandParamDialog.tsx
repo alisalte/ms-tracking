@@ -105,6 +105,25 @@ export function CommandParamDialog({
     return Object.keys(errs).length > 0 ? null : out;
   };
 
+  const handleRead = async () => {
+    if (!command) return;
+    setSubmitting(true);
+    setServerError(null);
+    try {
+      await onSubmit({});
+      toast.success(
+        t('commands.form.readQueued', {
+          defaultValue: 'Reading current settings from the device…',
+          code: command.readbackCommand ?? command.code,
+        }),
+      );
+    } catch (err) {
+      setServerError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!command) return;
     const params = validate();
@@ -156,6 +175,11 @@ export function CommandParamDialog({
             <Button variant="outline" onClick={onClose} disabled={submitting}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </Button>
+            {command.supportsReadback && (
+              <Button variant="outline" onClick={() => void handleRead()} loading={submitting}>
+                {t('commands.form.read', { defaultValue: 'Read current' })}
+              </Button>
+            )}
             <Button onClick={() => void handleSubmit()} loading={submitting}>
               {deviceCount > 1
                 ? t('commands.form.sendBulk', {

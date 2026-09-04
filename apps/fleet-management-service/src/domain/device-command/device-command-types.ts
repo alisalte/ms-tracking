@@ -80,8 +80,13 @@ export interface CommandDef {
   readonly params: readonly CommandParamDef[];
   /** True when the device reply carries data the UI should surface (queries). */
   readonly expectResponse: boolean;
-  /** True when sending the bare code (no params) reads back current settings. */
+  /** True when the UI should offer a Read action for this command. */
   readonly supportsReadback: boolean;
+  /**
+   * Command actually sent on Read. A11/A21 (and similar) only ACK `OK` on
+   * GPRS; current values come from DB4 (§3.168) / DA6 (§3.165).
+   */
+  readonly readbackCommand?: string;
 }
 
 /** Result of building a command's wire payload from validated params. */

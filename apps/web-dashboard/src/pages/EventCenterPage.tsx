@@ -30,6 +30,11 @@ import {
   Spinner,
   Toolbar,
 } from '@/components/tailwind-ui';
+import {
+  localizeEventType,
+  localizeNotificationBody,
+  localizeNotificationTitle,
+} from '@/lib/alarm-copy';
 import { relativeTime } from '@/lib/relative-time';
 
 const SEVERITIES = ['critical', 'high', 'normal', 'low'] as const;
@@ -49,8 +54,8 @@ function severityBadgeColor(severity: string): 'danger' | 'warning' | 'info' | '
 }
 
 /** Day bucket label (locale date; grouping key doubles as the heading). */
-function dayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+function dayLabel(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale.startsWith('fa') ? 'fa-IR' : locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -58,7 +63,7 @@ function dayLabel(iso: string): string {
 }
 
 export function EventCenterPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
@@ -75,29 +80,36 @@ export function EventCenterPage() {
 
   const page = useNotificationsPage({ eventType, severity });
 
-  // Client search over title/body/vehicle.
+  // Client search over localized title/body/type plus vehicle id.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return page.items;
-    return page.items.filter(
-      (n) =>
+    return page.items.filter((n) => {
+      const title = localizeNotificationTitle(t, n).toLowerCase();
+      const body = localizeNotificationBody(t, n).toLowerCase();
+      const type = localizeEventType(t, n.eventType).toLowerCase();
+      return (
+        title.includes(q) ||
+        body.includes(q) ||
+        type.includes(q) ||
         n.title.toLowerCase().includes(q) ||
         n.body.toLowerCase().includes(q) ||
-        (n.vehicleId?.toLowerCase().includes(q) ?? false),
-    );
-  }, [page.items, search]);
+        (n.vehicleId?.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [page.items, search, t]);
 
   // Group by calendar day, newest first.
   const groups = useMemo(() => {
     const map = new Map<string, typeof filtered>();
     for (const n of filtered) {
-      const key = dayLabel(n.createdAt);
+      const key = dayLabel(n.createdAt, i18n.language);
       const list = map.get(key) ?? [];
       list.push(n);
       map.set(key, list);
     }
     return Array.from(map.entries());
-  }, [filtered]);
+  }, [filtered, i18n.language]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -132,9 +144,7 @@ export function EventCenterPage() {
                 { value: '', label: t('common.all', { defaultValue: 'All' }) },
                 ...Array.from(new Set(page.items.map((n) => n.eventType))).map((type) => ({
                   value: type,
-                  label: t(`notifications.eventTypes.${type}`, {
-                    defaultValue: type.replace(/_/g, ' '),
-                  }),
+                  label: localizeEventType(t, type),
                 })),
               ]}
             />
@@ -200,12 +210,10 @@ export function EventCenterPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span className="truncate text-sm font-semibold text-gray-800 dark:text-graydark-800">
-                            {n.title}
+                            {localizeNotificationTitle(t, n)}
                           </span>
                           <Badge color="gray" className="shrink-0">
-                            {t(`notifications.eventTypes.${n.eventType}`, {
-                              defaultValue: n.eventType.replace(/_/g, ' '),
-                            })}
+                            {localizeEventType(t, n.eventType)}
                           </Badge>
                           <Badge
                             color={severityBadgeColor(n.severity)}
@@ -217,7 +225,7 @@ export function EventCenterPage() {
                           </Badge>
                         </div>
                         <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-graydark-600">
-                          {n.body}
+                          {localizeNotificationBody(t, n)}
                           {n.vehicleId ? ` · ${n.vehicleId}` : ''}
                         </p>
                       </div>

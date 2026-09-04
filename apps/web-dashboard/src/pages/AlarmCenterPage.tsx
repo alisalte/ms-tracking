@@ -21,22 +21,12 @@ import { AlarmMap } from '@/components/alarms/AlarmMap';
 import { AlarmTimeline } from '@/components/alarms/AlarmTimeline';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Badge, PageHeader, SegmentedControl, Select, Toolbar } from '@/components/tailwind-ui';
+import { ALARM_CATALOG_TYPES, localizeAlarmMessage } from '@/lib/alarm-copy';
 import type { AlarmFilters, AlarmSeverity, AlarmStatus, AlarmType } from '@/types/alarm.types';
 
 type ViewMode = 'list' | 'timeline' | 'map';
 
-const TYPES: Array<AlarmType | 'all'> = [
-  'all',
-  'sos',
-  'dms',
-  'overspeed',
-  'geofence',
-  'offline',
-  'fuel-theft',
-  'temperature',
-  'collision',
-  'camera',
-];
+const TYPES: Array<AlarmType | 'all'> = ['all', ...ALARM_CATALOG_TYPES];
 const SEVERITIES: Array<AlarmSeverity | 'all'> = ['all', 'critical', 'major', 'minor', 'info'];
 const STATUSES: Array<AlarmStatus | 'all'> = ['all', 'raised', 'acked', 'escalated', 'resolved'];
 
@@ -67,13 +57,16 @@ export function AlarmCenterPage() {
       if (filters.severity !== 'all' && a.severity !== filters.severity) return false;
       if (filters.status !== 'all' && a.status !== filters.status) return false;
       if (!q) return true;
+      const message = localizeAlarmMessage(t, a).toLowerCase();
       return (
         a.vehicleLabel.toLowerCase().includes(q) ||
         a.id.toLowerCase().includes(q) ||
+        message.includes(q) ||
+        a.message.toLowerCase().includes(q) ||
         (a.driver?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [alarms, filters]);
+  }, [alarms, filters, t]);
 
   // Headline stats (active / unacked / escalated).
   const stats = useMemo(() => {

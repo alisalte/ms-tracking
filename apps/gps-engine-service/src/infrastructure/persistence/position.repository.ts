@@ -14,6 +14,13 @@ import { QUALITY_CODE } from '../../domain/quality.js';
 const TABLE = 'vehicle_positions';
 const SCHEMA = 'tracking';
 
+/** Latest-position views: last VALID/LOW_ACCURACY fix, not stale GPS-clock or jump junk. */
+const LATEST_QUALITY_SKIP = [
+  QUALITY_CODE.REJECTED,
+  QUALITY_CODE.STALE,
+  QUALITY_CODE.SUSPECT_JUMP,
+] as const;
+
 /** Latest-position read model returned to the API / cache-miss path. */
 export interface LatestPosition {
   readonly vehicleId: string;
@@ -83,6 +90,7 @@ export class PositionRepository {
       .from(TABLE)
       .whereRaw('tenant_id = ?::uuid', [tenantId])
       .whereRaw('vehicle_id = ?::uuid', [vehicleId])
+      .whereNotIn('quality', [...LATEST_QUALITY_SKIP])
       .orderBy('captured_at', 'desc')
       .first();
     return row ? toLatest(row) : null;
@@ -98,6 +106,7 @@ export class PositionRepository {
       .withSchema(SCHEMA)
       .from(TABLE)
       .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereNotIn('quality', [...LATEST_QUALITY_SKIP])
       .select('*')
       .distinctOn('vehicle_id')
       .orderBy('vehicle_id', 'desc')
@@ -145,6 +154,7 @@ export class PositionRepository {
       .from(TABLE)
       .whereRaw('tenant_id = ?::uuid', [tenantId])
       .whereRaw('ST_DWithin(geom, ?::geography, ?)', [pointWkt, radiusM])
+      .whereNotIn('quality', [...LATEST_QUALITY_SKIP])
       .select('*', this.knex.raw('ST_Distance(geom, ?::geography) AS distance_m', [pointWkt]))
       .distinctOn('vehicle_id')
       .orderBy('vehicle_id', 'desc')
@@ -176,6 +186,7 @@ export class PositionRepository {
       .from(TABLE)
       .whereRaw('tenant_id = ?::uuid', [tenantId])
       .whereRaw('geom && ?::geography', [bboxWkt])
+      .whereNotIn('quality', [...LATEST_QUALITY_SKIP])
       .select('*')
       .distinctOn('vehicle_id')
       .orderBy('vehicle_id', 'desc')

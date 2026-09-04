@@ -1,3 +1,5 @@
+import type { AlarmType } from './alarm.types';
+
 /**
  * Fleet dashboard domain types (UI-facing, camelCase).
  *
@@ -160,8 +162,8 @@ export interface ActivityBucket {
 /** Alert severity — maps to `status.red` (critical) / `status.amber` (warning). */
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 
-/** Alert category — selects the icon + i18n label. */
-export type AlertType = 'overspeed' | 'idle' | 'geofence' | 'fcw' | 'dtc' | 'lowBattery';
+/** Alert category — Alarm Center types plus legacy dashboard aliases. */
+export type AlertType = AlarmType | 'fcw' | 'dtc' | 'lowBattery';
 
 /** A live alert row in the Active Alerts panel. */
 export interface FleetAlert {

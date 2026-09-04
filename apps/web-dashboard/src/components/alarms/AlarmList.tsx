@@ -14,6 +14,7 @@ import {
   severityColor,
 } from '@/components/alarms/AlarmTypeIcon';
 import { Badge, Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
+import { localizeAlarmMessage } from '@/lib/alarm-copy';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmListProps {
@@ -96,7 +97,7 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-gray-800 dark:text-graydark-800">
-                        {a.message}
+                        {localizeAlarmMessage(t, a)}
                       </p>
                       <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
                         {t(`alarms.type.${a.type}`)}

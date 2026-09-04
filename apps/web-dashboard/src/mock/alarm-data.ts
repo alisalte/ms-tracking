@@ -65,6 +65,12 @@ const TYPE_SEVERITY: Record<AlarmType, AlarmSeverity> = {
   temperature: 'major',
   collision: 'critical',
   camera: 'major',
+  idle: 'minor',
+  ignition: 'info',
+  battery: 'major',
+  tow: 'major',
+  power: 'critical',
+  jamming: 'major',
   other: 'minor',
 };
 
@@ -109,6 +115,18 @@ function alarmText(type: AlarmType, rand: () => number): { message: string; deta
         message: ['FCW', 'Distraction', 'No seatbelt'][Math.floor(rand() * 3)],
         detail: 'AI event above severity threshold',
       };
+    case 'idle':
+      return { message: 'Prolonged idle: 22 min (limit 15 min)', detail: 'Engine on, speed 0' };
+    case 'ignition':
+      return { message: 'Ignition turned on', detail: '' };
+    case 'battery':
+      return { message: 'Device alarm LOW_BATTERY', detail: '' };
+    case 'tow':
+      return { message: 'Device alarm TOW', detail: '' };
+    case 'power':
+      return { message: 'Device alarm POWER_CUT', detail: '' };
+    case 'jamming':
+      return { message: 'Device alarm JAMMING', detail: '' };
     default:
       return { message: 'Alarm', detail: '' };
   }
@@ -125,6 +143,12 @@ const SOURCE_EVENT_TYPE: Record<AlarmType, string> = {
   temperature: 'telemetry.temp.excursion.v1',
   collision: 'tracking.collision.detected.v1',
   camera: 'media.ai.alert.v1',
+  idle: 'tracking.idle.prolonged.v1',
+  ignition: 'tracking.ignition.changed.v1',
+  battery: 'device.alarm.low_battery.v1',
+  tow: 'device.alarm.tow.v1',
+  power: 'device.alarm.power.v1',
+  jamming: 'device.alarm.jamming.v1',
   other: 'tracking.event.v1',
 };
 

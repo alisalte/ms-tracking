@@ -159,16 +159,55 @@ describe('CommandDispatcher (downstream command path, 06 §6.2)', () => {
 
   it('rejects with DEVICE_NOT_AUTHENTICATED when the session cannot dispatch', async () => {
     const { dispatcher, events } = makeDeps({ session: makeSession({ dispatchable: false }) });
-    const result = await dispatcher.dispatch(REQUEST);
+    const result = await dispatcher.dispatch({
+      ...REQUEST,
+      commandCode: 'C01',
+      payloadText: 'C01,20,10122',
+    });
     expect(result).toEqual({ outcome: 'REJECTED', reason: 'DEVICE_NOT_AUTHENTICATED' });
     expect(events[0]).toMatchObject({ result: 'REJECTED', reason: 'DEVICE_NOT_AUTHENTICATED' });
   });
 
   it('rejects with DEVICE_OFFLINE when no local session and no global snapshot', async () => {
     const { dispatcher, events } = makeDeps({ session: null, redisSnapshot: null });
-    const result = await dispatcher.dispatch(REQUEST);
+    const result = await dispatcher.dispatch({
+      ...REQUEST,
+      commandCode: 'C01',
+      payloadText: 'C01,20,10122',
+    });
     expect(result).toEqual({ outcome: 'REJECTED', reason: 'DEVICE_OFFLINE' });
     expect(events[0]).toMatchObject({ result: 'REJECTED', reason: 'DEVICE_OFFLINE' });
+  });
+
+  it('holds A10 while fully offline (no session) until flushHeld', async () => {
+    const written: Buffer[] = [];
+    let session: FakeSession | null = null;
+    const sessions = {
+      byDeviceId: (deviceId: string) =>
+        session && session.deviceId === deviceId ? (session as never as DeviceSession) : null,
+      writerFor: () => (data: Buffer) => {
+        written.push(data);
+        return true;
+      },
+    } as unknown as SessionManager;
+    const adapter = {
+      id: 'meitrack',
+      encode: (cmd: { payload: Record<string, unknown> }) =>
+        Buffer.from(String(cmd.payload.text ?? ''), 'ascii'),
+    } as unknown as ProtocolAdapter;
+    const dispatcher = new CommandDispatcher(
+      sessions,
+      { get: () => adapter } as unknown as AdapterRegistry,
+      null,
+      null,
+    );
+    const a10 = { ...REQUEST, commandCode: 'A10', payloadText: 'A10' };
+    expect(await dispatcher.dispatch(a10)).toEqual({ outcome: 'HELD' });
+    expect(written).toHaveLength(0);
+    session = makeSession();
+    await dispatcher.flushHeld(DEVICE_ID);
+    expect(written).toHaveLength(1);
+    expect(written[0]?.toString('ascii')).toContain('A10');
   });
 
   it('holds AB2 while offline and writes it after flushHeld', async () => {
@@ -208,6 +247,43 @@ describe('CommandDispatcher (downstream command path, 06 §6.2)', () => {
     await dispatcher.flushHeld(DEVICE_ID);
     expect(written).toHaveLength(1);
     expect(events[0]).toMatchObject({ result: 'SENT', commandCode: 'AB2' });
+  });
+
+  it('holds two AB2 payloads (two cameras) and flushes both', async () => {
+    const written: Buffer[] = [];
+    let session: FakeSession | null = null;
+    const sessions = {
+      byDeviceId: (deviceId: string) =>
+        session && session.deviceId === deviceId ? (session as never as DeviceSession) : null,
+      writerFor: () => (data: Buffer) => {
+        written.push(data);
+        return true;
+      },
+    } as unknown as SessionManager;
+    const adapter = {
+      id: 'meitrack',
+      encode: (cmd: { payload: Record<string, unknown> }) =>
+        Buffer.from(String(cmd.payload.hex), 'ascii'),
+    } as unknown as ProtocolAdapter;
+    const dispatcher = new CommandDispatcher(
+      sessions,
+      { get: () => adapter } as unknown as AdapterRegistry,
+      null,
+      null,
+    );
+    const ch1 = { ...REQUEST, commandCode: 'AB2', payloadText: null, payloadHex: '4142322C31' };
+    const ch2 = {
+      ...REQUEST,
+      commandId: 'cmd-2',
+      commandCode: 'AB2',
+      payloadText: null,
+      payloadHex: '4142322C32',
+    };
+    expect(await dispatcher.dispatch(ch1)).toEqual({ outcome: 'HELD' });
+    expect(await dispatcher.dispatch(ch2)).toEqual({ outcome: 'HELD' });
+    session = makeSession();
+    await dispatcher.flushHeld(DEVICE_ID);
+    expect(written).toHaveLength(2);
   });
 
   it('stays silent (ROUTED_ELSEWHERE) when another instance owns the session', async () => {

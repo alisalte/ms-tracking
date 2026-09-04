@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Skeleton, Tooltip } from '@/components/tailwind-ui';
+import { localizeAlarmMessage } from '@/lib/alarm-copy';
 import type { Alarm, AlarmSeverity } from '@/types/alarm.types';
 
 interface AlarmTimelineProps {
@@ -100,7 +101,7 @@ export function AlarmTimeline({
                 {bucket.map((a) => {
                   const isSel = a.id === selectedId;
                   return (
-                    <Tooltip key={a.id} label={`${a.vehicleLabel} · ${a.message}`}>
+                    <Tooltip key={a.id} label={`${a.vehicleLabel} · ${localizeAlarmMessage(t, a)}`}>
                       <button
                         type="button"
                         onClick={() => onSelect(a.id)}
@@ -108,7 +109,7 @@ export function AlarmTimeline({
                           isSel ? PILL_TONES[a.severity].selected : PILL_TONES[a.severity].rest
                         }`}
                       >
-                        {a.message}
+                        {localizeAlarmMessage(t, a)}
                       </button>
                     </Tooltip>
                   );

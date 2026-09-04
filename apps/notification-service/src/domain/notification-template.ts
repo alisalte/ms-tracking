@@ -27,6 +27,8 @@ export const TEMPLATE_DATA_KEYS = [
   'driverName',
   'duration',
   'batteryLevel',
+  'alarmCode',
+  'alarmDetail',
 ] as const;
 
 export type TemplateDataKey = (typeof TEMPLATE_DATA_KEYS)[number];

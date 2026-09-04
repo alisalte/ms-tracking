@@ -36,7 +36,14 @@ async function fetchChannels(): Promise<CameraChannel[]> {
   if (shouldUseMock()) return resolveMock(mockChannels);
   return withMockFallback(
     // apiGetRaw: media-service returns a RAW array (no { data } envelope).
-    async () => (await apiGetRaw<MediaChannelWire[]>('/media/channels')).map(mapMediaChannel),
+    async () => {
+      const rows = (await apiGetRaw<MediaChannelWire[]>('/media/channels')).map(mapMediaChannel);
+      rows.sort(
+        (a, b) =>
+          (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
+      );
+      return rows;
+    },
     () => resolveMock(mockChannels),
   );
 }
@@ -67,6 +74,7 @@ export function mapMediaChannelForTest(w: MediaChannelWire): CameraChannel {
 function mapMediaChannel(w: MediaChannelWire): CameraChannel {
   const label = w.label || `Camera ${w.logicalChannel ?? ''}`.trim();
   const lowered = label.toLowerCase();
+  const sourceId = w.vehicleId ?? w.siteId ?? w.deviceId ?? '';
   return {
     id: w.channelId,
     label,
@@ -78,8 +86,8 @@ function mapMediaChannel(w: MediaChannelWire): CameraChannel {
           ? 'cargo'
           : 'site',
     sourceType: w.vehicleId ? 'vehicle' : 'site',
-    sourceId: (w.vehicleId ?? w.siteId ?? '') || '',
-    sourceLabel: label,
+    sourceId,
+    sourceLabel: w.endpoint ? `MDVR ${w.endpoint}` : label,
     codec: w.codec === 'H265' ? 'H265' : 'H264',
     online: w.status !== 'OFFLINE' && w.status !== 'DECOMMISSIONED',
     recordingActive: false,
@@ -165,22 +173,121 @@ export function useSnapshot() {
 // ── MDVR live stream (AB2 RTMP push + MediaMTX HLS) ─────────────────────────
 
 /**
- * md300-main `live.js` always publishes `live/md300` (not per-IMEI).
- * Fleet-management rewrites AB2 to this same path so HLS and RTMP match.
+ * md300-main `live.js` used a single `live/md300` key. A 2-camera MDVR needs
+ * a distinct RTMP/HLS path per logical channel (`live/md300/1`, `live/md300/2`)
+ * so two AB2 pushes do not overwrite each other on MediaMTX.
  */
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
+export function mdvrStreamKey(logicalChannel = 1): string {
+  const n = Number(logicalChannel);
+  const ch = Number.isInteger(n) && n >= 1 ? n : 1;
+  return `${MDVR_RTMP_PATH}/${ch}`;
+}
+
 /** Host:port the device is told to push RTMP to (rewritten off-loopback server-side). */
-export function mdvrRtmpUploadUrl(_imei?: string): string {
+export function mdvrRtmpUploadUrl(_imei?: string, logicalChannel = 1): string {
   const server = import.meta.env.VITE_MDVR_PUBLIC_HOST || window.location.hostname;
   const tcpPort = Number(import.meta.env.VITE_MDVR_RTMP_PORT ?? 1935);
-  return `rtmp://${server}:${tcpPort}/${MDVR_RTMP_PATH}`;
+  return `rtmp://${server}:${tcpPort}/${mdvrStreamKey(logicalChannel)}`;
 }
 
 /** Same-origin HLS playlist (nginx `/media-hls` → MediaMTX :8888). */
-export function mdvrHlsUrl(_imei?: string): string {
-  return `${window.location.protocol}//${window.location.host}/media-hls/${MDVR_RTMP_PATH}/index.m3u8`;
+export function mdvrHlsUrl(_imei?: string, logicalChannel = 1): string {
+  return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrStreamKey(logicalChannel)}/index.m3u8`;
+}
+
+/**
+ * AB4 still carries `live/md300/{n}/pb` so the command is distinct from live
+ * AB2. The MD300 ACKs that URL but publishes the three-part live key
+ * (`live/md300/{n}`) — extra path is dropped. The HLS player must therefore
+ * watch the live key, not `/pb`.
+ */
+export function mdvrPlaybackStreamKey(logicalChannel = 1): string {
+  return `${mdvrStreamKey(logicalChannel)}/pb`;
+}
+
+export function mdvrPlaybackRtmpUrl(_imei?: string, logicalChannel = 1): string {
+  const server = import.meta.env.VITE_MDVR_PUBLIC_HOST || window.location.hostname;
+  const tcpPort = Number(import.meta.env.VITE_MDVR_RTMP_PORT ?? 1935);
+  return `rtmp://${server}:${tcpPort}/${mdvrPlaybackStreamKey(logicalChannel)}`;
+}
+
+export function mdvrPlaybackHlsUrl(_imei?: string, logicalChannel = 1): string {
+  return mdvrHlsUrl(_imei, logicalChannel);
+}
+
+/** Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS in the operator's local clock. */
+export function toMdvrBcdTime(ms: number): string {
+  const d = new Date(ms);
+  if (!Number.isFinite(d.getTime())) return '000000000000';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${String(d.getFullYear()).slice(-2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+/** Inverse of `toMdvrBcdTime` — 12-digit BCD → epoch ms in the operator's local clock. */
+export function fromMdvrBcdTime(bcd: string): number {
+  const s = String(bcd).replace(/\D/g, '').padStart(12, '0').slice(0, 12);
+  const yy = Number(s.slice(0, 2));
+  const year = yy >= 70 ? 1900 + yy : 2000 + yy;
+  const d = new Date(
+    year,
+    Number(s.slice(2, 4)) - 1,
+    Number(s.slice(4, 6)),
+    Number(s.slice(6, 8)),
+    Number(s.slice(8, 10)),
+    Number(s.slice(10, 12)),
+  );
+  return d.getTime();
+}
+
+/** One MDVR SD-card file from an AB8 resource-list ACK. */
+export interface MdvrResource {
+  channel: number;
+  startTime: string;
+  endTime: string;
+  avType: number;
+  streamType: number;
+  capType: number;
+  fileLen: number;
+  eventCode: number;
+  subEventCode: number;
+}
+
+export function mdvrResourceKind(avType: number): 'video' | 'photo' {
+  return avType === 4 ? 'photo' : 'video';
+}
+
+/** Parse `response_text` JSON written by the AB8 command-ack consumer. */
+export function parseMdvrResourceAck(responseText: string | null | undefined): MdvrResource[] {
+  if (!responseText) return [];
+  try {
+    const parsed = JSON.parse(responseText) as { resources?: unknown };
+    if (!Array.isArray(parsed.resources)) return [];
+    const out: MdvrResource[] = [];
+    for (const raw of parsed.resources) {
+      if (!raw || typeof raw !== 'object') continue;
+      const r = raw as Record<string, unknown>;
+      const startTime = String(r.startTime ?? '').replace(/\D/g, '');
+      const endTime = String(r.endTime ?? '').replace(/\D/g, '');
+      if (startTime.length !== 12 || endTime.length !== 12) continue;
+      out.push({
+        channel: Number(r.channel) || 0,
+        startTime,
+        endTime,
+        avType: Number(r.avType) || 0,
+        streamType: Number(r.streamType) || 0,
+        capType: Number(r.capType) || 0,
+        fileLen: Number(r.fileLen) || 0,
+        eventCode: Number(r.eventCode) || 0,
+        subEventCode: Number(r.subEventCode) || 0,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -204,7 +311,7 @@ export function useStartMdvrStream() {
       apiPost(`/devices/${deviceId}/commands`, {
         commandCode: 'AB2',
         params: {
-          uploadUrl: mdvrRtmpUploadUrl(imei),
+          uploadUrl: mdvrRtmpUploadUrl(imei, logicalChannel),
           channel: logicalChannel,
           dataType: dataType ?? '0',
           streamType: streamType ?? '0',
@@ -250,10 +357,10 @@ export function useRegisterChannel() {
   });
 }
 
-/** Default MDVR camera numbers (CH1–CH4). */
-export const DEFAULT_MDVR_CHANNEL_NOS = [1, 2, 3, 4] as const;
+/** Default MDVR camera numbers (MD300 is typically two cameras). Extra channels via the wizard. */
+export const DEFAULT_MDVR_CHANNEL_NOS = [1, 2] as const;
 
-/** Register CH1–CH4 for a bound MDVR so the video wall has something to play. */
+/** Register CH1–CH2 for a bound MDVR so the video wall has something to play. */
 export async function registerDefaultMdvrChannels(input: {
   vehicleId: string;
   deviceId: string;

@@ -82,17 +82,22 @@ export function CommandHistoryTable({ rows, loading }: CommandHistoryTableProps)
     {
       id: 'response',
       headerKey: 'commands.history.response',
-      render: (r) => (
-        <span
-          className={`block max-w-[240px] truncate font-mono text-xs ${
-            r.error
-              ? 'text-danger-600 dark:text-danger-400'
-              : 'text-gray-800 dark:text-graydark-800'
-          }`}
-        >
-          {r.responseText ?? r.error ?? '—'}
-        </span>
-      ),
+      render: (r) => {
+        const text = r.responseText ?? r.error ?? '—';
+        return (
+          <Tooltip label={text}>
+            <span
+              className={`block max-w-[240px] truncate font-mono text-xs ${
+                r.error
+                  ? 'text-danger-600 dark:text-danger-400'
+                  : 'text-gray-800 dark:text-graydark-800'
+              }`}
+            >
+              {text}
+            </span>
+          </Tooltip>
+        );
+      },
     },
   ];
 

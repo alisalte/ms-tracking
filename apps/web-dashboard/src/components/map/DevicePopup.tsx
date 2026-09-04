@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Clock,
   Gauge,
   History,
+  LocateFixed,
   type LucideIcon,
   MapPin,
   MessageSquare,
@@ -15,18 +16,22 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { type AlarmListParams, fetchAlarms } from '@/api/alarm.api';
+import { fetchDeviceCommand, useSendDeviceCommand } from '@/api/command.api';
 import { driverFullName, useDrivers } from '@/api/driver.api';
 import { useVehicleDetail } from '@/api/fleet.api';
 import { useReverseGeocode } from '@/api/map.api';
+import { queryKeys } from '@/api/query-keys';
 import { PERMISSIONS, usePermissions } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
+import { useToast } from '@/components/feedback/ToastProvider';
 import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
+import { localizeAlarmMessage, localizeAlarmType } from '@/lib/alarm-copy';
 import { lastSeenLabel } from '@/lib/relative-time';
 import { status } from '@/theme/palette';
 
@@ -69,8 +74,12 @@ export function DevicePopup({
 }: DevicePopupProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const toast = useToast();
+  const qc = useQueryClient();
   const { can } = usePermissions();
   const { data, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
+  const sendCommand = useSendDeviceCommand(data?.deviceId ?? null);
+  const [locating, setLocating] = useState(false);
   const { data: drivers } = useDrivers({
     enabled: Boolean(vehicleId) && can(PERMISSIONS.driverRead),
   });
@@ -105,6 +114,30 @@ export function DevicePopup({
   if (!vehicleId) return null;
 
   const live = data?.presence === 'ONLINE';
+
+  const requestLiveFix = async () => {
+    if (!data?.deviceId) return;
+    setLocating(true);
+    try {
+      const rec = await sendCommand.mutateAsync({ commandCode: 'A10', params: {}, ttlSec: 600 });
+      toast.success(t('map.popup.locateQueued'));
+      const deadline = Date.now() + 180_000;
+      let row = rec;
+      while (Date.now() < deadline && (row.status === 'QUEUED' || row.status === 'SENT')) {
+        await new Promise((r) => setTimeout(r, 3000));
+        row = await fetchDeviceCommand(row.id);
+      }
+      await qc.invalidateQueries({ queryKey: queryKeys.fleet.all });
+      if (row.status === 'ACKED') toast.success(t('map.popup.locateOk'));
+      else if (row.status === 'QUEUED' || row.status === 'SENT') {
+        toast.success(t('map.popup.locateWaiting'));
+      } else toast.error(t('map.popup.locateFail'));
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setLocating(false);
+    }
+  };
 
   return (
     <div role="presentation" className="absolute inset-0 z-40" data-testid="device-popup-overlay">
@@ -226,6 +259,13 @@ export function DevicePopup({
             </p>
             <div className="mb-4 grid grid-cols-2 gap-1.5">
               <ActionButton
+                icon={LocateFixed}
+                label={locating ? t('common.loading') : t('map.popup.locate')}
+                disabled={!data.deviceId || locating}
+                title={!data.deviceId ? t('map.popup.offlineAction') : undefined}
+                onClick={() => void requestLiveFix()}
+              />
+              <ActionButton
                 icon={Navigation}
                 label={t('map.popup.follow')}
                 primary={following}
@@ -285,10 +325,10 @@ export function DevicePopup({
                       style={{ backgroundColor: SEVERITY_COLOR[a.severity] ?? status.slate }}
                     />
                     <p className="min-w-0 flex-1 text-sm text-gray-800 dark:text-graydark-800">
-                      {t(`alarms.type.${a.type}`)}
+                      {localizeAlarmType(t, a.type)}
                       <span className="text-xs text-gray-500 dark:text-graydark-600">
                         {' · '}
-                        {a.message}
+                        {localizeAlarmMessage(t, a)}
                       </span>
                     </p>
                     <span className="shrink-0 text-[0.65rem] text-gray-400 tabular-nums dark:text-graydark-500">

@@ -4,24 +4,36 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveAlarms } from '@/api/fleet.api';
+import { ALARM_CATALOG_TYPES, localizeAlarmType, mapAlarmType } from '@/lib/alarm-copy';
 import { chart } from '@/theme/palette';
-import type { AlertType } from '@/types/fleet.types';
 
 import { ApexChart } from './ApexChart';
 import { DashboardCard } from './DashboardCard';
 
 /** Alert type → semantic color (§0.2). */
-const TYPE_COLOR: Record<AlertType, string> = {
+const TYPE_COLOR: Record<string, string> = {
   overspeed: chart.speeding,
+  dms: chart.fcw,
   fcw: chart.fcw,
   idle: chart.idle,
   geofence: chart.geofence,
   dtc: chart.dtc,
+  battery: chart.lowBattery,
   lowBattery: chart.lowBattery,
+  sos: chart.critical,
+  collision: chart.speeding,
+  offline: chart.offline,
+  camera: chart.other,
+  'fuel-theft': chart.high,
+  temperature: chart.medium,
+  ignition: chart.info,
+  tow: chart.other,
+  power: chart.high,
+  jamming: chart.other,
+  other: chart.other,
 };
 
-/** Display order for the rose/donut — most-severe first. */
-const TYPE_ORDER: AlertType[] = ['overspeed', 'fcw', 'idle', 'geofence', 'dtc', 'lowBattery'];
+const TYPE_ORDER = [...ALARM_CATALOG_TYPES, 'fcw', 'dtc', 'lowBattery'] as const;
 
 /**
  * AlertTypeBreakdownChart — polar-area of active alerts grouped by type.
@@ -34,13 +46,14 @@ export function AlertTypeBreakdownChart() {
   const alerts = data ?? [];
 
   const { labels, series, colors } = useMemo(() => {
-    const counts = new Map<AlertType, number>();
+    const counts = new Map<string, number>();
     for (const a of alerts) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
-    const ordered = TYPE_ORDER.filter((type) => counts.has(type));
+    const extra = [...counts.keys()].filter((type) => !TYPE_ORDER.includes(type as never));
+    const ordered = [...TYPE_ORDER.filter((type) => counts.has(type)), ...extra];
     return {
-      labels: ordered.map((type) => t(`dashboard.alerts.${type}`)),
+      labels: ordered.map((type) => localizeAlarmType(t, mapAlarmType(type))),
       series: ordered.map((type) => counts.get(type) ?? 0),
-      colors: ordered.map((type) => TYPE_COLOR[type]),
+      colors: ordered.map((type) => TYPE_COLOR[type] ?? chart.other),
     };
   }, [alerts, t]);
 

@@ -142,7 +142,10 @@ export function useLiveTracking(tenantId: string | null, wsUrl?: string): LiveTr
  *   same way the REST bootstrap derives it (offline → offline, stale → stopped,
  *   moving → driving, ignition off → stopped, else idle).
  *
- * Vehicles without a live delta are returned unchanged (referentially stable).
+ * A live delta that is MDVR GPS junk (Norwegian Sea ~67°N, 0°E) is ignored.
+ * A live delta that teleports more than 250 km from a *fresh* REST bootstrap is
+ * ignored, unless the REST point itself is junk (so a real fix can correct it).
+ * Vehicles without a live delta are returned unchanged.
  */
 export function mergeLivePositions(
   vehicles: MapVehicle[],
@@ -151,7 +154,8 @@ export function mergeLivePositions(
 ): MapVehicle[] {
   if (live.size === 0 && (!statuses || statuses.size === 0)) return vehicles;
   return vehicles.map((v) => {
-    const pos = live.get(v.id);
+    const raw = live.get(v.id);
+    const pos = raw && !isTeleport(v, raw) ? raw : undefined;
     const status = statuses ? (statuses.get(v.deviceId ?? '') ?? statuses.get(v.id)) : undefined;
     if (!pos && !status) return v;
     // A WS status delta wins; without one the bootstrapped presence stands
@@ -181,4 +185,34 @@ export function mergeLivePositions(
       lastSeenAt: status?.lastSeenAt ?? v.lastSeenAt,
     };
   });
+}
+
+/** Ignore a live fix that jumps more than 250 km from a fresh REST bootstrap. */
+const TELEPORT_M = 250_000;
+/** REST last-known older than this is not a live lock — the vehicle may have travelled. */
+const REST_FRESH_MS = 30 * 60_000;
+
+/** MDVR invalid-GPS junk seen in the wild (Norwegian Sea ~67.28, 0.20). */
+function isGarbageFix(lat: number, lng: number): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
+  if (lat === 0 && lng === 0) return true;
+  return lat > 60 && Math.abs(lng) < 8;
+}
+
+function isTeleport(v: MapVehicle, pos: LivePosition): boolean {
+  if (isGarbageFix(pos.latitude, pos.longitude)) return true;
+  if (isGarbageFix(v.lat, v.lng)) return false;
+  if (!Number.isFinite(v.lat) || !Number.isFinite(v.lng)) return false;
+  const dLat = ((pos.latitude - v.lat) * Math.PI) / 180;
+  const dLng = ((pos.longitude - v.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((v.lat * Math.PI) / 180) *
+      Math.cos((pos.latitude * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  const meters = 6_371_000 * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+  if (meters <= TELEPORT_M) return false;
+  const restTs = v.updatedAt ? Date.parse(v.updatedAt) : Number.NaN;
+  if (!Number.isFinite(restTs) || Date.now() - restTs > REST_FRESH_MS) return false;
+  return true;
 }

@@ -1,32 +1,15 @@
 import type { TFunction } from 'i18next';
-import {
-  AlertOctagon,
-  AlertTriangle,
-  Battery,
-  Gauge,
-  MapPin,
-  ShieldAlert,
-  Wrench,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { AlertOctagon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useActiveAlarms } from '@/api/fleet.api';
+import { alarmTypeIcon } from '@/components/alarms/AlarmTypeIcon';
 import { Badge } from '@/components/tailwind-ui';
-import type { AlertSeverity, AlertType, FleetAlert } from '@/types/fleet.types';
+import { localizeAlarmMessage, localizeAlarmType, mapAlarmType } from '@/lib/alarm-copy';
+import type { AlertSeverity, FleetAlert } from '@/types/fleet.types';
 
 import { DashboardCard } from './DashboardCard';
-
-/** Icon per alert category. */
-const ALERT_ICON: Record<AlertType, LucideIcon> = {
-  overspeed: Gauge,
-  idle: AlertTriangle,
-  geofence: MapPin,
-  fcw: ShieldAlert,
-  dtc: Wrench,
-  lowBattery: Battery,
-};
 
 /** Severity → tailwind badge tone + icon tint. */
 const SEVERITY_TONE: Record<AlertSeverity, { badge: 'danger' | 'warning' | 'gray'; text: string }> =
@@ -102,7 +85,8 @@ export function RecentEventsPanel() {
     >
       <ul className="flex list-none flex-col gap-1 p-0">
         {alerts.slice(0, 6).map((alert) => {
-          const Icon = ALERT_ICON[alert.type];
+          const catalogType = mapAlarmType(alert.type);
+          const Icon = alarmTypeIcon(catalogType);
           const tone = SEVERITY_TONE[alert.severity];
           return (
             <li key={alert.id}>
@@ -115,14 +99,18 @@ export function RecentEventsPanel() {
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-gray-800 dark:text-graydark-800">
-                      {t(`dashboard.alerts.${alert.type}`)}
+                      {localizeAlarmType(t, catalogType)}
                       <span className="font-medium text-gray-500 dark:text-graydark-600">
                         {' · '}
                         {alert.vehicleLabel}
                       </span>
                     </span>
                     <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
-                      {alert.detail}
+                      {localizeAlarmMessage(t, {
+                        type: catalogType,
+                        message: alert.detail,
+                        detail: alert.detail,
+                      })}
                     </span>
                   </span>
                   <span className="text-xs whitespace-nowrap tabular-nums text-gray-400 dark:text-graydark-600">

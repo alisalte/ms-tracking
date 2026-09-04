@@ -20,6 +20,7 @@ import {
 } from '@/api/notification.api';
 import { Button, Spinner } from '@/components/tailwind-ui';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
+import { localizeNotificationBody, localizeNotificationTitle } from '@/lib/alarm-copy';
 
 export function NotificationBell() {
   const { t } = useTranslation();
@@ -42,7 +43,7 @@ export function NotificationBell() {
     <div className="relative">
       <button
         type="button"
-        aria-label="notifications"
+        aria-label={t('notifications.title')}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="relative inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-graydark-600 dark:hover:bg-white/5 dark:hover:text-white"
@@ -126,11 +127,11 @@ export function NotificationBell() {
                               : 'font-semibold text-gray-900 dark:text-white'
                           }`}
                         >
-                          {n.title}
+                          {localizeNotificationTitle(t, n)}
                         </span>
                       </span>
                       <span className="w-full truncate text-xs text-gray-500 dark:text-graydark-600">
-                        {n.body}
+                        {localizeNotificationBody(t, n)}
                       </span>
                     </button>
                   </li>

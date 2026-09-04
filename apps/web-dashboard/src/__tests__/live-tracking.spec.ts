@@ -148,4 +148,53 @@ describe('mergeLivePositions with device-status deltas (§18/§19)', () => {
     expect(v1?.speed).toBe(75);
     expect(v1?.presence).toBe('ONLINE'); // unchanged — no status delta
   });
+
+  it('ignores a live fix that teleports across continents', () => {
+    const norway = new Map<string, LivePosition>([
+      [
+        'v1',
+        {
+          vehicleId: 'v1',
+          latitude: 67.28,
+          longitude: 0.2,
+          speedKph: 0,
+          headingDeg: 238,
+          capturedAt: '2026-09-03T23:15:00Z',
+          quality: 'VALID',
+        },
+      ],
+    ]);
+    const result = mergeLivePositions(withDevices, norway, new Map());
+    const v1 = result.find((v) => v.id === 'v1');
+    expect(v1?.lat).toBe(35.7);
+    expect(v1?.lng).toBe(51.3);
+  });
+
+  it('lets a real live fix replace MDVR junk on the REST bootstrap', () => {
+    const junkRest: MapVehicle[] = [
+      {
+        ...withDevices[0],
+        lat: 67.28,
+        lng: 0.2,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    const tehran = new Map<string, LivePosition>([
+      [
+        'v1',
+        {
+          vehicleId: 'v1',
+          latitude: 35.703,
+          longitude: 51.403,
+          speedKph: 12,
+          headingDeg: 90,
+          capturedAt: new Date().toISOString(),
+          quality: 'VALID',
+        },
+      ],
+    ]);
+    const result = mergeLivePositions(junkRest, tehran, new Map());
+    expect(result[0]?.lat).toBe(35.703);
+    expect(result[0]?.lng).toBe(51.403);
+  });
 });
