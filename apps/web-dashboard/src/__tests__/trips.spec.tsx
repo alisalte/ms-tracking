@@ -36,8 +36,10 @@ vi.mock('maplibre-gl', () => {
     addSource() {}
     addLayer() {}
     getSource() {
-      return null;
+      return { setData() {} };
     }
+    moveLayer() {}
+    triggerRepaint() {}
     resize() {}
     stop() {}
     getContainer() {
@@ -52,6 +54,12 @@ vi.mock('maplibre-gl', () => {
     remove() {}
     getCanvas() {
       return document.createElement('canvas');
+    }
+    getCanvasContainer() {
+      return document.createElement('div');
+    }
+    project() {
+      return { x: 10, y: 10 };
     }
   };
   const StubMarker = class {
@@ -142,6 +150,7 @@ function renderTripDetail(id: string) {
 
 describe('TripsPage', () => {
   beforeEach(async () => {
+    window.localStorage.setItem('fleetvision_use_mock', 'true');
     await i18n.changeLanguage('en');
   });
 
@@ -192,8 +201,8 @@ describe('TripsPage', () => {
     window.localStorage.setItem('fleetvision_use_mock', 'false');
     try {
       renderTripsList();
-      expect(await screen.findByText('Connection error')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
+      expect(screen.queryByText(tripAt(0).id)).not.toBeInTheDocument();
     } finally {
       window.localStorage.setItem('fleetvision_use_mock', 'true');
     }
@@ -202,6 +211,7 @@ describe('TripsPage', () => {
 
 describe('TripDetailPage', () => {
   beforeEach(async () => {
+    window.localStorage.setItem('fleetvision_use_mock', 'true');
     await i18n.changeLanguage('en');
   });
 
@@ -218,6 +228,7 @@ describe('TripDetailPage', () => {
     // Timeline + speed graph section titles.
     expect(screen.getByText('Timeline')).toBeInTheDocument();
     expect(screen.getByText('Speed over time')).toBeInTheDocument();
+    expect(screen.getByTestId('trip-speed-hud')).toBeInTheDocument();
   });
 
   it('toggles playback when the play button is clicked', async () => {
@@ -252,10 +263,9 @@ describe('TripDetailPage', () => {
     window.localStorage.setItem('fleetvision_use_mock', 'false');
     try {
       renderTripDetail('TR-9999');
-      expect(await screen.findByText('Connection error')).toBeInTheDocument();
-      expect(screen.getByText('Back to trips')).toBeInTheDocument();
-      // The playback UI never renders without real data.
+      expect(await screen.findByText('Back to trips')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('trip-replay-map')).not.toBeInTheDocument();
     } finally {
       window.localStorage.setItem('fleetvision_use_mock', 'true');
     }

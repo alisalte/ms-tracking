@@ -8,8 +8,10 @@
  * mounted maps in the same tab via `fv:basemap-change`.
  *
  * Google styles use Google's public raster endpoints (labels follow the UI
- * language). OSM / Esri / OpenTopo stay available so the operator can flip
- * back from Map settings at any time.
+ * language). Raster `maxzoom` is capped at 21 because Google has no z=22
+ * tiles — MapLibre's default is 22, those requests 404 as HTML without CORS,
+ * and the console fills with `AJAXError: Failed to fetch`. OSM / Esri /
+ * OpenTopo stay available so the operator can flip back from Map settings.
  */
 import type { Map as MaplibreMap } from 'maplibre-gl';
 
@@ -37,6 +39,11 @@ export interface BasemapDef {
   readonly googleLyrs?: 'm' | 's' | 'y' | 'p';
   /** Static tile URL templates (non-Google providers). */
   readonly tiles?: readonly string[];
+  /**
+   * Native raster zoom. MapLibre overzooms past this instead of requesting
+   * missing tiles. Unset → MapLibre default 22, which 404s on Google/OSM.
+   */
+  readonly maxzoom: number;
 }
 
 export const BASEMAP_STORAGE_KEY = 'fv:map-basemap';
@@ -50,6 +57,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     attribution: '© Google',
     swatchClass: 'from-sky-300 via-emerald-200 to-amber-200',
     googleLyrs: 'm',
+    maxzoom: 21,
   },
   {
     id: 'google-satellite',
@@ -58,6 +66,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     attribution: '© Google',
     swatchClass: 'from-slate-600 to-slate-900',
     googleLyrs: 's',
+    maxzoom: 21,
   },
   {
     id: 'google-hybrid',
@@ -66,6 +75,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     attribution: '© Google',
     swatchClass: 'from-emerald-900 to-slate-700',
     googleLyrs: 'y',
+    maxzoom: 21,
   },
   {
     id: 'google-terrain',
@@ -74,6 +84,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     attribution: '© Google',
     swatchClass: 'from-lime-200 to-amber-400',
     googleLyrs: 'p',
+    maxzoom: 21,
   },
   {
     id: 'streets',
@@ -82,6 +93,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
     attribution: '© OpenStreetMap contributors',
     swatchClass: 'from-emerald-200 to-emerald-400',
+    maxzoom: 19,
   },
   {
     id: 'satellite',
@@ -92,6 +104,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     ],
     attribution: '© Esri, Maxar, Earthstar Geographics',
     swatchClass: 'from-slate-600 to-slate-800',
+    maxzoom: 19,
   },
   {
     id: 'dark',
@@ -102,6 +115,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     ],
     attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors',
     swatchClass: 'from-gray-700 to-gray-900',
+    maxzoom: 16,
   },
   {
     id: 'topo',
@@ -114,6 +128,7 @@ export const BASEMAPS: readonly BasemapDef[] = [
     ],
     attribution: '© OpenTopoMap (CC-BY-SA)',
     swatchClass: 'from-amber-200 to-amber-500',
+    maxzoom: 17,
   },
 ];
 
@@ -146,17 +161,22 @@ export function basemapTiles(def: BasemapDef, lang?: string): string[] {
   return [...(def.tiles ?? [])];
 }
 
+function rasterSource(bm: BasemapDef, lang?: string) {
+  return {
+    type: 'raster' as const,
+    tiles: basemapTiles(bm, lang),
+    tileSize: 256,
+    attribution: bm.attribution,
+    maxzoom: bm.maxzoom,
+  };
+}
+
 export function rasterMapStyle(id: BasemapId, lang?: string) {
   const bm = basemapById(id);
   return {
     version: 8 as const,
     sources: {
-      basemap: {
-        type: 'raster' as const,
-        tiles: basemapTiles(bm, lang),
-        tileSize: 256,
-        attribution: bm.attribution,
-      },
+      basemap: rasterSource(bm, lang),
     },
     layers: [{ id: 'basemap', type: 'raster' as const, source: 'basemap' }],
   };
@@ -174,23 +194,19 @@ export function applyRasterBasemap(
   beforeLayerIds: readonly string[] = [],
 ): void {
   const bm = basemapById(id);
-  const tiles = basemapTiles(bm, lang);
+  const source = rasterSource(bm, lang);
   const existing = map.getSource('basemap') as
-    | { setTiles?: (next: string[]) => void; attribution?: string }
+    | { setTiles?: (next: string[]) => void; attribution?: string; maxzoom?: number }
     | undefined;
   if (existing && typeof existing.setTiles === 'function') {
-    existing.setTiles(tiles);
-    existing.attribution = bm.attribution;
+    existing.setTiles(source.tiles);
+    existing.attribution = source.attribution;
+    existing.maxzoom = source.maxzoom;
     return;
   }
   if (map.getLayer('basemap')) map.removeLayer('basemap');
   if (map.getSource('basemap')) map.removeSource('basemap');
-  map.addSource('basemap', {
-    type: 'raster',
-    tiles,
-    tileSize: 256,
-    attribution: bm.attribution,
-  });
+  map.addSource('basemap', source);
   const before = beforeLayerIds.find((layerId) => map.getLayer(layerId));
   map.addLayer({ id: 'basemap', type: 'raster', source: 'basemap' }, before);
 }

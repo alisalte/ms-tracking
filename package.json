@@ -30,6 +30,7 @@
     "stack:ps": "docker compose --project-name fleetvision -f infra/docker/docker-compose.yml ps",
     "seed:demo": "node tools/seed-demo.mjs",
     "seed:history": "node tools/seed-history-existing.mjs",
+    "seed:showcase-trip": "node tools/seed-showcase-trip.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

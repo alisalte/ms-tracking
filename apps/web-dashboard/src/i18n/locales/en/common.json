@@ -554,11 +554,22 @@
       "vehicle": "Vehicle position",
       "timeline": "Timeline",
       "speedGraph": "Speed over time",
+      "hudSpeed": "{{speed}} km/h",
+      "hudStopped": "Stopped",
+      "hudMoving": "Moving",
+      "start": "Start",
+      "end": "End",
+      "eventDuration": "{{type}} · {{minutes}} min",
       "legend": {
         "route": "Route",
         "stop": "Stop",
         "idle": "Idle",
-        "overspeed": "Overspeed"
+        "overspeed": "Overspeed",
+        "speedStopped": "Stopped",
+        "speedSlow": "< 40",
+        "speedMedium": "40–80",
+        "speedFast": "80–100",
+        "speedOver": "> 100"
       }
     },
     "timeline": {
@@ -1769,7 +1780,7 @@
     },
     "draw": {
       "polygonHint": "Click the map to add vertices. The blue fill is the selected area.",
-      "selfIntersecting": "Edges cross — drag a vertex so the blue fill does not fold over itself.",
+      "selfIntersecting": "Edges cross — click the four corners around the boundary (not two-by-two in rows), or drag a vertex.",
       "polygonStatus": "{{count}} vertices · {{area}}",
       "circleStatus": "Center {{lat}}, {{lng}} · radius {{radius}} m",
       "circleCenterHint": "Click the map to place the center. The circle uses the radius field (meters).",
@@ -1787,7 +1798,7 @@
       "legendActive": "Area being drawn",
       "legendExisting": "Other geofences",
       "selectedCircle": "Selected area · {{radius}} m radius",
-      "selectedPolygon": "Selected area (blue fill)"
+      "selectedPolygon": "Selected area — interior highlighted"
     },
     "overviewMap": "All geofences on the map"
   },

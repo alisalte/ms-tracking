@@ -29,7 +29,7 @@
  */
 import { type GeoJSONSource, Map as MaplibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
@@ -317,6 +317,120 @@ export function ringSelfIntersects(ring: number[][]): boolean {
   return false;
 }
 
+/**
+ * Walk vertices counter-clockwise around their centroid. Four corners clicked
+ * left-to-right in two rows (a Z / bow-tie) become a simple quadrilateral.
+ */
+export function orderRingAroundCentroid(ring: number[][]): number[][] {
+  const pts = dropRingClosure(ring);
+  if (pts.length < 3) return pts;
+  let sx = 0;
+  let sy = 0;
+  for (const p of pts) {
+    sx += p[0] ?? 0;
+    sy += p[1] ?? 0;
+  }
+  const cx = sx / pts.length;
+  const cy = sy / pts.length;
+  return [...pts].sort((a, b) => {
+    const aa = Math.atan2((a[1] ?? 0) - cy, (a[0] ?? 0) - cx);
+    const bb = Math.atan2((b[1] ?? 0) - cy, (b[0] ?? 0) - cx);
+    return aa - bb;
+  });
+}
+
+/** If the ring is a bow-tie, reorder vertices into a simple polygon when possible. */
+export function untangleRing(ring: number[][]): number[][] {
+  const pts = dropRingClosure(ring);
+  if (!ringSelfIntersects(pts)) return pts;
+  const ordered = orderRingAroundCentroid(pts);
+  return ringSelfIntersects(ordered) ? pts : ordered;
+}
+
+/** Convex hull (monotone chain) so four corners always enclose a fillable area. */
+export function convexHullRing(ring: number[][]): number[][] {
+  const pts = dropRingClosure(ring);
+  if (pts.length < 3) return pts;
+  const keyOf = (p: number[]) => `${(p[0] ?? 0).toFixed(7)}:${(p[1] ?? 0).toFixed(7)}`;
+  const uniq: number[][] = [];
+  const seen = new Set<string>();
+  for (const p of pts) {
+    const k = keyOf(p);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    uniq.push(p);
+  }
+  if (uniq.length < 3) return pts;
+  const sorted = [...uniq].sort((a, b) => {
+    const dx = (a[0] ?? 0) - (b[0] ?? 0);
+    return dx !== 0 ? dx : (a[1] ?? 0) - (b[1] ?? 0);
+  });
+  const cross = (o: number[], a: number[], b: number[]) =>
+    ((a[0] ?? 0) - (o[0] ?? 0)) * ((b[1] ?? 0) - (o[1] ?? 0)) -
+    ((a[1] ?? 0) - (o[1] ?? 0)) * ((b[0] ?? 0) - (o[0] ?? 0));
+  const popWhileNotLeftTurn = (stack: number[][], p: number[]) => {
+    while (stack.length >= 2) {
+      const origin = stack[stack.length - 2];
+      const tip = stack[stack.length - 1];
+      if (!origin || !tip || cross(origin, tip, p) > 0) break;
+      stack.pop();
+    }
+  };
+  const lower: number[][] = [];
+  for (const p of sorted) {
+    popWhileNotLeftTurn(lower, p);
+    lower.push(p);
+  }
+  const upper: number[][] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i];
+    if (!p) continue;
+    popWhileNotLeftTurn(upper, p);
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+/**
+ * Ring used for the selected fill. Four corners always become the convex
+ * quadrilateral (the interior of those points) so MapLibre can paint a fill —
+ * a bow-tie has no interior and stays empty.
+ */
+export function drawRingForFill(ring: number[][]): number[][] {
+  const pts = dropRingClosure(ring);
+  if (pts.length < 3) return pts;
+  if (pts.length === 4) {
+    const hull = convexHullRing(pts);
+    if (hull.length >= 3 && !ringSelfIntersects(hull)) return hull;
+  }
+  if (ringSelfIntersects(pts)) {
+    const ordered = orderRingAroundCentroid(pts);
+    if (!ringSelfIntersects(ordered)) return ordered;
+    const hull = convexHullRing(pts);
+    if (hull.length >= 3 && !ringSelfIntersects(hull)) return hull;
+  }
+  return pts;
+}
+
+function projectRingPoints(map: MaplibreMap, ring: number[][]): string | null {
+  const parts: string[] = [];
+  for (const p of ring) {
+    const pt = map.project([p[0] ?? 0, p[1] ?? 0]);
+    if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) return null;
+    parts.push(`${pt.x},${pt.y}`);
+  }
+  return parts.length >= 3 ? parts.join(' ') : null;
+}
+
+const DRAW_OVERLAY_LAYER_IDS = [
+  'geofence-draw-fill',
+  'geofence-draw-halo',
+  'geofence-draw-line-casing',
+  'geofence-draw-line',
+] as const;
+
 export function polygonAreaM2(ring: number[][]): number {
   if (ring.length < 4) return 0;
   const lat0 = ring[0]?.[1] ?? 0;
@@ -331,7 +445,7 @@ export function polygonAreaM2(ring: number[][]): number {
   return Math.abs(sum / 2);
 }
 
-const DRAW_BASEMAP_BEFORE = ['geofence-existing-fill'] as const;
+const DRAW_BASEMAP_BEFORE = ['geofence-draw-fill', 'geofence-existing-fill'] as const;
 
 export function GeofenceDrawMap({
   geofences,
@@ -344,6 +458,8 @@ export function GeofenceDrawMap({
   height = 480,
 }: GeofenceDrawMapProps) {
   const { t, i18n } = useTranslation();
+  const overlayUid = useId();
+  const hatchId = `fv-sel-${overlayUid.replace(/:/g, '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -384,16 +500,17 @@ export function GeofenceDrawMap({
     const center = centerRef.current;
     const radiusM = parseCircleRadiusM(radiusRef.current);
     if (currentMode === 'polygon' && vertices.length > 0) {
-      const invalid = ringSelfIntersects(vertices);
-      if (vertices.length >= 3) {
-        const first = vertices[0] as number[];
+      const fillPts = drawRingForFill(vertices);
+      const invalid = ringSelfIntersects(fillPts);
+      if (fillPts.length >= 3) {
+        const first = fillPts[0] as number[];
         src.setData({
           type: 'FeatureCollection',
           features: [
             {
               type: 'Feature',
-              geometry: { type: 'Polygon', coordinates: [[...vertices, first]] },
-              properties: { invalid },
+              geometry: { type: 'Polygon', coordinates: [[...fillPts, first]] },
+              properties: { invalid, selected: !invalid },
             },
           ],
         });
@@ -403,19 +520,34 @@ export function GeofenceDrawMap({
           features: [
             {
               type: 'Feature',
-              geometry: { type: 'LineString', coordinates: vertices },
-              properties: { invalid: false },
+              geometry: { type: 'LineString', coordinates: fillPts },
+              properties: { invalid: false, selected: false },
             },
           ],
         });
       }
+      for (const id of DRAW_OVERLAY_LAYER_IDS) {
+        if (map.getLayer(id)) map.moveLayer(id);
+      }
+      if (map.getLayer('basemap')) {
+        const firstOverlay =
+          DRAW_OVERLAY_LAYER_IDS.find((id) => map.getLayer(id)) ??
+          (map.getLayer('geofence-existing-fill') ? 'geofence-existing-fill' : undefined);
+        if (firstOverlay) map.moveLayer('basemap', firstOverlay);
+      }
+      map.triggerRepaint();
       return;
     }
     if (currentMode === 'circle' && center && radiusM != null) {
       src.setData(circleDrawCollection(center[0], center[1], radiusM));
+      for (const id of DRAW_OVERLAY_LAYER_IDS) {
+        if (map.getLayer(id)) map.moveLayer(id);
+      }
+      map.triggerRepaint();
       return;
     }
     src.setData(EMPTY_DRAW);
+    map.triggerRepaint();
   };
 
   // Seed the radius when editing an existing circle (form ↔ map sync, once).
@@ -436,12 +568,13 @@ export function GeofenceDrawMap({
         onDrawn(null);
         return;
       }
-      if (ringSelfIntersects(polygonVertices)) {
+      const fillPts = drawRingForFill(polygonVertices);
+      if (ringSelfIntersects(fillPts)) {
         onDrawn(null);
         return;
       }
-      const first = polygonVertices[0] as number[];
-      const ring = [...polygonVertices, first];
+      const first = fillPts[0] as number[];
+      const ring = [...fillPts, first];
       onDrawn({ boundary: { type: 'Polygon', coordinates: [ring] } });
       return;
     }
@@ -540,7 +673,6 @@ export function GeofenceDrawMap({
         id: 'geofence-draw-fill',
         type: 'fill',
         source: 'geofence-draw',
-        filter: ['==', ['geometry-type'], 'Polygon'],
         paint: {
           'fill-color': [
             'case',
@@ -548,14 +680,13 @@ export function GeofenceDrawMap({
             status.danger,
             mapAccents.geofence,
           ],
-          'fill-opacity': ['case', ['boolean', ['get', 'invalid'], false], 0.28, 0.36],
+          'fill-opacity': ['case', ['boolean', ['get', 'invalid'], false], 0.28, 0.5],
         },
       });
       map.addLayer({
         id: 'geofence-draw-halo',
         type: 'line',
         source: 'geofence-draw',
-        filter: ['==', ['geometry-type'], 'Polygon'],
         paint: {
           'line-color': [
             'case',
@@ -563,8 +694,8 @@ export function GeofenceDrawMap({
             status.danger,
             mapAccents.geofence,
           ],
-          'line-width': 16,
-          'line-opacity': 0.28,
+          'line-width': 22,
+          'line-opacity': 0.4,
           'line-blur': 8,
         },
       });
@@ -585,7 +716,7 @@ export function GeofenceDrawMap({
             status.danger,
             mapAccents.geofence,
           ],
-          'line-width': 3,
+          'line-width': 4,
         },
       });
       applyDrawRef.current(map);
@@ -619,23 +750,25 @@ export function GeofenceDrawMap({
       const lng = e.lngLat.lng;
       if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
       if (modeRef.current === 'polygon') {
-        setPolygonVertices((prev) => {
-          if (prev.length > 0) {
-            const last = prev[prev.length - 1];
-            if (last && haversineMeters(last[1] ?? 0, last[0] ?? 0, lat, lng) < 3) {
-              return prev;
-            }
+        const prev = polygonRef.current;
+        if (prev.length > 0) {
+          const last = prev[prev.length - 1];
+          if (last && haversineMeters(last[1] ?? 0, last[0] ?? 0, lat, lng) < 3) {
+            return;
           }
-          if (prev.length >= 3) {
-            const first = prev[0];
-            if (first) {
-              const a = map.project([first[0] ?? 0, first[1] ?? 0]);
-              const b = map.project([lng, lat]);
-              if (Math.hypot(a.x - b.x, a.y - b.y) < 16) return prev;
-            }
+        }
+        if (prev.length >= 3) {
+          const first = prev[0];
+          if (first) {
+            const a = map.project([first[0] ?? 0, first[1] ?? 0]);
+            const b = map.project([lng, lat]);
+            if (Math.hypot(a.x - b.x, a.y - b.y) < 16) return;
           }
-          return [...prev, [lng, lat]];
-        });
+        }
+        const next = drawRingForFill([...prev, [lng, lat]]);
+        polygonRef.current = next;
+        setPolygonVertices(next);
+        applyDrawRef.current(map);
       } else if (modeRef.current === 'circle') {
         setCircleCenter([lat, lng]);
         centerRef.current = [lat, lng];
@@ -699,7 +832,11 @@ export function GeofenceDrawMap({
           setPolygonVertices((prev) => {
             const next = [...prev];
             next[i] = [ll.lng, ll.lat];
-            return next;
+            const ring = drawRingForFill(next);
+            polygonRef.current = ring;
+            const live = mapRef.current;
+            if (live) applyDrawRef.current(live);
+            return ring;
           });
         });
         el.addEventListener('contextmenu', (ev) => {
@@ -881,16 +1018,55 @@ export function GeofenceDrawMap({
     [mode, polygonVertices],
   );
 
-  const polygonInvalid = mode === 'polygon' && ringSelfIntersects(polygonVertices);
-
   const circleRadius = parseCircleRadiusM(circleRadiusM);
+  const polygonInvalid =
+    mode === 'polygon' &&
+    polygonVertices.length >= 3 &&
+    ringSelfIntersects(drawRingForFill(polygonVertices));
   const radiusInvalid = mode === 'circle' && circleCenter !== null && circleRadius == null;
+
+  const [, setViewRev] = useState(0);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const bump = () => setViewRev((n) => n + 1);
+    map.on('move', bump);
+    map.on('resize', bump);
+    return () => {
+      map.off('move', bump);
+      map.off('resize', bump);
+    };
+  }, [mapReady]);
+
+  const selectionOverlay = (() => {
+    if (!mapReady) return null;
+    const map = mapRef.current;
+    if (!map) return null;
+    const w = map.getContainer().clientWidth;
+    const h = map.getContainer().clientHeight;
+    if (w < 8 || h < 8) return null;
+    let points: string | null = null;
+    let invalid = false;
+    if (mode === 'polygon' && polygonVertices.length >= 3) {
+      const fillPts = drawRingForFill(polygonVertices);
+      invalid = fillPts.length < 3 || ringSelfIntersects(fillPts);
+      if (fillPts.length >= 3) points = projectRingPoints(map, fillPts);
+    } else if (mode === 'circle' && circleCenter && circleRadius != null) {
+      points = projectRingPoints(
+        map,
+        circleToPolygonRing(circleCenter[0], circleCenter[1], circleRadius),
+      );
+    }
+    if (!points) return null;
+    return { w, h, points, invalid };
+  })();
 
   const statusText =
     mode === 'polygon'
       ? polygonInvalid
         ? t('geofences.draw.selfIntersecting', {
-            defaultValue: 'Edges cross — drag a vertex so the fill does not fold over itself.',
+            defaultValue:
+              'Edges cross — click corners around the boundary (not two-by-two in rows), or drag a vertex.',
           })
         : polygonVertices.length === 0
           ? t('geofences.draw.polygonHint', {
@@ -943,13 +1119,63 @@ export function GeofenceDrawMap({
         {statusText}
       </p>
       <div className="relative">
-        <div
-          ref={containerRef}
-          style={{ width: '100%', height, borderRadius: 8, overflow: 'hidden' }}
-          data-testid="geofence-draw-map"
-          role="application"
-          aria-label={t('geofences.draw.mapLabel', { defaultValue: 'Geofence drawing map' })}
-        />
+        <div className="relative isolate overflow-hidden rounded-lg" style={{ height }}>
+          <div
+            ref={containerRef}
+            className="relative z-0 h-full w-full"
+            data-testid="geofence-draw-map"
+            role="application"
+            aria-label={t('geofences.draw.mapLabel', { defaultValue: 'Geofence drawing map' })}
+          />
+          {selectionOverlay ? (
+            <svg
+              className="pointer-events-none absolute start-0 top-0"
+              style={{ zIndex: 2, width: selectionOverlay.w, height: selectionOverlay.h }}
+              viewBox={`0 0 ${selectionOverlay.w} ${selectionOverlay.h}`}
+              width={selectionOverlay.w}
+              height={selectionOverlay.h}
+              aria-hidden
+              data-testid="geofence-selection-overlay"
+            >
+              <title>
+                {t('geofences.draw.selectionOverlay', { defaultValue: 'Selected geofence area' })}
+              </title>
+              <defs>
+                <pattern
+                  id={hatchId}
+                  patternUnits="userSpaceOnUse"
+                  width="10"
+                  height="10"
+                  patternTransform="rotate(-35)"
+                >
+                  <rect
+                    width="10"
+                    height="10"
+                    fill={selectionOverlay.invalid ? status.danger : mapAccents.geofence}
+                    fillOpacity="0.22"
+                  />
+                  <line
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="10"
+                    stroke={selectionOverlay.invalid ? status.danger : mapAccents.geofence}
+                    strokeWidth="3"
+                    strokeOpacity="0.85"
+                  />
+                </pattern>
+              </defs>
+              <polygon
+                points={selectionOverlay.points}
+                fill={selectionOverlay.invalid ? status.danger : mapAccents.geofence}
+                fillOpacity={0.4}
+                stroke={selectionOverlay.invalid ? status.danger : mapAccents.geofence}
+                strokeWidth={4}
+              />
+              <polygon points={selectionOverlay.points} fill={`url(#${hatchId})`} />
+            </svg>
+          ) : null}
+        </div>
         <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
         <div className="pointer-events-none absolute bottom-2 start-2 z-1 flex flex-col gap-1">
           {(mode === 'circle' && circleCenter && circleRadius != null) ||
@@ -961,7 +1187,7 @@ export function GeofenceDrawMap({
                     defaultValue: `Selected area · ${Math.round(circleRadius ?? 0)} m radius`,
                   })
                 : t('geofences.draw.selectedPolygon', {
-                    defaultValue: 'Selected area (blue fill)',
+                    defaultValue: 'Selected area — interior highlighted',
                   })}
             </div>
           ) : null}

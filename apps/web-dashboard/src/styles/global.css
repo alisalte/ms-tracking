@@ -247,6 +247,7 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
   line-height: 0;
   pointer-events: auto;
   cursor: pointer;
+  z-index: 6;
 }
 .fv-tracking-map[data-zoom-tier='far'] .fv-vehicle-marker,
 .fv-tracking-map[data-zoom-tier='far'] .fv-playback-marker {
@@ -327,4 +328,91 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
 .fv-geofence-label.is-selected {
   background: #465ffb;
   box-shadow: 0 0 0 2px rgb(70 95 251 / 0.45), 0 1px 4px rgb(15 23 42 / 0.35);
+}
+
+.fv-trip-speed-hud {
+  pointer-events: none;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 108px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgb(15 23 42 / 0.88);
+  color: #fff;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.35);
+}
+.fv-trip-speed-hud.is-stopped {
+  background: rgb(71 85 105 / 0.92);
+}
+.fv-trip-speed-hud.is-overspeed {
+  background: rgb(185 28 28 / 0.92);
+}
+.fv-trip-speed-hud__value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.fv-trip-speed-hud__state {
+  font-size: 11px;
+  font-weight: 550;
+  opacity: 0.88;
+}
+
+.fv-trip-event-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 5;
+}
+.fv-trip-event-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 0.86);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.35);
+}
+.fv-trip-event-label--stop {
+  background: rgb(217 119 6 / 0.94);
+}
+.fv-trip-event-label--idle {
+  background: rgb(71 85 105 / 0.94);
+}
+.fv-trip-event-label--overspeed {
+  background: rgb(220 38 38 / 0.94);
+}
+.fv-trip-event-label--geofence {
+  background: rgb(70 95 251 / 0.94);
+}
+
+.fv-trip-endpoint {
+  pointer-events: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.35);
+  z-index: 5;
+}
+.fv-trip-endpoint--start {
+  background: #16a34a;
+}
+.fv-trip-endpoint--end {
+  background: #0f172a;
 }

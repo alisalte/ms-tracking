@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Clock3, MapPin } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useParams } from 'react-router';
 
@@ -22,11 +22,9 @@ import { useTripPlayback } from '@/components/trips/useTripPlayback';
 import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
 import { shouldUseMock } from '@/lib/mock-gate';
+import { TRIP_SPEED_LIMIT_KMH } from '@/lib/trip-events';
 import { status as statusPalette } from '@/theme/palette';
 import type { Trip, TripEvent } from '@/types/fleet.types';
-
-/** Speed limit used for the reference line (km/h) — matches the mock generator. */
-const SPEED_LIMIT_KMH = 100;
 
 /** Event type → list-dot color (semantic palette — Phase 2.6 §10). */
 const EVENT_COLOR: Record<TripEvent['type'], string> = {
@@ -73,6 +71,16 @@ export function TripDetailPage() {
   const waypoints = trip?.waypoints ?? [];
   const events = trip?.events ?? [];
   const playback = useTripPlayback(waypoints.length);
+
+  useEffect(() => {
+    if (waypoints.length < 2) return;
+    if (import.meta.env.MODE === 'test') return;
+    const timer = window.setTimeout(() => {
+      playback.setSpeed(4);
+      playback.play();
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [waypoints.length, playback.play, playback.setSpeed]);
 
   const startLabel = useMemo(
     () =>
@@ -230,12 +238,12 @@ export function TripDetailPage() {
             vehicleType={getVehicleIcon({ label: trip.vehicleLabel })}
           />
         </Card>
-        <Card className="flex h-90 flex-col">
+        <Card className="flex min-h-[460px] flex-col">
           <CardHeader title={t('trips.replay.speedGraph')} />
           <div className="min-h-0 flex-1">
             <SpeedGraph
               waypoints={waypoints}
-              speedLimitKmh={SPEED_LIMIT_KMH}
+              speedLimitKmh={TRIP_SPEED_LIMIT_KMH}
               index={playback.index}
             />
           </div>

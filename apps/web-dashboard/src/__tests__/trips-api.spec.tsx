@@ -151,11 +151,32 @@ describe('useTripDetail (real /trips/:id mapping)', () => {
     expect(detail?.waypoints).toHaveLength(2);
     expect(detail?.waypoints[0]).toMatchObject({ lat: 35.7, lng: 51.4, speed: 40 });
     expect(detail?.idleMin).toBe(5);
-    // Stop event keeps its coordinates; idle event stays timeline-only.
+    // Stop event keeps its coordinates; idle is pinned to the nearest sample (08:10 → 08:00).
     const stop = detail?.events.find((e) => e.type === 'stop');
     const idle = detail?.events.find((e) => e.type === 'idle');
     expect(stop?.lat).toBe(35.71);
-    expect(idle?.lat).toBeUndefined();
+    expect(idle?.lat).toBe(35.7);
+    expect(idle?.lng).toBe(51.4);
+  });
+
+  it('derives overspeed markers from waypoints above the posted limit', async () => {
+    apiGetRaw.mockResolvedValueOnce({
+      ...tripWire,
+      avgSpeedKph: 60.3,
+      waypoints: [
+        { ts: '2026-08-15T08:00:00Z', lat: 35.7, lng: 51.4, speed: 40, heading: 90 },
+        { ts: '2026-08-15T08:20:00Z', lat: 35.73, lng: 51.43, speed: 118, heading: 10 },
+      ],
+      events: [],
+    });
+
+    const { result } = renderHook(() => useTripDetail(tripWire.id), { wrapper: makeWrapper() });
+    await waitFor(() =>
+      expect(result.current.data !== undefined && result.current.data !== null).toBe(true),
+    );
+    const overspeed = result.current.data?.events.find((e) => e.type === 'overspeed');
+    expect(overspeed?.lat).toBe(35.73);
+    expect(overspeed?.label).toBe('118 km/h');
   });
 
   it('propagates a 404 instead of faking a trip', async () => {

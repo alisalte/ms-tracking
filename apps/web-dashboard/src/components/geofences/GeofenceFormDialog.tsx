@@ -38,11 +38,14 @@ interface VehicleOption {
 export function GeofenceFormDialog({
   open,
   onClose,
+  onSaved,
   /** Present → EDIT mode; absent → CREATE mode. */
   geofence,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Called after a successful create/update so the overview map can highlight it. */
+  onSaved?: (g: Geofence) => void;
   geofence?: Geofence | null;
 }) {
   const { t } = useTranslation();
@@ -136,8 +139,8 @@ export function GeofenceFormDialog({
       update.mutate(
         { id: geofence.id, payload: payloadBase },
         {
-          onSuccess: () => {
-            // Assignment set is replaced in a second call (separate endpoint).
+          onSuccess: (updated) => {
+            onSaved?.(updated);
             assign.mutate({ id: geofence.id, vehicleIds }, { onSuccess: onDone, onError });
           },
           onError,
@@ -146,6 +149,7 @@ export function GeofenceFormDialog({
     } else {
       create.mutate(payloadBase, {
         onSuccess: (created) => {
+          onSaved?.(created);
           assign.mutate({ id: created.id, vehicleIds }, { onSuccess: onDone, onError });
         },
         onError,

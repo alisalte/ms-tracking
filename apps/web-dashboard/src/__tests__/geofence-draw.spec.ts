@@ -3,12 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   circleDrawCollection,
   circleToPolygonRing,
+  convexHullRing,
+  drawRingForFill,
   haversineMeters,
   parseCircleRadiusM,
   radiusHandleLngLat,
   ringSelfIntersects,
+  untangleRing,
   zoomForCircleRadius,
 } from '@/components/geofences/GeofenceDrawMap';
+import { fillableClosedRing } from '@/components/geofences/GeofencePreviewMap';
 import { ringCentroid } from '@/lib/geofence-geo';
 
 describe('circleToPolygonRing', () => {
@@ -56,6 +60,53 @@ describe('ringSelfIntersects', () => {
         [51.3, 35.8],
       ]),
     ).toBe(true);
+  });
+
+  it('untangles four corners clicked as a Z into a simple rectangle', () => {
+    const zOrder = [
+      [51.3, 35.7],
+      [51.4, 35.7],
+      [51.3, 35.8],
+      [51.4, 35.8],
+    ];
+    expect(ringSelfIntersects(zOrder)).toBe(true);
+    const simple = untangleRing(zOrder);
+    expect(ringSelfIntersects(simple)).toBe(false);
+    expect(simple).toHaveLength(4);
+  });
+
+  it('leaves an already-simple rectangle in click order', () => {
+    const around = [
+      [51.3, 35.7],
+      [51.4, 35.7],
+      [51.4, 35.8],
+      [51.3, 35.8],
+    ];
+    expect(untangleRing(around)).toEqual(around);
+  });
+
+  it('fills the convex interior of four corners regardless of click order', () => {
+    const zOrder = [
+      [51.3, 35.7],
+      [51.4, 35.7],
+      [51.3, 35.8],
+      [51.4, 35.8],
+    ];
+    const fill = drawRingForFill(zOrder);
+    expect(ringSelfIntersects(fill)).toBe(false);
+    expect(fill).toHaveLength(4);
+  });
+
+  it('uses the convex hull so a Z-order quad still fills', () => {
+    const zOrder = [
+      [51.3, 35.7],
+      [51.4, 35.7],
+      [51.3, 35.8],
+      [51.4, 35.8],
+    ];
+    const hull = convexHullRing(zOrder);
+    expect(hull).toHaveLength(4);
+    expect(ringSelfIntersects(hull)).toBe(false);
   });
 });
 
@@ -107,5 +158,23 @@ describe('ringCentroid', () => {
     ]);
     expect(lng).toBeCloseTo(52);
     expect(lat).toBeCloseTo(36);
+  });
+});
+
+describe('fillableClosedRing', () => {
+  it('closes a Z-order quad into a simple polygon the overview map can fill', () => {
+    const zOrder = [
+      [51.3, 35.7],
+      [51.4, 35.7],
+      [51.3, 35.8],
+      [51.4, 35.8],
+    ];
+    const closed = fillableClosedRing(zOrder);
+    expect(closed.length).toBeGreaterThanOrEqual(4);
+    const first = closed[0];
+    const last = closed[closed.length - 1];
+    expect(first?.[0]).toBeCloseTo(last?.[0] ?? 0, 8);
+    expect(first?.[1]).toBeCloseTo(last?.[1] ?? 0, 8);
+    expect(ringSelfIntersects(closed)).toBe(false);
   });
 });

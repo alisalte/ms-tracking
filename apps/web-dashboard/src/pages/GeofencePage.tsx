@@ -65,6 +65,7 @@ export function GeofencePage() {
   const [statusFilter, setStatusFilter] = useState<'' | GeofenceStatus | 'ARCHIVED'>('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<Geofence | null>(null);
   const [detailTarget, setDetailTarget] = useState<Geofence | null>(null);
@@ -146,8 +147,11 @@ export function GeofencePage() {
       {(overlays?.length ?? 0) > 0 && (
         <GeofencePreviewMap
           geofences={overlays}
-          selectedId={detailTarget?.id ?? editTarget?.id}
-          onSelect={setDetailTarget}
+          selectedId={mapSelectedId ?? detailTarget?.id ?? editTarget?.id}
+          onSelect={(g) => {
+            setMapSelectedId(g.id);
+            setDetailTarget(g);
+          }}
           height={320}
         />
       )}
@@ -185,11 +189,19 @@ export function GeofencePage() {
                   <tr
                     key={g.id}
                     tabIndex={0}
-                    onClick={() => setDetailTarget(g)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') setDetailTarget(g);
+                    onClick={() => {
+                      setMapSelectedId(g.id);
+                      setDetailTarget(g);
                     }}
-                    className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setMapSelectedId(g.id);
+                        setDetailTarget(g);
+                      }
+                    }}
+                    className={`cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                      g.id === mapSelectedId ? 'bg-brand-50 dark:bg-brand-500/10' : ''
+                    }`}
                   >
                     <TD>
                       <span className="flex min-w-0 items-center gap-2">
@@ -261,6 +273,7 @@ export function GeofencePage() {
           setShowCreate(false);
           setEditTarget(null);
         }}
+        onSaved={(g) => setMapSelectedId(g.id)}
       />
       <GeofenceDetailDialog
         geofence={detailTarget}

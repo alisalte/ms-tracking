@@ -554,11 +554,22 @@
       "vehicle": "موقعیت خودرو",
       "timeline": "خط زمانی",
       "speedGraph": "سرعت در طول زمان",
+      "hudSpeed": "{{speed}} کیلومتر بر ساعت",
+      "hudStopped": "متوقف",
+      "hudMoving": "در حرکت",
+      "start": "شروع",
+      "end": "پایان",
+      "eventDuration": "{{type}} · {{minutes}} دقیقه",
       "legend": {
         "route": "مسیر",
         "stop": "توقف",
         "idle": "درجا",
-        "overspeed": "سرعت غیرمجاز"
+        "overspeed": "سرعت غیرمجاز",
+        "speedStopped": "توقف",
+        "speedSlow": "کمتر از ۴۰",
+        "speedMedium": "۴۰–۸۰",
+        "speedFast": "۸۰–۱۰۰",
+        "speedOver": "بیش از ۱۰۰"
       }
     },
     "timeline": {
@@ -1769,7 +1780,7 @@
     },
     "draw": {
       "polygonHint": "روی نقشه کلیک کنید تا رأس اضافه شود. رنگ آبی محدودهٔ انتخاب‌شده است.",
-      "selfIntersecting": "اضلاع همدیگر را قطع کرده‌اند — یک رأس را جابه‌جا کنید تا محدوده روی خودش نیفتد.",
+      "selfIntersecting": "اضلاع همدیگر را قطع کرده‌اند — چهار گوشه را به‌ترتیب دور محدوده بزنید (نه دو تا پایین و دو تا بالا)، یا یک رأس را بکشید.",
       "polygonStatus": "{{count}} رأس · {{area}}",
       "circleStatus": "مرکز {{lat}}، {{lng}} · شعاع {{radius}} متر",
       "circleCenterHint": "روی نقشه کلیک کنید تا مرکز دایره گذاشته شود. شعاع از فیلد بالا (متر) می‌آید.",
@@ -1787,7 +1798,7 @@
       "legendActive": "محدوده در حال ترسیم",
       "legendExisting": "محدوده‌های دیگر",
       "selectedCircle": "محدوده انتخاب‌شده · شعاع {{radius}} متر",
-      "selectedPolygon": "محدوده انتخاب‌شده (رنگ آبی)"
+      "selectedPolygon": "محدوده انتخاب‌شده — داخل هایلایت شده"
     },
     "overviewMap": "همه محدوده‌ها روی نقشه"
   },

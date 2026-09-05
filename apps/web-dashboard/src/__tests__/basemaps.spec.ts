@@ -49,6 +49,13 @@ describe('basemaps', () => {
     const style = rasterMapStyle('google-satellite', 'fa');
     expect(style.sources.basemap.type).toBe('raster');
     expect(style.sources.basemap.tiles[0]).toContain('lyrs=s');
+    expect(style.sources.basemap.maxzoom).toBe(21);
     expect(style.layers[0]?.id).toBe('basemap');
+  });
+
+  it('caps native zoom so MapLibre overzooms instead of fetching missing z=22 tiles', () => {
+    expect(BASEMAPS.find((b) => b.id === 'google')?.maxzoom).toBe(21);
+    expect(BASEMAPS.find((b) => b.id === 'streets')?.maxzoom).toBe(19);
+    expect(rasterMapStyle('streets').sources.basemap.maxzoom).toBe(19);
   });
 });

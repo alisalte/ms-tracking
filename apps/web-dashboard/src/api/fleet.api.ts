@@ -24,6 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
+import { decorateTripEvents } from '@/lib/trip-events';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
 import type { Alarm } from '@/types/alarm.types';
@@ -382,7 +383,8 @@ function fetchTrips(): Promise<Trip[]> {
 /**
  * Trip detail — REAL `GET /trips/:id` (trip + waypoints from the positions
  * hypertable + idle/parking events). Idle time is summed from the events;
- * events without coordinates stay on the timeline only.
+ * idle windows without coordinates are pinned to the nearest waypoint, and
+ * overspeed markers are derived from samples above the posted limit.
  */
 function fetchTripDetail(id: string): Promise<TripDetail | null> {
   if (!shouldUseMock()) {
@@ -397,6 +399,21 @@ function fetchTripDetail(id: string): Promise<TripDetail | null> {
         .filter((e) => e.type === 'idle')
         .reduce((sum, e) => sum + e.durationMin, 0);
       const vehicle = registry.vehicles.find((v) => v.id === w.vehicleId);
+      const waypoints = w.waypoints.map((p) => ({
+        ts: p.ts,
+        lat: p.lat,
+        lng: p.lng,
+        speed: p.speed,
+        heading: p.heading,
+      }));
+      const apiEvents = w.events.map((e) => ({
+        id: e.id,
+        ts: e.ts,
+        type: e.type,
+        ...(e.lat !== null && e.lng !== null ? { lat: e.lat, lng: e.lng } : {}),
+        label: `${e.durationMin} min`,
+        durationMin: e.durationMin,
+      }));
       return {
         id: w.id,
         vehicleId: w.vehicleId,
@@ -417,21 +434,8 @@ function fetchTripDetail(id: string): Promise<TripDetail | null> {
         avgSpeed: w.avgSpeedKph,
         stopCount: w.stopCount,
         idleMin,
-        waypoints: w.waypoints.map((p) => ({
-          ts: p.ts,
-          lat: p.lat,
-          lng: p.lng,
-          speed: p.speed,
-          heading: p.heading,
-        })),
-        events: w.events.map((e) => ({
-          id: e.id,
-          ts: e.ts,
-          type: e.type,
-          ...(e.lat !== null && e.lng !== null ? { lat: e.lat, lng: e.lng } : {}),
-          label: `${e.durationMin} min`,
-          durationMin: e.durationMin,
-        })),
+        waypoints,
+        events: decorateTripEvents(apiEvents, waypoints),
       } satisfies TripDetail;
     })();
   }

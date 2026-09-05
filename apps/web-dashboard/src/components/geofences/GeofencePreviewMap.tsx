@@ -4,12 +4,16 @@
  * Single-fence mode (detail dialog): fill + outline, camera fits that ring.
  * Overview mode (`geofences`): every fence is painted; the selected one is
  * highlighted so it is obvious which area is chosen. Click a fill to select.
+ *
+ * Raster basemaps are opaque. An SVG overlay (same approach as the draw map)
+ * paints interiors above the tiles so the selected area is never hidden.
  */
 import { type GeoJSONSource, Map as MaplibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { drawRingForFill } from '@/components/geofences/GeofenceDrawMap';
 import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
 import { useFollowBasemap } from '@/hooks/useBasemap';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
@@ -18,7 +22,41 @@ import { runWhenStyleReady } from '@/lib/map-ready';
 import { mapAccents } from '@/theme/palette';
 import type { Geofence } from '@/types/geofence.types';
 
+const PREVIEW_OVERLAY_LAYER_IDS = [
+  'geofence-preview-fill',
+  'geofence-preview-halo',
+  'geofence-preview-line-casing',
+  'geofence-preview-line',
+] as const;
+
 const PREVIEW_BASEMAP_BEFORE = ['geofence-preview-fill'] as const;
+
+function raisePreviewLayers(map: MaplibreMap): void {
+  for (const id of PREVIEW_OVERLAY_LAYER_IDS) {
+    if (map.getLayer(id)) map.moveLayer(id);
+  }
+  if (map.getLayer('basemap') && map.getLayer('geofence-preview-fill')) {
+    map.moveLayer('basemap', 'geofence-preview-fill');
+  }
+}
+
+/** Closed ring MapLibre can fill (bow-tie four-corners become a simple quad). */
+export function fillableClosedRing(ring: number[][]): number[][] {
+  const pts = drawRingForFill(ring);
+  const first = pts[0];
+  if (!first || pts.length < 3) return ring;
+  return [...pts, first];
+}
+
+function projectRingPoints(map: MaplibreMap, ring: number[][]): string | null {
+  const parts: string[] = [];
+  for (const p of ring) {
+    const pt = map.project([p[0] ?? 0, p[1] ?? 0]);
+    if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) return null;
+    parts.push(`${pt.x},${pt.y}`);
+  }
+  return parts.length >= 3 ? parts.join(' ') : null;
+}
 
 export function GeofencePreviewMap({
   geofence,
@@ -34,11 +72,13 @@ export function GeofencePreviewMap({
   height?: number;
 }) {
   const { t, i18n } = useTranslation();
+  const overlayUid = useId();
+  const hatchId = `fv-preview-${overlayUid.replace(/:/g, '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const labelsRef = useRef<Marker[]>([]);
-  const fittedIdsRef = useRef('');
+  const fittedKeyRef = useRef('');
   const items = geofences ?? (geofence ? [geofence] : []);
   const highlightId = selectedId ?? geofence?.id ?? null;
   const itemsRef = useRef(items);
@@ -69,15 +109,20 @@ export function GeofencePreviewMap({
         type: 'fill',
         source: 'geofence-preview',
         paint: {
-          'fill-color': ['case', ['==', ['get', 'selected'], 1], mapAccents.geofence, '#64748B'],
-          'fill-opacity': ['case', ['==', ['get', 'selected'], 1], 0.36, 0.16],
+          'fill-color': [
+            'case',
+            ['boolean', ['get', 'selected'], false],
+            mapAccents.geofence,
+            '#64748B',
+          ],
+          'fill-opacity': ['case', ['boolean', ['get', 'selected'], false], 0.45, 0.28],
         },
       });
       map.addLayer({
         id: 'geofence-preview-halo',
         type: 'line',
         source: 'geofence-preview',
-        filter: ['==', ['get', 'selected'], 1],
+        filter: ['==', ['get', 'selected'], true],
         paint: {
           'line-color': mapAccents.geofence,
           'line-width': 16,
@@ -96,10 +141,16 @@ export function GeofencePreviewMap({
         type: 'line',
         source: 'geofence-preview',
         paint: {
-          'line-color': ['case', ['==', ['get', 'selected'], 1], mapAccents.geofence, '#475569'],
-          'line-width': ['case', ['==', ['get', 'selected'], 1], 3.5, 2],
+          'line-color': [
+            'case',
+            ['boolean', ['get', 'selected'], false],
+            mapAccents.geofence,
+            '#475569',
+          ],
+          'line-width': ['case', ['boolean', ['get', 'selected'], false], 4, 2.5],
         },
       });
+      raisePreviewLayers(map);
       map.on('click', 'geofence-preview-fill', (e) => {
         const id = e.features?.[0]?.properties?.id as string | undefined;
         const hit = itemsRef.current.find((g) => g.id === id);
@@ -133,37 +184,49 @@ export function GeofencePreviewMap({
       for (const m of labelsRef.current) m.remove();
       labelsRef.current = [];
       const features: GeoJSON.Feature[] = [];
-      const lngs: number[] = [];
-      const lats: number[] = [];
+      const allLngs: number[] = [];
+      const allLats: number[] = [];
+      const focusLngs: number[] = [];
+      const focusLats: number[] = [];
       for (const g of items) {
-        const feat = geofenceFeature(g, { selected: g.id === highlightId ? 1 : 0 });
+        const feat = geofenceFeature(g, { selected: g.id === highlightId });
         if (!feat) continue;
+        const fillRing = fillableClosedRing(feat.geometry.coordinates[0] ?? []);
+        feat.geometry.coordinates = [fillRing];
         features.push(feat);
-        const ring = geofenceRing(g);
-        if (!ring) continue;
-        for (const p of ring) {
-          lngs.push(p[0] ?? 0);
-          lats.push(p[1] ?? 0);
+        for (const p of fillRing) {
+          allLngs.push(p[0] ?? 0);
+          allLats.push(p[1] ?? 0);
+          if (g.id === highlightId) {
+            focusLngs.push(p[0] ?? 0);
+            focusLats.push(p[1] ?? 0);
+          }
         }
         const el = document.createElement('div');
         el.className = g.id === highlightId ? 'fv-geofence-label is-selected' : 'fv-geofence-label';
         el.textContent = g.name;
         labelsRef.current.push(
-          new Marker({ element: el, anchor: 'center' }).setLngLat(ringCentroid(ring)).addTo(map),
+          new Marker({ element: el, anchor: 'center' })
+            .setLngLat(ringCentroid(fillRing))
+            .addTo(map),
         );
       }
       map.resize();
       src.setData({ type: 'FeatureCollection', features });
-      const idKey = items.map((g) => g.id).join(',');
-      if (idKey !== fittedIdsRef.current && lngs.length >= 1 && lats.length >= 1) {
-        fittedIdsRef.current = idKey;
+      raisePreviewLayers(map);
+      map.triggerRepaint();
+      const fitLngs = focusLngs.length > 0 ? focusLngs : allLngs;
+      const fitLats = focusLats.length > 0 ? focusLats : allLats;
+      const fitKey = `${items.map((g) => g.id).join(',')}|${highlightId ?? ''}`;
+      if (fitKey !== fittedKeyRef.current && fitLngs.length >= 1 && fitLats.length >= 1) {
+        fittedKeyRef.current = fitKey;
         map.stop();
         map.fitBounds(
           [
-            [Math.min(...lngs), Math.min(...lats)],
-            [Math.max(...lngs), Math.max(...lats)],
+            [Math.min(...fitLngs), Math.min(...fitLats)],
+            [Math.max(...fitLngs), Math.max(...fitLats)],
           ],
-          { padding: 48, maxZoom: 16, duration: 0 },
+          { padding: 48, maxZoom: 16, duration: highlightId ? 400 : 0 },
         );
       }
     };
@@ -174,13 +237,45 @@ export function GeofencePreviewMap({
     };
   }, [items, highlightId]);
 
+  const [, setViewRev] = useState(0);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const bump = () => setViewRev((n) => n + 1);
+    map.on('move', bump);
+    map.on('resize', bump);
+    return () => {
+      map.off('move', bump);
+      map.off('resize', bump);
+    };
+  }, [mapReady]);
+
+  const selectionOverlay = (() => {
+    if (!mapReady) return null;
+    const map = mapRef.current;
+    if (!map) return null;
+    const w = map.getContainer().clientWidth;
+    const h = map.getContainer().clientHeight;
+    if (w < 8 || h < 8) return null;
+    const polygons: { points: string; selected: boolean }[] = [];
+    for (const g of items) {
+      const ring = geofenceRing(g);
+      if (!ring) continue;
+      const points = projectRingPoints(map, drawRingForFill(ring));
+      if (!points) continue;
+      polygons.push({ points, selected: g.id === highlightId });
+    }
+    if (polygons.length === 0) return null;
+    return { w, h, polygons };
+  })();
+
   if (items.length === 0) return null;
 
   return (
-    <div className="relative" style={{ width: '100%', height }}>
+    <div className="relative isolate overflow-hidden rounded-lg" style={{ width: '100%', height }}>
       <div
         ref={containerRef}
-        style={{ width: '100%', height, borderRadius: 8, overflow: 'hidden' }}
+        className="relative z-0 h-full w-full"
         data-testid="geofence-preview-map"
         role="img"
         aria-label={
@@ -189,6 +284,74 @@ export function GeofencePreviewMap({
             : t('geofences.overviewMap', { defaultValue: 'All geofences on the map' })
         }
       />
+      {selectionOverlay ? (
+        <svg
+          className="pointer-events-none absolute start-0 top-0"
+          style={{ zIndex: 2, width: selectionOverlay.w, height: selectionOverlay.h }}
+          viewBox={`0 0 ${selectionOverlay.w} ${selectionOverlay.h}`}
+          width={selectionOverlay.w}
+          height={selectionOverlay.h}
+          aria-hidden
+          data-testid="geofence-preview-overlay"
+        >
+          <title>
+            {t('geofences.previewOverlay', { defaultValue: 'Geofence areas on the map' })}
+          </title>
+          <defs>
+            <pattern
+              id={`${hatchId}-on`}
+              patternUnits="userSpaceOnUse"
+              width="10"
+              height="10"
+              patternTransform="rotate(-35)"
+            >
+              <rect width="10" height="10" fill={mapAccents.geofence} fillOpacity="0.22" />
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="10"
+                stroke={mapAccents.geofence}
+                strokeWidth="3"
+                strokeOpacity="0.85"
+              />
+            </pattern>
+            <pattern
+              id={`${hatchId}-off`}
+              patternUnits="userSpaceOnUse"
+              width="10"
+              height="10"
+              patternTransform="rotate(-35)"
+            >
+              <rect width="10" height="10" fill="#64748B" fillOpacity="0.14" />
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="10"
+                stroke="#475569"
+                strokeWidth="2"
+                strokeOpacity="0.55"
+              />
+            </pattern>
+          </defs>
+          {selectionOverlay.polygons.map((poly) => (
+            <g key={poly.points}>
+              <polygon
+                points={poly.points}
+                fill={poly.selected ? mapAccents.geofence : '#64748B'}
+                fillOpacity={poly.selected ? 0.4 : 0.22}
+                stroke={poly.selected ? mapAccents.geofence : '#475569'}
+                strokeWidth={poly.selected ? 4 : 2}
+              />
+              <polygon
+                points={poly.points}
+                fill={`url(#${poly.selected ? `${hatchId}-on` : `${hatchId}-off`})`}
+              />
+            </g>
+          ))}
+        </svg>
+      ) : null}
       <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
     </div>
   );
