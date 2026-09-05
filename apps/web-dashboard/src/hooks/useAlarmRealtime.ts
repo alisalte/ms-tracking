@@ -16,6 +16,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
+import { mapAlarm } from '@/api/alarm.api';
 import { type ConnectionState, useRealtimeSocket } from '@/hooks/useRealtimeSocket';
 import { shouldUseMock } from '@/lib/mock-gate';
 import { resolveRealtimeTarget } from '@/lib/realtime-url';
@@ -89,25 +90,7 @@ export function useAlarmRealtime(tenantId: string | null, wsUrl?: string): Alarm
         // expected nested { alert | data } envelopes and silently dropped
         // every event).
         const flat = raw as Record<string, unknown>;
-        const alarm: Alarm | null = flat
-          ? ({
-              id: String(flat.id ?? ''),
-              type: (flat.type as string) ?? 'other',
-              severity: ((flat.severity as string) ?? 'info').toLowerCase(),
-              status:
-                flat.status === 'ACKNOWLEDGED'
-                  ? 'acked'
-                  : flat.status === 'RESOLVED'
-                    ? 'resolved'
-                    : 'raised',
-              vehicleId: (flat.vehicleId as string) ?? (flat.vehicle_id as string) ?? '',
-              vehicleLabel: (flat.vehicleId as string) ?? '',
-              message: (flat.message as string) ?? '',
-              raisedAt: (flat.raisedAt as string) ?? new Date().toISOString(),
-              ackedAt: (flat.acknowledgedAt as string) ?? undefined,
-              resolvedAt: (flat.resolvedAt as string) ?? undefined,
-            } as Alarm)
-          : null;
+        const alarm = flat?.id ? mapAlarm(flat) : null;
         if (!alarm || !alarm.id) return;
         setEvents((prev) => [...prev, { type, alarm }]);
       }),

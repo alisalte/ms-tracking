@@ -151,7 +151,7 @@ export function localizeAlarmMessage(
 
 export function localizeAlarmDetail(
   t: TFunction,
-  alarm: Pick<Alarm, 'type' | 'message' | 'detail' | 'code'>,
+  alarm: Pick<Alarm, 'type' | 'message' | 'detail' | 'code' | 'rawType'>,
 ): string {
   const raw = alarm.detail?.trim() ?? '';
   if (!raw || raw === '{}' || raw === 'null') return '';
@@ -159,16 +159,31 @@ export function localizeAlarmDetail(
     try {
       const obj = JSON.parse(raw) as Record<string, unknown>;
       const dms = typeof obj.dmsDetail === 'string' ? obj.dmsDetail : undefined;
-      const code = typeof obj.alarmCode === 'string' ? obj.alarmCode : alarm.code;
       if (dms) return localizePhrase(t, dms);
-      if (code) return localizeAlarmCode(t, code);
-      const bits: string[] = [];
-      for (const [k, v] of Object.entries(obj)) {
-        if (v === null || v === undefined || k === 'deviceAlarm' || k === 'lastDetection') continue;
-        if (typeof v === 'object') continue;
-        bits.push(`${k}: ${String(v)}`);
+      const speed = obj.speedKph ?? obj.speed;
+      const limit = obj.limit ?? obj.speedLimit ?? obj.thresholdKmh;
+      if (speed != null && limit != null) {
+        return t('alarms.messages.overspeed', {
+          speed: compactNum(speed),
+          limit: compactNum(limit),
+        });
       }
-      return bits.join(' · ');
+      const geo = typeof obj.geofenceName === 'string' ? obj.geofenceName : undefined;
+      if (geo) {
+        const kind = `${alarm.rawType ?? ''} ${alarm.type}`.toLowerCase();
+        if (kind.includes('exit')) return t('alarms.messages.geofenceExit', { name: geo });
+        if (kind.includes('dwell')) {
+          return t('alarms.messages.geofenceDwell', {
+            name: geo,
+            minutes: String(obj.minutes ?? obj.dwellMin ?? ''),
+          });
+        }
+        return t('alarms.messages.geofenceEnter', { name: geo });
+      }
+      const code = typeof obj.alarmCode === 'string' ? obj.alarmCode : alarm.code;
+      if (code) return localizeAlarmCode(t, code);
+      const fromMessage = localizeAlarmMessage(t, alarm);
+      if (fromMessage) return fromMessage;
     } catch {
       /* keep raw */
     }
@@ -222,6 +237,12 @@ function looksLocalized(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
 }
 
+function compactNum(value: unknown): string {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return String(value ?? '');
+  return Number.isInteger(n) ? String(n) : String(n);
+}
+
 function looksEnglishAlarmTitle(text: string): boolean {
   return /^(alarm|speeding|overspeed|geofence|device |ignition |trip |prolonged |unauthorized |low battery|notification|sos|dms|fuel|camera|collision|temperature|idle|tow|power|jamming|driver )/i.test(
     text.trim(),
@@ -240,7 +261,7 @@ function localizeEnglishPattern(t: TFunction, msg: string): string | undefined {
     s,
   );
   if (m) {
-    return t('alarms.messages.overspeed', { speed: m[1], limit: m[2] });
+    return t('alarms.messages.overspeed', { speed: compactNum(m[1]), limit: compactNum(m[2]) });
   }
   m = /^Entered geofence\s+(.+)$/i.exec(s);
   if (m) return t('alarms.messages.geofenceEnter', { name: m[1] });

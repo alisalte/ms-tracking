@@ -348,7 +348,12 @@ export function VideoWallPage() {
 
       {tab === 'playback' && (
         <div className="flex min-h-0 flex-1 flex-col">
-          <PlaybackPanel channels={channels} />
+          <PlaybackPanel
+            channels={channels}
+            initialDeviceId={params.get('device')}
+            initialFrom={params.get('from')}
+            initialTo={params.get('to')}
+          />
         </div>
       )}
 

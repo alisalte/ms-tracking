@@ -20,16 +20,19 @@ import {
   Truck,
   Video,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useAlarmDetail, useTransitionAlarm } from '@/api/alarm.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
+import { AlarmEvidence } from '@/components/alarms/AlarmEvidence';
 import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 import { alarmTypeIcon, severityBg } from '@/components/alarms/AlarmTypeIcon';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Drawer, Spinner } from '@/components/tailwind-ui';
 import { localizeAlarmDetail, localizeAlarmMessage, localizePhrase } from '@/lib/alarm-copy';
+import { hasAlarmCoordinates } from '@/lib/alarm-evidence';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmDetailDrawerProps {
@@ -124,7 +127,17 @@ function AlarmDetailContent({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const isResolved = alarm.status === 'resolved';
+  const canShowOnMap = hasAlarmCoordinates(alarm);
+
+  const showOnMap = () => {
+    if (!canShowOnMap) return;
+    const next = new URLSearchParams(params);
+    next.set('view', 'map');
+    next.set('id', alarm.id);
+    setParams(next, { replace: true });
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -133,7 +146,7 @@ function AlarmDetailContent({
         <DetailRow
           icon={<Truck size={16} />}
           label={t('alarms.detail.vehicle')}
-          value={alarm.vehicleLabel}
+          value={alarm.vehicleLabel || '—'}
         />
         {alarm.driver && (
           <DetailRow
@@ -145,7 +158,9 @@ function AlarmDetailContent({
         <DetailRow
           icon={<MapPin size={16} />}
           label={t('alarms.detail.location')}
-          value={alarm.address}
+          value={alarm.address || '—'}
+          onClick={canShowOnMap ? showOnMap : undefined}
+          actionLabel={t('alarms.detail.showOnMap')}
         />
         <DetailRow
           icon={<Clock size={16} />}
@@ -175,33 +190,44 @@ function AlarmDetailContent({
         )}
       </div>
 
-      {/* Detail / description */}
-      {localizeAlarmDetail(t, alarm) && (
-        <div>
-          <SectionLabel>{t('alarms.detail.description')}</SectionLabel>
-          <p className="mt-1 text-sm text-gray-700 dark:text-graydark-700">
-            {localizeAlarmDetail(t, alarm)}
-          </p>
-        </div>
-      )}
+      {/* Detail / description — hide when it just repeats the headline. */}
+      {(() => {
+        const headline = localizeAlarmMessage(t, alarm);
+        const description = localizeAlarmDetail(t, alarm);
+        if (!description || description === headline) return null;
+        return (
+          <div>
+            <SectionLabel>{t('alarms.detail.description')}</SectionLabel>
+            <p className="mt-1 text-sm text-gray-700 dark:text-graydark-700">{description}</p>
+          </div>
+        );
+      })()}
 
       {/* Source events */}
       <div>
         <SectionLabel>{t('alarms.detail.sourceEvents')}</SectionLabel>
-        <div className="mt-1.5 flex flex-col gap-1">
-          {alarm.sourceEvents.map((e) => (
-            <div
-              key={e.id}
-              className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600"
-            >
-              <span className="inline-flex h-[18px] items-center rounded-full bg-gray-100 px-1.5 font-mono text-[0.6rem] dark:bg-white/5">
-                {e.type}
-              </span>
-              <span className="min-w-0 truncate">{localizePhrase(t, e.detail)}</span>
-            </div>
-          ))}
-        </div>
+        {alarm.sourceEvents.length === 0 ? (
+          <p className="mt-1.5 text-sm text-gray-500 dark:text-graydark-600">
+            {t('alarms.detail.noSourceEvents', { defaultValue: 'No source events recorded' })}
+          </p>
+        ) : (
+          <div className="mt-1.5 flex flex-col gap-1">
+            {alarm.sourceEvents.map((e) => (
+              <div
+                key={e.id}
+                className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600"
+              >
+                <span className="inline-flex h-[18px] items-center rounded-full bg-gray-100 px-1.5 font-mono text-[0.6rem] dark:bg-white/5">
+                  {e.type}
+                </span>
+                <span className="min-w-0 truncate">{localizePhrase(t, e.detail) || e.type}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      <AlarmEvidence alarm={alarm} />
 
       {/* Linked artifacts */}
       {(alarm.linkedClipId || alarm.linkedTripId) && (
@@ -276,19 +302,42 @@ function DetailRow({
   icon,
   label,
   value,
-}: { icon: React.ReactNode; label: string; value: string }) {
+  onClick,
+  actionLabel,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  onClick?: () => void;
+  actionLabel?: string;
+}) {
   return (
     <div className="flex items-center gap-2.5">
       <span className="flex shrink-0 text-gray-400 dark:text-graydark-600">{icon}</span>
       <span className="min-w-[90px] text-sm text-gray-500 dark:text-graydark-600">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
-        {value}
-      </span>
+      {onClick ? (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={actionLabel}
+          data-testid="alarm-show-on-map"
+          className="min-w-0 flex-1 truncate text-start text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+        >
+          {value}
+        </button>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
+          {value}
+        </span>
+      )}
     </div>
   );
 }
 
 /** Locale-aware timestamp formatter. */
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }

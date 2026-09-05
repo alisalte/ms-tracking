@@ -15,6 +15,7 @@ import { severityColor } from '@/components/alarms/AlarmTypeIcon';
 import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
 import { NO_OVERLAY_LAYERS, useFollowBasemap } from '@/hooks/useBasemap';
 import { localizeAlarmMessage } from '@/lib/alarm-copy';
+import { hasAlarmCoordinates } from '@/lib/alarm-evidence';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { markerDataUrl, selectedMarkerDataUrl } from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
@@ -93,6 +94,18 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
     if (map.loaded()) render();
     else runWhenStyleReady(map, render);
   }, [alarms, selectedId, t]);
+
+  // Fly to the open alarm so "show on map" from the drawer lands on the pin.
+  const flewToId = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !selectedId) return;
+    const a = alarms.find((x) => x.id === selectedId);
+    if (!a || !hasAlarmCoordinates(a)) return;
+    if (flewToId.current === selectedId) return;
+    flewToId.current = selectedId;
+    map.flyTo({ center: [a.lng, a.lat], zoom: 15, duration: 800 });
+  }, [mapReady, selectedId, alarms]);
 
   if (alarms.length === 0) {
     return (

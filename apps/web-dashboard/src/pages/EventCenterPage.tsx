@@ -18,11 +18,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { useVehicles } from '@/api/asset.api';
 import { useNotificationsPage } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import {
   Badge,
+  Button,
   Card,
+  Drawer,
   EmptyState,
   LoadMoreButton,
   PageHeader,
@@ -35,7 +38,10 @@ import {
   localizeNotificationBody,
   localizeNotificationTitle,
 } from '@/lib/alarm-copy';
+import { displayLabel } from '@/lib/ids';
 import { relativeTime } from '@/lib/relative-time';
+import { formatVehicleLabel } from '@/lib/vehicle-label';
+import type { Notification } from '@/types/notification.types';
 
 const SEVERITIES = ['critical', 'high', 'normal', 'low'] as const;
 
@@ -67,6 +73,8 @@ export function EventCenterPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: vehicles } = useVehicles();
 
   const eventType = params.get('eventType') ?? undefined;
   const severity = params.get('severity') ?? undefined;
@@ -110,6 +118,17 @@ export function EventCenterPage() {
     }
     return Array.from(map.entries());
   }, [filtered, i18n.language]);
+
+  const vehicleLabelOf = useMemo(() => {
+    const labels = new Map((vehicles ?? []).map((v) => [v.id, formatVehicleLabel(v)] as const));
+    return (id: string | undefined) => {
+      if (!id) return '';
+      return labels.get(id) || displayLabel(id) || '';
+    };
+  }, [vehicles]);
+
+  const selected =
+    filtered.find((n) => n.id === selectedId) ?? page.items.find((n) => n.id === selectedId);
 
   return (
     <div className="flex flex-col gap-4">
@@ -194,12 +213,8 @@ export function EventCenterPage() {
                   <li key={n.id}>
                     <button
                       type="button"
-                      onClick={() => n.link && navigate(n.link)}
-                      className={`flex w-full items-start gap-3 border-b border-gray-100 px-5 py-3 text-start last:border-b-0 dark:border-white/5 ${
-                        n.link
-                          ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5'
-                          : 'cursor-default'
-                      }`}
+                      onClick={() => setSelectedId(n.id)}
+                      className="flex w-full cursor-pointer items-start gap-3 border-b border-gray-100 px-5 py-3 text-start last:border-b-0 hover:bg-gray-50 dark:border-white/5 dark:hover:bg-white/5"
                     >
                       {/* Timeline rail dot */}
                       <span className="relative mt-1.5 flex size-2.5 shrink-0">
@@ -226,19 +241,17 @@ export function EventCenterPage() {
                         </div>
                         <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-graydark-600">
                           {localizeNotificationBody(t, n)}
-                          {n.vehicleId ? ` · ${n.vehicleId}` : ''}
+                          {n.vehicleId ? ` · ${vehicleLabelOf(n.vehicleId) || n.vehicleId}` : ''}
                         </p>
                       </div>
                       <span className="shrink-0 text-xs tabular-nums text-gray-400 dark:text-graydark-600">
                         {relativeTime(n.createdAt, t)}
                       </span>
-                      {n.link && (
-                        <ArrowRight
-                          size={13}
-                          aria-hidden
-                          className="mt-1 shrink-0 text-gray-300 rtl:rotate-180 dark:text-graydark-500"
-                        />
-                      )}
+                      <ArrowRight
+                        size={13}
+                        aria-hidden
+                        className="mt-1 shrink-0 text-gray-300 rtl:rotate-180 dark:text-graydark-500"
+                      />
                     </button>
                   </li>
                 ))}
@@ -253,6 +266,88 @@ export function EventCenterPage() {
           />
         </div>
       )}
+
+      <Drawer
+        open={selectedId !== null}
+        onClose={() => setSelectedId(null)}
+        size="md"
+        title={
+          selected
+            ? localizeNotificationTitle(t, selected)
+            : t('events.detail.heading', { defaultValue: 'Event detail' })
+        }
+        subtitle={
+          selected
+            ? `${localizeEventType(t, selected.eventType)} · ${t(`notifications.severity.${selected.severity}`, { defaultValue: selected.severity })}`
+            : undefined
+        }
+      >
+        {selected ? (
+          <EventDetailContent
+            event={selected}
+            vehicleLabel={vehicleLabelOf(selected.vehicleId) || selected.vehicleId || '—'}
+            onOpenAlarm={
+              selected.link
+                ? () => {
+                    navigate(selected.link as string);
+                  }
+                : undefined
+            }
+          />
+        ) : (
+          <div className="flex min-h-48 items-center justify-center">
+            <Spinner size="lg" label={t('common.loading')} />
+          </div>
+        )}
+      </Drawer>
+    </div>
+  );
+}
+
+function EventDetailContent({
+  event,
+  vehicleLabel,
+  onOpenAlarm,
+}: {
+  event: Notification;
+  vehicleLabel: string;
+  onOpenAlarm?: () => void;
+}) {
+  const { t } = useTranslation();
+  const when = event.createdAt ? new Date(event.createdAt) : null;
+  const whenLabel =
+    when && !Number.isNaN(when.getTime())
+      ? when.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+      : '—';
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-gray-700 dark:text-graydark-700">
+        {localizeNotificationBody(t, event)}
+      </p>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="min-w-[90px] text-sm text-gray-500 dark:text-graydark-600">
+            {t('alarms.detail.vehicle')}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
+            {vehicleLabel}
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <span className="min-w-[90px] text-sm text-gray-500 dark:text-graydark-600">
+            {t('events.detail.time', { defaultValue: 'Time' })}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
+            {whenLabel}
+          </span>
+        </div>
+      </div>
+      {onOpenAlarm ? (
+        <Button size="sm" variant="outline" onClick={onOpenAlarm}>
+          {t('events.detail.openAlarm', { defaultValue: 'Open related alarm' })}
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -145,3 +145,50 @@ export function useMdvrResources() {
 
   return { status, error, videos, photos, search, reset };
 }
+
+/** One SD-card file plus the camera it was listed on (alarm-drawer playback). */
+export interface AlarmMdvrClip {
+  resource: MdvrResource;
+  channel: CameraChannel;
+}
+
+/**
+ * Sequential AB8 across cameras (concurrent AB8 on one MDVR collides).
+ * `includePhotos` is for DMS — other alarm types only need video.
+ */
+export async function listMdvrEvidence(
+  channels: CameraChannel[],
+  fromMs: number,
+  toMs: number,
+  includePhotos: boolean,
+  isCancelled: () => boolean,
+): Promise<{ videos: AlarmMdvrClip[]; photos: AlarmMdvrClip[]; error: string | null }> {
+  const videos: AlarmMdvrClip[] = [];
+  const photos: AlarmMdvrClip[] = [];
+  const errors: string[] = [];
+
+  for (const ch of channels) {
+    if (isCancelled()) break;
+    if (!isMdvrChannel(ch)) continue;
+    try {
+      for (const resource of await queryAb8(ch, fromMs, toMs, '3', isCancelled)) {
+        videos.push({ resource, channel: ch });
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'cancelled') break;
+      errors.push(err instanceof Error ? err.message : 'AB8 failed');
+    }
+    if (!includePhotos) continue;
+    try {
+      for (const resource of await queryAb8(ch, fromMs, toMs, '4', isCancelled)) {
+        photos.push({ resource, channel: ch });
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'cancelled') break;
+      errors.push(err instanceof Error ? err.message : 'AB8 failed');
+    }
+  }
+
+  const empty = videos.length === 0 && photos.length === 0;
+  return { videos, photos, error: empty ? (errors[0] ?? null) : null };
+}

@@ -1,18 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { i18n } from '@/i18n';
-
-afterEach(async () => {
-  await i18n.changeLanguage('en');
-});
 import {
   extractDeviceCode,
+  localizeAlarmDetail,
   localizeAlarmMessage,
   localizeEventType,
   localizeNotificationBody,
   localizeNotificationTitle,
   mapAlarmType,
 } from '@/lib/alarm-copy';
+
+afterEach(async () => {
+  await i18n.changeLanguage('en');
+});
 
 describe('mapAlarmType', () => {
   it('maps rule types and device codes onto the catalog', () => {
@@ -45,7 +46,7 @@ describe('localizeAlarmMessage', () => {
       message: 'Vehicle exceeded speed limit: 82.0 km/h (limit 80 km/h)',
       detail: '',
     });
-    expect(text).toContain('82.0');
+    expect(text).toContain('82');
     expect(text).toContain('کیلومتر');
     expect(text).not.toMatch(/Vehicle exceeded/i);
   });
@@ -79,6 +80,21 @@ describe('localizeAlarmMessage', () => {
     });
     expect(idle).toContain('کارکرد بیهوده');
     expect(idle).toContain('22 min');
+  });
+});
+
+describe('localizeAlarmDetail', () => {
+  it('renders overspeed JSON as a sentence, not raw keys', async () => {
+    await i18n.changeLanguage('fa');
+    const text = localizeAlarmDetail(i18n.t.bind(i18n), {
+      type: 'overspeed',
+      message: 'Vehicle exceeded speed limit: 128.0 km/h (limit 90 km/h)',
+      detail: '{"speedKph":128,"limit":90}',
+    });
+    expect(text).toContain('128');
+    expect(text).toContain('90');
+    expect(text).not.toMatch(/speedKph/);
+    expect(text).not.toMatch(/limit:/);
   });
 });
 

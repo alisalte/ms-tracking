@@ -1032,7 +1032,21 @@
       "viewClip": "View clip",
       "viewTrip": "View trip",
       "heading": "Alarm detail",
-      "actionFailed": "The action failed — please try again."
+      "actionFailed": "The action failed — please try again.",
+      "noSourceEvents": "No source events recorded",
+      "showOnMap": "Show on map",
+      "evidence": "Recordings",
+      "evidenceWindow": "Clips stored within ±{{minutes}} minutes of this alarm",
+      "searchingRecordings": "Asking the device for recordings…",
+      "noCamera": "No camera is bound to this vehicle.",
+      "dmsNoCamera": "DMS evidence needs an MDVR camera on this vehicle.",
+      "noVideos": "No video in this window",
+      "noPhotos": "No photos in this window",
+      "videos": "Videos",
+      "photos": "Photos",
+      "eventPhoto": "Event photo: {{name}}",
+      "openPlayback": "Open playback",
+      "evidenceError": "Could not list recordings — {{message}}"
     },
     "actions": {
       "ack": "Acknowledge",
@@ -2055,7 +2069,12 @@
     "subtitle": "Fleet event timeline — what happened, when, and to which vehicle",
     "search": "Search events…",
     "empty": "No events yet",
-    "emptyHelp": "Fleet events will appear here as they happen."
+    "emptyHelp": "Fleet events will appear here as they happen.",
+    "detail": {
+      "heading": "Event detail",
+      "time": "Time",
+      "openAlarm": "Open related alarm"
+    }
   },
   "notFound": {
     "title": "404 — Page not found",

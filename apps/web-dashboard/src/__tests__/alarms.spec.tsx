@@ -28,6 +28,19 @@ vi.mock('maplibre-gl', () => {
     loaded() {
       return true;
     }
+    flyTo() {}
+    getZoom() {
+      return 11;
+    }
+    isStyleLoaded() {
+      return true;
+    }
+    getSource() {
+      return undefined;
+    }
+    addSource() {}
+    addLayer() {}
+    setStyle() {}
     getBounds() {
       return { getWest: () => 50, getSouth: () => 34, getEast: () => 52, getNorth: () => 37 };
     }
@@ -116,12 +129,19 @@ describe('AlarmCenterPage', () => {
 
     fireEvent.click(screen.getByText(first.vehicleLabel));
 
-    // The drawer renders the alarm's headline message.
-    await waitFor(() => {
-      expect(screen.getByText(first.message)).toBeInTheDocument();
-    });
-    // And the vehicle detail row.
-    expect(screen.getByText('Vehicle')).toBeInTheDocument();
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getAllByText(first.message).length).toBeGreaterThan(0);
+    expect(within(drawer).getByText('Vehicle')).toBeInTheDocument();
+  });
+
+  it('makes the alarm location a show-on-map control', async () => {
+    renderAlarms();
+    const first = mockAlarms[0];
+    await waitFor(() => expect(screen.getByText(first.vehicleLabel)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText(first.vehicleLabel));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByTestId('alarm-show-on-map')).toHaveTextContent(first.address);
   });
 
   it('filters the list by alarm type', async () => {
@@ -216,6 +236,6 @@ describe('AlarmCenterPage', () => {
     });
     // The shared Drawer primitive renders role="dialog" (aria-modal).
     const drawer = screen.getByRole('dialog', { hidden: false });
-    expect(within(drawer).getByText('Acknowledged')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Acknowledged').length).toBeGreaterThan(0);
   });
 });

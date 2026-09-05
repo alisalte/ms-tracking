@@ -9,7 +9,7 @@
  * the active view + filters sync to the URL for shareable deep links.
  */
 import { Activity, LayoutList, Map as MapIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -36,7 +36,13 @@ export function AlarmCenterPage() {
   const { data: alarms, isLoading, isError, error, refetch } = useAlarms();
 
   const view = (params.get('view') as ViewMode) ?? 'list';
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = params.get('id');
+  const setSelectedId = (id: string | null) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set('id', id);
+    else next.delete('id');
+    setParams(next, { replace: true });
+  };
 
   // Read filter state from the URL (shareable deep links).
   const filters: AlarmFilters = useMemo(

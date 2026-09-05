@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { useCursorPagination } from '@/lib/use-cursor-pagination';
+import { wireIso, wireStr } from '@/lib/wire-value';
 import type {
   ChannelHealth,
   Notification,
@@ -42,19 +43,20 @@ export interface NotificationListParams {
   limit?: number;
 }
 
-function mapNotification(raw: Record<string, unknown>): Notification {
+export function mapNotification(raw: Record<string, unknown>): Notification {
+  const vehicleId = wireStr(raw, 'vehicleId', 'vehicle_id') || undefined;
   return {
-    id: raw.id as string,
-    title: (raw.title as string) ?? '',
-    body: (raw.body as string) ?? '',
-    severity: ((raw.severity as string) ?? 'normal') as Notification['severity'],
-    priority: ((raw.priority as string) ?? 'normal') as Notification['priority'],
-    category: ((raw.category as string) ?? 'system') as Notification['category'],
-    eventType: (raw.eventType as string) ?? (raw.event_type as string) ?? 'system',
-    vehicleId: (raw.vehicleId as string) ?? (raw.vehicle_id as string) ?? undefined,
-    read: (raw.read as boolean) ?? false,
-    createdAt: (raw.created_at as string) ?? new Date().toISOString(),
-    link: (raw.link as string) ?? undefined,
+    id: wireStr(raw, 'id'),
+    title: wireStr(raw, 'title'),
+    body: wireStr(raw, 'body'),
+    severity: (wireStr(raw, 'severity') || 'normal') as Notification['severity'],
+    priority: (wireStr(raw, 'priority') || 'normal') as Notification['priority'],
+    category: (wireStr(raw, 'category') || 'system') as Notification['category'],
+    eventType: wireStr(raw, 'eventType', 'event_type') || 'system',
+    vehicleId,
+    read: Boolean(raw.read),
+    createdAt: wireIso(raw, 'createdAt', 'created_at') ?? '',
+    link: wireStr(raw, 'link') || undefined,
   };
 }
 
@@ -92,16 +94,16 @@ async function fetchNotificationDetail(id: string): Promise<NotificationDetail> 
       return {
         ...mapNotification(raw),
         deliveries: ((raw.deliveries as Record<string, unknown>[]) ?? []).map((d) => ({
-          id: d.id as string,
-          channel: d.channel as NotificationDetail['deliveries'][number]['channel'],
-          status: d.status as NotificationDetail['deliveries'][number]['status'],
-          attempts: (d.attempts as number) ?? 0,
+          id: wireStr(d, 'id'),
+          channel: wireStr(d, 'channel') as NotificationDetail['deliveries'][number]['channel'],
+          status: wireStr(d, 'status') as NotificationDetail['deliveries'][number]['status'],
+          attempts: Number(d.attempts ?? 0),
           error: (d.error as string) ?? null,
           provider: (d.provider as string) ?? null,
-          providerMessageId: (d.provider_message_id as string) ?? null,
-          sentAt: (d.sent_at as string) ?? null,
-          nextAttemptAt: (d.next_attempt_at as string) ?? null,
-          createdAt: (d.created_at as string) ?? new Date().toISOString(),
+          providerMessageId: wireStr(d, 'providerMessageId', 'provider_message_id') || null,
+          sentAt: wireIso(d, 'sentAt', 'sent_at') ?? null,
+          nextAttemptAt: wireIso(d, 'nextAttemptAt', 'next_attempt_at') ?? null,
+          createdAt: wireIso(d, 'createdAt', 'created_at') ?? '',
         })),
       };
     },

@@ -69,6 +69,10 @@ const notifApi = vi.hoisted(() => ({
   useNotificationsPage: vi.fn(),
 }));
 
+vi.mock('@/api/asset.api', () => ({
+  useVehicles: () => ({ data: [] }),
+}));
+
 vi.mock('@/api/notification.api', () => ({
   useNotificationsPage: (params: unknown) => notifApi.useNotificationsPage(params),
 }));
@@ -166,9 +170,18 @@ describe('EventCenterPage — timeline rendering', () => {
     expect(screen.getByText(yesterday)).toBeTruthy();
   });
 
-  it('navigates to the source entity when an event with a link is clicked', () => {
+  it('opens the detail drawer when an event is clicked', () => {
     renderEvents();
     fireEvent.click(screen.getByText('Overspeed: TRK-1'));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Vehicle')).toBeTruthy();
+    expect(screen.getByText('v-trk-1')).toBeTruthy();
+  });
+
+  it('opens the related alarm from the event drawer', () => {
+    renderEvents();
+    fireEvent.click(screen.getByText('Overspeed: TRK-1'));
+    fireEvent.click(screen.getByRole('button', { name: /open related alarm/i }));
     expect(screen.getByTestId('page').textContent).toBe('alarms');
   });
 

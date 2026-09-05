@@ -405,7 +405,9 @@ function NotificationDetailContent({
         </span>
       </div>
       <p className="text-xs text-gray-400 dark:text-graydark-600">
-        {new Date(notification.createdAt).toLocaleString()}
+        {notification.createdAt && !Number.isNaN(new Date(notification.createdAt).getTime())
+          ? new Date(notification.createdAt).toLocaleString()
+          : '—'}
         {notification.vehicleId ? ` · ${notification.vehicleId}` : ''}
       </p>
 

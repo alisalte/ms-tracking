@@ -48,6 +48,11 @@ function toDateInput(ms: number): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+function parseIsoToInput(iso: string | null | undefined, fallbackMs: number): string {
+  if (!iso) return toDateInput(fallbackMs);
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? toDateInput(ms) : toDateInput(fallbackMs);
+}
 function fmtBytes(n: number): string {
   if (n <= 0) return '';
   if (n < 1024) return `${n} B`;
@@ -64,18 +69,37 @@ function clipWindow(r: MdvrResource): { fromMs: number; toMs: number } | null {
 
 interface PlaybackPanelProps {
   channels: CameraChannel[];
+  /** Preselect this device's first MDVR camera (alarm → playback deep link). */
+  initialDeviceId?: string | null;
+  /** ISO start of the alarm evidence window. */
+  initialFrom?: string | null;
+  /** ISO end of the alarm evidence window. */
+  initialTo?: string | null;
 }
 
-export function PlaybackPanel({ channels }: PlaybackPanelProps) {
+export function PlaybackPanel({
+  channels,
+  initialDeviceId,
+  initialFrom,
+  initialTo,
+}: PlaybackPanelProps) {
   const { t } = useTranslation();
   const available = useMemo(() => channels.filter((c) => c.online && c.consentGiven), [channels]);
   const hasMdvr = useMemo(() => channels.some((c) => isMdvrChannel(c)), [channels]);
   const playback = useMdvrPlayback();
-  const resources = useMdvrResources();
+  const {
+    search: searchResources,
+    status: resourceStatus,
+    error: resourceError,
+    videos,
+    photos,
+  } = useMdvrResources();
 
   const [channelId, setChannelId] = useState('');
-  const [fromInput, setFromInput] = useState(() => toDateInput(Date.now() - 2 * 3600_000));
-  const [toInput, setToInput] = useState(() => toDateInput(Date.now()));
+  const [fromInput, setFromInput] = useState(() =>
+    parseIsoToInput(initialFrom, Date.now() - 2 * 3600_000),
+  );
+  const [toInput, setToInput] = useState(() => parseIsoToInput(initialTo, Date.now()));
 
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -92,7 +116,27 @@ export function PlaybackPanel({ channels }: PlaybackPanelProps) {
   const channel = available.find((c) => c.id === channelId) ?? null;
   const mdvr = isMdvrChannel(channel);
   const hasRecordingContext = channel !== null && cursorMs !== null;
-  const busy = playback.status === 'starting' || resources.status === 'listing';
+  const busy = playback.status === 'starting' || resourceStatus === 'listing';
+  const deepLinkApplied = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    if (!initialDeviceId && !initialFrom) return;
+    const mine = channels
+      .filter((c) => isMdvrChannel(c) && (!initialDeviceId || c.deviceId === initialDeviceId))
+      .sort((a, b) => (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99));
+    const ch = mine[0];
+    if (!ch) return;
+    deepLinkApplied.current = true;
+    setChannelId(ch.id);
+    const fromMs = initialFrom ? Date.parse(initialFrom) : Number.NaN;
+    const toMs = initialTo ? Date.parse(initialTo) : Number.NaN;
+    if (Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs > fromMs) {
+      setFromInput(toDateInput(fromMs));
+      setToInput(toDateInput(toMs));
+      void searchResources(ch, fromMs, toMs);
+    }
+  }, [channels, initialDeviceId, initialFrom, initialTo, searchResources]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: cursorMs gates start; ticks use functional setState
   useEffect(() => {
@@ -145,7 +189,7 @@ export function PlaybackPanel({ channels }: PlaybackPanelProps) {
 
   const search = () => {
     if (!rangeValid || !channel || !mdvr) return;
-    void resources.search(channel, from, to);
+    void searchResources(channel, from, to);
   };
 
   const playResource = (r: MdvrResource) => {
@@ -275,29 +319,27 @@ export function PlaybackPanel({ channels }: PlaybackPanelProps) {
               {t('video.playback.listTitle', { defaultValue: 'Recordings' })}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {resources.status === 'listing' && (
+              {resourceStatus === 'listing' && (
                 <div className="flex items-center gap-2 px-1 py-3 text-sm text-gray-500">
                   <Spinner size="sm" label={t('video.playback.listing')} />
                   {t('video.playback.listing')}
                 </div>
               )}
-              {resources.status === 'error' && (
+              {resourceStatus === 'error' && (
                 <p className="px-1 py-2 text-sm text-warning-600">
-                  {t('video.playback.listError', { message: resources.error ?? '' })}
+                  {t('video.playback.listError', { message: resourceError ?? '' })}
                 </p>
               )}
-              {resources.status === 'ready' &&
-                resources.videos.length === 0 &&
-                resources.photos.length === 0 && (
-                  <p className="px-1 py-2 text-sm text-gray-500">{t('video.playback.empty')}</p>
-                )}
-              {resources.status === 'idle' && (
+              {resourceStatus === 'ready' && videos.length === 0 && photos.length === 0 && (
+                <p className="px-1 py-2 text-sm text-gray-500">{t('video.playback.empty')}</p>
+              )}
+              {resourceStatus === 'idle' && (
                 <p className="px-1 py-2 text-sm text-gray-500">{t('video.playback.selectFirst')}</p>
               )}
               <ResourceGroup
                 title={t('video.playback.videos', { defaultValue: 'Videos' })}
                 icon={<Film size={14} aria-hidden />}
-                items={resources.videos}
+                items={videos}
                 kind="video"
                 onPlay={playResource}
                 playLabel={t('video.playback.playClip', { defaultValue: 'Play this clip' })}
@@ -305,7 +347,7 @@ export function PlaybackPanel({ channels }: PlaybackPanelProps) {
               <ResourceGroup
                 title={t('video.playback.photos', { defaultValue: 'Photos' })}
                 icon={<Image size={14} aria-hidden />}
-                items={resources.photos}
+                items={photos}
                 kind="photo"
                 onPlay={playResource}
                 playLabel={t('video.playback.playClip', { defaultValue: 'Play this clip' })}
