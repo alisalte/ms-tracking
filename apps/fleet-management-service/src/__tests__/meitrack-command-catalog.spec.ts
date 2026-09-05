@@ -300,6 +300,13 @@ describe('meitrack command catalog', () => {
     });
   });
 
+  // --- media (§3.86) --------------------------------------------------------------
+  it('CB8 accepts comma-separated event,channel,seconds,priority entries (regression: allowComma was missing)', () => {
+    expect(
+      build('CB8', { operation: '1', entries: '1,1,10,1;2,2,20,2' }),
+    ).toEqual({ kind: 'text', text: 'CB8,1;1,1,10,1;2,2,20,2' });
+  });
+
   // --- outputs (§3.49, §3.74) ----------------------------------------------------
   it('C01 concatenates the five output states (§3.49 example: C01,20,10122)', () => {
     expect(

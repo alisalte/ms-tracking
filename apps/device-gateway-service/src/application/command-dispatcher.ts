@@ -164,15 +164,43 @@ export class CommandDispatcher {
     if (!byCode || byCode.size === 0) return;
     this.held.delete(deviceId);
     const now = Date.now();
-    for (const held of byCode.values()) {
+    const live = [...byCode.values()].filter((held) => {
       if (now - held.heldAt > HOLD_TTL_MS) {
         this.logger.warn(
           `Dropping expired held command ${held.request.commandCode} (${held.request.commandId}).`,
         );
-        continue;
+        return false;
       }
+      return true;
+    });
+    for (const held of this.commandsToFlush(live)) {
       await this.dispatch(held.request);
     }
+  }
+
+  /**
+   * Opening the video wall holds AB2; leaving it holds AB3. Flushing both would
+   * start the stream and immediately stop it. Keep the latest intent: if the
+   * newest held command is AB3, only stops go out; otherwise only starts.
+   */
+  private commandsToFlush(held: HeldCommand[]): HeldCommand[] {
+    if (held.length === 0) return held;
+    const latest = held.reduce((best, cur) => (cur.heldAt >= best.heldAt ? cur : best));
+    const starts = held.filter((h) => h.request.commandCode === 'AB2');
+    const stops = held.filter((h) => h.request.commandCode === 'AB3');
+    if (starts.length > 0 && stops.length > 0) {
+      if (latest.request.commandCode === 'AB3') {
+        this.logger.log(
+          `Skipping ${starts.length} held AB2 — latest command is AB3 (${latest.request.commandId}).`,
+        );
+        return stops;
+      }
+      this.logger.log(
+        `Skipping ${stops.length} held AB3 — latest command is AB2 (${latest.request.commandId}).`,
+      );
+      return starts;
+    }
+    return held;
   }
 
   private encode(

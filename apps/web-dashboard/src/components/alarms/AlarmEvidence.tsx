@@ -1,19 +1,20 @@
 /**
- * AlarmEvidence — MDVR recordings around the alarm time.
+ * AlarmEvidence — MDVR photo/video for an alarm, fetched only after a click.
  *
- * Any camera-equipped vehicle lists video in a ±5 minute window. DMS alarms
- * always surface that section and also query stills (plus `photoName` from
- * the device event when the gateway attached it).
+ * DMS: D00 shows the event JPEG and AB4 plays the clip. Click downloads.
+ * Other alarms: list saved files in ±5 minutes.
  */
-import { Film, Image as ImageIcon } from 'lucide-react';
+import { Download, Film, Image as ImageIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { fromMdvrBcdTime } from '@/api/video.api';
-import { Spinner } from '@/components/tailwind-ui';
+import { AlarmEventVideo } from '@/components/alarms/AlarmEventVideo';
+import { Button, Spinner } from '@/components/tailwind-ui';
 import type { AlarmMdvrClip } from '@/components/video/useMdvrResources';
 import { useAlarmEvidence } from '@/hooks/useAlarmEvidence';
+import { downloadBlob, downloadHlsPlaylist } from '@/lib/video-stream';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmEvidenceProps {
@@ -42,47 +43,137 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
     navigate(`/video?${params.toString()}`);
   };
 
-  const openWindow = () => {
-    const ch = evidence.mdvrChannels[0];
-    if (!ch?.deviceId || !evidence.window) return;
-    const params = new URLSearchParams({
-      view: 'playback',
-      device: ch.deviceId,
-      from: new Date(evidence.window.fromMs).toISOString(),
-      to: new Date(evidence.window.toMs).toISOString(),
-    });
-    navigate(`/video?${params.toString()}`);
+  const downloadPhoto = () => {
+    if (!evidence.photoBlob) return;
+    downloadBlob(evidence.photoBlob, evidence.eventPhotoName ?? 'event.jpg');
   };
+
+  const downloadVideo = (hlsUrl: string) => {
+    const base = (evidence.eventPhotoName ?? 'event').replace(/\.[^.]+$/, '');
+    void downloadHlsPlaylist(hlsUrl, `${base}.ts`).catch(() => {
+      /* HLS may 404 until the device publishes — ignore a missed click. */
+    });
+  };
+
+  const idle = evidence.status === 'idle';
+  const listing = evidence.status === 'listing';
+  const showCatalog = evidence.status === 'ready' || evidence.status === 'error';
+  const showEventMedia =
+    evidence.dms &&
+    !evidence.includeNearby &&
+    evidence.loadRequested &&
+    evidence.hasCamera &&
+    !idle;
 
   return (
     <div>
       <SectionLabel>{t('alarms.detail.evidence')}</SectionLabel>
       <p className="mt-1 text-xs text-gray-400 dark:text-graydark-600">
-        {t('alarms.detail.evidenceWindow', { minutes: 5 })}
+        {t(
+          evidence.dms && !evidence.includeNearby
+            ? 'alarms.detail.dmsEvidence'
+            : 'alarms.detail.evidenceWindow',
+          { minutes: 5 },
+        )}
       </p>
 
-      {evidence.eventPhotoName && (
-        <p className="mt-1.5 text-sm text-gray-700 dark:text-graydark-700">
-          {t('alarms.detail.eventPhoto', { name: evidence.eventPhotoName })}
-        </p>
-      )}
-
-      {evidence.channelsLoading || evidence.status === 'listing' ? (
+      {idle && !evidence.loadRequested && evidence.hasCamera ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-2"
+          onClick={evidence.requestLoad}
+        >
+          {t(evidence.dms ? 'alarms.detail.loadEvent' : 'alarms.detail.loadNearby', {
+            minutes: 5,
+          })}
+        </Button>
+      ) : listing && !evidence.dms ? (
         <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600">
-          <Spinner size="sm" label={t('alarms.detail.searchingRecordings')} />
+          <Spinner size="sm" />
           {t('alarms.detail.searchingRecordings')}
         </div>
-      ) : !evidence.hasCamera ? (
+      ) : evidence.channelsLoading ? null : !evidence.hasCamera ? (
         <p className="mt-1.5 text-sm text-gray-500 dark:text-graydark-600">
           {t(evidence.dms ? 'alarms.detail.dmsNoCamera' : 'alarms.detail.noCamera')}
         </p>
+      ) : showEventMedia ? (
+        <div className="mt-2 flex flex-col gap-3">
+          <div>
+            <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-graydark-600">
+              <ImageIcon size={14} aria-hidden />
+              {t('alarms.detail.photos')}
+            </p>
+            {evidence.photoUrl ? (
+              <div className="overflow-hidden rounded-lg bg-gray-100 dark:bg-white/5">
+                <img
+                  src={evidence.photoUrl}
+                  alt={evidence.eventPhotoName ?? t('alarms.detail.photos')}
+                  className="max-h-64 w-full object-contain"
+                />
+                <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                  <span className="min-w-0 truncate text-xs text-gray-500 dark:text-graydark-600">
+                    {evidence.eventPhotoName}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    leftIcon={<Download size={14} />}
+                    onClick={downloadPhoto}
+                  >
+                    {t('alarms.detail.downloadPhoto')}
+                  </Button>
+                </div>
+              </div>
+            ) : listing ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600">
+                <Spinner size="sm" />
+                {t('alarms.detail.loadingEventMedia')}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-graydark-600">
+                {evidence.photoError
+                  ? t('alarms.detail.photoError', { message: evidence.photoError })
+                  : t('alarms.detail.noEventPhotos')}
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-graydark-600">
+              <Film size={14} aria-hidden />
+              {t('alarms.detail.videos')}
+            </p>
+            {evidence.videoChannel && evidence.videoWindow ? (
+              <AlarmEventVideo
+                channel={evidence.videoChannel}
+                fromMs={evidence.videoWindow.fromMs}
+                toMs={evidence.videoWindow.toMs}
+                onDownload={downloadVideo}
+              />
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-graydark-600">
+                {t('alarms.detail.noEventVideos')}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={evidence.requestNearby}
+            className="self-start text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            {t('alarms.detail.loadNearby', { minutes: 5 })}
+          </button>
+        </div>
       ) : evidence.status === 'error' &&
         evidence.videos.length === 0 &&
-        evidence.photos.length === 0 ? (
+        evidence.photos.length === 0 &&
+        !evidence.photoUrl ? (
         <p className="mt-1.5 text-sm text-warning-600 dark:text-warning-400">
           {t('alarms.detail.evidenceError', { message: evidence.error ?? '' })}
         </p>
-      ) : (
+      ) : showCatalog ? (
         <div className="mt-2 flex flex-col gap-3">
           <ClipGroup
             title={t('alarms.detail.videos')}
@@ -91,24 +182,20 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
             empty={t('alarms.detail.noVideos')}
             onOpen={openClip}
           />
-          {evidence.dms && (
-            <ClipGroup
-              title={t('alarms.detail.photos')}
-              icon={<ImageIcon size={14} aria-hidden />}
-              items={evidence.photos}
-              empty={t('alarms.detail.noPhotos')}
-              onOpen={openClip}
-            />
-          )}
-          <button
-            type="button"
-            onClick={openWindow}
-            className="self-start text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
-          >
-            {t('alarms.detail.openPlayback')}
-          </button>
+          <ClipGroup
+            title={t('alarms.detail.photos')}
+            icon={<ImageIcon size={14} aria-hidden />}
+            items={evidence.photos}
+            empty={t('alarms.detail.noPhotos')}
+            onOpen={openClip}
+          />
         </div>
-      )}
+      ) : listing || (evidence.loadRequested && idle) ? (
+        <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600">
+          <Spinner size="sm" />
+          {t('alarms.detail.searchingRecordings')}
+        </div>
+      ) : null}
     </div>
   );
 }

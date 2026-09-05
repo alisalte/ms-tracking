@@ -307,4 +307,61 @@ describe('PacketDispatcher — fail-closed pipeline (06 §8, §6.1)', () => {
     expect(result.close).toBe(false);
     expect(kafka.published).toHaveLength(0);
   });
+
+  it('reassembles D00 PHOTO chunks into a COMMAND_ACK with JPEG bytes', async () => {
+    const { deps, kafka } = buildDeps();
+    const dispatcher = new PacketDispatcher(deps);
+    const session = newSession();
+    session.identify();
+    await dispatcher.dispatch(
+      session,
+      fakeAdapter([
+        new DeviceMessage({
+          messageId: 'login',
+          deviceId: '',
+          serialOrImei: 'imei-1',
+          tenantId: '',
+          protocolId: 'stub',
+          type: 'LOGIN',
+          timestamp: NOW,
+          ingestedAt: NOW,
+          rawSize: 2,
+          checksum: 'abc',
+          direction: 'INBOUND',
+        }),
+      ]),
+      rawPacket(),
+    );
+    const chunk = (index: number, bytes: number[]) =>
+      new DeviceMessage({
+        messageId: `photo-${index}`,
+        deviceId: '',
+        serialOrImei: 'imei-1',
+        tenantId: '',
+        protocolId: 'stub',
+        type: 'PHOTO',
+        timestamp: NOW,
+        ingestedAt: NOW,
+        telemetry: {
+          command: 'D00',
+          filename: 'snap.jpg',
+          totalPackets: 2,
+          packetIndex: index,
+          chunkBase64: Buffer.from(bytes).toString('base64'),
+        },
+        rawSize: 2,
+        checksum: 'p',
+        direction: 'INBOUND',
+      });
+    await dispatcher.dispatch(session, fakeAdapter([chunk(0, [0xff, 0xd8])]), rawPacket());
+    await dispatcher.dispatch(session, fakeAdapter([chunk(1, [0xff, 0xd9])]), rawPacket());
+    const ack = kafka.published.find(
+      (m) => m.type === 'COMMAND_ACK' && m.telemetry?.command === 'D00',
+    );
+    expect(ack).toBeDefined();
+    expect(ack?.telemetry?.filename).toBe('snap.jpg');
+    expect(Buffer.from(String(ack?.telemetry?.photoBase64), 'base64')).toEqual(
+      Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    );
+  });
 });

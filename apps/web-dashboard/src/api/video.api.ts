@@ -173,17 +173,15 @@ export function useSnapshot() {
 // ── MDVR live stream (AB2 RTMP push + MediaMTX HLS) ─────────────────────────
 
 /**
- * md300-main `live.js` used a single `live/md300` key. A 2-camera MDVR needs
- * a distinct RTMP/HLS path per logical channel (`live/md300/1`, `live/md300/2`)
- * so two AB2 pushes do not overwrite each other on MediaMTX.
+ * Same RTMP/HLS key as md300-main `live.js` (`RTMP_PATH = live/md300`).
+ * Camera is selected by the AB2/AB3/AB4 channel byte, not a URL suffix —
+ * the MD300 drops extra path segments and publishes `live/md300`.
  */
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
-export function mdvrStreamKey(logicalChannel = 1): string {
-  const n = Number(logicalChannel);
-  const ch = Number.isInteger(n) && n >= 1 ? n : 1;
-  return `${MDVR_RTMP_PATH}/${ch}`;
+export function mdvrStreamKey(_logicalChannel = 1): string {
+  return MDVR_RTMP_PATH;
 }
 
 /** Host:port the device is told to push RTMP to (rewritten off-loopback server-side). */
@@ -199,13 +197,12 @@ export function mdvrHlsUrl(_imei?: string, logicalChannel = 1): string {
 }
 
 /**
- * AB4 still carries `live/md300/{n}/pb` so the command is distinct from live
- * AB2. The MD300 ACKs that URL but publishes the three-part live key
- * (`live/md300/{n}`) — extra path is dropped. The HLS player must therefore
- * watch the live key, not `/pb`.
+ * AB4 still carries `live/md300/pb` so the command bytes differ from live AB2.
+ * The MD300 ACKs that URL but publishes `live/md300` (extra path dropped).
+ * The HLS player must therefore watch the live key, not `/pb`.
  */
-export function mdvrPlaybackStreamKey(logicalChannel = 1): string {
-  return `${mdvrStreamKey(logicalChannel)}/pb`;
+export function mdvrPlaybackStreamKey(_logicalChannel = 1): string {
+  return `${mdvrStreamKey()}/pb`;
 }
 
 export function mdvrPlaybackRtmpUrl(_imei?: string, logicalChannel = 1): string {
@@ -257,6 +254,27 @@ export interface MdvrResource {
 
 export function mdvrResourceKind(avType: number): 'video' | 'photo' {
   return avType === 4 ? 'photo' : 'video';
+}
+
+/** Parse `response_text` JSON written by the D00 photo-download command-ack. */
+export function parseMdvrPhotoAck(
+  responseText: string | null | undefined,
+): { filename: string; bytes: Uint8Array } | null {
+  if (!responseText) return null;
+  try {
+    const parsed = JSON.parse(responseText) as { filename?: unknown; photoBase64?: unknown };
+    if (typeof parsed.photoBase64 !== 'string' || parsed.photoBase64.length === 0) return null;
+    const binary = atob(parsed.photoBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const filename =
+      typeof parsed.filename === 'string' && parsed.filename.trim()
+        ? parsed.filename.trim()
+        : 'event.jpg';
+    return { filename, bytes };
+  } catch {
+    return null;
+  }
 }
 
 /** Parse `response_text` JSON written by the AB8 command-ack consumer. */

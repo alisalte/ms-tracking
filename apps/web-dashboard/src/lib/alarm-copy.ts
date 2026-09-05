@@ -82,7 +82,16 @@ export function mapAlarmType(raw: string | undefined): AlarmType {
     return 'collision';
   }
   if (u.startsWith('VIDEO') || u.startsWith('STORAGE') || u === 'CAMERA') return 'camera';
-  if (u.startsWith('ADAS') || u.startsWith('DMS') || u.startsWith('FATIGUE')) return 'dms';
+  if (
+    u.startsWith('ADAS') ||
+    u.startsWith('DMS') ||
+    u.includes('DMS_') ||
+    u.includes('.DMS') ||
+    u.startsWith('FATIGUE') ||
+    u.includes('FATIGUE')
+  ) {
+    return 'dms';
+  }
   if (u === 'TOW') return 'tow';
   if (u === 'JAMMING') return 'jamming';
   if (u === 'POWER_CUT' || u === 'POWER_RESTORED' || u === 'LOW_POWER' || u === 'POWER') {
@@ -191,6 +200,39 @@ export function localizeAlarmDetail(
   const fromPattern = localizeEnglishPattern(t, raw);
   if (fromPattern) return fromPattern;
   if (raw === alarm.message) return localizeAlarmMessage(t, alarm);
+  return localizePhrase(t, raw);
+}
+
+/** `device.alarm.DMS_SMOKING.v1` → `DMS_SMOKING`. */
+export function sourceEventAlarmCode(eventType: string): string | undefined {
+  const tagged = /(?:^|\.)((?:DMS|ADAS|FATIGUE)_[A-Z0-9_]+)(?:\.|$)/i.exec(eventType);
+  return tagged?.[1]?.toUpperCase();
+}
+
+export function localizeSourceEventType(t: TFunction, eventType: string): string {
+  const code = sourceEventAlarmCode(eventType);
+  if (code) return localizeAlarmCode(t, code);
+  return localizeEventType(t, eventType);
+}
+
+/** Prefer a short human line; never dump the device JSON blob. */
+export function localizeSourceEventDetail(t: TFunction, detail: string): string {
+  const raw = detail?.trim() ?? '';
+  if (!raw) return '';
+  if (raw.startsWith('{')) {
+    try {
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof obj.dmsDetail === 'string' && obj.dmsDetail.trim()) {
+        return localizePhrase(t, obj.dmsDetail);
+      }
+      if (typeof obj.alarmCode === 'string' && obj.alarmCode.trim()) {
+        return localizeAlarmCode(t, obj.alarmCode);
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  }
   return localizePhrase(t, raw);
 }
 

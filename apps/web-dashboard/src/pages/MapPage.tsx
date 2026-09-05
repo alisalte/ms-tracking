@@ -187,19 +187,38 @@ export function MapPage() {
   // itself still errors honestly through its own queries).
   const { data: geofencesData } = useGeofences();
 
-  // Deep-link preselection (?vehicle=…&from=…&to=…) — trip → map (§37).
+  // Deep-link preselection:
+  //   ?vehicle&from&to → history track (trips → map, §37)
+  //   ?vehicle and/or ?lat&lng → live map, fly to the vehicle or alarm pin
   useEffect(() => {
     const vehicleParam = searchParams.get('vehicle');
-    if (!vehicleParam) return;
     const from = searchParams.get('from');
     const to = searchParams.get('to');
-    if (from && to && new Date(from) < new Date(to)) {
+    const lat = Number(searchParams.get('lat'));
+    const lng = Number(searchParams.get('lng'));
+    const hasPin = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
+
+    if (vehicleParam && from && to && new Date(from) < new Date(to)) {
       setCustomRange({ from, to });
       setHistoryPreset('custom');
+      setSelectedId(vehicleParam);
+      setPopupOpen(false);
+      setMode('history');
+      return;
     }
-    setSelectedId(vehicleParam);
-    setPopupOpen(false); // deep link targets the TRACK, not the inspector
-    setMode('history');
+
+    if (!vehicleParam && !hasPin) return;
+
+    if (vehicleParam) {
+      setSelectedId(vehicleParam);
+      setPopupOpen(false);
+      setMode('live');
+    }
+    setFocus((prev) => ({
+      id: vehicleParam ?? prev?.id,
+      nonce: (prev?.nonce ?? 0) + 1,
+      ...(hasPin ? { lat, lng } : {}),
+    }));
   }, [searchParams]);
 
   const historyWindow = useMemo(
@@ -284,7 +303,12 @@ export function MapPage() {
       : null;
 
   // ── Deep-link + selection sync ──
-  const [focus, setFocus] = useState<{ id: string; nonce: number } | null>(null);
+  const [focus, setFocus] = useState<{
+    id?: string;
+    nonce: number;
+    lat?: number;
+    lng?: number;
+  } | null>(null);
   const selectFromList = useCallback((id: string) => {
     setSelectedId(id);
     setFollowing(false);

@@ -193,7 +193,7 @@ function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
 }
 
-function renderMap() {
+function renderMap(initialEntry = '/map') {
   const client = makeClient();
   return render(
     createElement(
@@ -202,7 +202,7 @@ function renderMap() {
       createElement(
         I18nextProvider,
         { i18n },
-        createElement(MemoryRouter, { initialEntries: ['/map'] }, createElement(MapPage)),
+        createElement(MemoryRouter, { initialEntries: [initialEntry] }, createElement(MapPage)),
       ),
     ),
   );
@@ -393,5 +393,23 @@ describe('MapPage (Live Tracking)', () => {
     expect(await screen.findByTestId('map-state-overlay')).toBeInTheDocument();
     expect(screen.getByText(/registry unreachable/)).toBeInTheDocument();
     expect(screen.getByText('Live Tracking')).toBeInTheDocument();
+  });
+
+  it('keeps live mode and selects the vehicle from an alarm location deep link', async () => {
+    renderMap('/map?vehicle=v1&lat=35.72&lng=51.39');
+
+    expect(await screen.findByText('Live Tracking')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Live mode' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'History mode' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    const selected = screen
+      .getAllByTestId('map-vehicle-card')
+      .find((el) => el.getAttribute('aria-pressed') === 'true');
+    expect(selected?.closest('[data-vehicle-id]')).toHaveAttribute('data-vehicle-id', 'v1');
   });
 });

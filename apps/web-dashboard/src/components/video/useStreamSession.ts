@@ -45,6 +45,14 @@ export interface StreamSessionHook {
    * - `unavailable` — the session could not be opened.
    */
   streamKind: 'real' | 'stub' | 'unavailable';
+  /**
+   * MDVR path only: set when a DIFFERENT logical channel on this same
+   * device already holds the device's one live RTMP stream (real MD300
+   * hardware can push only one channel at a time). This tile is
+   * deliberately not sending its own AB2 — it will retry once that
+   * channel's tile closes.
+   */
+  blockedByChannel: number | null;
   /** Switch the simulcast layer (10 §2.3). */
   setQuality: (q: StreamQuality) => void;
   /** Manually retry the connection (after an error). */
@@ -65,43 +73,86 @@ const MAX_RETRIES = 3;
 /** Base backoff delay for reconnect. */
 const RECONNECT_BASE_MS = 1000;
 
-/** One AB2/AB3 pair per IMEI+camera — two wall tiles must start two RTMP pushes. */
-function mdvrLiveKey(imei: string, logicalChannel: number): string {
-  return `${imei}:${logicalChannel}`;
-}
-type MdvrShare = { count: number; start: Promise<void> };
-const mdvrShares = new Map<string, MdvrShare>();
+/**
+ * A real MD300 only ever pushes ONE RTMP stream, to ONE shared key
+ * (`live/md300` — see `MDVR_RTMP_PATH`): the AB2 `channel` byte selects which
+ * camera feeds it, but a second AB2 for a different channel just steals the
+ * device's single output rather than opening a second stream. So the lock
+ * below is per-IMEI (per device), not per-channel: only one logical channel
+ * may hold the live session at a time. A tile asking for a channel that
+ * isn't the current holder is BLOCKED — it must not send its own AB2 (that
+ * would just fight the active tile for the same RTMP key) — and is notified
+ * to retry once the holder releases.
+ */
+type MdvrDeviceLock = {
+  channel: number;
+  refCount: number;
+  start: Promise<void>;
+  /** Tiles waiting on a different channel, notified once this lock frees. */
+  waiters: Set<() => void>;
+};
+const mdvrLocks = new Map<string, MdvrDeviceLock>();
 /** In-flight AB3 so a reconnect cannot send AB2 before stop is queued. */
 const mdvrStopping = new Map<string, Promise<void>>();
 
-function acquireMdvrLive(imei: string, start: () => Promise<void>): Promise<void> {
-  const existing = mdvrShares.get(imei);
-  if (existing) {
-    existing.count += 1;
-    return existing.start;
+/** Register to be notified (once) the next time this IMEI's lock frees up. */
+function waitForMdvrRelease(imei: string, onFree: () => void): () => void {
+  const lock = mdvrLocks.get(imei);
+  if (!lock) {
+    // Nothing holds the device right now — let the caller retry immediately.
+    onFree();
+    return () => {};
   }
-  const afterStop = mdvrStopping.get(imei) ?? Promise.resolve();
-  const share: MdvrShare = {
-    count: 1,
-    start: afterStop.catch(() => undefined).then(() => start()),
-  };
-  mdvrShares.set(imei, share);
-  share.start.catch(() => {
-    if (mdvrShares.get(imei) === share) mdvrShares.delete(imei);
-  });
-  return share.start;
+  lock.waiters.add(onFree);
+  return () => lock.waiters.delete(onFree);
 }
 
-function releaseMdvrLive(imei: string, stop: () => Promise<void>): void {
-  const existing = mdvrShares.get(imei);
-  if (!existing) return;
-  existing.count -= 1;
-  if (existing.count > 0) return;
-  mdvrShares.delete(imei);
+/**
+ * Try to become (or join) the single live holder for this IMEI.
+ * `blocked: true` means a DIFFERENT channel already owns the device's one
+ * RTMP stream — the caller must not call `start` itself.
+ */
+function acquireMdvrLive(
+  imei: string,
+  channel: number,
+  start: () => Promise<void>,
+): { blocked: boolean; start: Promise<void> } {
+  const existing = mdvrLocks.get(imei);
+  if (existing) {
+    if (existing.channel !== channel) {
+      return { blocked: true, start: Promise.resolve() };
+    }
+    existing.refCount += 1;
+    return { blocked: false, start: existing.start };
+  }
+  const afterStop = mdvrStopping.get(imei) ?? Promise.resolve();
+  const lock: MdvrDeviceLock = {
+    channel,
+    refCount: 1,
+    start: afterStop.catch(() => undefined).then(() => start()),
+    waiters: new Set(),
+  };
+  mdvrLocks.set(imei, lock);
+  lock.start.catch(() => {
+    if (mdvrLocks.get(imei) === lock) mdvrLocks.delete(imei);
+  });
+  return { blocked: false, start: lock.start };
+}
+
+/** Release a held lock (no-op if this channel never held it — a blocked waiter). */
+function releaseMdvrLive(imei: string, channel: number, stop: () => Promise<void>): void {
+  const existing = mdvrLocks.get(imei);
+  if (!existing || existing.channel !== channel) return;
+  existing.refCount -= 1;
+  if (existing.refCount > 0) return;
+  mdvrLocks.delete(imei);
+  const waiters = [...existing.waiters];
   const stopping = stop().catch(() => undefined);
   mdvrStopping.set(imei, stopping);
   void stopping.finally(() => {
     if (mdvrStopping.get(imei) === stopping) mdvrStopping.delete(imei);
+    // Let whoever was waiting on this device try to acquire it now.
+    for (const notify of waiters) notify();
   });
 }
 
@@ -151,6 +202,7 @@ export function useStreamSession(
   const [currentQuality, setCurrentQuality] = useState<StreamQuality>(quality);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [errorState, setErrorState] = useState(false);
+  const [blockedByChannel, setBlockedByChannel] = useState<number | null>(null);
 
   const mdvr = isMdvrChannel(channel);
   const mode: 'mdvr' | 'mock' | null = channel ? (mdvr ? 'mdvr' : 'mock') : null;
@@ -225,11 +277,13 @@ export function useStreamSession(
     if (!channel) {
       teardown();
       setSession(null);
+      setBlockedByChannel(null);
       return;
     }
     if (!channel.online || !channel.consentGiven) {
       teardown();
       setSession(null);
+      setBlockedByChannel(null);
       return;
     }
 
@@ -244,21 +298,8 @@ export function useStreamSession(
       const logicalChannel = channel.logicalChannel ?? 1;
       const uploadUrl = mdvrRtmpUploadUrl(imei, logicalChannel);
       const url = mdvrHlsUrl(imei, logicalChannel);
-      mdvrLog(
-        `opening channel=${channel.id} device=${deviceId} imei=${imei} cam=${logicalChannel} → AB2 uploadUrl=${uploadUrl} hlsUrl=${url}`,
-      );
 
-      timeoutTimerRef.current = setTimeout(() => {
-        if (cancelled) return;
-        mdvrLog(
-          `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. Check: is the device connected to device-gateway (AUTHENTICATED)? Is AB2 still HELD (see device-gateway logs)? Is the device pushing RTMP to :1935?`,
-        );
-        teardown();
-        setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
-        scheduleReconnect();
-      }, CONNECTION_TIMEOUT_MS);
-
-      void acquireMdvrLive(mdvrLiveKey(imei, logicalChannel), async () => {
+      const startAb2 = async () => {
         mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
           uploadUrl,
           channel: logicalChannel,
@@ -295,29 +336,64 @@ export function useStreamSession(
             mdvrLog(`AB2 ${wire} on the wire for device=${deviceId} — waiting for RTMP ingest`);
           }
         });
-      })
-        .then(() => {
+        if (cancelled) return;
+        mdvrLog(`AB2 REST ${record.status} id=${record.id} — waiting for GPRS write`);
+        setHlsUrl(url);
+      };
+
+      const lock = acquireMdvrLive(imei, logicalChannel, startAb2);
+
+      if (lock.blocked) {
+        const holder = mdvrLocks.get(imei)?.channel ?? null;
+        mdvrLog(
+          `channel=${logicalChannel} BLOCKED — device=${deviceId} imei=${imei} is already ` +
+            `streaming channel ${holder} (a real MD300 pushes one RTMP stream at a time); ` +
+            'not sending a competing AB2 — will retry once that tile closes.',
+        );
+        setBlockedByChannel(holder);
+        const unsubscribe = waitForMdvrRelease(imei, () => {
           if (cancelled) return;
-          mdvrLog(`AB2 accepted — attaching HLS player to ${url}`);
-          setHlsUrl(url);
-        })
-        .catch((err) => {
-          mdvrLog(`AB2 request FAILED for device=${deviceId} imei=${imei}:`, err);
-          if (cancelled) return;
-          teardown();
-          setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
-          setErrorState(true);
-          scheduleReconnect();
+          setRetryTrigger((n) => n + 1);
         });
+        return () => {
+          cancelled = true;
+          unsubscribe();
+        };
+      }
+
+      setBlockedByChannel(null);
+      mdvrLog(
+        `opening channel=${channel.id} device=${deviceId} imei=${imei} cam=${logicalChannel} → AB2 uploadUrl=${uploadUrl} hlsUrl=${url}`,
+      );
+
+      timeoutTimerRef.current = setTimeout(() => {
+        if (cancelled) return;
+        mdvrLog(
+          `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. Check: is the device connected to device-gateway (AUTHENTICATED)? Is AB2 still HELD (see device-gateway logs)? Is the device pushing RTMP to :1935?`,
+        );
+        teardown();
+        setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+        scheduleReconnect();
+      }, CONNECTION_TIMEOUT_MS);
+
+      void lock.start.catch((err) => {
+        mdvrLog(`AB2 request FAILED for device=${deviceId} imei=${imei}:`, err);
+        if (cancelled) return;
+        teardown();
+        setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+        setErrorState(true);
+        scheduleReconnect();
+      });
 
       return () => {
         cancelled = true;
-        releaseMdvrLive(mdvrLiveKey(imei, logicalChannel), stopMdvr);
+        releaseMdvrLive(imei, logicalChannel, stopMdvr);
         teardown();
       };
     }
 
     // ── Mock path ───────────────────────────────────────────────────────────
+    setBlockedByChannel(null);
     // Open the synthetic MediaStream immediately so the player can attach.
     handleRef.current = openStream(channel, currentQuality, { audio: true });
     setStream(handleRef.current.stream);
@@ -405,5 +481,15 @@ export function useStreamSession(
         : 'stub'
       : 'unavailable';
 
-  return { session, stream, hlsUrl, mode, streamKind, setQuality, retry, onPlayerReady };
+  return {
+    session,
+    stream,
+    hlsUrl,
+    mode,
+    streamKind,
+    blockedByChannel,
+    setQuality,
+    retry,
+    onPlayerReady,
+  };
 }

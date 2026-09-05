@@ -587,6 +587,8 @@ services:
     build:
       context: ../..
       dockerfile: apps/web-dashboard/Dockerfile
+      # Don't HEAD Docker Hub for attestations (TLS timeouts from this network).
+      provenance: false
     container_name: fleetvision-web
     restart: unless-stopped
     depends_on:

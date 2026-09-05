@@ -35,12 +35,18 @@ export function AlarmCenterPage() {
   const [params, setParams] = useSearchParams();
   const { data: alarms, isLoading, isError, error, refetch } = useAlarms();
 
-  const view = (params.get('view') as ViewMode) ?? 'list';
+  const rawView = params.get('view');
+  const view: ViewMode = rawView === 'map' || rawView === 'timeline' ? rawView : 'list';
   const selectedId = params.get('id');
+  const focusId = params.get('focus') ?? selectedId;
   const setSelectedId = (id: string | null) => {
     const next = new URLSearchParams(params);
-    if (id) next.set('id', id);
-    else next.delete('id');
+    if (id) {
+      next.set('id', id);
+      next.set('focus', id);
+    } else {
+      next.delete('id');
+    }
     setParams(next, { replace: true });
   };
 
@@ -94,6 +100,13 @@ export function AlarmCenterPage() {
   const setView = (v: ViewMode) => {
     const next = new URLSearchParams(params);
     next.set('view', v);
+    if (v === 'map') {
+      const openId = next.get('id');
+      if (openId) {
+        next.set('focus', openId);
+        next.delete('id');
+      }
+    }
     setParams(next, { replace: true });
   };
 
@@ -189,7 +202,7 @@ export function AlarmCenterPage() {
           />
         )}
         {view === 'map' && (
-          <AlarmMap alarms={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+          <AlarmMap alarms={filtered} selectedId={focusId} onSelect={setSelectedId} />
         )}
       </div>
 

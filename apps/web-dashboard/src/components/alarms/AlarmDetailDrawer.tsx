@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import { useAlarmDetail, useTransitionAlarm } from '@/api/alarm.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
@@ -31,7 +31,12 @@ import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 import { alarmTypeIcon, severityBg } from '@/components/alarms/AlarmTypeIcon';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Drawer, Spinner } from '@/components/tailwind-ui';
-import { localizeAlarmDetail, localizeAlarmMessage, localizePhrase } from '@/lib/alarm-copy';
+import {
+  localizeAlarmDetail,
+  localizeAlarmMessage,
+  localizeSourceEventDetail,
+  localizeSourceEventType,
+} from '@/lib/alarm-copy';
 import { hasAlarmCoordinates } from '@/lib/alarm-evidence';
 import type { Alarm } from '@/types/alarm.types';
 
@@ -127,16 +132,16 @@ function AlarmDetailContent({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
   const isResolved = alarm.status === 'resolved';
   const canShowOnMap = hasAlarmCoordinates(alarm);
 
   const showOnMap = () => {
     if (!canShowOnMap) return;
-    const next = new URLSearchParams(params);
-    next.set('view', 'map');
-    next.set('id', alarm.id);
-    setParams(next, { replace: true });
+    const q = new URLSearchParams();
+    if (alarm.vehicleId) q.set('vehicle', alarm.vehicleId);
+    q.set('lat', String(alarm.lat));
+    q.set('lng', String(alarm.lng));
+    navigate(`/map?${q.toString()}`);
   };
 
   return (
@@ -212,17 +217,22 @@ function AlarmDetailContent({
           </p>
         ) : (
           <div className="mt-1.5 flex flex-col gap-1">
-            {alarm.sourceEvents.map((e) => (
-              <div
-                key={e.id}
-                className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600"
-              >
-                <span className="inline-flex h-[18px] items-center rounded-full bg-gray-100 px-1.5 font-mono text-[0.6rem] dark:bg-white/5">
-                  {e.type}
-                </span>
-                <span className="min-w-0 truncate">{localizePhrase(t, e.detail) || e.type}</span>
-              </div>
-            ))}
+            {alarm.sourceEvents.map((e) => {
+              const typeLabel = localizeSourceEventType(t, e.type);
+              const detailLabel = localizeSourceEventDetail(t, e.detail);
+              const extra = detailLabel && detailLabel !== typeLabel ? detailLabel : '';
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600"
+                >
+                  <span className="inline-flex h-[18px] max-w-[60%] items-center truncate rounded-full bg-gray-100 px-1.5 text-[0.65rem] font-medium dark:bg-white/5">
+                    {typeLabel}
+                  </span>
+                  {extra ? <span className="min-w-0 truncate">{extra}</span> : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

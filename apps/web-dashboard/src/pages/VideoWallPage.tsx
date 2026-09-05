@@ -25,6 +25,7 @@ import { CamerasPanel } from '@/components/video/CamerasPanel';
 import { ChannelDock } from '@/components/video/ChannelDock';
 import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
 import { PlaybackPanel } from '@/components/video/PlaybackPanel';
+import { isMdvrChannel } from '@/components/video/useStreamSession';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
 import { toggleFullscreen } from '@/lib/video-stream';
@@ -141,6 +142,27 @@ export function VideoWallPage() {
         if (i < next.length) next[i] = { ...next[i], channelId: ch.id };
       });
       return next;
+    });
+  }, [focusDeviceId, channels]);
+
+  // First-load: prefer real MDVR cameras so the wall talks to the device.
+  // Only fill DEMO/mock cameras when no MDVR channel is registered.
+  const autoFilledRef = useRef(false);
+  useEffect(() => {
+    if (autoFilledRef.current) return;
+    if (focusDeviceId || channels.length === 0) return;
+    autoFilledRef.current = true;
+    setTiles((prev) => {
+      const live = channels.filter((c) => c.online && c.consentGiven);
+      const mdvr = live.filter((c) => isMdvrChannel(c));
+      const online = mdvr.length > 0 ? mdvr : live.filter((c) => !isMdvrChannel(c));
+      let cursor = 0;
+      return prev.map((tile) => {
+        if (tile.channelId !== null) return tile;
+        const ch = online[cursor];
+        cursor += 1;
+        return ch ? { ...tile, channelId: ch.id } : tile;
+      });
     });
   }, [focusDeviceId, channels]);
 

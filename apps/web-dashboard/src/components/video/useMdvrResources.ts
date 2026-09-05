@@ -12,6 +12,7 @@ import { fetchDeviceCommand } from '@/api/command.api';
 import {
   type MdvrResource,
   mdvrResourceKind,
+  parseMdvrPhotoAck,
   parseMdvrResourceAck,
   toMdvrBcdTime,
 } from '@/api/video.api';
@@ -21,6 +22,7 @@ import type { CameraChannel } from '@/types/video.types';
 
 const AB8_POLL_MS = 1_500;
 const AB8_TIMEOUT_MS = 45_000;
+const D00_TIMEOUT_MS = 90_000;
 
 export type MdvrResourceStatus = 'idle' | 'listing' | 'ready' | 'error';
 
@@ -33,11 +35,12 @@ function isNoFileError(rec: DeviceCommandRecord): boolean {
   return /FFF5/i.test(`${rec.error ?? ''} ${rec.responseText ?? ''}`);
 }
 
-async function waitForAb8(
+async function waitForCommand(
   commandId: string,
+  timeoutMs: number,
   isCancelled: () => boolean,
 ): Promise<DeviceCommandRecord> {
-  const deadline = Date.now() + AB8_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   let last: DeviceCommandRecord | null = null;
   while (Date.now() < deadline) {
     if (isCancelled()) throw new Error('cancelled');
@@ -47,7 +50,14 @@ async function waitForAb8(
     }
     await new Promise((r) => setTimeout(r, AB8_POLL_MS));
   }
-  throw new Error(last ? `AB8 still ${last.status}` : 'AB8 timeout');
+  throw new Error(last ? `command still ${last.status}` : 'command timeout');
+}
+
+async function waitForAb8(
+  commandId: string,
+  isCancelled: () => boolean,
+): Promise<DeviceCommandRecord> {
+  return waitForCommand(commandId, AB8_TIMEOUT_MS, isCancelled);
 }
 
 async function queryAb8(
@@ -154,7 +164,8 @@ export interface AlarmMdvrClip {
 
 /**
  * Sequential AB8 across cameras (concurrent AB8 on one MDVR collides).
- * `includePhotos` is for DMS — other alarm types only need video.
+ * Photos are listed when the operator asks for the alarm window (and always
+ * for DMS event evidence).
  */
 export async function listMdvrEvidence(
   channels: CameraChannel[],
@@ -191,4 +202,27 @@ export async function listMdvrEvidence(
 
   const empty = videos.length === 0 && photos.length === 0;
   return { videos, photos, error: empty ? (errors[0] ?? null) : null };
+}
+
+/** D00 named-file download — used for DMS event snapshots (`photoName`). */
+export async function fetchMdvrPhoto(
+  deviceId: string,
+  filename: string,
+  isCancelled: () => boolean,
+): Promise<{ blob: Blob; filename: string }> {
+  mdvrLog(`D00 filename=${filename}`);
+  const queued = await apiPost<Record<string, unknown>, DeviceCommandRecord>(
+    `/devices/${deviceId}/commands`,
+    { commandCode: 'D00', params: { filename, startPacket: 0 } },
+  );
+  const done = await waitForCommand(queued.id, D00_TIMEOUT_MS, isCancelled);
+  if (done.status !== 'ACKED') {
+    throw new Error(done.error ?? done.responseText ?? `D00 ${done.status}`);
+  }
+  const parsed = parseMdvrPhotoAck(done.responseText);
+  if (!parsed) throw new Error('D00 returned no image');
+  return {
+    filename: parsed.filename || filename,
+    blob: new Blob([new Uint8Array(parsed.bytes)], { type: 'image/jpeg' }),
+  };
 }

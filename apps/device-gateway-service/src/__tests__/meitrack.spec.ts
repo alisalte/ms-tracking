@@ -394,8 +394,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
         [0x40, 0], // event 0
       ],
       [
-        [0x02, LNG],
-        [0x03, LAT],
+        [0x02, LAT],
+        [0x03, LNG],
         [0x04, T0],
       ],
     );
@@ -414,8 +414,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     const params = cceParams(
       [[0x40, 126]],
       [
-        [0x02, LNG],
-        [0x03, LAT],
+        [0x02, LAT],
+        [0x03, LNG],
         [0x04, T0],
       ],
       [[0xfe31, fe31]],
@@ -435,8 +435,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     const params = cceParams(
       [[0x40, 126]],
       [
-        [0x02, LNG],
-        [0x03, LAT],
+        [0x02, LAT],
+        [0x03, LNG],
         [0x04, T0],
       ],
       [[0xfe31, fe31]],
@@ -458,8 +458,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     const params = cceParams(
       [[0x40, 19]],
       [
-        [0x02, LNG],
-        [0x03, LAT],
+        [0x02, LAT],
+        [0x03, LNG],
         [0x04, T0],
       ],
     );
@@ -494,8 +494,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
           [0x40, 0],
         ],
         [
-          [0x02, LNG],
-          [0x03, LAT],
+          [0x02, LAT],
+          [0x03, LNG],
           [0x04, T0],
         ],
       ),
@@ -512,8 +512,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
       cceParams(
         [[0x40, 0]],
         [
-          [0x02, LNG],
-          [0x03, LAT],
+          [0x02, LAT],
+          [0x03, LNG],
           [0x04, T0],
         ],
       ),
@@ -544,8 +544,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
       cceParams(
         [[0x40, 34]],
         [
-          [0x02, LNG],
-          [0x03, LAT],
+          [0x02, LAT],
+          [0x03, LNG],
           [0x04, T0],
         ],
       ),
@@ -561,8 +561,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
       cceParams(
         [[0x40, 34]],
         [
-          [0x02, LNG],
-          [0x03, LAT],
+          [0x02, LAT],
+          [0x03, LNG],
           [0x04, T0],
         ],
       ),

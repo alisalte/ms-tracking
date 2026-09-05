@@ -8,6 +8,8 @@ import {
   localizeEventType,
   localizeNotificationBody,
   localizeNotificationTitle,
+  localizeSourceEventDetail,
+  localizeSourceEventType,
   mapAlarmType,
 } from '@/lib/alarm-copy';
 
@@ -25,6 +27,7 @@ describe('mapAlarmType', () => {
     expect(mapAlarmType('LOW_BATTERY')).toBe('battery');
     expect(mapAlarmType('prolonged_idle')).toBe('idle');
     expect(mapAlarmType('POWER_CUT')).toBe('power');
+    expect(mapAlarmType('device.alarm.DMS_SMOKING.v1')).toBe('dms');
   });
 });
 
@@ -130,5 +133,23 @@ describe('localizeEventType', () => {
   it('labels geofence_enter in FA', async () => {
     await i18n.changeLanguage('fa');
     expect(localizeEventType(i18n.t.bind(i18n), 'geofence_enter')).toContain('ورود');
+  });
+});
+
+describe('localizeSourceEvent', () => {
+  it('labels a DMS device event without dumping the JSON payload', async () => {
+    await i18n.changeLanguage('en');
+    expect(localizeSourceEventType(i18n.t.bind(i18n), 'device.alarm.DMS_SMOKING.v1')).toMatch(
+      /smok/i,
+    );
+    expect(
+      localizeSourceEventDetail(
+        i18n.t.bind(i18n),
+        '{"photoName":"240823120009_CH2_E126S8_0.jpg","dmsDetail":"Smoking"}',
+      ),
+    ).toMatch(/smok/i);
+    expect(
+      localizeSourceEventDetail(i18n.t.bind(i18n), '{"photoName":"240823120009_CH2_E126S8_0.jpg"}'),
+    ).toBe('');
   });
 });

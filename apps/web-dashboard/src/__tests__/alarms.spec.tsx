@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/auth/auth.store';
@@ -65,6 +65,16 @@ function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
 }
 
+function MapLanding() {
+  const [params] = useSearchParams();
+  return createElement('div', {
+    'data-testid': 'fleet-map-page',
+    'data-vehicle': params.get('vehicle') ?? '',
+    'data-lat': params.get('lat') ?? '',
+    'data-lng': params.get('lng') ?? '',
+  });
+}
+
 function renderAlarms(initialEntry = '/alarms') {
   const client = makeClient();
   return render(
@@ -77,7 +87,12 @@ function renderAlarms(initialEntry = '/alarms') {
         createElement(
           MemoryRouter,
           { initialEntries: [initialEntry] },
-          createElement(AlarmCenterPage),
+          createElement(
+            Routes,
+            null,
+            createElement(Route, { path: '/alarms', element: createElement(AlarmCenterPage) }),
+            createElement(Route, { path: '/map', element: createElement(MapLanding) }),
+          ),
         ),
       ),
     ),
@@ -142,6 +157,13 @@ describe('AlarmCenterPage', () => {
     fireEvent.click(screen.getByText(first.vehicleLabel));
     const drawer = await screen.findByRole('dialog');
     expect(within(drawer).getByTestId('alarm-show-on-map')).toHaveTextContent(first.address);
+
+    fireEvent.click(within(drawer).getByTestId('alarm-show-on-map'));
+    const mapPage = await screen.findByTestId('fleet-map-page');
+    expect(mapPage).toHaveAttribute('data-vehicle', first.vehicleId);
+    expect(mapPage).toHaveAttribute('data-lat', String(first.lat));
+    expect(mapPage).toHaveAttribute('data-lng', String(first.lng));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('filters the list by alarm type', async () => {

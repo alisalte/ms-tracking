@@ -101,9 +101,17 @@ describe('VideoWallPage', () => {
     });
   });
 
-  it('shows the empty state before any channel is added', async () => {
+  it('shows the empty state while channels are still loading', async () => {
     renderWall();
-    expect(await screen.findByText('No cameras on the wall yet')).toBeInTheDocument();
+    expect(screen.getByText('No cameras on the wall yet')).toBeInTheDocument();
+  });
+
+  it('auto-fills the wall once channels load, with no device deep-link', async () => {
+    renderWall();
+    await waitForChannels();
+    await waitFor(() => {
+      expect(screen.queryByText('No cameras on the wall yet')).not.toBeInTheDocument();
+    });
   });
 
   it('auto-fills tiles when Auto-fill is clicked', async () => {
@@ -308,6 +316,17 @@ const mdvrMockChannel = vi.hoisted(() => ({
   imei: '867191086416152',
 }));
 
+/** Second logical channel on the SAME device/IMEI — real MD300 hardware can
+ * only push one RTMP stream at a time, so this exercises the single-flight
+ * lock in useStreamSession (see "single active channel per MDVR device"). */
+const mdvrMockChannel2 = vi.hoisted(() => ({
+  ...mdvrMockChannel,
+  id: 'ch-mdvr-2',
+  label: 'MD300 Sim · CH2',
+  sourceLabel: 'MD300 Sim · CH2',
+  logicalChannel: 2,
+}));
+
 vi.mock('@/api/video.api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/video.api')>();
   return {
@@ -338,13 +357,26 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     mdvrOverride.channels = [mdvrMockChannel];
     renderWall();
     await screen.findByText('Video Wall');
-    await waitFor(() => expect(screen.getByText('Auto-fill')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('Auto-fill'));
     await waitFor(() => {
-      expect(screen.queryByText('No cameras on the wall yet')).not.toBeInTheDocument();
+      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
     });
-    const tile = document.querySelector('[data-tile="MD300 Sim · CH1"]');
-    expect(tile).not.toBeNull();
+  });
+
+  it('blocks a second channel on the same MDVR device instead of racing it live', async () => {
+    // A real MD300 only pushes one RTMP stream at a time — opening both of a
+    // device's channels must not fire two competing AB2s; the second tile
+    // stays honestly "blocked" until the first one closes.
+    mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
+    renderWall('/video?device=device-1');
+    await screen.findByText('Video Wall');
+    await waitFor(() => {
+      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+      expect(document.querySelector('[data-tile="MD300 Sim · CH2"]')).not.toBeNull();
+    });
+    // Exactly one of the two tiles is held back — never both, never neither.
+    await waitFor(() => {
+      expect(screen.getAllByText(/is live on this device/).length).toBe(1);
+    });
   });
 
   it('auto-assigns cameras from the map deep-link ?device=', async () => {
@@ -485,19 +517,19 @@ describe('mapMediaChannel wire shape', () => {
 
   it('builds AB2 RTMP and HLS URLs from the IMEI', async () => {
     const { mdvrRtmpUploadUrl, mdvrHlsUrl } = await import('@/api/video.api');
-    expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300\/1$/);
-    expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/1/index.m3u8');
-    expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300\/2$/);
-    expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300/2/index.m3u8');
+    expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300$/);
+    expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/index.m3u8');
+    expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300$/);
+    expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300/index.m3u8');
   });
 
   it('builds a sibling playback RTMP/HLS path so AB4 does not clobber live', async () => {
     const { mdvrPlaybackRtmpUrl, mdvrPlaybackHlsUrl, toMdvrBcdTime } = await import(
       '@/api/video.api'
     );
-    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300\/2\/pb$/);
+    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300\/pb$/);
     expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain(
-      '/media-hls/live/md300/1/index.m3u8',
+      '/media-hls/live/md300/index.m3u8',
     );
     expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toMatch(/^\d{12}$/);
   });

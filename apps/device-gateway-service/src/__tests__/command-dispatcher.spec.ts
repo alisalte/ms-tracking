@@ -286,6 +286,44 @@ describe('CommandDispatcher (downstream command path, 06 §6.2)', () => {
     expect(written).toHaveLength(2);
   });
 
+  it('does not flush a held AB3 that would cancel a later AB2', async () => {
+    const written: string[] = [];
+    let session: FakeSession | null = null;
+    const sessions = {
+      byDeviceId: (deviceId: string) =>
+        session && session.deviceId === deviceId ? (session as never as DeviceSession) : null,
+      writerFor: () => (data: Buffer) => {
+        written.push(data.toString('ascii'));
+        return true;
+      },
+    } as unknown as SessionManager;
+    const adapter = {
+      id: 'meitrack',
+      encode: (cmd: { payload: Record<string, unknown> }) =>
+        Buffer.from(String(cmd.payload.hex ?? cmd.payload.text ?? ''), 'ascii'),
+    } as unknown as ProtocolAdapter;
+    const dispatcher = new CommandDispatcher(
+      sessions,
+      { get: () => adapter } as unknown as AdapterRegistry,
+      null,
+      null,
+    );
+    await dispatcher.dispatch({
+      ...REQUEST,
+      commandCode: 'AB3',
+      payloadHex: 'AB3',
+    });
+    await dispatcher.dispatch({
+      ...REQUEST,
+      commandId: 'cmd-ab2',
+      commandCode: 'AB2',
+      payloadHex: 'AB2',
+    });
+    session = makeSession();
+    await dispatcher.flushHeld(DEVICE_ID);
+    expect(written).toEqual(['AB2']);
+  });
+
   it('stays silent (ROUTED_ELSEWHERE) when another instance owns the session', async () => {
     const { dispatcher, events } = makeDeps({
       session: null,

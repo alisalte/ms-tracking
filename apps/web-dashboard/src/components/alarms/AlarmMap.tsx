@@ -75,6 +75,7 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
       markersRef.current = [];
 
       for (const a of alarms) {
+        if (!hasAlarmCoordinates(a)) continue;
         const color = severityColor(a.severity);
         const isSel = a.id === selectedId;
         const el = document.createElement('img');
@@ -107,17 +108,14 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
     map.flyTo({ center: [a.lng, a.lat], zoom: 15, duration: 800 });
   }, [mapReady, selectedId, alarms]);
 
-  if (alarms.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
-      </div>
-    );
-  }
-
   return (
     <div className="relative h-full min-h-[400px] w-full">
       <div ref={containerRef} className="h-full min-h-[400px] w-full" />
+      {alarms.length === 0 ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-graydark-200/70">
+          <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
+        </div>
+      ) : null}
       <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
     </div>
   );

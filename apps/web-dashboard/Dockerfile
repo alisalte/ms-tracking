@@ -46,8 +46,12 @@ ENV VITE_GPS_WS_URL=$VITE_GPS_WS_URL \
 COPY apps/web-dashboard ./apps/web-dashboard
 RUN pnpm --filter @fleetvision/web-dashboard build
 
-# ---- Stage 2: runtime (nginx, non-root) ------------------------------------
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+# ---- Stage 2: runtime ------------------------------------------------------
+# Pin the digest of the official image already on this host. BuildKit still
+# HEADs Docker Hub to resolve a floating tag, and that TLS handshake times out
+# from this network — `nginxinc/nginx-unprivileged` is not cached locally.
+# Our server block listens on 8080 (compose publishes ${WEB_PORT:-8080}:8080).
+FROM nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
 ENV NODE_ENV=production
 
 # The built static assets.

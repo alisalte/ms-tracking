@@ -48,9 +48,10 @@ interface FleetMapProps {
   /**
    * §17 selection sync: selecting a list row focuses the map. Each token change
    * flies to the referenced vehicle (nonce bumped per request so re-selecting
-   * the same vehicle re-focuses).
+   * the same vehicle re-focuses). Optional lat/lng fly to an alarm pin instead
+   * of the vehicle's live position.
    */
-  focus?: { id: string; nonce: number } | null;
+  focus?: { id?: string; nonce: number; lat?: number; lng?: number } | null;
   /** Historical track overlay (Sprint F §9) — null in live mode. */
   track?: HistoryTrack | null;
   /**
@@ -487,14 +488,37 @@ export function FleetMap({
   );
 
   // §17 selection sync: a list-row selection flies the camera to the vehicle.
-  // Depends only on the focus token so live position deltas never re-trigger it.
+  // Alarm deep-links pass lat/lng so we land on the event, not the live fix.
+  // mapReady is required so /map?lat&lng is not skipped before the canvas exists.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !focus) return;
+    if (!map || !mapReady || !focus) return;
+    if (Number.isFinite(focus.lat) && Number.isFinite(focus.lng)) {
+      map.flyTo({ center: [focus.lng as number, focus.lat as number], zoom: 15 });
+      return;
+    }
+    if (!focus.id) return;
     const v = vehiclesRef.current.find((veh) => veh.id === focus.id);
-    if (!v || (v.lat === 0 && v.lng === 0)) return; // no fix yet — nothing to focus
+    if (!v || (v.lat === 0 && v.lng === 0)) return;
     map.flyTo({ center: [v.lng, v.lat], zoom: Math.max(map.getZoom(), 14) });
-  }, [focus]);
+  }, [focus, mapReady]);
+
+  // Alarm location pin (distinct from the live vehicle marker).
+  const pinRef = useRef<MaplibreMarker | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    pinRef.current?.remove();
+    pinRef.current = null;
+    if (!map || !mapReady || !focus) return;
+    if (!Number.isFinite(focus.lat) || !Number.isFinite(focus.lng)) return;
+    pinRef.current = new MaplibreMarker({ color: '#e11d48' })
+      .setLngLat([focus.lng as number, focus.lat as number])
+      .addTo(map);
+    return () => {
+      pinRef.current?.remove();
+      pinRef.current = null;
+    };
+  }, [focus, mapReady]);
 
   // Live follow (§2.5 دنبال‌کردن): pan the camera to the followed vehicle on
   // every position update. Gentle `panTo` (no zoom change, animated) so the

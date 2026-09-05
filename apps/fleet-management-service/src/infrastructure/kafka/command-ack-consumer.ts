@@ -34,6 +34,9 @@ interface CommandEventEnvelope {
     readonly response?: string;
     readonly resources?: unknown;
     readonly photoNames?: unknown;
+    readonly photoBase64?: unknown;
+    readonly filename?: unknown;
+    readonly byteLength?: unknown;
     readonly allPack?: number;
     readonly curPack?: number;
     readonly allFileNum?: number;
@@ -187,6 +190,19 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
     const photoNames = env.telemetry?.photoNames;
     if (Array.isArray(photoNames)) {
       await this.commands.markAcked(tenantId, pending.id, JSON.stringify({ photoNames }));
+      return;
+    }
+    const photoBase64 = env.telemetry?.photoBase64;
+    if (typeof photoBase64 === 'string' && photoBase64.length > 0) {
+      await this.commands.markAcked(
+        tenantId,
+        pending.id,
+        JSON.stringify({
+          filename: typeof env.telemetry?.filename === 'string' ? env.telemetry.filename : '',
+          photoBase64,
+          byteLength: env.telemetry?.byteLength ?? 0,
+        }),
+      );
       return;
     }
 

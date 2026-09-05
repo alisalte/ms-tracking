@@ -20,14 +20,19 @@ import { mockCommandCatalog } from '@/mock/command-data';
 import { CommandCenterPage } from '@/pages/CommandCenterPage';
 import type { Device } from '@/types/asset.types';
 
-function device(id: string, imei: string, status: Device['status'] = 'ACTIVE'): Device {
+function device(
+  id: string,
+  imei: string,
+  status: Device['status'] = 'ACTIVE',
+  model = 'MD522S',
+): Device {
   return {
     id,
     tenantId: 't1',
     imei,
     serialNumber: null,
     manufacturer: 'Meitrack',
-    model: 'MD522S',
+    model,
     protocol: 'meitrack',
     status,
     vehicleId: null,
@@ -44,6 +49,12 @@ const DEVICES = [
   device('11111111-1111-1111-1111-111111111111', '866854036516451'),
   device('22222222-2222-2222-2222-222222222222', '866854036516452'),
   device('33333333-3333-3333-3333-333333333333', '866854036516453', 'SUSPENDED'),
+];
+
+const MIXED_TYPE_DEVICES = [
+  device('11111111-1111-1111-1111-111111111111', '866854036516451', 'ACTIVE', 'MD522S'),
+  device('22222222-2222-2222-2222-222222222222', '866854036516452', 'ACTIVE', 'T622'),
+  device('33333333-3333-3333-3333-333333333333', '866854036516453', 'ACTIVE', 'T622'),
 ];
 
 const issueMutate = vi.fn();
@@ -120,6 +131,21 @@ describe('CommandDevicePicker', () => {
     expect(onChange).toHaveBeenCalledWith([
       '11111111-1111-1111-1111-111111111111',
       '22222222-2222-2222-2222-222222222222',
+    ]);
+  });
+
+  it('selecting a device type targets every ACTIVE device of that model', () => {
+    const onChange = vi.fn();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <CommandDevicePicker devices={MIXED_TYPE_DEVICES} selectedIds={[]} onChange={onChange} />
+      </I18nextProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/device type/i), { target: { value: 'T622' } });
+    expect(onChange).toHaveBeenCalledWith([
+      '22222222-2222-2222-2222-222222222222',
+      '33333333-3333-3333-3333-333333333333',
     ]);
   });
 });

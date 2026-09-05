@@ -2,7 +2,7 @@
  * useMdvrPlayback — AB4 RTMP playback from the MDVR SD card (Meitrack §3.x).
  *
  * Load sends AB4 (startTime/endTime + RTMP URL). The device pushes recorded
- * video to MediaMTX on the live key (`live/md300/{n}` — `/pb` is dropped).
+ * video to MediaMTX on the live key (`live/md300` — `/pb` is dropped).
  * Seek is AB5 drag; teardown is AB5 end. Non-MDVR channels never hit this hook.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';

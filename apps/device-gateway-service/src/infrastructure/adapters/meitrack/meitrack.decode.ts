@@ -691,10 +691,15 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
   };
 
   const event = u16(0x40) ?? u8(0x01) ?? 0;
-  // MD300 CCE 4-byte IDs on this firmware: 0x02 = longitude, 0x03 = latitude
-  // (signed millionths). Live Tehran fixes match this mapping.
-  const lngRaw = i32(0x02);
-  const latRaw = i32(0x03);
+  // CCE 4-byte GPS IDs per MEITRACK MDVR GPRS Protocol V2.0 §"Parameter list"
+  // (and matching the AAA text protocol's lat-before-lng field order):
+  // 0x02 = latitude, 0x03 = longitude (signed millionths of a degree).
+  // Confirmed against a real MD300 capture (IMEI 867191086416152): the same
+  // frame's 0x0E base-station field decodes to MCC 432 / MNC 35 (Iran,
+  // Irancell) — only the 0x02=lat/0x03=lng assignment places the fix inside
+  // Iran; the previously swapped mapping placed it on the Black Sea coast.
+  const latRaw = i32(0x02);
+  const lngRaw = i32(0x03);
   const speed = u16(0x08) ?? 0;
   const heading = u16(0x09) ?? 0;
   const timeRaw = u32(0x04);

@@ -3078,6 +3078,7 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
         labelFa: 'ورودی‌ها',
         type: 'string',
         maxLength: 900,
+        allowComma: true,
         required: false,
         hint: 'event,channel,seconds,priority;…',
         hintFa: 'رویداد،کانال،ثانیه،اولویت;…',

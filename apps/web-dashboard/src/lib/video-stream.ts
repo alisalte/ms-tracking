@@ -218,6 +218,30 @@ export function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Concatenate same-origin HLS media segments into a downloadable file. */
+export async function downloadHlsPlaylist(playlistUrl: string, filename: string): Promise<void> {
+  const res = await fetch(playlistUrl, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`playlist HTTP ${res.status}`);
+  const text = await res.text();
+  const parts: ArrayBuffer[] = [];
+  const map = text.match(/#EXT-X-MAP:URI="([^"]+)"/);
+  const uris = [
+    ...(map?.[1] ? [map[1]] : []),
+    ...text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#')),
+  ];
+  for (const uri of uris.slice(0, 80)) {
+    const url = /^https?:\/\//i.test(uri) ? uri : new URL(uri, playlistUrl).toString();
+    const seg = await fetch(url, { cache: 'no-store' });
+    if (!seg.ok) continue;
+    parts.push(await seg.arrayBuffer());
+  }
+  if (parts.length === 0) throw new Error('no HLS segments');
+  downloadBlob(new Blob(parts, { type: 'video/mp2t' }), filename);
+}
+
 /**
  * Enter fullscreen on an element, exiting if already fullscreen.
  *

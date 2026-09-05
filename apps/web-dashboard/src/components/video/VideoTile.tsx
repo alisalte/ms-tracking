@@ -99,6 +99,7 @@ export function VideoTile({
     hlsUrl,
     mode,
     streamKind,
+    blockedByChannel,
     setQuality: changeQuality,
     onPlayerReady,
   } = useStreamSession(activeChannel, quality);
@@ -145,6 +146,22 @@ export function VideoTile({
             <span className="text-xs text-gray-500">{t('video.tile.clickToPromote')}</span>
           )}
         </button>
+        <TileLabel label={channel.label} compact={compact} />
+      </TileFrame>
+    );
+  }
+
+  // MDVR: a different channel on this same device already holds the
+  // device's one RTMP stream (real hardware can't push two at once).
+  if (blockedByChannel !== null) {
+    return (
+      <TileFrame label={channel.label} alert={false}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0b1220] px-3 text-center">
+          <Camera size={compact ? 16 : 28} color="#475569" aria-hidden />
+          <p className="text-xs text-gray-500">
+            {t('video.tile.channelBusy', { channel: blockedByChannel })}
+          </p>
+        </div>
         <TileLabel label={channel.label} compact={compact} />
       </TileFrame>
     );

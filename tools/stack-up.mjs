@@ -88,6 +88,7 @@ function compose(args, inherit = false) {
     cwd: ROOT,
     stdio: inherit ? 'inherit' : 'pipe',
     encoding: 'utf8',
+    env: { ...process.env, BUILDX_NO_DEFAULT_ATTESTATIONS: '1' },
   });
   if (r.status !== 0) {
     fail(`docker compose ${args.join(' ')}\n${r.stderr ?? r.stdout ?? ''}`);
@@ -240,7 +241,9 @@ function rebuildChanged() {
     return;
   }
   console.log(`\n→ docker compose build (${changed.length}): ${changed.join(', ')}`);
-  compose(['build', ...changed], true);
+  // Skip provenance/SBOM uploads — they HEAD Docker Hub even when FROM layers
+  // are already local, and that TLS handshake often times out.
+  compose(['build', '--provenance=false', ...changed], true);
   saveStamps({ ...stamps, ...Object.fromEntries(changed.map((s) => [s, fingerprints[s]])) });
   console.log('✓ images rebuilt\n');
 }

@@ -6,8 +6,11 @@ import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Checkbox, Input } from '@/components/tailwind-ui';
+import { Button, Card, Checkbox, Input, Select } from '@/components/tailwind-ui';
 import type { Device } from '@/types/asset.types';
+
+/** Sentinel for "no device-type filter" in the type dropdown. */
+const ALL_TYPES = '';
 
 interface CommandDevicePickerProps {
   devices: readonly Device[];
@@ -26,15 +29,30 @@ export function CommandDevicePicker({
 }: CommandDevicePickerProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
+
+  // Distinct device types (models) present in the fleet, each with its
+  // ACTIVE (selectable) count — lets an operator target "every T622" instead
+  // of hunting for individual units in a long IMEI list.
+  const deviceTypes = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of devices) {
+      if (!d.model) continue;
+      if (d.status !== 'ACTIVE') continue;
+      counts.set(d.model, (counts.get(d.model) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [devices]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return devices;
     return devices.filter((d) => {
+      if (typeFilter !== ALL_TYPES && d.model !== typeFilter) return false;
+      if (!q) return true;
       const model = (d.model ?? '').toLowerCase();
       return d.imei.toLowerCase().includes(q) || model.includes(q);
     });
-  }, [devices, query]);
+  }, [devices, query, typeFilter]);
 
   const selectable = useMemo(() => filtered.filter((d) => d.status === 'ACTIVE'), [filtered]);
   const selectableIds = selectable.map((d) => d.id);
@@ -54,6 +72,14 @@ export function CommandDevicePicker({
   const clearVisible = () => {
     const drop = new Set(selectableIds);
     onChange(selectedIds.filter((id) => !drop.has(id)));
+  };
+
+  /** Picking a type targets exactly that fleet — replaces the selection. */
+  const selectType = (type: string) => {
+    setTypeFilter(type);
+    if (type === ALL_TYPES) return;
+    const ids = devices.filter((d) => d.model === type && d.status === 'ACTIVE').map((d) => d.id);
+    onChange(ids);
   };
 
   return (
@@ -93,18 +119,39 @@ export function CommandDevicePicker({
         </div>
       </div>
 
-      <Input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={t('commands.picker.search', {
-          defaultValue: 'Filter by IMEI or model…',
-        })}
-        aria-label={t('commands.picker.search', {
-          defaultValue: 'Filter by IMEI or model…',
-        })}
-        leftIcon={<Search size={14} />}
-        disabled={disabled || loading}
-      />
+      <div className="flex flex-wrap gap-2">
+        <Select
+          value={typeFilter}
+          onChange={(e) => selectType(e.target.value)}
+          wrapperClassName="w-56"
+          disabled={disabled || loading || deviceTypes.length === 0}
+          aria-label={t('commands.picker.type', { defaultValue: 'Device type' })}
+          options={[
+            {
+              value: ALL_TYPES,
+              label: t('commands.picker.allTypes', { defaultValue: 'All types' }),
+            },
+            ...deviceTypes.map(([model, count]) => ({
+              value: model,
+              label: `${model} (${count})`,
+            })),
+          ]}
+        />
+        <div className="min-w-0 flex-1">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('commands.picker.search', {
+              defaultValue: 'Filter by IMEI or model…',
+            })}
+            aria-label={t('commands.picker.search', {
+              defaultValue: 'Filter by IMEI or model…',
+            })}
+            leftIcon={<Search size={14} />}
+            disabled={disabled || loading}
+          />
+        </div>
+      </div>
 
       {devices.length === 0 ? (
         <p className="p-2 text-sm text-gray-500 dark:text-graydark-600">

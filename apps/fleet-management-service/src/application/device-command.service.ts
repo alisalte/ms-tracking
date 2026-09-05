@@ -91,16 +91,18 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
   }
 }
 
-/** `live/md300/2` live; AB4 URL is `live/md300/2/pb` (device still publishes the live key). */
+/**
+ * md300 `live.js` tells the unit `rtmp://IP:1935/live/md300` — camera is the
+ * AB2/AB4 channel byte, not a URL suffix. Extra path segments are dropped
+ * and MediaMTX never sees a publisher on `live/md300/2`.
+ */
 function mdvrChannelStreamPath(
   base: string,
-  channel: unknown,
+  _channel: unknown,
   kind: 'live' | 'playback' = 'live',
 ): string {
   const root = (base || 'live/md300').replace(/^\/+|\/+$/g, '');
-  const n = Number(channel);
-  const ch = Number.isInteger(n) && n >= 1 && n <= 129 ? n : 1;
-  return kind === 'playback' ? `${root}/${ch}/pb` : `${root}/${ch}`;
+  return kind === 'playback' ? `${root}/pb` : root;
 }
 
 export class DeviceCommandService {
@@ -119,7 +121,7 @@ export class DeviceCommandService {
   ) {
     if (options.mdvrPublicHost) {
       this.logger.log(
-        `MDVR AB2 RTMP: rtmp://${options.mdvrPublicHost}:${options.mdvrRtmpPort ?? 1935}/${options.mdvrRtmpPath ?? 'live/md300'}/{channel}`,
+        `MDVR AB2 RTMP: rtmp://${options.mdvrPublicHost}:${options.mdvrRtmpPort ?? 1935}/${options.mdvrRtmpPath ?? 'live/md300'}`,
       );
     } else {
       this.logger.warn(

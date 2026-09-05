@@ -20,6 +20,7 @@ import { DeviceMessage } from '../domain/device-message.js';
 import type { DeviceSession } from '../domain/device-session.js';
 import { ProtocolError } from '../domain/errors.js';
 import type { RawPacket } from '../domain/raw-packet.js';
+import { PhotoAssembler } from '../infrastructure/adapters/meitrack/meitrack.photo-assembler.js';
 import type { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/kafka-producer.js';
 import type { ProtocolAdapter } from '../infrastructure/protocol/protocol-adapter.js';
 import type { RawPacketStorage } from '../infrastructure/storage/raw-packet-storage.js';
@@ -49,6 +50,8 @@ export interface PacketDispatcherDeps {
 
 export class PacketDispatcher {
   private readonly logger = new Logger(PacketDispatcher.name);
+  /** One assembler per process — keyed by IMEI+filename so two MDVRs can overlap. */
+  private readonly photos = new PhotoAssembler();
 
   constructor(private readonly deps: PacketDispatcherDeps) {}
 
@@ -232,5 +235,52 @@ export class PacketDispatcher {
     void this.deps.rawStorage.retain(raw, msg.deviceId, msg.messageId);
     if (!this.deps.kafka) return;
     await this.deps.kafka.publish(msg);
+    const photoAck = this.assemblePhotoAck(msg);
+    if (photoAck) await this.deps.kafka.publish(photoAck);
+  }
+
+  /**
+   * D00 arrives as PHOTO chunks. When a filename is complete, emit COMMAND_ACK
+   * so fleet-management can ACK the pending D00 row with the JPEG (base64).
+   */
+  private assemblePhotoAck(msg: DeviceMessage): DeviceMessage | null {
+    if (msg.type !== 'PHOTO') return null;
+    const filename = typeof msg.telemetry?.filename === 'string' ? msg.telemetry.filename : '';
+    const chunkBase64 =
+      typeof msg.telemetry?.chunkBase64 === 'string' ? msg.telemetry.chunkBase64 : '';
+    if (!filename || !chunkBase64) return null;
+    const result = this.photos.feed({
+      filename: `${msg.serialOrImei}::${filename}`,
+      totalPackets: Number(msg.telemetry?.totalPackets ?? 0),
+      packetIndex: Number(msg.telemetry?.packetIndex ?? 0),
+      chunkBase64,
+    });
+    if (result.status !== 'complete') return null;
+    const logical = result.filename.includes('::')
+      ? result.filename.slice(result.filename.indexOf('::') + 2)
+      : result.filename;
+    this.logger.log(`D00 photo complete ${logical} (${result.data.length} bytes)`);
+    return new DeviceMessage({
+      messageId: globalThis.crypto.randomUUID(),
+      deviceId: msg.deviceId,
+      vehicleId: msg.vehicleId ?? null,
+      correlationId: msg.correlationId ?? null,
+      serialOrImei: msg.serialOrImei,
+      tenantId: msg.tenantId,
+      protocolId: msg.protocolId,
+      type: 'COMMAND_ACK',
+      timestamp: msg.timestamp,
+      ingestedAt: msg.ingestedAt,
+      telemetry: {
+        command: 'D00',
+        filename: logical,
+        photoBase64: result.data.toString('base64'),
+        byteLength: result.data.length,
+        response: 'OK',
+      },
+      rawSize: result.data.length,
+      checksum: msg.checksum,
+      direction: msg.direction,
+    });
   }
 }
