@@ -1,6 +1,11 @@
 # MediaMTX — MD300/MDVR live ingest (AB2 RTMP push → HLS).
 # Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300
 # Browser plays same-origin /media-hls/live/md300/index.m3u8 (nginx → :8888).
+#
+# Camera 1 publishes H.264 (RTMP codec 7). Camera 2 publishes legacy HEVC
+# (RTMP codec 12) which MediaMTX < 1.16.2 rejects. After ingest, ffmpeg
+# re-encodes to H.264 on live/md300_web so Linux Chrome can play it; nginx
+# maps /media-hls/live/md300 → that transcoded path.
 
 logLevel: info
 
@@ -9,7 +14,7 @@ rtmpAddress: :1935
 
 hls: yes
 hlsAddress: :8888
-hlsAllowOrigin: "*"
+hlsAllowOrigins: ['*']
 
 rtsp: yes
 rtspAddress: :8554
@@ -18,4 +23,15 @@ api: yes
 apiAddress: :9997
 
 paths:
+  live/md300:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -map 0:a?
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -c:a copy
+      -f flv rtmp://127.0.0.1:1935/live/md300_web
+    runOnReadyRestart: yes
+  live/md300_web:
   all_others:

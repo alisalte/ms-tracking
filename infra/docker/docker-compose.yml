@@ -509,8 +509,10 @@ services:
 
   # MediaMTX — MD300 live path (MEITRACK_LIVE_VIDEO_GUIDE): AB2 RTMP push
   # from the device on :1935, HLS for the dashboard on :8888 (nginx /media-hls).
+  # 1.16.2+ reads legacy RTMP HEVC (codec id 12) that this MD300 camera 2
+  # publishes; the -ffmpeg tag transcodes that ingest to H.264 for Chrome.
   mediamtx:
-    image: bluenviron/mediamtx:1.11.3
+    image: bluenviron/mediamtx:1.16.2-ffmpeg
     container_name: fleetvision-mediamtx
     restart: unless-stopped
     volumes:

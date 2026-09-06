@@ -163,6 +163,7 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
                     <button
                       key={c.id}
                       type="button"
+                      data-testid={`dock-channel-${c.id}`}
                       onClick={() => onPick(c)}
                       className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
                         c.online && c.consentGiven ? 'opacity-100' : 'opacity-50'

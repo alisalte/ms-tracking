@@ -57,6 +57,11 @@ export interface StreamSessionHook {
   setQuality: (q: StreamQuality) => void;
   /** Manually retry the connection (after an error). */
   retry: () => void;
+  /**
+   * MDVR path: steal the device's one RTMP slot so THIS channel goes live
+   * (the previous camera yields). No-op on the mock path.
+   */
+  switchToThis: () => void;
   /** MDVR path: the HLS player reports the playlist is ready. */
   onPlayerReady: () => void;
 }
@@ -83,6 +88,10 @@ const RECONNECT_BASE_MS = 1000;
  * isn't the current holder is BLOCKED — it must not send its own AB2 (that
  * would just fight the active tile for the same RTMP key) — and is notified
  * to retry once the holder releases.
+ *
+ * The operator can steal the stream: `stealMdvrLive` asks the holder to
+ * yield (AB3) so the requested channel can send AB2. Same RTMP key, new
+ * camera byte — that is how this MD300 actually switches cameras.
  */
 type MdvrDeviceLock = {
   channel: number;
@@ -90,21 +99,37 @@ type MdvrDeviceLock = {
   start: Promise<void>;
   /** Tiles waiting on a different channel, notified once this lock frees. */
   waiters: Set<() => void>;
+  /** Holder tile: bump retry so its effect tears down and releases. */
+  yielders: Set<() => void>;
 };
 const mdvrLocks = new Map<string, MdvrDeviceLock>();
 /** In-flight AB3 so a reconnect cannot send AB2 before stop is queued. */
 const mdvrStopping = new Map<string, Promise<void>>();
+/** Operator-chosen channel for this IMEI (cleared when that channel takes the lock). */
+const mdvrPreferred = new Map<string, number>();
+/** Waiters parked while the lock is empty but another channel is preferred. */
+const mdvrPendingWaiters = new Map<string, Set<() => void>>();
+/** Delayed AB3 after the live tile unmounts (React Strict Mode remounts in between). */
+const mdvrDelayedStop = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Register to be notified (once) the next time this IMEI's lock frees up. */
 function waitForMdvrRelease(imei: string, onFree: () => void): () => void {
   const lock = mdvrLocks.get(imei);
-  if (!lock) {
-    // Nothing holds the device right now — let the caller retry immediately.
-    onFree();
-    return () => {};
+  if (lock) {
+    lock.waiters.add(onFree);
+    return () => lock.waiters.delete(onFree);
   }
-  lock.waiters.add(onFree);
-  return () => lock.waiters.delete(onFree);
+  if (mdvrPreferred.has(imei)) {
+    let pending = mdvrPendingWaiters.get(imei);
+    if (!pending) {
+      pending = new Set();
+      mdvrPendingWaiters.set(imei, pending);
+    }
+    pending.add(onFree);
+    return () => pending.delete(onFree);
+  }
+  onFree();
+  return () => {};
 }
 
 /**
@@ -118,12 +143,26 @@ function acquireMdvrLive(
   start: () => Promise<void>,
 ): { blocked: boolean; start: Promise<void> } {
   const existing = mdvrLocks.get(imei);
+  const preferred = mdvrPreferred.get(imei);
   if (existing) {
-    if (existing.channel !== channel) {
-      return { blocked: true, start: Promise.resolve() };
+    if (existing.channel === channel) {
+      existing.refCount += 1;
+      return { blocked: false, start: existing.start };
     }
-    existing.refCount += 1;
-    return { blocked: false, start: existing.start };
+    if (preferred === channel) {
+      for (const yieldHolder of [...existing.yielders]) yieldHolder();
+    }
+    return { blocked: true, start: Promise.resolve() };
+  }
+  // Free lock: do not grab it if the operator asked for a different camera
+  // (the preferred tile is about to mount / retry).
+  if (preferred !== undefined && preferred !== channel) {
+    return { blocked: true, start: Promise.resolve() };
+  }
+  const delayed = mdvrDelayedStop.get(imei);
+  if (delayed !== undefined) {
+    clearTimeout(delayed);
+    mdvrDelayedStop.delete(imei);
   }
   const afterStop = mdvrStopping.get(imei) ?? Promise.resolve();
   const lock: MdvrDeviceLock = {
@@ -131,12 +170,48 @@ function acquireMdvrLive(
     refCount: 1,
     start: afterStop.catch(() => undefined).then(() => start()),
     waiters: new Set(),
+    yielders: new Set(),
   };
   mdvrLocks.set(imei, lock);
+  const pending = mdvrPendingWaiters.get(imei);
+  if (pending) {
+    mdvrPendingWaiters.delete(imei);
+    for (const notify of pending) notify();
+  }
   lock.start.catch(() => {
     if (mdvrLocks.get(imei) === lock) mdvrLocks.delete(imei);
   });
   return { blocked: false, start: lock.start };
+}
+
+/**
+ * Ask this IMEI to switch its single live RTMP push to `channel`.
+ * The current holder yields so the requested camera can send AB2 (no AB3 —
+ * this MD300 often never republishes after stop). Same-channel is still a
+ * yield: the HLS key is shared, so the live tile can be showing a different
+ * camera than the lock thinks (e.g. after an out-of-band AB2).
+ */
+export function stealMdvrLive(imei: string, channel: number): void {
+  mdvrPreferred.set(imei, channel);
+  const existing = mdvrLocks.get(imei);
+  if (existing) {
+    for (const yieldHolder of [...existing.yielders]) yieldHolder();
+    return;
+  }
+  const pending = mdvrPendingWaiters.get(imei);
+  if (pending) {
+    for (const notify of [...pending]) notify();
+  }
+}
+
+/** Test helper — module-level locks survive between mounted walls. */
+export function resetMdvrLiveForTests(): void {
+  mdvrLocks.clear();
+  mdvrStopping.clear();
+  mdvrPreferred.clear();
+  mdvrPendingWaiters.clear();
+  for (const t of mdvrDelayedStop.values()) clearTimeout(t);
+  mdvrDelayedStop.clear();
 }
 
 /** Release a held lock (no-op if this channel never held it — a blocked waiter). */
@@ -147,13 +222,29 @@ function releaseMdvrLive(imei: string, channel: number, stop: () => Promise<void
   if (existing.refCount > 0) return;
   mdvrLocks.delete(imei);
   const waiters = [...existing.waiters];
-  const stopping = stop().catch(() => undefined);
-  mdvrStopping.set(imei, stopping);
-  void stopping.finally(() => {
-    if (mdvrStopping.get(imei) === stopping) mdvrStopping.delete(imei);
-    // Let whoever was waiting on this device try to acquire it now.
+  const preferred = mdvrPreferred.get(imei);
+
+  if (preferred !== undefined && preferred !== channel) {
+    mdvrLog(`soft-release channel=${channel} imei=${imei} → preferred=${preferred} (no AB3)`);
     for (const notify of waiters) notify();
-  });
+    return;
+  }
+
+  // This camera was the live one. Delay AB3 so React Strict Mode remount
+  // (and the incoming preferred tile) can re-acquire the same RTMP session.
+  mdvrPreferred.delete(imei);
+  const delayed = setTimeout(() => {
+    mdvrDelayedStop.delete(imei);
+    if (mdvrLocks.has(imei)) return;
+    mdvrLog(`AB3 after release channel=${channel} imei=${imei}`);
+    const stopping = stop().catch(() => undefined);
+    mdvrStopping.set(imei, stopping);
+    void stopping.finally(() => {
+      if (mdvrStopping.get(imei) === stopping) mdvrStopping.delete(imei);
+    });
+  }, 50);
+  mdvrDelayedStop.set(imei, delayed);
+  for (const notify of waiters) notify();
 }
 
 /** Poll until the gateway actually wrote AB2 (QUEUED → SENT). HELD stays QUEUED. */
@@ -344,12 +435,11 @@ export function useStreamSession(
       const lock = acquireMdvrLive(imei, logicalChannel, startAb2);
 
       if (lock.blocked) {
-        const holder = mdvrLocks.get(imei)?.channel ?? null;
+        const holder = mdvrLocks.get(imei)?.channel ?? mdvrPreferred.get(imei) ?? null;
         mdvrLog(
-          `channel=${logicalChannel} BLOCKED — device=${deviceId} imei=${imei} is already ` +
-            `streaming channel ${holder} (a real MD300 pushes one RTMP stream at a time); ` +
-            'not sending a competing AB2 — will retry once that tile closes.',
+          `channel=${logicalChannel} BLOCKED — device=${deviceId} imei=${imei} is already streaming channel ${holder} (a real MD300 pushes one RTMP stream at a time); not sending a competing AB2 — will retry once that tile closes or the operator switches.`,
         );
+        teardown();
         setBlockedByChannel(holder);
         const unsubscribe = waitForMdvrRelease(imei, () => {
           if (cancelled) return;
@@ -360,6 +450,12 @@ export function useStreamSession(
           unsubscribe();
         };
       }
+
+      const yielders = mdvrLocks.get(imei)?.yielders;
+      const onYield = () => {
+        if (!cancelled) setRetryTrigger((n) => n + 1);
+      };
+      yielders?.add(onYield);
 
       setBlockedByChannel(null);
       mdvrLog(
@@ -387,6 +483,7 @@ export function useStreamSession(
 
       return () => {
         cancelled = true;
+        yielders?.delete(onYield);
         releaseMdvrLive(imei, logicalChannel, stopMdvr);
         teardown();
       };
@@ -473,6 +570,19 @@ export function useStreamSession(
     setRetryTrigger((n) => n + 1);
   }, []);
 
+  /** Steal the device's one live RTMP slot so this camera becomes the publisher. */
+  const switchToThis = useCallback(() => {
+    const ch = channelRef.current;
+    if (!ch || !isMdvrChannel(ch) || !ch.imei) {
+      retry();
+      return;
+    }
+    mdvrLog(
+      `switch → imei=${ch.imei} channel=${ch.logicalChannel ?? 1} (steal the device's one RTMP slot)`,
+    );
+    stealMdvrLive(ch.imei, ch.logicalChannel ?? 1);
+  }, [retry]);
+
   const streamKind: 'real' | 'stub' | 'unavailable' = errorState
     ? 'unavailable'
     : channel
@@ -490,6 +600,7 @@ export function useStreamSession(
     blockedByChannel,
     setQuality,
     retry,
+    switchToThis,
     onPlayerReady,
   };
 }

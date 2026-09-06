@@ -25,9 +25,9 @@ import { CamerasPanel } from '@/components/video/CamerasPanel';
 import { ChannelDock } from '@/components/video/ChannelDock';
 import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
 import { PlaybackPanel } from '@/components/video/PlaybackPanel';
-import { isMdvrChannel } from '@/components/video/useStreamSession';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
+import { isMdvrChannel, stealMdvrLive } from '@/components/video/useStreamSession';
 import { toggleFullscreen } from '@/lib/video-stream';
 import { emptyTiles } from '@/mock/video-data';
 import { MAX_LIVE_TILES, WALL_DIVISIONS } from '@/types/video.types';
@@ -103,9 +103,15 @@ export function VideoWallPage() {
   );
 
   // Assign a channel to the first empty slot (click-to-add from dock/table).
+  // If it's already on the wall (often blocked behind another MDVR camera),
+  // steal the device's one RTMP slot so this camera goes live.
   const pickChannel = useCallback((channel: CameraChannel) => {
     setTab('wall');
+    if (channel.imei && channel.logicalChannel) {
+      stealMdvrLive(channel.imei, channel.logicalChannel);
+    }
     setTiles((prev) => {
+      if (prev.some((tile) => tile.channelId === channel.id)) return prev;
       const idx = prev.findIndex((tile) => tile.channelId === null);
       if (idx === -1) return prev; // wall full
       const next = prev.slice();

@@ -101,6 +101,7 @@ export function VideoTile({
     streamKind,
     blockedByChannel,
     setQuality: changeQuality,
+    switchToThis,
     onPlayerReady,
   } = useStreamSession(activeChannel, quality);
 
@@ -156,12 +157,22 @@ export function VideoTile({
   if (blockedByChannel !== null) {
     return (
       <TileFrame label={channel.label} alert={false}>
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0b1220] px-3 text-center">
+        <button
+          type="button"
+          data-testid="mdvr-switch-channel"
+          onClick={switchToThis}
+          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-2 border-none bg-[#0b1220] px-3 text-center transition-colors hover:bg-[#111c30]"
+        >
           <Camera size={compact ? 16 : 28} color="#475569" aria-hidden />
           <p className="text-xs text-gray-500">
             {t('video.tile.channelBusy', { channel: blockedByChannel })}
           </p>
-        </div>
+          {!compact && (
+            <span className="text-xs font-semibold text-brand-400">
+              {t('video.tile.clickToSwitch')}
+            </span>
+          )}
+        </button>
         <TileLabel label={channel.label} compact={compact} />
       </TileFrame>
     );

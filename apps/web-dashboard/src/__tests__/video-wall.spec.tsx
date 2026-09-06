@@ -5,6 +5,7 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetMdvrLiveForTests } from '@/components/video/useStreamSession';
 import { mockChannels } from '@/mock/video-data';
 import { VideoWallPage } from '@/pages/VideoWallPage';
 
@@ -339,6 +340,15 @@ vi.mock('@/api/video.api', async (importOriginal) => {
   };
 });
 
+vi.mock('@/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>();
+  return {
+    ...actual,
+    apiPost: vi.fn(async () => ({ id: 'cmd-1', status: 'ACKED', params: {} })),
+    apiGet: vi.fn(async () => ({ id: 'cmd-1', status: 'ACKED' })),
+  };
+});
+
 vi.mock('@/components/video/useMdvrResources', () => ({
   useMdvrResources: () => resourcesOverride,
 }));
@@ -351,6 +361,7 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     resourcesOverride.videos = [];
     resourcesOverride.photos = [];
     resourcesOverride.search.mockClear();
+    resetMdvrLiveForTests();
   });
 
   it('assigns the MDVR channel to a wall tile', async () => {
@@ -376,6 +387,34 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     // Exactly one of the two tiles is held back — never both, never neither.
     await waitFor(() => {
       expect(screen.getAllByText(/is live on this device/).length).toBe(1);
+    });
+  });
+
+  it('switches the live MDVR camera when the blocked tile is clicked', async () => {
+    mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
+    renderWall('/video?device=device-1');
+    await screen.findByText('Video Wall');
+    const switchBtn = await screen.findByTestId('mdvr-switch-channel');
+    fireEvent.click(switchBtn);
+    await waitFor(() => {
+      expect(screen.getByText(/Camera 2 is live on this device/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Camera 1 is live on this device/)).toBeNull();
+  });
+
+  it('re-sends AB2 when the operator re-picks the camera that is already live', async () => {
+    const { apiPost } = await import('@/api/client');
+    mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
+    renderWall('/video?device=device-1');
+    await screen.findByTestId('mdvr-switch-channel');
+    vi.mocked(apiPost).mockClear();
+    fireEvent.click(screen.getByTestId('dock-channel-ch-mdvr-1'));
+    await waitFor(() => {
+      const ab2 = vi
+        .mocked(apiPost)
+        .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2');
+      expect(ab2.length).toBeGreaterThan(0);
+      expect((ab2.at(-1)?.[1] as { params?: { channel?: number } })?.params?.channel).toBe(1);
     });
   });
 
@@ -528,9 +567,7 @@ describe('mapMediaChannel wire shape', () => {
       '@/api/video.api'
     );
     expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300\/pb$/);
-    expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain(
-      '/media-hls/live/md300/index.m3u8',
-    );
+    expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain('/media-hls/live/md300/index.m3u8');
     expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toMatch(/^\d{12}$/);
   });
 
