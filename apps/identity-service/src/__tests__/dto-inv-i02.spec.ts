@@ -3,6 +3,8 @@ import {
   createApiKeySchema,
   createUserSchema,
   loginSchema,
+  provisionTenantSchema,
+  putTenantLicenseSchema,
   refreshSchema,
 } from '../api/auth/auth.dto.js';
 
@@ -54,5 +56,26 @@ describe('INV-I02: tenant_id is forbidden in request DTOs', () => {
     if (result.success) {
       expect(result.data).not.toHaveProperty('tenant_id');
     }
+  });
+
+  it('license schemas strip tenant_id', () => {
+    const provision = provisionTenantSchema.safeParse({
+      name: 'Acme',
+      tier: 'STANDARD',
+      region: 'local',
+      admin_email: 'a@b.com',
+      admin_username: 'acme-admin',
+      admin_password: 'ChangeMe!Strong1',
+      tenant_id: 't1',
+      license: { plan_code: 'TRIAL', tenant_id: 't1' },
+    });
+    expect(provision.success).toBe(true);
+    if (provision.success) {
+      expect(provision.data).not.toHaveProperty('tenant_id');
+      expect(provision.data.license).not.toHaveProperty('tenant_id');
+    }
+    const put = putTenantLicenseSchema.safeParse({ max_users: 12, tenant_id: 't1' });
+    expect(put.success).toBe(true);
+    if (put.success) expect(put.data).not.toHaveProperty('tenant_id');
   });
 });

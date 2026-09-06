@@ -71,3 +71,10 @@ export class VehicleAlreadyAssignedError extends DomainError {
     super('Vehicle is already assigned to another active driver.');
   }
 }
+
+export class TenantQuotaExceededError extends DomainError {
+  public readonly code = 'FORBIDDEN';
+  constructor(metric: string) {
+    super(`Tenant quota exceeded for ${metric}.`, { reason: 'TENANT_QUOTA', metric });
+  }
+}

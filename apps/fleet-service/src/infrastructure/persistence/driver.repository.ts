@@ -2,9 +2,19 @@
  * Driver repository — CRUD for fleet.drivers. Tenant-scoped (RLS enforced).
  */
 import type { Knex } from '@fleetvision/persistence-knex';
-import { withPlatformContext, withTenantContext } from '@fleetvision/persistence-knex';
+import {
+  TenantQuotaDeniedError,
+  assertTenantResourceQuota,
+  withPlatformContext,
+  withTenantContext,
+} from '@fleetvision/persistence-knex';
 import { type Page, toCursor } from '@fleetvision/shared-kernel';
-import { type Driver, Driver as DriverClass, type DriverStatus } from '../../domain/index.js';
+import {
+  type Driver,
+  Driver as DriverClass,
+  type DriverStatus,
+  TenantQuotaExceededError,
+} from '../../domain/index.js';
 
 export interface DriverRow {
   id: string;
@@ -35,26 +45,34 @@ export class DriverRepository {
   ) {}
 
   public async create(driver: Driver): Promise<void> {
-    await withTenantContext(this.knex, driver.tenantId, async (trx) => {
-      await trx('fleet.drivers').insert({
-        id: driver.id,
-        tenant_id: driver.tenantId,
-        employee_id: driver.employeeId,
-        first_name: driver.firstName,
-        last_name: driver.lastName,
-        email: driver.email,
-        phone: driver.phone,
-        license_number: driver.licenseNumber,
-        license_class: driver.licenseClass,
-        license_issued: driver.licenseIssued,
-        license_expires: driver.licenseExpires,
-        license_country: driver.licenseCountry,
-        status: driver.status,
-        assigned_vehicle_id: driver.assignedVehicleId,
-        assigned_at: driver.assignedAt,
-        metadata: JSON.stringify(driver.metadata),
+    try {
+      await withTenantContext(this.knex, driver.tenantId, async (trx) => {
+        await assertTenantResourceQuota(trx, driver.tenantId, 'drivers');
+        await trx('fleet.drivers').insert({
+          id: driver.id,
+          tenant_id: driver.tenantId,
+          employee_id: driver.employeeId,
+          first_name: driver.firstName,
+          last_name: driver.lastName,
+          email: driver.email,
+          phone: driver.phone,
+          license_number: driver.licenseNumber,
+          license_class: driver.licenseClass,
+          license_issued: driver.licenseIssued,
+          license_expires: driver.licenseExpires,
+          license_country: driver.licenseCountry,
+          status: driver.status,
+          assigned_vehicle_id: driver.assignedVehicleId,
+          assigned_at: driver.assignedAt,
+          metadata: JSON.stringify(driver.metadata),
+        });
       });
-    });
+    } catch (err) {
+      if (err instanceof TenantQuotaDeniedError) {
+        throw new TenantQuotaExceededError(err.metric ?? 'drivers');
+      }
+      throw err;
+    }
   }
 
   public async findById(tenantId: string, id: string): Promise<Driver | null> {

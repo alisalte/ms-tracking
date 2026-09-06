@@ -30,6 +30,10 @@ import type { UserRepository } from '../../infrastructure/persistence/user.repos
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
 import type { TokenService } from '../../infrastructure/services/token-service.js';
 import { buildEventContext } from '../shared/context.js';
+import {
+  type TenantEntitlementUseCase,
+  sessionTtlFromLicense,
+} from '../tenants/tenant-entitlement.use-case.js';
 
 export interface LoginInput {
   readonly email: string;
@@ -75,6 +79,7 @@ export class LoginUseCase {
     private readonly sessions: SessionStore,
     private readonly rateLimiter: RateLimiterStore,
     private readonly roles: RoleRepository,
+    private readonly entitlements: TenantEntitlementUseCase,
     private readonly config: LoginConfig,
   ) {}
 
@@ -108,6 +113,9 @@ export class LoginUseCase {
     if (!tenant || !tenant.isActive()) {
       throw new TenantNotActiveError();
     }
+
+    const concurrent = await this.sessions.countForTenant(input.tenantId);
+    const license = await this.entitlements.assertLoginAllowed(input.tenantId, concurrent);
 
     const ctx = buildEventContext(input.tenantId, 'user', input.correlationId);
 
@@ -148,6 +156,7 @@ export class LoginUseCase {
     );
 
     const now = Date.now();
+    const ttl = sessionTtlFromLicense(license);
     await this.sessions.create(
       {
         sessionId,
@@ -155,10 +164,10 @@ export class LoginUseCase {
         tenantId: input.tenantId,
         refreshFamilyId,
         issuedAt: now,
-        absoluteExpiresAt: now + this.config.refreshTtlSeconds * 1000,
+        absoluteExpiresAt: now + ttl.absoluteSeconds * 1000,
       },
-      this.config.accessTtlSeconds,
-      this.config.refreshTtlSeconds,
+      ttl.idleSeconds,
+      ttl.absoluteSeconds,
     );
 
     return {

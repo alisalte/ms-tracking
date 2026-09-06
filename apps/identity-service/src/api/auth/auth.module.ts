@@ -21,6 +21,7 @@ import {
   ProvisionTenantUseCase,
   RefreshTokenUseCase,
   RevokeApiKeyUseCase,
+  TenantEntitlementUseCase,
   TenantLifecycleUseCase,
   UpdateUserUseCase,
 } from '../../application/index.js';
@@ -34,6 +35,7 @@ import {
   RefreshStore,
   RoleRepository,
   SessionStore,
+  TenantLicenseRepository,
   TenantRepository,
   TokenService,
   UserRepository,
@@ -92,6 +94,16 @@ export class AuthModule {
           provide: TenantRepository,
           inject: [KNEX_TOKEN],
           useFactory: (knex: Knex) => new TenantRepository(knex),
+        },
+        {
+          provide: TenantLicenseRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: Knex) => new TenantLicenseRepository(knex),
+        },
+        {
+          provide: TenantEntitlementUseCase,
+          inject: [TenantLicenseRepository],
+          useFactory: (licenses: TenantLicenseRepository) => new TenantEntitlementUseCase(licenses),
         },
         {
           provide: RoleRepository,
@@ -174,6 +186,7 @@ export class AuthModule {
             SessionStore,
             RateLimiterStore,
             RoleRepository,
+            TenantEntitlementUseCase,
           ],
           useFactory: (
             u: UserRepository,
@@ -184,8 +197,9 @@ export class AuthModule {
             s: SessionStore,
             r: RateLimiterStore,
             roles: RoleRepository,
+            entitlements: TenantEntitlementUseCase,
           ) =>
-            new LoginUseCase(u, t, a, h, tk, s, r, roles, {
+            new LoginUseCase(u, t, a, h, tk, s, r, roles, entitlements, {
               accessTtlSeconds: accessTtl,
               refreshTtlSeconds: refreshTtl,
               maxAttempts: config.LOGIN_MAX_ATTEMPTS,
@@ -203,6 +217,7 @@ export class AuthModule {
             TokenService,
             RevocationStore,
             RoleRepository,
+            TenantEntitlementUseCase,
           ],
           useFactory: (
             a: AuthRepository,
@@ -211,8 +226,9 @@ export class AuthModule {
             tk: TokenService,
             revocation: RevocationStore,
             roles: RoleRepository,
+            entitlements: TenantEntitlementUseCase,
           ) =>
-            new RefreshTokenUseCase(a, u, t, tk, revocation, roles, {
+            new RefreshTokenUseCase(a, u, t, tk, revocation, roles, entitlements, {
               accessTtlSeconds: accessTtl,
             }),
         },
@@ -224,9 +240,9 @@ export class AuthModule {
         },
         {
           provide: CreateUserUseCase,
-          inject: [UserRepository, PasswordHasher],
-          useFactory: (u: UserRepository, h: PasswordHasher) =>
-            new CreateUserUseCase(u, h, { minLength: config.PASSWORD_MIN_LENGTH }),
+          inject: [UserRepository, PasswordHasher, TenantEntitlementUseCase],
+          useFactory: (u: UserRepository, h: PasswordHasher, e: TenantEntitlementUseCase) =>
+            new CreateUserUseCase(u, h, e, { minLength: config.PASSWORD_MIN_LENGTH }),
         },
         {
           provide: UpdateUserUseCase,
@@ -257,13 +273,20 @@ export class AuthModule {
         },
         {
           provide: ProvisionTenantUseCase,
-          inject: [TenantRepository, RoleRepository, UserRepository, PasswordHasher],
+          inject: [
+            TenantRepository,
+            RoleRepository,
+            UserRepository,
+            PasswordHasher,
+            TenantEntitlementUseCase,
+          ],
           useFactory: (
             t: TenantRepository,
             r: RoleRepository,
             u: UserRepository,
             h: PasswordHasher,
-          ) => new ProvisionTenantUseCase(t, r, u, h, { minLength: config.PASSWORD_MIN_LENGTH }),
+            e: TenantEntitlementUseCase,
+          ) => new ProvisionTenantUseCase(t, r, u, h, e, { minLength: config.PASSWORD_MIN_LENGTH }),
         },
         {
           provide: TenantLifecycleUseCase,

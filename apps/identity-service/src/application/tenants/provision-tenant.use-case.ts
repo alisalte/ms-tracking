@@ -18,11 +18,13 @@ import {
   User as UserClass,
 } from '../../domain/index.js';
 import { assertPasswordPolicy } from '../../domain/password-policy.js';
+import { PLAN_DEFAULTS } from '../../domain/tenant-license.js';
 import type { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 import type { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
 import { buildEventContext } from '../shared/context.js';
+import type { LicensePatch, TenantEntitlementUseCase } from './tenant-entitlement.use-case.js';
 
 export interface ProvisionTenantInput {
   readonly name: string;
@@ -31,6 +33,7 @@ export interface ProvisionTenantInput {
   readonly adminEmail: string;
   readonly adminUsername: string;
   readonly adminPassword: string;
+  readonly license?: LicensePatch;
   readonly correlationId?: string;
 }
 
@@ -47,6 +50,7 @@ export class ProvisionTenantUseCase {
     private readonly roles: RoleRepository,
     private readonly users: UserRepository,
     private readonly hasher: PasswordHasher,
+    private readonly entitlements: TenantEntitlementUseCase,
     private readonly policy: { minLength: number } = { minLength: 12 },
   ) {}
 
@@ -54,13 +58,16 @@ export class ProvisionTenantUseCase {
     assertPasswordPolicy(input.adminPassword, this.policy);
     const tenantId = randomUUID();
     const tenantCtx = buildEventContext(tenantId, 'tenant', input.correlationId);
+    const plan = input.license?.planCode;
+    const tier = plan ? PLAN_DEFAULTS[plan].tenantTier : input.tier;
     const tenant = TenantClass.provision(
       tenantId,
-      { name: input.name, tier: input.tier, region: input.region },
+      { name: input.name, tier, region: input.region },
       tenantCtx,
     );
     tenant.activate(tenantCtx);
     await this.tenants.save(tenant, tenantCtx);
+    await this.entitlements.provisionFor(tenantId, tier, input.license);
 
     // Seed system roles; remember the tenant-admin role id for the admin user.
     let adminRoleId = '';

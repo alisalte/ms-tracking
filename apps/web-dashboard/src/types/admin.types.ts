@@ -166,12 +166,36 @@ export type AdminSection =
   | 'permissions';
 
 /** Tenant self-view (`GET /tenant`). */
+export interface TenantQuotaMeter {
+  used: number;
+  limit: number;
+  pct: number;
+  state: 'ok' | 'warn' | 'exceeded';
+}
+
+export interface TenantLicenseInfo {
+  licenseKey: string;
+  planCode: string;
+  licenseStatus: string;
+  daysRemaining: number;
+  expiresAt: string;
+  quotas: {
+    users: TenantQuotaMeter;
+    vehicles: TenantQuotaMeter;
+    devices: TenantQuotaMeter;
+    drivers: TenantQuotaMeter;
+    storageBytes: TenantQuotaMeter;
+    downloadBytesMonth: TenantQuotaMeter;
+  };
+}
+
 export interface TenantInfo {
   id: string;
   name: string;
   tier: string;
   region: string;
   status: string;
+  license?: TenantLicenseInfo | null;
 }
 
 /** API key list row (`GET /auth/api-keys`). The plaintext is never listed. */

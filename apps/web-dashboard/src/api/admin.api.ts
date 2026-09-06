@@ -125,15 +125,58 @@ interface TenantWire {
   tier: string;
   region: string;
   status: string;
+  license?: {
+    license_key: string;
+    plan_code: string;
+    license_status: string;
+    days_remaining: number;
+    expires_at: string;
+    quotas: {
+      users: { used: number; limit: number; pct: number; state: 'ok' | 'warn' | 'exceeded' };
+      vehicles: { used: number; limit: number; pct: number; state: 'ok' | 'warn' | 'exceeded' };
+      devices: { used: number; limit: number; pct: number; state: 'ok' | 'warn' | 'exceeded' };
+      drivers: { used: number; limit: number; pct: number; state: 'ok' | 'warn' | 'exceeded' };
+      storage_bytes: {
+        used: number;
+        limit: number;
+        pct: number;
+        state: 'ok' | 'warn' | 'exceeded';
+      };
+      download_bytes_month: {
+        used: number;
+        limit: number;
+        pct: number;
+        state: 'ok' | 'warn' | 'exceeded';
+      };
+    };
+  } | null;
 }
 
 function mapTenant(wire: TenantWire): TenantInfo {
+  const lic = wire.license;
   return {
     id: wire.id,
     name: wire.name,
     tier: wire.tier,
     region: wire.region,
     status: wire.status,
+    license: lic
+      ? {
+          licenseKey: lic.license_key,
+          planCode: lic.plan_code,
+          licenseStatus: lic.license_status,
+          daysRemaining: lic.days_remaining,
+          expiresAt: lic.expires_at,
+          quotas: {
+            users: lic.quotas.users,
+            vehicles: lic.quotas.vehicles,
+            devices: lic.quotas.devices,
+            drivers: lic.quotas.drivers,
+            storageBytes: lic.quotas.storage_bytes,
+            downloadBytesMonth: lic.quotas.download_bytes_month,
+          },
+        }
+      : null,
   };
 }
 

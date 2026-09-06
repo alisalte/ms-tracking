@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
+import { addDaysIso } from '@/lib/license';
 import { canManageTenants } from '@/lib/session';
 import { LoginPage } from '@/pages/LoginPage';
 import { TenantCreatePage } from '@/pages/TenantCreatePage';
@@ -37,5 +38,25 @@ describe('create tenant form', () => {
     fireEvent.click(screen.getByRole('button', { name: /ایجاد مستأجر و مدیر|Create tenant/i }));
     const name = screen.getByLabelText(/نام سازمان|Organisation name/i) as HTMLInputElement;
     expect(name.validity.valueMissing).toBe(true);
+  });
+
+  it('offers a Trial license plan', () => {
+    render(
+      <MemoryRouter>
+        <TenantCreatePage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('option', { name: /آزمایشی|Trial/i })).toBeInTheDocument();
+  });
+
+  it('fills a 14-day expiry when Trial is selected', () => {
+    render(
+      <MemoryRouter>
+        <TenantCreatePage />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'TRIAL' } });
+    const expires = screen.getByLabelText(/^(انقضا|Expires)$/) as HTMLInputElement;
+    expect(expires.value).toBe(addDaysIso(14));
   });
 });

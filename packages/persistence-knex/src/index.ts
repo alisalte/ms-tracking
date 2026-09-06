@@ -32,3 +32,8 @@ export {
   withoutTenantContext,
   withPlatformContext,
 } from './tenant-context.js';
+export {
+  assertTenantResourceQuota,
+  TenantQuotaDeniedError,
+  type TenantQuotaMetric,
+} from './tenant-quota.js';

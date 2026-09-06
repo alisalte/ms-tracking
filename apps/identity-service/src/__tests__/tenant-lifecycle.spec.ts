@@ -98,4 +98,22 @@ describe('platform tenant DTOs (INV-I02)', () => {
       expect(result.data).not.toHaveProperty('tenant_id');
     }
   });
+
+  it('provision schema accepts a Trial license override and strips tenant_id', () => {
+    const result = provisionTenantSchema.safeParse({
+      name: 'Trial Co',
+      tier: 'STANDARD',
+      region: 'local',
+      admin_email: 'admin@trial.example',
+      admin_username: 'trial-admin',
+      admin_password: 'ChangeMe!Strong1',
+      tenant_id: 'nope',
+      license: { plan_code: 'TRIAL', max_users: 3 },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('tenant_id');
+      expect(result.data.license?.plan_code).toBe('TRIAL');
+    }
+  });
 });

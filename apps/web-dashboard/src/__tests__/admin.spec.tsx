@@ -58,6 +58,21 @@ vi.mock('@/api/client', () => ({
         tier: 'STANDARD',
         region: 'local',
         status: 'ACTIVE',
+        license: {
+          license_key: 'FV-STD-2026-TEST0001',
+          plan_code: 'STANDARD',
+          license_status: 'ACTIVE',
+          days_remaining: 200,
+          expires_at: '2027-09-06T00:00:00.000Z',
+          quotas: {
+            users: { used: 2, limit: 10, pct: 20, state: 'ok' },
+            vehicles: { used: 5, limit: 100, pct: 5, state: 'ok' },
+            devices: { used: 3, limit: 100, pct: 3, state: 'ok' },
+            drivers: { used: 1, limit: 25, pct: 4, state: 'ok' },
+            storage_bytes: { used: 0, limit: 10_737_418_240, pct: 0, state: 'ok' },
+            download_bytes_month: { used: 0, limit: 53_687_091_200, pct: 0, state: 'ok' },
+          },
+        },
       };
     }
     if (url === '/auth/api-keys') {
@@ -242,6 +257,7 @@ describe('AdminPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Organization name')).toBeInTheDocument();
     });
+    expect(screen.getByText(/200 days remaining/)).toBeInTheDocument();
   });
 
   it('renders the audit log on the Audit section', async () => {
@@ -318,7 +334,9 @@ describe('AdminPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Subscription')).toBeInTheDocument();
     });
-    expect(screen.getByText(/Billing-service is not in this stack/)).toBeInTheDocument();
+    expect(screen.getByText('FV-STD-2026-TEST0001')).toBeInTheDocument();
+    expect(screen.getByText(/200 days remaining/)).toBeInTheDocument();
+    expect(screen.getByText(/Invoicing is not in this stack/)).toBeInTheDocument();
   });
 
   it('renders integrations with an honest SSO gap', async () => {

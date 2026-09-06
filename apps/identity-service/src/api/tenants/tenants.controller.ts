@@ -24,12 +24,15 @@ import {
   ChangeUserStatusUseCase,
   CreateTenantAccessUseCase,
   ProvisionTenantUseCase,
+  TenantEntitlementUseCase,
   TenantLifecycleUseCase,
 } from '../../application/index.js';
 import type { Tenant } from '../../domain/index.js';
 import { tenantSettingsPatchSchema } from '../../domain/tenant-settings.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
+import { TenantLicenseRepository } from '../../infrastructure/persistence/tenant-license.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
@@ -38,6 +41,8 @@ import {
   changeUserStatusSchema,
   createTenantAccessSchema,
   provisionTenantSchema,
+  putTenantLicenseSchema,
+  putTenantUsageSchema,
 } from '../auth/auth.dto.js';
 import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
@@ -50,6 +55,8 @@ export class TenantsController {
     private readonly lifecycle: TenantLifecycleUseCase,
     private readonly createAccess: CreateTenantAccessUseCase,
     private readonly changeStatus: ChangeUserStatusUseCase,
+    private readonly entitlements: TenantEntitlementUseCase,
+    private readonly licenses: TenantLicenseRepository,
     private readonly tenants: TenantRepository,
     private readonly users: UserRepository,
     private readonly roles: RoleRepository,
@@ -69,6 +76,7 @@ export class TenantsController {
       adminEmail: body.admin_email,
       adminUsername: body.admin_username,
       adminPassword: body.admin_password,
+      license: licenseDtoToPatch(body.license),
     });
     return {
       data: {
@@ -84,8 +92,11 @@ export class TenantsController {
   @RequirePermissions('billing.tenant.manage')
   public async list() {
     const rows = await this.tenants.list();
+    const snaps = await this.licenses.snapshotsFor(rows.map((r) => r.tenant.id as string));
     return {
-      data: rows.map(({ tenant, createdAt }) => this.toView(tenant, createdAt)),
+      data: rows.map(({ tenant, createdAt }) =>
+        this.toView(tenant, createdAt, snaps.get(tenant.id as string) ?? null),
+      ),
       meta: { total: rows.length },
     };
   }
@@ -96,7 +107,15 @@ export class TenantsController {
     const p = getPrincipal(req);
     const tenant = await this.tenants.findById(p.tenantId);
     if (!tenant) return { data: null };
-    return { data: this.toView(tenant) };
+    const license = await this.licenses.snapshot(p.tenantId);
+    return { data: this.toView(tenant, undefined, license) };
+  }
+
+  @Get('tenant/entitlement')
+  public async selfEntitlement(@Req() req: Request) {
+    const p = getPrincipal(req);
+    const snap = await this.licenses.snapshot(p.tenantId);
+    return { data: snap };
   }
 
   @Get('tenant/settings')
@@ -210,21 +229,50 @@ export class TenantsController {
   @RequirePermissions('billing.tenant.manage')
   public async suspend(@Param('id') id: string) {
     const tenant = await this.lifecycle.suspend(id);
-    return { data: this.toView(tenant) };
+    return { data: await this.viewOf(tenant) };
   }
 
   @Post('tenants/:id/reactivate')
   @RequirePermissions('billing.tenant.manage')
   public async reactivate(@Param('id') id: string) {
     const tenant = await this.lifecycle.reactivate(id);
-    return { data: this.toView(tenant) };
+    return { data: await this.viewOf(tenant) };
   }
 
   @Get('tenants/:id')
   @RequirePermissions('billing.tenant.manage')
   public async get(@Param('id') id: string) {
     const tenant = await this.requireTenant(id);
-    return { data: this.toView(tenant) };
+    return { data: await this.viewOf(tenant) };
+  }
+
+  @Put('tenants/:id/license')
+  @RequirePermissions('billing.tenant.manage')
+  public async putLicense(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(putTenantLicenseSchema))
+    body: import('../auth/auth.dto.js').PutTenantLicenseDto,
+  ) {
+    await this.requireTenant(id);
+    await this.entitlements.update(id, licenseDtoToPatch(body) ?? {});
+    const tenant = await this.requireTenant(id);
+    return { data: await this.viewOf(tenant) };
+  }
+
+  @Post('tenants/:id/usage')
+  @RequirePermissions('billing.tenant.manage')
+  public async putUsage(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(putTenantUsageSchema))
+    body: import('../auth/auth.dto.js').PutTenantUsageDto,
+  ) {
+    await this.requireTenant(id);
+    await this.entitlements.setUsage(id, {
+      storageBytes: body.storage_bytes,
+      downloadBytesMonth: body.download_bytes_month,
+    });
+    const tenant = await this.requireTenant(id);
+    return { data: await this.viewOf(tenant) };
   }
 
   private async requireTenant(id: string): Promise<Tenant> {
@@ -238,7 +286,18 @@ export class TenantsController {
     return new Map(roles.map((r) => [r.id as string, r.name]));
   }
 
-  private toView(tenant: Tenant, createdAt?: Date) {
+  private async viewOf(tenant: Tenant, createdAt?: Date) {
+    const license = await this.licenses.snapshot(tenant.id as string);
+    return this.toView(tenant, createdAt, license);
+  }
+
+  private toView(
+    tenant: Tenant,
+    createdAt?: Date,
+    license?:
+      | import('../../infrastructure/persistence/tenant-license.repository.js').LicenseSnapshot
+      | null,
+  ) {
     return {
       id: tenant.id as string,
       name: tenant.name,
@@ -246,6 +305,39 @@ export class TenantsController {
       region: tenant.region,
       status: tenant.status,
       ...(createdAt ? { created_at: createdAt.toISOString() } : {}),
+      license: license ?? null,
     };
   }
+}
+
+function parseInstant(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const d = value.length <= 10 ? new Date(`${value}T00:00:00.000Z`) : new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function licenseDtoToPatch(
+  dto: import('../auth/auth.dto.js').TenantLicenseFieldsDto | undefined,
+): import('../../application/tenants/tenant-entitlement.use-case.js').LicensePatch | undefined {
+  if (!dto) return undefined;
+  return {
+    planCode: dto.plan_code,
+    startsAt: parseInstant(dto.starts_at),
+    expiresAt: parseInstant(dto.expires_at),
+    graceDays: dto.grace_days,
+    maxUsers: dto.max_users,
+    maxVehicles: dto.max_vehicles,
+    maxDevices: dto.max_devices,
+    maxDrivers: dto.max_drivers,
+    maxStorageBytes: dto.max_storage_bytes,
+    maxDownloadBytesMonth: dto.max_download_bytes_month,
+    maxConcurrentSessions: dto.max_concurrent_sessions,
+    sessionIdleMinutes: dto.session_idle_minutes,
+    sessionAbsoluteHours: dto.session_absolute_hours,
+    loginHoursStart: dto.login_hours_start,
+    loginHoursEnd: dto.login_hours_end,
+    timezone: dto.timezone,
+    notes: dto.notes,
+    features: dto.features,
+  };
 }

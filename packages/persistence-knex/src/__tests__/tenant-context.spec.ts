@@ -1,5 +1,6 @@
 import { assertUuid, withTenantContext } from '@fleetvision/persistence-knex';
 import { describe, expect, it } from '@jest/globals';
+import { assertTenantResourceQuota } from '../tenant-quota.js';
 
 /**
  * tenant-context (Sprint 1 RLS): withTenantContext must reject a non-UUID
@@ -28,5 +29,14 @@ describe('withTenantContext UUID guard', () => {
     await expect(
       withTenantContext(fakeKnex as never, 'not-a-uuid', async () => 1),
     ).rejects.toThrow();
+  });
+});
+
+describe('assertTenantResourceQuota', () => {
+  it('no-ops when knex is not a query builder (unit-test stubs)', async () => {
+    const stub = { transaction: async () => undefined };
+    await expect(
+      assertTenantResourceQuota(stub as never, '11111111-1111-1111-1111-111111111111', 'vehicles'),
+    ).resolves.toBeUndefined();
   });
 });

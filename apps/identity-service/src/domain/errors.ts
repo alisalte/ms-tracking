@@ -87,3 +87,35 @@ export class NotFoundError extends DomainError {
     super(`${resource} not found.`);
   }
 }
+
+/** License past grace — login and creates denied. */
+export class TenantLicenseExpiredError extends DomainError {
+  public readonly code = 'FORBIDDEN';
+  constructor() {
+    super('Tenant license has expired.', { reason: 'TENANT_LICENSE_EXPIRED' });
+  }
+}
+
+/** Hard quota or grace-period create block. */
+export class TenantQuotaExceededError extends DomainError {
+  public readonly code = 'FORBIDDEN';
+  constructor(metric: string) {
+    super(`Tenant quota exceeded for ${metric}.`, { reason: 'TENANT_QUOTA', metric });
+  }
+}
+
+/** Outside the tenant's allowed sign-in hours. */
+export class TenantLoginWindowError extends DomainError {
+  public readonly code = 'FORBIDDEN';
+  constructor() {
+    super('Sign-in is not allowed at this time.', { reason: 'TENANT_LOGIN_WINDOW' });
+  }
+}
+
+/** Concurrent session cap for the tenant. */
+export class TenantSessionLimitError extends DomainError {
+  public readonly code = 'FORBIDDEN';
+  constructor() {
+    super('Concurrent session limit reached.', { reason: 'TENANT_SESSION_LIMIT' });
+  }
+}

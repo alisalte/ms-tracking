@@ -90,11 +90,19 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
   const rootRef = useRef<HTMLDivElement>(null);
 
   const selected = parsed ? dateToJalali(parsed) : null;
+  const selectedJy = selected?.jy;
+  const selectedJm = selected?.jm;
+  const selectedJd = selected?.jd;
   const [view, setView] = useState<JalaliDate>(() => selected ?? dateToJalali(new Date()));
 
   useEffect(() => {
-    if (selected) setView({ jy: selected.jy, jm: selected.jm, jd: selected.jd });
-  }, [selected]);
+    if (selectedJy == null || selectedJm == null || selectedJd == null) return;
+    setView((prev) =>
+      prev.jy === selectedJy && prev.jm === selectedJm && prev.jd === selectedJd
+        ? prev
+        : { jy: selectedJy, jm: selectedJm, jd: selectedJd },
+    );
+  }, [selectedJy, selectedJm, selectedJd]);
 
   useEffect(() => {
     if (!open) return;
@@ -226,10 +234,11 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
         className={`${inputClass} cursor-pointer`}
       />
       {open && (
-        <dialog
-          open
+        // biome-ignore lint/a11y/useSemanticElements: popover (not a modal); native <dialog> is poorly supported in jsdom tests.
+        <div
+          role="dialog"
           aria-label={t('common.datePicker.title', { defaultValue: 'تقویم شمسی' })}
-          className="absolute start-0 top-full z-50 m-0 mt-1 w-[272px] rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-white/10 dark:bg-graydark-300"
+          className="absolute start-0 top-full z-50 mt-1 w-[272px] rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-white/10 dark:bg-graydark-300"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
@@ -351,7 +360,7 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
               </button>
             )}
           </div>
-        </dialog>
+        </div>
       )}
       {error ? (
         <p id={errorId} className="text-xs text-danger-600 dark:text-danger-400">

@@ -30,6 +30,46 @@ export const createUserSchema = z.object({
 });
 export type CreateUserDto = z.infer<typeof createUserSchema>;
 
+export const licensePlanCodeSchema = z.enum([
+  'TRIAL',
+  'STANDARD',
+  'PROFESSIONAL',
+  'ENTERPRISE',
+  'CUSTOM',
+]);
+
+export const tenantLicenseFieldsSchema = z.object({
+  plan_code: licensePlanCodeSchema.optional(),
+  starts_at: z.string().min(8).max(40).optional(),
+  expires_at: z.string().min(8).max(40).optional(),
+  grace_days: z.number().int().min(0).max(90).optional(),
+  max_users: z.number().int().min(1).max(100_000).optional(),
+  max_vehicles: z.number().int().min(1).max(1_000_000).optional(),
+  max_devices: z.number().int().min(1).max(1_000_000).optional(),
+  max_drivers: z.number().int().min(1).max(1_000_000).optional(),
+  max_storage_bytes: z.number().int().min(0).optional(),
+  max_download_bytes_month: z.number().int().min(0).optional(),
+  max_concurrent_sessions: z.number().int().min(1).max(10_000).optional(),
+  session_idle_minutes: z
+    .number()
+    .int()
+    .min(5)
+    .max(24 * 60)
+    .optional(),
+  session_absolute_hours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .optional(),
+  login_hours_start: z.number().int().min(0).max(23).nullable().optional(),
+  login_hours_end: z.number().int().min(0).max(23).nullable().optional(),
+  timezone: z.string().trim().min(1).max(64).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  features: z.record(z.unknown()).optional(),
+});
+export type TenantLicenseFieldsDto = z.infer<typeof tenantLicenseFieldsSchema>;
+
 export const provisionTenantSchema = z.object({
   name: z.string().trim().min(2).max(128),
   tier: z.enum(['STANDARD', 'PROFESSIONAL', 'ENTERPRISE']),
@@ -37,8 +77,18 @@ export const provisionTenantSchema = z.object({
   admin_email: z.string().email(),
   admin_username: z.string().min(3).max(64),
   admin_password: z.string().min(12),
+  license: tenantLicenseFieldsSchema.optional(),
 });
 export type ProvisionTenantDto = z.infer<typeof provisionTenantSchema>;
+
+export const putTenantLicenseSchema = tenantLicenseFieldsSchema;
+export type PutTenantLicenseDto = TenantLicenseFieldsDto;
+
+export const putTenantUsageSchema = z.object({
+  storage_bytes: z.number().int().min(0).optional(),
+  download_bytes_month: z.number().int().min(0).optional(),
+});
+export type PutTenantUsageDto = z.infer<typeof putTenantUsageSchema>;
 
 export const createTenantAccessSchema = createUserSchema.extend({
   role_name: z.enum(['tenant-admin', 'fleet-admin', 'viewer']).default('viewer'),

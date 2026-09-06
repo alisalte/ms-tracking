@@ -3,7 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { apiMessage } from '@/api/client';
-import { type TenantRow, listTenants, reactivateTenant, suspendTenant } from '@/api/tenants';
+import {
+  type QuotaMeter,
+  type TenantLicense,
+  type TenantRow,
+  listTenants,
+  reactivateTenant,
+  suspendTenant,
+} from '@/api/tenants';
+import { bytesToGib } from '@/lib/license';
 
 export function TenantsPage() {
   const { t, i18n } = useTranslation();
@@ -50,6 +58,8 @@ export function TenantsPage() {
     }
   };
 
+  const loc = i18n.language.startsWith('fa') ? 'fa-IR-u-ca-persian' : 'en-GB';
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -70,8 +80,9 @@ export function TenantsPage() {
             <thead className="bg-slate-50 text-start text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">{t('tenants.name')}</th>
-                <th className="px-4 py-3 font-medium">{t('tenants.tier')}</th>
-                <th className="px-4 py-3 font-medium">{t('tenants.region')}</th>
+                <th className="px-4 py-3 font-medium">{t('tenants.license')}</th>
+                <th className="px-4 py-3 font-medium">{t('tenants.remaining')}</th>
+                <th className="px-4 py-3 font-medium">{t('tenants.usage')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.status')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.created')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.actions')}</th>
@@ -80,9 +91,17 @@ export function TenantsPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-slate-100">
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
-                  <td className="px-4 py-3">{r.tier}</td>
-                  <td className="px-4 py-3">{r.region}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {r.name}
+                    <div className="text-xs font-normal text-slate-400">{r.region}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <LicenseBadge license={r.license} />
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{remainingLabel(r.license, t)}</td>
+                  <td className="px-4 py-3">
+                    <MiniMeters license={r.license} />
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -97,11 +116,7 @@ export function TenantsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-500">
-                    {r.created_at
-                      ? new Date(r.created_at).toLocaleDateString(
-                          i18n.language.startsWith('fa') ? 'fa-IR-u-ca-persian' : 'en-GB',
-                        )
-                      : '—'}
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString(loc) : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
@@ -136,6 +151,73 @@ export function TenantsPage() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function LicenseBadge({ license }: { license?: TenantLicense | null }) {
+  const { t } = useTranslation();
+  if (!license) return <span className="text-slate-400">—</span>;
+  const tone =
+    license.license_status === 'ACTIVE'
+      ? 'bg-emerald-50 text-emerald-700'
+      : license.license_status === 'GRACE'
+        ? 'bg-amber-50 text-amber-800'
+        : 'bg-red-50 text-red-700';
+  return (
+    <div>
+      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>
+        {t(`licenseStatus.${license.license_status}`)}
+      </span>
+      <div className="mt-1 text-xs text-slate-500">{t(`plans.${license.plan_code}`)}</div>
+    </div>
+  );
+}
+
+function remainingLabel(
+  license: TenantLicense | null | undefined,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (!license) return '—';
+  const n = license.days_remaining;
+  if (n >= 0) return t('detail.daysLeft', { count: n });
+  return t('detail.expiredAgo', { count: Math.abs(n) });
+}
+
+function MiniMeters({ license }: { license?: TenantLicense | null }) {
+  if (!license) return <span className="text-slate-400">—</span>;
+  return (
+    <div className="flex min-w-40 flex-col gap-1">
+      <MiniMeter meter={license.quotas.vehicles} label="V" />
+      <MiniMeter meter={license.quotas.users} label="U" />
+      <MiniMeter
+        meter={{
+          ...license.quotas.storage_bytes,
+          used: bytesToGib(license.quotas.storage_bytes.used),
+          limit: bytesToGib(license.quotas.storage_bytes.limit),
+        }}
+        label="S"
+      />
+    </div>
+  );
+}
+
+function MiniMeter({ meter, label }: { meter: QuotaMeter; label: string }) {
+  const color =
+    meter.state === 'exceeded'
+      ? 'bg-red-500'
+      : meter.state === 'warn'
+        ? 'bg-amber-500'
+        : 'bg-brand-500';
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-3 text-[10px] text-slate-400">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full ${color}`} style={{ width: `${Math.min(100, meter.pct)}%` }} />
+      </div>
+      <span className="w-16 text-end text-[10px] tabular-nums text-slate-500">
+        {meter.used}/{meter.limit}
+      </span>
     </div>
   );
 }

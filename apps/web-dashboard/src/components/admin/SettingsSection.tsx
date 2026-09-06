@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSettings, useUpdateSettings } from '@/api/admin.api';
+import { useSettings, useTenant, useUpdateSettings } from '@/api/admin.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Card, CardHeader, Input, Select } from '@/components/tailwind-ui';
@@ -50,6 +50,7 @@ export function SettingsSection() {
   const { t } = useTranslation();
   const toast = useToast();
   const { data: settings, isLoading, isError, error, refetch } = useSettings();
+  const tenant = useTenant();
   const update = useUpdateSettings();
 
   // Local form state mirrors the loaded settings; Save commits the dirty diff.
@@ -102,6 +103,24 @@ export function SettingsSection() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-4">
+      {tenant.data?.license && (
+        <Alert
+          variant={
+            tenant.data.license.licenseStatus === 'EXPIRED'
+              ? 'danger'
+              : tenant.data.license.licenseStatus === 'GRACE' ||
+                  tenant.data.license.quotas.users.state !== 'ok' ||
+                  tenant.data.license.quotas.vehicles.state !== 'ok'
+                ? 'warning'
+                : 'info'
+          }
+        >
+          {tenant.data.license.daysRemaining >= 0
+            ? t('admin.billing.daysLeft', { count: tenant.data.license.daysRemaining })
+            : t('admin.billing.expired')}
+          {tenant.data.license.licenseStatus === 'GRACE' ? ` — ${t('admin.billing.grace')}` : ''}
+        </Alert>
+      )}
       {update.isError && <Alert variant="danger">{t('admin.settings.saveFailed')}</Alert>}
 
       {/* Locale & format */}

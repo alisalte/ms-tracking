@@ -47,6 +47,9 @@ export class SessionStore {
     await this.redis.expire(key, idleTtlSeconds);
     await this.redis.sadd(userKey, data.sessionId);
     await this.redis.expire(userKey, absoluteTtlSeconds);
+    const tenantKey = `session:tenant:${data.tenantId}`;
+    await this.redis.sadd(tenantKey, data.sessionId);
+    await this.redis.expire(tenantKey, absoluteTtlSeconds);
   }
 
   public async get(sessionId: string): Promise<SessionData | null> {
@@ -70,6 +73,7 @@ export class SessionStore {
     await this.redis.del(`session:${sessionId}`);
     if (data) {
       await this.redis.srem(`session:user:${data.userId}`, sessionId);
+      await this.redis.srem(`session:tenant:${data.tenantId}`, sessionId);
     }
   }
 
@@ -81,6 +85,20 @@ export class SessionStore {
     }
     await this.redis.del(`session:user:${userId}`);
     return sessionIds;
+  }
+
+  /** Live sessions for a tenant (prunes stale ids). */
+  public async countForTenant(tenantId: string): Promise<number> {
+    const key = `session:tenant:${tenantId}`;
+    const ids = await this.redis.smembers(key);
+    if (ids.length === 0) return 0;
+    let live = 0;
+    for (const id of ids) {
+      const exists = await this.redis.exists(`session:${id}`);
+      if (exists) live += 1;
+      else await this.redis.srem(key, id);
+    }
+    return live;
   }
 }
 

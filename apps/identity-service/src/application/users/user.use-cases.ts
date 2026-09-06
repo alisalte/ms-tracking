@@ -16,6 +16,7 @@ import type { RevocationStore } from '../../infrastructure/cache/session-store.j
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { PasswordHasher } from '../../infrastructure/services/password-hasher.js';
 import { buildEventContext } from '../shared/context.js';
+import type { TenantEntitlementUseCase } from '../tenants/tenant-entitlement.use-case.js';
 
 export interface CreateUserInput {
   readonly tenantId: string;
@@ -53,11 +54,13 @@ export class CreateUserUseCase {
   constructor(
     private readonly users: UserRepository,
     private readonly hasher: PasswordHasher,
+    private readonly entitlements: TenantEntitlementUseCase,
     private readonly policy: { minLength: number },
   ) {}
 
   public async execute(input: CreateUserInput): Promise<User> {
     assertPasswordPolicy(input.password, this.policy);
+    await this.entitlements.assertCanCreate(input.tenantId, 'users');
 
     // INV-IAM-01 (email unique per tenant) + INV-IAM-02 (username unique platform).
     const existingEmail = await this.users.findByEmail(input.tenantId, input.email);

@@ -62,9 +62,10 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   // Non-ASCII org names (e.g. «شرکت سامان») must be percent-encoded — HTTP
   // headers are ByteString and Node/undici reject or mojibake them otherwise.
   const existingTenant = config.headers.get('X-Tenant-Id');
-  if (existingTenant && needsPercentEncode(existingTenant)) {
-    config.headers.set('X-Tenant-Id', encodeURIComponent(existingTenant));
-  } else if (!existingTenant) {
+  const tenantHeader = typeof existingTenant === 'string' ? existingTenant : '';
+  if (tenantHeader && needsPercentEncode(tenantHeader)) {
+    config.headers.set('X-Tenant-Id', encodeURIComponent(tenantHeader));
+  } else if (!tenantHeader) {
     const tenantId = isLogin ? getTenantId() : (stored?.tenantId ?? getTenantId());
     if (tenantId) {
       config.headers.set(

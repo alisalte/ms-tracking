@@ -1,4 +1,9 @@
-import { type Knex, withTenantContext } from '@fleetvision/persistence-knex';
+import {
+  type Knex,
+  TenantQuotaDeniedError,
+  assertTenantResourceQuota,
+  withTenantContext,
+} from '@fleetvision/persistence-knex';
 import type { Page } from '@fleetvision/shared-kernel';
 /**
  * DeviceService — device use-cases + the cross-tenant IMEI resolution the
@@ -11,7 +16,12 @@ import type { Page } from '@fleetvision/shared-kernel';
  *   the owning tenant's active-status checked. It is the source of truth for the
  *   device-gateway's auth-resolver L3 (cached upward; never per-packet).
  */
-import { ConflictException, HttpException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { DeviceResolution, DeviceStatus } from '../domain/device/device-types.js';
 import type { DeviceRecord } from '../domain/device/device-types.js';
 import type { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
@@ -53,6 +63,7 @@ export class DeviceService {
   public async create(ctx: ActorContext, input: CreateDeviceInput): Promise<DeviceRecord> {
     try {
       return await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
+        await assertTenantResourceQuota(trx, ctx.tenantId, 'devices');
         const row = await this.devices.create(trx, ctx.tenantId, {
           imei: input.imei, // already normalized by the zod schema
           serialNumber: input.serialNumber ?? null,
@@ -66,6 +77,7 @@ export class DeviceService {
         return record;
       });
     } catch (err) {
+      if (err instanceof TenantQuotaDeniedError) throw new ForbiddenException(err.message);
       throw mapUniqueViolation(err);
     }
   }

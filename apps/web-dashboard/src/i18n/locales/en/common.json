@@ -1784,7 +1784,17 @@
       "tier": "Plan",
       "region": "Region",
       "invoicesTitle": "Invoices and payment methods",
-      "invoicesBody": "Billing-service is not in this stack, so invoices, usage meters, and cards are not available. The plan above is the live tenant record."
+      "invoicesBody": "Invoicing is not in this stack. License remaining time and quotas below come from the live tenant record.",
+      "license": "License",
+      "daysLeft": "{{count}} days remaining",
+      "expired": "License expired",
+      "grace": "Grace period — new resources are blocked",
+      "users": "Users",
+      "vehicles": "Vehicles",
+      "devices": "Devices",
+      "drivers": "Personnel",
+      "storage": "Storage",
+      "download": "Monthly download"
     },
     "fleets": {
       "colName": "Name",

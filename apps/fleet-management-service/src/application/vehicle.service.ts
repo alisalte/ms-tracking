@@ -1,11 +1,21 @@
-import { type Knex, withTenantContext } from '@fleetvision/persistence-knex';
+import {
+  type Knex,
+  TenantQuotaDeniedError,
+  assertTenantResourceQuota,
+  withTenantContext,
+} from '@fleetvision/persistence-knex';
 import type { Page } from '@fleetvision/shared-kernel';
 /**
  * VehicleService — vehicle use-cases, wrapped in a tenant-scoped transaction with
  * audit. A vehicle's `fleetId` must belong to the same tenant (cross-tenant fleet
  * reference is rejected). DELETE = archive (§27).
  */
-import { ConflictException, HttpException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { VehicleRecord } from '../domain/vehicle/vehicle-types.js';
 import type { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { FleetRepository, type FleetRow } from '../infrastructure/persistence/fleet.repository.js';
@@ -35,6 +45,7 @@ export class VehicleService {
     await this.requireFleetInTenant(ctx.tenantId, input.fleetId);
     try {
       return await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
+        await assertTenantResourceQuota(trx, ctx.tenantId, 'vehicles');
         const row = await this.vehicles.create(trx, ctx.tenantId, {
           fleetId: input.fleetId,
           name: input.name,
@@ -49,6 +60,7 @@ export class VehicleService {
         return record;
       });
     } catch (err) {
+      if (err instanceof TenantQuotaDeniedError) throw new ForbiddenException(err.message);
       throw mapUniqueViolation(err);
     }
   }

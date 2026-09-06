@@ -12,6 +12,7 @@ import type { TenantRepository } from '../../infrastructure/persistence/tenant.r
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import type { TokenService } from '../../infrastructure/services/token-service.js';
 import { buildEventContext } from '../shared/context.js';
+import type { TenantEntitlementUseCase } from '../tenants/tenant-entitlement.use-case.js';
 
 export interface RefreshInput {
   readonly refreshToken: string;
@@ -38,6 +39,7 @@ export class RefreshTokenUseCase {
     private readonly tokens: TokenService,
     private readonly revocation: RevocationStore,
     private readonly roles: RoleRepository,
+    private readonly entitlements: TenantEntitlementUseCase,
     private readonly config: RefreshConfig,
   ) {}
 
@@ -48,6 +50,7 @@ export class RefreshTokenUseCase {
 
     const family = await this.auth.findFamilyByTokenHash(presentedHash);
     if (!family) throw new TokenInvalidError();
+    await this.entitlements.assertRefreshAllowed(family.tenantId);
 
     const ctx = buildEventContext(family.tenantId, 'refresh_token_family', input.correlationId);
     const newIssued = await this.tokens.issuePair(
