@@ -26,12 +26,15 @@ import {
   useUpdatePreferences,
 } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
-import { Button, Card, PageHeader, Spinner, Tooltip } from '@/components/tailwind-ui';
+import { Button, Card, Input, PageHeader, Spinner, Tooltip } from '@/components/tailwind-ui';
+import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
 import {
   localizeEventType,
   localizeNotificationBody,
   localizeNotificationTitle,
+  notificationVehicleName,
 } from '@/lib/alarm-copy';
+import { formatDateTime } from '@/lib/format-date';
 import { relativeTime } from '@/lib/relative-time';
 import type { Notification, NotificationChannel } from '@/types/notification.types';
 
@@ -92,6 +95,7 @@ export function NotificationCenterPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'history' | 'preferences'>('history');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const vehicleCaptionOf = useVehicleCaptionOf();
 
   const eventType = searchParams.get('eventType') ?? undefined;
   const severity = searchParams.get('severity') ?? undefined;
@@ -219,30 +223,20 @@ export function NotificationCenterPage() {
                 </option>
               ))}
             </select>
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-graydark-700">
-              <span className="sr-only">
-                {t('notifications.center.filters.from', { defaultValue: 'From' })}
-              </span>
-              <input
-                type="date"
-                value={from ?? ''}
-                onChange={(e) => setFilter('from', e.target.value || null)}
-                aria-label={t('notifications.center.filters.from', { defaultValue: 'From' })}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-graydark-700">
-              <span className="sr-only">
-                {t('notifications.center.filters.to', { defaultValue: 'To' })}
-              </span>
-              <input
-                type="date"
-                value={to ?? ''}
-                onChange={(e) => setFilter('to', e.target.value || null)}
-                aria-label={t('notifications.center.filters.to', { defaultValue: 'To' })}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
-              />
-            </label>
+            <Input
+              type="date"
+              value={from ?? ''}
+              onChange={(e) => setFilter('from', e.target.value || null)}
+              aria-label={t('notifications.center.filters.from', { defaultValue: 'From' })}
+              wrapperClassName="w-auto"
+            />
+            <Input
+              type="date"
+              value={to ?? ''}
+              onChange={(e) => setFilter('to', e.target.value || null)}
+              aria-label={t('notifications.center.filters.to', { defaultValue: 'To' })}
+              wrapperClassName="w-auto"
+            />
             {/* Unread-only switch */}
             <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-graydark-700">
               <input
@@ -289,7 +283,7 @@ export function NotificationCenterPage() {
                               : 'font-semibold text-gray-900 dark:text-white'
                           }`}
                         >
-                          {localizeNotificationTitle(t, n)}
+                          {localizeNotificationTitle(t, n, vehicleCaptionOf(n.vehicleId))}
                         </span>
                         <span
                           className={`inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[0.7rem] font-semibold ${severityTone(n.severity)}`}
@@ -364,6 +358,10 @@ export function NotificationCenterPage() {
               <NotificationDetailContent
                 notification={detail.data as Notification}
                 deliveries={detail.data.deliveries ?? []}
+                vehicleLabel={notificationVehicleName(
+                  detail.data as Notification,
+                  vehicleCaptionOf(detail.data.vehicleId),
+                )}
               />
             )}
           </aside>
@@ -376,19 +374,24 @@ export function NotificationCenterPage() {
 function NotificationDetailContent({
   notification,
   deliveries,
+  vehicleLabel,
 }: {
   notification: Notification;
   deliveries: NonNullable<ReturnType<typeof useNotificationDetail>['data']>['deliveries'];
+  vehicleLabel: string;
 }) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-        {localizeNotificationTitle(t, notification)}
+        {localizeNotificationTitle(t, notification, vehicleLabel)}
       </h2>
       <p className="text-sm text-gray-500 dark:text-graydark-600">
         {localizeNotificationBody(t, notification)}
       </p>
+      {vehicleLabel ? (
+        <p className="text-sm font-medium text-gray-800 dark:text-white">{vehicleLabel}</p>
+      ) : null}
       <div className="flex flex-wrap gap-1.5">
         <span
           className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${severityTone(notification.severity)}`}
@@ -406,9 +409,8 @@ function NotificationDetailContent({
       </div>
       <p className="text-xs text-gray-400 dark:text-graydark-600">
         {notification.createdAt && !Number.isNaN(new Date(notification.createdAt).getTime())
-          ? new Date(notification.createdAt).toLocaleString()
+          ? formatDateTime(notification.createdAt)
           : '—'}
-        {notification.vehicleId ? ` · ${notification.vehicleId}` : ''}
       </p>
 
       <div className="border-t border-gray-200 dark:border-white/5" />

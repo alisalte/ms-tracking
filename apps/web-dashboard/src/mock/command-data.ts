@@ -146,6 +146,17 @@ export function mockCommandCatalog(): CommandDef[] {
       supportsReadback: false,
     },
     {
+      code: 'AB2',
+      name: 'Start Live Stream',
+      nameFa: 'شروع استریم زنده',
+      category: 'media' as CommandCategory,
+      description: 'Tell the MDVR to push a live RTMP stream.',
+      descriptionFa: 'دستور شروع استریم زنده RTMP روی دستگاه تصویربردار.',
+      params: [],
+      expectResponse: false,
+      supportsReadback: false,
+    },
+    {
       code: 'C01',
       name: 'Output Control',
       nameFa: 'کنترل خروجی‌ها',
@@ -231,37 +242,69 @@ export function mockCommandCatalog(): CommandDef[] {
 const MOCK_STATUSES: CommandStatus[] = ['ACKED', 'ACKED', 'SENT', 'QUEUED', 'FAILED', 'EXPIRED'];
 const MOCK_CODES = ['A12', 'A11', 'B07', 'A10', 'C01', 'E91'];
 
+function mockRecord(
+  id: string,
+  deviceId: string,
+  code: string,
+  status: CommandStatus,
+  issuedAt: Date,
+): DeviceCommandRecord {
+  return {
+    id,
+    tenantId: 'mock-tenant',
+    deviceId,
+    commandCode: code,
+    category: 'tracking',
+    params: code === 'A12' ? { interval: 6 } : null,
+    payloadText: code === 'A12' ? 'A12,6' : code,
+    payloadHex: null,
+    status,
+    responseText: status === 'ACKED' ? `${code},OK` : null,
+    error: status === 'FAILED' ? 'DEVICE_OFFLINE' : status === 'EXPIRED' ? 'TTL_EXPIRED' : null,
+    issuedBy: 'mock-user',
+    issuedAt: issuedAt.toISOString(),
+    sentAt: status !== 'QUEUED' ? issuedAt.toISOString() : null,
+    ackedAt:
+      status === 'ACKED' || status === 'FAILED'
+        ? new Date(issuedAt.getTime() + 4_000).toISOString()
+        : null,
+    expiresAt: new Date(issuedAt.getTime() + 120_000).toISOString(),
+    version: 1,
+    createdAt: issuedAt.toISOString(),
+    updatedAt: issuedAt.toISOString(),
+  };
+}
+
 export function mockCommandHistory(
   deviceId: string | null,
   status?: CommandStatus,
 ): DeviceCommandRecord[] {
-  if (!deviceId) return [];
   const now = Date.now();
+  if (!deviceId) {
+    const bulkAt = new Date(now - 5 * 60_000);
+    const rows: DeviceCommandRecord[] = Array.from({ length: 10 }, (_, i) =>
+      mockRecord(
+        `mock-bulk-${i + 1}`,
+        `22222222-2222-2222-2222-22222222222${i}`,
+        'A12',
+        i === 9 ? 'FAILED' : 'ACKED',
+        new Date(bulkAt.getTime() + i * 40),
+      ),
+    );
+    rows.push(
+      mockRecord(
+        'mock-single-1',
+        '11111111-1111-1111-1111-111111111111',
+        'E91',
+        'ACKED',
+        new Date(now - 20 * 60_000),
+      ),
+    );
+    return status ? rows.filter((r) => r.status === status) : rows;
+  }
   const rows: DeviceCommandRecord[] = MOCK_CODES.map((code, i) => {
     const s = MOCK_STATUSES[i] ?? 'ACKED';
-    const issuedAt = new Date(now - (i + 1) * 7 * 60_000);
-    return {
-      id: `mock-cmd-${i + 1}`,
-      tenantId: 'mock-tenant',
-      deviceId,
-      commandCode: code,
-      category: 'tracking',
-      params: code === 'A12' ? { interval: 6 } : null,
-      payloadText: code === 'A12' ? 'A12,6' : code,
-      payloadHex: null,
-      status: s,
-      responseText: s === 'ACKED' ? `${code},OK` : null,
-      error: s === 'FAILED' ? 'DEVICE_OFFLINE' : s === 'EXPIRED' ? 'TTL_EXPIRED' : null,
-      issuedBy: 'mock-user',
-      issuedAt: issuedAt.toISOString(),
-      sentAt: s !== 'QUEUED' ? issuedAt.toISOString() : null,
-      ackedAt:
-        s === 'ACKED' || s === 'FAILED' ? new Date(issuedAt.getTime() + 4_000).toISOString() : null,
-      expiresAt: new Date(issuedAt.getTime() + 120_000).toISOString(),
-      version: 1,
-      createdAt: issuedAt.toISOString(),
-      updatedAt: issuedAt.toISOString(),
-    };
+    return mockRecord(`mock-cmd-${i + 1}`, deviceId, code, s, new Date(now - (i + 1) * 7 * 60_000));
   });
   return status ? rows.filter((r) => r.status === status) : rows;
 }

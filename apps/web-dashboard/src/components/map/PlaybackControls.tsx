@@ -14,17 +14,14 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { IconButton } from '@/components/tailwind-ui';
+import { formatDateTime, formatTime } from '@/lib/format-date';
 import { PLAYBACK_SPEEDS, type UseTrackPlaybackResult } from './useTrackPlayback';
 
 function fmtTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatTime(ms, { second: '2-digit' });
 }
 function fmtFull(ms: number): string {
-  return new Date(ms).toLocaleString();
+  return formatDateTime(ms);
 }
 
 export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResult }) {

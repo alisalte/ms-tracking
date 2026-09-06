@@ -16,6 +16,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { formatDate } from '@/lib/format-date';
 import { displayLabel } from '@/lib/ids';
 import type { Trip, TripStatus } from '@/types/fleet.types';
 
@@ -103,7 +104,7 @@ export function TripsPage() {
       sortBy: (trip) => trip.startTime,
       render: (trip) => (
         <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
-          {new Date(trip.startTime).toLocaleDateString([], {
+          {formatDate(trip.startTime, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',

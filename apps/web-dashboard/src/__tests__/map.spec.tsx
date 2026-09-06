@@ -5,6 +5,7 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { persistMapMarkerStyle } from '@/lib/map-marker-style';
 import { MapPage } from '@/pages/MapPage';
 import type { Fleet } from '@/types/asset.types';
 import type { MapVehicle, VehicleDetail, VehiclePresence } from '@/types/fleet.types';
@@ -86,7 +87,9 @@ vi.mock('@/api/asset.api', () => ({
 }));
 vi.mock('@/api/driver.api', () => ({
   driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
-  useDrivers: () => ({ data: [] as { assignedVehicleId: string | null; firstName: string; lastName: string }[] }),
+  useDrivers: () => ({
+    data: [] as { assignedVehicleId: string | null; firstName: string; lastName: string }[],
+  }),
 }));
 
 // ── Mock supercluster: return every point as its own (un-clustered) feature so
@@ -212,6 +215,9 @@ describe('MapPage (Live Tracking)', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
     localStorage.removeItem('fv:map-basemap');
+    localStorage.removeItem('fv:map-marker-style');
+    document.cookie = 'fv-map-marker-style=; Path=/; Max-Age=0';
+    localStorage.setItem('fv:map-demo-status', '0');
     mockUseMapVehicles.mockReturnValue({
       data: vehiclesFixture,
       isLoading: false,
@@ -255,8 +261,11 @@ describe('MapPage (Live Tracking)', () => {
 
     fireEvent.click(screen.getByTestId('map-settings-button'));
     const popover = screen.getByTestId('map-settings-popover');
-    const options = within(popover).getAllByRole('radio');
-    expect(options.length).toBe(8);
+    const google = within(popover).getByTestId('map-settings-basemaps-google');
+    const other = within(popover).getByTestId('map-settings-basemaps-other');
+    expect(
+      within(google).getAllByRole('radio').length + within(other).getAllByRole('radio').length,
+    ).toBe(8);
     expect(within(popover).getByRole('radio', { name: /Google Streets/ })).toHaveAttribute(
       'aria-checked',
       'true',
@@ -279,6 +288,54 @@ describe('MapPage (Live Tracking)', () => {
     );
   });
 
+  it('switches map markers between vehicle bodies and direction arrows', async () => {
+    renderMap();
+    await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    const popover = screen.getByTestId('map-settings-popover');
+    expect(within(popover).getByTestId('marker-style-vehicle')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+
+    fireEvent.click(within(popover).getByTestId('marker-style-navigation'));
+    expect(within(popover).getByTestId('marker-style-navigation')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(popover).getByTestId('marker-style-vehicle')).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    expect(document.cookie).toContain('fv-map-marker-style=navigation');
+    expect(localStorage.getItem('fv:map-marker-style')).toBe('navigation');
+  });
+
+  it('keeps the saved marker icon after leaving and returning to the map', async () => {
+    persistMapMarkerStyle('navigation');
+    const view = renderMap();
+    await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    expect(screen.getByTestId('marker-style-navigation')).toHaveAttribute('aria-checked', 'true');
+    view.unmount();
+
+    renderMap();
+    await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    expect(screen.getByTestId('marker-style-navigation')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('can enable demo status colors from map settings', async () => {
+    renderMap();
+    await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    const toggle = screen.getByTestId('map-settings-demo-status');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('renders the presence filter chips with counts (§18/§20)', async () => {
     renderMap();
     await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
@@ -287,6 +344,16 @@ describe('MapPage (Live Tracking)', () => {
     expect(screen.getByRole('button', { name: 'Offline · 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Stale · 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unknown · 1' })).toBeInTheDocument();
+  });
+
+  it('shows a map legend for every vehicle status color', async () => {
+    renderMap();
+    const legend = await screen.findByTestId('map-status-legend');
+    expect(within(legend).getByText('Driving')).toBeInTheDocument();
+    expect(within(legend).getByText('Idle')).toBeInTheDocument();
+    expect(within(legend).getByText('Overspeed')).toBeInTheDocument();
+    expect(within(legend).getByText('Stopped')).toBeInTheDocument();
+    expect(within(legend).getByText('Offline')).toBeInTheDocument();
   });
 
   it('filters the list by search query', async () => {

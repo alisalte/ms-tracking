@@ -241,8 +241,8 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
 .fv-playback-marker {
   --fv-zoom-scale: 1;
   --fv-state-scale: 1;
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   max-width: none !important;
   line-height: 0;
   pointer-events: auto;
@@ -264,6 +264,11 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
 .fv-vehicle-marker.is-selected {
   --fv-state-scale: 1.16;
   z-index: 3;
+}
+.fv-vehicle-marker.is-nav,
+.fv-playback-marker.is-nav {
+  width: 40px;
+  height: 40px;
 }
 .fv-vehicle-marker svg,
 .fv-playback-marker svg {

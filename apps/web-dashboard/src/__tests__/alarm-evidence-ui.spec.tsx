@@ -16,7 +16,7 @@ const evidence = vi.hoisted(() => ({
     photoUrl: null as string | null,
     photoBlob: null,
     photoError: null as string | null,
-    videoChannel: null,
+    videoChannel: null as { id: string; deviceId: string; label: string } | null,
     videoWindow: null as { fromMs: number; toMs: number } | null,
     window: { fromMs: 0, toMs: 1 },
     hasCamera: true,

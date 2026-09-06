@@ -21,6 +21,11 @@ import type { Notification, UnreadCount } from '@/types/notification.types';
 import { useQueryClient } from '@tanstack/react-query';
 
 function mapWsNotification(raw: Record<string, unknown>): Notification {
+  const metadataRaw = raw.metadata;
+  const metadata =
+    metadataRaw && typeof metadataRaw === 'object' && !Array.isArray(metadataRaw)
+      ? (metadataRaw as Record<string, unknown>)
+      : undefined;
   return {
     id: String(raw.id ?? ''),
     title: (raw.title as string) ?? '',
@@ -30,6 +35,7 @@ function mapWsNotification(raw: Record<string, unknown>): Notification {
     category: ((raw.category as string) ?? 'system') as Notification['category'],
     eventType: (raw.eventType as string) ?? 'system',
     vehicleId: (raw.vehicleId as string) ?? undefined,
+    metadata,
     read: false,
     createdAt: (raw.createdAt as string) ?? new Date().toISOString(),
     link: (raw.link as string) ?? undefined,

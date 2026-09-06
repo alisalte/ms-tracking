@@ -1,39 +1,41 @@
 /**
- * CommandDevicePicker — multi-select Meitrack devices so one catalog command
- * (interval, APN, alerts, …) can be queued on many units at once.
+ * CommandDevicePicker — fleet-type filter (menu mode) or a locked single
+ * device (opened from the unit itself). No IMEI checklist: menu mode applies
+ * the catalog to every ACTIVE device of the chosen model.
  */
-import { Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Checkbox, Input, Select } from '@/components/tailwind-ui';
+import { Button, Card, Select } from '@/components/tailwind-ui';
+import { commandClassFromModel } from '@/lib/command-capability';
 import type { Device } from '@/types/asset.types';
 
-/** Sentinel for "no device-type filter" in the type dropdown. */
 const ALL_TYPES = '';
 
 interface CommandDevicePickerProps {
   devices: readonly Device[];
-  selectedIds: readonly string[];
-  onChange: (ids: string[]) => void;
+  /** Device opened from the unit (map popup / device drawer). */
+  lockedDevice?: Device | null;
+  /** Selected model in menu mode (empty = none). */
+  typeFilter: string;
+  onTypeChange: (model: string) => void;
+  /** Leave single-device mode and return to type-wide commands. */
+  onClearDevice?: () => void;
   loading?: boolean;
   disabled?: boolean;
 }
 
 export function CommandDevicePicker({
   devices,
-  selectedIds,
-  onChange,
+  lockedDevice,
+  typeFilter,
+  onTypeChange,
+  onClearDevice,
   loading,
   disabled,
 }: CommandDevicePickerProps) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
 
-  // Distinct device types (models) present in the fleet, each with its
-  // ACTIVE (selectable) count — lets an operator target "every T622" instead
-  // of hunting for individual units in a long IMEI list.
   const deviceTypes = useMemo(() => {
     const counts = new Map<string, number>();
     for (const d of devices) {
@@ -44,92 +46,81 @@ export function CommandDevicePicker({
     return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [devices]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return devices.filter((d) => {
-      if (typeFilter !== ALL_TYPES && d.model !== typeFilter) return false;
-      if (!q) return true;
-      const model = (d.model ?? '').toLowerCase();
-      return d.imei.toLowerCase().includes(q) || model.includes(q);
-    });
-  }, [devices, query, typeFilter]);
+  if (lockedDevice) {
+    const klass = commandClassFromModel(lockedDevice.model);
+    return (
+      <Card
+        flush
+        className="flex flex-wrap items-center gap-3 p-3"
+        data-testid="command-device-scope"
+      >
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+            {t('commands.picker.thisDevice', { defaultValue: 'This device' })}
+          </h2>
+          <p className="mt-0.5 font-mono text-sm text-gray-800 dark:text-graydark-800">
+            {lockedDevice.imei}
+            {lockedDevice.model ? (
+              <span className="ms-2 font-sans text-xs text-gray-500 dark:text-graydark-600">
+                {lockedDevice.model}
+              </span>
+            ) : null}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-graydark-600">
+            {klass === 'mdvr'
+              ? t('commands.picker.classMdvr', { defaultValue: 'MDVR settings for this unit' })
+              : t('commands.picker.classTracker', {
+                  defaultValue: 'Tracker settings for this unit',
+                })}
+          </p>
+        </div>
+        {onClearDevice && (
+          <Button type="button" size="sm" variant="outline" onClick={onClearDevice}>
+            {t('commands.picker.backToTypes', { defaultValue: 'All device types' })}
+          </Button>
+        )}
+      </Card>
+    );
+  }
 
-  const selectable = useMemo(() => filtered.filter((d) => d.status === 'ACTIVE'), [filtered]);
-  const selectableIds = selectable.map((d) => d.id);
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const allVisibleSelected =
-    selectableIds.length > 0 && selectableIds.every((id) => selectedSet.has(id));
-
-  const toggleOne = (id: string, eligible: boolean) => {
-    if (!eligible || disabled) return;
-    onChange(selectedSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
-  };
-
-  const selectVisible = () => {
-    onChange([...new Set([...selectedIds, ...selectableIds])]);
-  };
-
-  const clearVisible = () => {
-    const drop = new Set(selectableIds);
-    onChange(selectedIds.filter((id) => !drop.has(id)));
-  };
-
-  /** Picking a type targets exactly that fleet — replaces the selection. */
-  const selectType = (type: string) => {
-    setTypeFilter(type);
-    if (type === ALL_TYPES) return;
-    const ids = devices.filter((d) => d.model === type && d.status === 'ACTIVE').map((d) => d.id);
-    onChange(ids);
-  };
+  const selectedCount =
+    typeFilter === ALL_TYPES
+      ? 0
+      : devices.filter((d) => d.model === typeFilter && d.status === 'ACTIVE').length;
 
   return (
     <Card flush className="flex flex-col gap-3 p-3" data-testid="command-device-picker">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
-          {t('commands.picker.title', { defaultValue: 'Devices' })}
+          {t('commands.picker.typeTitle', { defaultValue: 'Device type' })}
         </h2>
-        <span className="text-xs text-gray-500 dark:text-graydark-600">
-          {t('commands.picker.selectedCount', {
-            defaultValue: '{{selected}} of {{total}} selected',
-            selected: selectedIds.length,
-            total: devices.length,
-          })}
-        </span>
-        <div className="ms-auto flex flex-wrap gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={disabled || loading || selectableIds.length === 0}
-            onClick={allVisibleSelected ? clearVisible : selectVisible}
-          >
-            {allVisibleSelected
-              ? t('commands.picker.clearVisible', { defaultValue: 'Clear visible' })
-              : t('commands.picker.selectAll', { defaultValue: 'Select all' })}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={disabled || selectedIds.length === 0}
-            onClick={() => onChange([])}
-          >
-            {t('common.clear', { defaultValue: 'Clear' })}
-          </Button>
-        </div>
+        {typeFilter !== ALL_TYPES && (
+          <span className="text-xs text-gray-500 dark:text-graydark-600">
+            {t('commands.picker.typeCount', {
+              defaultValue: '{{count}} devices of this type',
+              count: selectedCount,
+            })}
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      {devices.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-graydark-600">
+          {t('commands.noMeitrackDevices', {
+            defaultValue: 'No Meitrack devices registered',
+          })}
+        </p>
+      ) : (
         <Select
           value={typeFilter}
-          onChange={(e) => selectType(e.target.value)}
-          wrapperClassName="w-56"
+          onChange={(e) => onTypeChange(e.target.value)}
+          wrapperClassName="w-full max-w-sm"
           disabled={disabled || loading || deviceTypes.length === 0}
           aria-label={t('commands.picker.type', { defaultValue: 'Device type' })}
           options={[
             {
               value: ALL_TYPES,
-              label: t('commands.picker.allTypes', { defaultValue: 'All types' }),
+              label: t('commands.picker.chooseType', { defaultValue: 'Choose a device type…' }),
             },
             ...deviceTypes.map(([model, count]) => ({
               value: model,
@@ -137,62 +128,6 @@ export function CommandDevicePicker({
             })),
           ]}
         />
-        <div className="min-w-0 flex-1">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('commands.picker.search', {
-              defaultValue: 'Filter by IMEI or model…',
-            })}
-            aria-label={t('commands.picker.search', {
-              defaultValue: 'Filter by IMEI or model…',
-            })}
-            leftIcon={<Search size={14} />}
-            disabled={disabled || loading}
-          />
-        </div>
-      </div>
-
-      {devices.length === 0 ? (
-        <p className="p-2 text-sm text-gray-500 dark:text-graydark-600">
-          {t('commands.noMeitrackDevices', {
-            defaultValue: 'No Meitrack devices registered',
-          })}
-        </p>
-      ) : (
-        <ul className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-white/10">
-          {filtered.length === 0 && (
-            <li className="px-3 py-2 text-sm text-gray-500 dark:text-graydark-600">
-              {t('commands.picker.noMatch', { defaultValue: 'No devices match.' })}
-            </li>
-          )}
-          {filtered.map((d) => {
-            const eligible = d.status === 'ACTIVE';
-            return (
-              <li
-                key={d.id}
-                className="border-b border-gray-100 px-3 py-1.5 last:border-b-0 dark:border-white/5"
-              >
-                <Checkbox
-                  checked={selectedSet.has(d.id)}
-                  disabled={disabled || !eligible}
-                  onChange={() => toggleOne(d.id, eligible)}
-                  label={
-                    <span className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-mono text-sm">{d.imei}</span>
-                      {d.model && (
-                        <span className="text-xs text-gray-500 dark:text-graydark-600">
-                          {d.model}
-                        </span>
-                      )}
-                      {!eligible && <span className="text-xs text-gray-400">{d.status}</span>}
-                    </span>
-                  }
-                />
-              </li>
-            );
-          })}
-        </ul>
       )}
     </Card>
   );

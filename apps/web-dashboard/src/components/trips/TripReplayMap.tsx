@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
 import { useFollowBasemap } from '@/hooks/useBasemap';
+import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { markerDataUrl, paintVehicleMarker } from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
@@ -121,6 +122,7 @@ export function TripReplayMap({ waypoints, events, index, vehicleType }: TripRep
   eventsRef.current = events;
   indexRef.current = index;
   const { basemap, setBasemap } = useFollowBasemap(mapRef, TRIP_BASEMAP_BEFORE, mapReady);
+  const [markerStyle] = useMapMarkerStyle();
 
   const current = waypoints[index];
   const hud = useMemo(() => {
@@ -247,6 +249,7 @@ export function TripReplayMap({ waypoints, events, index, vehicleType }: TripRep
         heading,
         id: 'trip-replay',
         selected: true,
+        style: markerStyle,
       });
       return;
     }
@@ -266,6 +269,7 @@ export function TripReplayMap({ waypoints, events, index, vehicleType }: TripRep
         heading: Number.isFinite(current.heading) ? current.heading : null,
         id: 'trip-replay',
         selected: true,
+        style: markerStyle,
       });
       el.setAttribute('aria-label', t('trips.replay.vehicle'));
       el.setAttribute('data-testid', 'trip-vehicle-marker');
@@ -276,7 +280,7 @@ export function TripReplayMap({ waypoints, events, index, vehicleType }: TripRep
       marker.addTo(map);
       vehicleMarkerRef.current = marker;
     });
-  }, [index, waypoints, t, vehicleType]);
+  }, [index, waypoints, t, vehicleType, markerStyle]);
 
   return (
     <div

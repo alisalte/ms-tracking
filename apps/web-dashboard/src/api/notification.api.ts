@@ -45,6 +45,11 @@ export interface NotificationListParams {
 
 export function mapNotification(raw: Record<string, unknown>): Notification {
   const vehicleId = wireStr(raw, 'vehicleId', 'vehicle_id') || undefined;
+  const metadataRaw = raw.metadata;
+  const metadata =
+    metadataRaw && typeof metadataRaw === 'object' && !Array.isArray(metadataRaw)
+      ? (metadataRaw as Record<string, unknown>)
+      : undefined;
   return {
     id: wireStr(raw, 'id'),
     title: wireStr(raw, 'title'),
@@ -54,6 +59,7 @@ export function mapNotification(raw: Record<string, unknown>): Notification {
     category: (wireStr(raw, 'category') || 'system') as Notification['category'],
     eventType: wireStr(raw, 'eventType', 'event_type') || 'system',
     vehicleId,
+    metadata,
     read: Boolean(raw.read),
     createdAt: wireIso(raw, 'createdAt', 'created_at') ?? '',
     link: wireStr(raw, 'link') || undefined,

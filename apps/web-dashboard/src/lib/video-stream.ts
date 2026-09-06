@@ -12,6 +12,7 @@
  * (Socket.IO) negotiation; the returned `MediaStream` plugs into the same
  * `video.srcObject` and the UI is unchanged.
  */
+import { formatTime } from '@/lib/format-date';
 import type { CameraChannel, StreamQuality } from '@/types/video.types';
 
 /** Options controlling the synthetic stream. */
@@ -104,7 +105,7 @@ function createMockStream(channel: CameraChannel, quality: StreamQuality): Strea
     ctx.fillText(channel.label, 12, Math.round(height * 0.1));
 
     // Live clock (top-right) — proves the frame is "live".
-    const clock = new Date().toLocaleTimeString([], { hour12: false });
+    const clock = formatTime(new Date(), { hour12: false, second: '2-digit' });
     const clockW = ctx.measureText(clock).width;
     ctx.fillStyle = SCENE.accent;
     ctx.fillText(clock, width - clockW - 12, Math.round(height * 0.1));

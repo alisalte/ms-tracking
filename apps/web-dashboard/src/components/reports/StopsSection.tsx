@@ -17,6 +17,7 @@ import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
+import { formatDateTime } from '@/lib/format-date';
 import { formatDurationSec, hours1, shortLabel } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
 
@@ -95,12 +96,12 @@ export function StopsSection({ range }: { range: ReportRange }) {
     {
       id: 'start',
       headerKey: 'reports.cols.start',
-      render: (r) => new Date(r.startedAt).toLocaleString(),
+      render: (r) => formatDateTime(r.startedAt),
     },
     {
       id: 'end',
       headerKey: 'reports.cols.end',
-      render: (r) => (r.endedAt ? new Date(r.endedAt).toLocaleString() : '—'),
+      render: (r) => (r.endedAt ? formatDateTime(r.endedAt) : '—'),
     },
     {
       id: 'duration',

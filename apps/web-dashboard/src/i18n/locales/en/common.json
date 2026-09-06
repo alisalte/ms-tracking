@@ -43,7 +43,7 @@
       "invalidCredentials": "Invalid email or password",
       "networkError": "Unable to connect to server"
     },
-    "tenantIdHelp": "Your organization name (e.g. FleetVision)",
+    "tenantIdHelp": "Exact organization name as created (e.g. FleetVision)",
     "brandHeadline": "Enterprise Fleet Intelligence",
     "brandSubline": "Real-time tracking, video telematics, maintenance, and compliance — unified in one calm, fast, secure dashboard.",
     "brandPill": {
@@ -139,7 +139,14 @@
     "selectedCount": "{{count}} selected",
     "discardChangesTitle": "Discard unsaved changes?",
     "discardChangesMessage": "You have unsaved changes. Closing this form will discard them.",
-    "discard": "Discard"
+    "discard": "Discard",
+    "datePicker": {
+      "title": "Calendar",
+      "placeholder": "Pick a date",
+      "today": "Today",
+      "hour": "Hour",
+      "minute": "Minute"
+    }
   },
   "errors": {
     "retry": "Retry",
@@ -398,7 +405,14 @@
       "open": "Map settings",
       "basemap": "Basemap style",
       "providerGoogle": "Google",
-      "providerOther": "Other maps"
+      "providerOther": "Other maps",
+      "markers": "Vehicle icons",
+      "markerVehicle": "Vehicle body",
+      "markerVehicleHint": "Top-down car, truck, trailer",
+      "markerNav": "Direction arrow",
+      "markerNavHint": "Colored circle; arrow shows heading",
+      "demoStatus": "Demo status colors",
+      "demoStatusHint": "Assign a different status to each vehicle"
     },
     "basemap": {
       "google": "Google Streets",
@@ -434,7 +448,7 @@
       "locateFail": "Could not read live location",
       "liveVideo": "Live video",
       "tripTimeline": "Trip timeline",
-      "sendMessage": "Message",
+      "sendMessage": "Commands",
       "history": "History",
       "recentEvents": "Recent events",
       "noEvents": "No recent events",
@@ -1197,7 +1211,8 @@
       "alreadyBound": "This device is already bound to a vehicle.",
       "noUnbound": "No unbound devices available.",
       "colStatus": "Status",
-      "emptyDescription": "No devices yet — register a tracker to see it here."
+      "emptyDescription": "No devices yet — register a tracker to see it here.",
+      "openCommands": "Commands"
     },
     "driver": {
       "notFound": "Driver not found.",
@@ -1327,13 +1342,65 @@
       "overview": "Overview",
       "analytics": "KPIs & Analytics",
       "vehicles": "Vehicles",
+      "drivers": "Drivers",
+      "devices": "Devices",
+      "distance": "Distance",
+      "speed": "Speed",
       "stops": "Stops",
       "operation": "Working hours",
       "odometer": "Odometer",
       "trips": "Trips",
       "alarms": "Alarms",
       "geofences": "Geofences",
+      "commands": "Commands",
       "activity": "Activity"
+    },
+    "catalog": {
+      "title": "Report catalog",
+      "ops": "Operations",
+      "safety": "Safety",
+      "assets": "Assets & devices",
+      "activity": "Activity",
+      "blurb": {
+        "analytics": "KPI scorecard versus the previous window, plus fleet comparison.",
+        "vehicles": "Utilization, distance, speed, and idle/parking per vehicle.",
+        "drivers": "Assigned-vehicle trips, distance, and hours for each driver.",
+        "devices": "Live connection state, last seen, and vehicle binding.",
+        "distance": "Kilometres travelled by vehicle, with daily trend.",
+        "speed": "Average and peak speed, plus speeding alarms.",
+        "stops": "Idle and parking duration, mix, and stop list.",
+        "operation": "Moving, idle, parking, and engine hours in the range.",
+        "odometer": "Registry odometer versus distance in the selected window.",
+        "trips": "Completed trips with duration, distance, and map playback.",
+        "alarms": "Alarm counts by type and severity, with CSV export.",
+        "geofences": "ENTER / EXIT / DWELL counts and time inside each fence.",
+        "commands": "Commands issued in the range, grouped by status.",
+        "activity": "Chronological mix of trips, stops, geofences, and alarms."
+      }
+    },
+    "daily": {
+      "title": "Daily summary",
+      "day": "Day"
+    },
+    "drivers": {
+      "assigned": "Assigned",
+      "unassigned": "No vehicle",
+      "note": "Hours and distance come from the vehicle currently assigned to the driver."
+    },
+    "devices": {
+      "online": "Online",
+      "offline": "Offline",
+      "stale": "Stale",
+      "unknown": "Unknown",
+      "unbound": "Unbound",
+      "note": "Connection state is live (not limited to the date range). Last seen is the device status timestamp."
+    },
+    "commandsReport": {
+      "issued": "Issued",
+      "acked": "Acked",
+      "failed": "Failed",
+      "inFlight": "Queued / sent",
+      "note": "Tenant command history filtered to the selected range (UTC)."
     },
     "vehicles": {
       "tabs": "Vehicle reports",
@@ -1374,7 +1441,10 @@
       "alarms": "Alarms",
       "open": "open",
       "geofenceEvents": "Geofence events",
-      "utilization": "Avg utilization"
+      "utilization": "Avg utilization",
+      "avgTrip": "Avg trip",
+      "discarded": "Discarded trips",
+      "speedingVehicles": "Vehicles with speeding"
     },
     "analytics": {
       "kpiTitle": "KPI scorecard vs previous period",
@@ -1414,6 +1484,14 @@
       "engineHours": "Working hours by vehicle",
       "periodDistance": "Distance in range",
       "odometer": "Odometer reading",
+      "distanceByVehicle": "Distance by vehicle",
+      "speedByVehicle": "Average vs peak speed",
+      "driversDistance": "Distance by driver",
+      "devicePresence": "Device connection state",
+      "commandStatus": "Commands by status",
+      "alarmSeverity": "Alarms by severity",
+      "alarmByType": "Alarms by type",
+      "geofenceEvents": "Geofence events by fence",
       "empty": "No data in range"
     },
     "export": {
@@ -1462,7 +1540,17 @@
       "enters": "ENTER",
       "exits": "EXIT",
       "dwells": "DWELL",
-      "timeInside": "Time inside"
+      "timeInside": "Time inside",
+      "driver": "Driver",
+      "employeeId": "Employee ID",
+      "assignedVehicle": "Assigned vehicle",
+      "imei": "IMEI",
+      "model": "Model",
+      "presence": "Presence",
+      "lastSeen": "Last seen",
+      "command": "Command",
+      "reply": "Reply",
+      "device": "Device"
     },
     "labels": {
       "distance": "Distance (km)",
@@ -1832,14 +1920,22 @@
   "commands": {
     "title": "Command Center",
     "description": "Send commands to devices — request position, reboot, lock/unlock, engine cut, configuration, and OTA firmware updates.",
-    "subtitle": "Configure one device or apply the same setting to many — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).",
+    "subtitle": "Configure one device or apply the same setting to every unit of a type.",
+    "subtitleDevice": "Settings for this device only.",
+    "subtitleType": "Pick a device type to apply the same setting to every unit of that type.",
     "selectDevice": "Device (IMEI)",
-    "selectDeviceFirst": "Select one or more devices to enable commands.",
+    "selectDeviceFirst": "Select a device to enable commands.",
+    "selectTypeFirst": "Choose a device type to enable commands.",
     "noMeitrackDevices": "No Meitrack devices registered",
     "noModel": "No model",
     "noSendPermission": "You lack permission to send commands (read-only).",
     "search": "Search commands (code or name)…",
     "noMatch": "No commands match.",
+    "categoriesLabel": "Command categories",
+    "tabs": {
+      "catalog": "Commands",
+      "history": "History"
+    },
     "readable": "readable",
     "sent": "Command {{code}} queued",
     "sentBulk": "Command {{code}} queued on {{count}} devices",
@@ -1853,7 +1949,14 @@
       "search": "Filter by IMEI or model…",
       "noMatch": "No devices match.",
       "type": "Device type",
-      "allTypes": "All types"
+      "allTypes": "All types",
+      "chooseType": "Choose a device type…",
+      "typeTitle": "Device type",
+      "typeCount": "{{count}} devices of this type",
+      "thisDevice": "This device",
+      "classMdvr": "MDVR settings for this unit",
+      "classTracker": "Tracker settings for this unit",
+      "backToTypes": "All device types"
     },
     "categories": {
       "all": "All",
@@ -1905,13 +2008,20 @@
       "status": "Status",
       "response": "Response / Error",
       "filterStatus": "Status",
-      "empty": "No commands sent to this device yet.",
-      "bulkHint": "Command history is shown when a single device is selected. {{count}} devices will receive the next command."
+      "empty": "No commands sent yet.",
+      "selectDeviceFirst": "Select one device to see its command history.",
+      "bulkHint": "Command history is shown when a single device is selected. {{count}} devices will receive the next command.",
+      "sentTo": "Devices",
+      "sentToCount": "Sent to {{count}} devices"
     }
   },
   "maintenance": {
     "title": "Maintenance",
-    "description": "Work orders, preventive maintenance schedules, parts inventory, and maintenance history."
+    "description": "Work orders, preventive maintenance schedules, parts inventory, and maintenance history.",
+    "partners": {
+      "pargar": "Pargar CMMS",
+      "alka": "Alka CMMS"
+    }
   },
   "profile": {
     "title": "Profile",

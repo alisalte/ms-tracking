@@ -1,0 +1,10 @@
+{
+  "errors": [
+    {
+      "code": "BAD_REQUEST",
+      "status": "400",
+      "title": "BAD_REQUEST",
+      "detail": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    }
+  ]
+}

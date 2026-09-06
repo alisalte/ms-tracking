@@ -7,6 +7,7 @@
  */
 import type { TFunction } from 'i18next';
 
+import { isUuid } from '@/lib/ids';
 import type { Alarm, AlarmType } from '@/types/alarm.types';
 import type { Notification } from '@/types/notification.types';
 
@@ -245,34 +246,110 @@ export function localizeEventType(t: TFunction, eventType: string): string {
   return humanizeCode(eventType);
 }
 
+const UUID_TOKEN_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+export function stripUuids(text: string): string {
+  return text
+    .replace(UUID_TOKEN_RE, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s*[:·,;|/—–-]+\s*$/g, '')
+    .replace(/^\s*[:·,;|/—–-]+\s*/g, '')
+    .trim();
+}
+
+function metaStr(meta: Record<string, unknown> | undefined, ...keys: string[]): string {
+  if (!meta) return '';
+  for (const key of keys) {
+    const value = meta[key];
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (text && !isUuid(text)) return text;
+  }
+  return '';
+}
+
+/** Human vehicle caption for a notification — never a GUID. */
+export function notificationVehicleName(
+  n: Pick<Notification, 'title' | 'vehicleId' | 'metadata'>,
+  resolvedLabel?: string,
+): string {
+  if (resolvedLabel && !isUuid(resolvedLabel)) return resolvedLabel.trim();
+  const named = metaStr(n.metadata, 'vehicleName', 'vehicleLabel', 'plate');
+  if (named) return named;
+  const colon = n.title.indexOf(':');
+  const suffix = colon >= 0 ? n.title.slice(colon + 1).trim() : '';
+  if (suffix && !isUuid(suffix) && !looksEnglishAlarmTitle(suffix)) return suffix;
+  return '';
+}
+
+function reasonFromMetadata(
+  t: TFunction,
+  n: Pick<Notification, 'eventType' | 'metadata'>,
+): string | undefined {
+  const meta = n.metadata;
+  if (!meta) return undefined;
+  const speed = meta.speed ?? meta.speedKph;
+  const limit = meta.speedLimit ?? meta.limit ?? meta.thresholdKmh;
+  if (speed != null && limit != null && String(speed) !== '' && String(limit) !== '') {
+    return t('alarms.messages.overspeed', {
+      speed: compactNum(speed),
+      limit: compactNum(limit),
+    });
+  }
+  const geo = metaStr(meta, 'geofenceName');
+  if (geo) {
+    const kind = n.eventType.toLowerCase();
+    if (kind.includes('exit')) return t('alarms.messages.geofenceExit', { name: geo });
+    if (kind.includes('dwell')) {
+      return t('alarms.messages.geofenceDwell', {
+        name: geo,
+        minutes: String(meta.duration ?? meta.minutes ?? ''),
+      });
+    }
+    return t('alarms.messages.geofenceEnter', { name: geo });
+  }
+  const duration = metaStr(meta, 'duration');
+  if (duration && n.eventType.toLowerCase().includes('idle')) {
+    return t('alarms.messages.vehicleIdle', { duration });
+  }
+  const alarmDetail = metaStr(meta, 'alarmDetail', 'dmsDetail');
+  if (alarmDetail) return localizePhrase(t, alarmDetail);
+  const alarmCode = metaStr(meta, 'alarmCode');
+  if (alarmCode) return localizeAlarmCode(t, alarmCode);
+  return undefined;
+}
+
 export function localizeNotificationTitle(
   t: TFunction,
-  n: Pick<Notification, 'title' | 'eventType'>,
+  n: Pick<Notification, 'title' | 'eventType' | 'vehicleId' | 'metadata'>,
+  vehicleLabel?: string,
 ): string {
   const typeLabel = localizeEventType(t, n.eventType);
-  const colon = n.title.indexOf(':');
-  const vehicle = colon >= 0 ? n.title.slice(colon + 1).trim() : '';
-  if (looksLocalized(n.title) && !looksEnglishAlarmTitle(n.title)) return n.title;
-  const vehicleLooksLikeType =
-    vehicle.toLowerCase().replace(/\s+/g, '_') === n.eventType.replace(/-/g, '_');
-  if (vehicle && !looksEnglishAlarmTitle(vehicle) && !vehicleLooksLikeType) {
-    return `${typeLabel}: ${vehicle}`;
+  const vehicle = notificationVehicleName(n, vehicleLabel);
+  if (vehicle) return `${typeLabel}: ${vehicle}`;
+  const cleaned = stripUuids(n.title);
+  if (looksLocalized(cleaned) && !looksEnglishAlarmTitle(cleaned) && cleaned !== typeLabel) {
+    return cleaned;
   }
   return typeLabel;
 }
 
 export function localizeNotificationBody(
   t: TFunction,
-  n: Pick<Notification, 'body' | 'eventType' | 'title'>,
+  n: Pick<Notification, 'body' | 'eventType' | 'title' | 'metadata'>,
 ): string {
-  if (looksLocalized(n.body)) return n.body;
-  const fromPattern = localizeEnglishPattern(t, n.body);
+  const fromMeta = reasonFromMetadata(t, n);
+  if (fromMeta) return fromMeta;
+  const cleaned = stripUuids(n.body);
+  if (looksLocalized(cleaned)) return cleaned;
+  const fromPattern = localizeEnglishPattern(t, cleaned || n.body);
   if (fromPattern) return fromPattern;
-  const extra = extractDeviceExtra(n.body) ?? extractDeviceExtra(n.title);
-  if (extra) return localizePhrase(t, extra);
-  const code = extractDeviceCode(n.body) ?? extractDeviceCode(n.title);
+  const extra = extractDeviceExtra(cleaned) ?? extractDeviceExtra(n.title);
+  if (extra && !isUuid(extra)) return localizePhrase(t, extra);
+  const code = extractDeviceCode(cleaned) ?? extractDeviceCode(n.title);
   if (code) return localizeAlarmCode(t, code);
-  return n.body;
+  if (cleaned && !isUuid(cleaned)) return cleaned;
+  return '';
 }
 
 function looksLocalized(text: string): boolean {

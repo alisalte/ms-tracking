@@ -15,6 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -26,12 +27,20 @@ import {
 } from '@/api/report.api';
 import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
+import { CommandsReportSection } from '@/components/reports/CommandsReportSection';
+import { DevicesSection } from '@/components/reports/DevicesSection';
+import { DistanceSection } from '@/components/reports/DistanceSection';
+import { DriversSection } from '@/components/reports/DriversSection';
+import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
+import { SpeedSection } from '@/components/reports/SpeedSection';
 import { StopsSection } from '@/components/reports/StopsSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { i18n } from '@/i18n';
+import { isInReportRange } from '@/lib/report-format';
+import { ReportsPage } from '@/pages/ReportsPage';
 
 // ── API mocks (client + blob download + chart stub) ─────────────────────────
 
@@ -55,9 +64,11 @@ function makeWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <I18nextProvider i18n={i18n}>
-        <ToastProvider>{children}</ToastProvider>
-      </I18nextProvider>
+      <MemoryRouter>
+        <I18nextProvider i18n={i18n}>
+          <ToastProvider>{children}</ToastProvider>
+        </I18nextProvider>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -172,6 +183,11 @@ describe('ReportsOverviewSection (backend KPIs only)', () => {
     render(<ReportsOverviewSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
 
     await waitFor(() => expect(screen.getAllByTestId('report-kpi')).toHaveLength(15));
+    expect(screen.getByTestId('report-catalog')).toBeInTheDocument();
+    expect(screen.getByTestId('report-catalog-distance')).toHaveAttribute(
+      'href',
+      '/reports?section=distance',
+    );
     // Backend values surface verbatim. KPI tiles render the value via
     // toLocaleString (locale digit grouping may render 1,500 / 1 500 / 1500
     // depending on the runner's ICU) with the unit as a suffix node.
@@ -415,6 +431,251 @@ describe('vehicle meters reports (stops / odometer)', () => {
     });
     render(<StopsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
     await waitFor(() => expect(screen.getByTestId('report-stops')).toBeInTheDocument());
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('expanded report sections', () => {
+  it('lists the new first-class reports on the page tabs', async () => {
+    apiGetRaw.mockImplementation(async (url: string) =>
+      url === '/reports/fleet-overview' ? overview : { points: [] },
+    );
+    render(<ReportsPage />, { wrapper: makeWrapper() });
+    expect(screen.getByTestId('report-section-distance')).toBeInTheDocument();
+    expect(screen.getByTestId('report-section-speed')).toBeInTheDocument();
+    expect(screen.getByTestId('report-section-drivers')).toBeInTheDocument();
+    expect(screen.getByTestId('report-section-devices')).toBeInTheDocument();
+    expect(screen.getByTestId('report-section-commands')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('report-catalog')).toBeInTheDocument());
+  });
+
+  it('keeps ISO timestamps inside a custom UTC window', () => {
+    const range = { from: '2026-09-01T00:00:00Z', to: '2026-09-06T00:00:00Z' };
+    expect(isInReportRange('2026-09-05T12:00:00Z', range)).toBe(true);
+    expect(isInReportRange('2026-08-31T23:59:59Z', range)).toBe(false);
+  });
+
+  it('renders the distance report with KPIs and charts', async () => {
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/reports/fleet-overview') return overview;
+      if (url === '/reports/distance') {
+        return {
+          items: [
+            {
+              vehicleId: 'v-36',
+              label: 'وانت نیسان 36',
+              distanceKm: 120.5,
+              trips: 4,
+              avgTripKm: 30.1,
+              maxTripKm: 48,
+              discardedTrips: 1,
+            },
+          ],
+          total: 1,
+        };
+      }
+      return { points: [] };
+    });
+    render(<DistanceSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-distance')).toBeInTheDocument());
+    expect(screen.getByText('وانت نیسان 36')).toBeInTheDocument();
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders the speed report including speeding vehicles', async () => {
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/reports/fleet-overview') return overview;
+      if (url === '/reports/speed') {
+        return {
+          items: [
+            {
+              vehicleId: 'v-36',
+              label: 'وانت نیسان 36',
+              avgSpeedKph: 42.2,
+              maxSpeedKph: 98,
+              speedingAlarms: 3,
+            },
+          ],
+          total: 1,
+        };
+      }
+      return { items: [] };
+    });
+    render(<SpeedSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-speed')).toBeInTheDocument());
+    expect(screen.getByText('42.2 km/h')).toBeInTheDocument();
+    expect(screen.getByText('98 km/h')).toBeInTheDocument();
+  });
+
+  it('joins driver assignment with vehicle meters', async () => {
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/fleet/drivers') {
+        return {
+          data: [
+            {
+              id: 'd-1',
+              firstName: 'Ali',
+              lastName: 'Rezaei',
+              employeeId: 'E-9',
+              assignedVehicleId: 'v-36',
+              licenseNumber: 'L1',
+            },
+          ],
+          nextCursor: null,
+        };
+      }
+      if (url === '/vehicles') {
+        return {
+          data: [{ id: 'v-36', name: 'وانت نیسان 36', code: 'V036', plate: '36-ب-12' }],
+          nextCursor: null,
+        };
+      }
+      if (url === '/reports/vehicle-meters') return { items: [metersRow], total: 1 };
+      return { data: [], nextCursor: null };
+    });
+    render(<DriversSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-drivers')).toBeInTheDocument());
+    expect(screen.getByText('Ali Rezaei')).toBeInTheDocument();
+    expect(screen.getByText('E-9')).toBeInTheDocument();
+  });
+
+  it('renders live device presence from tracking status', async () => {
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/devices') {
+        return {
+          data: [
+            {
+              id: 'dev-1',
+              imei: '123456789012345',
+              model: 'T622',
+              vehicleId: 'v-36',
+              status: 'ACTIVE',
+              lastSeenAt: '2026-09-06T08:00:00Z',
+              protocol: 'meitrack',
+            },
+          ],
+          nextCursor: null,
+        };
+      }
+      if (url === '/vehicles') {
+        return {
+          data: [{ id: 'v-36', name: 'وانت نیسان 36', code: 'V036', plate: '36-ب-12' }],
+          nextCursor: null,
+        };
+      }
+      if (url === '/tracking/devices/status') {
+        return [
+          {
+            deviceId: 'dev-1',
+            tenantId: 't1',
+            state: 'ONLINE',
+            protocolId: 'meitrack',
+            reason: null,
+            lastSeenAt: '2026-09-06T08:00:00Z',
+          },
+        ];
+      }
+      return { data: [], nextCursor: null };
+    });
+    render(<DevicesSection />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-devices')).toBeInTheDocument());
+    expect(screen.getByText('123456789012345')).toBeInTheDocument();
+    expect(screen.getByText('T622')).toBeInTheDocument();
+  });
+
+  it('filters tenant command history to the selected range', async () => {
+    const inside = new Date().toISOString();
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/device-commands') {
+        return {
+          data: [
+            {
+              id: 'c-1',
+              tenantId: 't1',
+              deviceId: 'dev-1',
+              commandCode: 'A10',
+              category: 'tracking',
+              params: null,
+              payloadText: null,
+              payloadHex: null,
+              status: 'ACKED',
+              responseText: 'OK',
+              error: null,
+              issuedBy: 'u1',
+              issuedAt: inside,
+              sentAt: inside,
+              ackedAt: inside,
+              expiresAt: inside,
+              version: 1,
+              createdAt: inside,
+              updatedAt: inside,
+            },
+            {
+              id: 'c-old',
+              tenantId: 't1',
+              deviceId: 'dev-1',
+              commandCode: 'D11',
+              category: 'tracking',
+              params: null,
+              payloadText: null,
+              payloadHex: null,
+              status: 'FAILED',
+              responseText: null,
+              error: 'timeout',
+              issuedBy: 'u1',
+              issuedAt: '2020-01-01T00:00:00Z',
+              sentAt: null,
+              ackedAt: null,
+              expiresAt: '2020-01-01T00:10:00Z',
+              version: 1,
+              createdAt: '2020-01-01T00:00:00Z',
+              updatedAt: '2020-01-01T00:00:00Z',
+            },
+          ],
+          nextCursor: null,
+        };
+      }
+      if (url === '/devices') {
+        return {
+          data: [
+            {
+              id: 'dev-1',
+              imei: '123456789012345',
+              model: 'T622',
+              vehicleId: null,
+              status: 'ACTIVE',
+            },
+          ],
+          nextCursor: null,
+        };
+      }
+      return { data: [], nextCursor: null };
+    });
+    render(<CommandsReportSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByTestId('report-commands')).toBeInTheDocument());
+    expect(screen.getByText('A10')).toBeInTheDocument();
+    expect(screen.queryByText('D11')).toBeNull();
+  });
+
+  it('renders geofence KPIs from pipeline aggregates', async () => {
+    apiGetRaw.mockResolvedValue({
+      items: [
+        {
+          geofenceId: 'g-1',
+          geofenceName: 'Depot',
+          vehicleId: 'v-36',
+          label: 'وانت نیسان 36',
+          enters: 4,
+          exits: 3,
+          dwells: 1,
+          timeInsideSec: 3600,
+        },
+      ],
+      total: 1,
+    });
+    render(<GeofencesSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+    await waitFor(() => expect(screen.getByText('Depot')).toBeInTheDocument());
+    expect(screen.getByTestId('report-geofences')).toBeInTheDocument();
     expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -205,6 +205,7 @@ beforeEach(async () => {
   addedSources.length = 0;
   addedLayers.length = 0;
   await i18n.changeLanguage('en');
+  localStorage.setItem('fv:map-demo-status', '0');
   useVehicleTrack.mockReturnValue({
     data: undefined,
     isLoading: false,

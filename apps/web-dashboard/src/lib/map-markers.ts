@@ -5,6 +5,7 @@
  * Status still drives fill color (UI_UX_Design.md §0.2 mapAccents); heading
  * rotates the body around the GPS anchor. No per-status SVG files.
  */
+import type { MapMarkerStyle } from '@/lib/map-marker-style';
 import { getVehicleIcon, vehicleBodySvg } from '@/lib/vehicle-icons';
 import { mapAccents, neutral } from '@/theme/palette';
 import type { MapVehicle, VehiclePresence, VehicleType } from '@/types/fleet.types';
@@ -100,6 +101,33 @@ function markerUid(id?: string): string {
 }
 
 /**
+ * Status-colored navigation puck: circle + dart (heading = rotation).
+ * Fill/stroke use the vehicle status color so state and direction are both readable.
+ */
+function navigationMarkerSvg(
+  color: string,
+  heading: number,
+  selected: boolean,
+  _uid: string,
+  alarm: string,
+): string {
+  const ring = selected ? 3.1 : 2.6;
+  const halo = selected
+    ? `<circle cx="24" cy="24" r="21.2" fill="none" stroke="#F8FAFC" stroke-width="2.2"/>`
+    : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 48 48" overflow="visible">
+      <ellipse cx="24" cy="43" rx="8" ry="2.6" fill="#0F172A" opacity="0.28"/>
+      <g transform="rotate(${heading} 24 24)">
+        <circle cx="24" cy="24" r="18.6" fill="none" stroke="${color}" stroke-width="${ring}"/>
+        ${halo}
+        <path d="M24 8.2 L36.6 35.6 L24 29.4 L11.4 35.6 Z"
+          fill="${color}" stroke="#FFFFFF" stroke-width="1.1" stroke-linejoin="round"/>
+      </g>
+      ${alarm}
+    </svg>`;
+}
+
+/**
  * Top-down vehicle marker — rotates with map heading (0° = north).
  * Ground shadow and alarm pip stay screen-aligned (outside the rotate group)
  * so the GPS anchor at the marker center does not shift. No SVG filters:
@@ -113,36 +141,52 @@ export function vehicleMarkerSvg(
     selected?: boolean;
     id?: string;
     alarm?: boolean;
+    style?: MapMarkerStyle;
   } = {},
 ): string {
   const heading = markerHeading(opts.heading, 0);
   const selected = Boolean(opts.selected);
-  const size = 56;
   const uid = markerUid(opts.id);
+  const alarm = opts.alarm
+    ? opts.style === 'navigation'
+      ? `<circle cx="38" cy="10" r="4.2" fill="${mapAccents.vehicleOverspeed}" stroke="#FFFFFF" stroke-width="1.5"/>
+       <circle cx="38" cy="10" r="1.7" fill="#FFFFFF"/>`
+      : `<circle cx="50" cy="12" r="5.2" fill="${mapAccents.vehicleOverspeed}" stroke="#FFFFFF" stroke-width="1.6"/>
+       <circle cx="50" cy="12" r="2.1" fill="#FFFFFF"/>`
+    : '';
+
+  if (opts.style === 'navigation') {
+    return navigationMarkerSvg(color, heading, selected, uid, alarm);
+  }
+
+  const size = 64;
   const dark = shadeColor(color, 0.38);
   const light = lightenColor(color, 0.16);
   const kind = getVehicleIcon({ type, label: '' });
   const body = vehicleBodySvg(kind, uid, selected);
-  const alarm = opts.alarm
-    ? `<circle cx="50" cy="12" r="5.2" fill="${mapAccents.vehicleOverspeed}" stroke="#FFFFFF" stroke-width="1.6"/>
-       <circle cx="50" cy="12" r="2.1" fill="#FFFFFF"/>`
-    : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64" overflow="visible">
       <defs>
         <linearGradient id="${uid}-body" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="${dark}"/>
-          <stop offset="38%" stop-color="${color}"/>
-          <stop offset="62%" stop-color="${light}"/>
-          <stop offset="100%" stop-color="${dark}"/>
+          <stop offset="0%" stop-color="${shadeColor(color, 0.5)}"/>
+          <stop offset="18%" stop-color="${dark}"/>
+          <stop offset="36%" stop-color="${lightenColor(color, 0.24)}"/>
+          <stop offset="48%" stop-color="${light}"/>
+          <stop offset="64%" stop-color="${color}"/>
+          <stop offset="100%" stop-color="${shadeColor(color, 0.44)}"/>
         </linearGradient>
         <linearGradient id="${uid}-roof" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="${shadeColor(color, 0.16)}"/>
-          <stop offset="100%" stop-color="${shadeColor(color, 0.34)}"/>
+          <stop offset="0%" stop-color="${shadeColor(color, 0.12)}"/>
+          <stop offset="100%" stop-color="${shadeColor(color, 0.38)}"/>
         </linearGradient>
         <linearGradient id="${uid}-hood" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="${lightenColor(color, 0.1)}"/>
-          <stop offset="100%" stop-color="${shadeColor(color, 0.2)}"/>
+          <stop offset="0%" stop-color="${lightenColor(color, 0.14)}"/>
+          <stop offset="100%" stop-color="${shadeColor(color, 0.22)}"/>
+        </linearGradient>
+        <linearGradient id="${uid}-glass" x1="12%" y1="0%" x2="88%" y2="100%">
+          <stop offset="0%" stop-color="#64748B"/>
+          <stop offset="28%" stop-color="#334155"/>
+          <stop offset="100%" stop-color="#0F172A"/>
         </linearGradient>
       </defs>
       <ellipse cx="32" cy="58.5" rx="10" ry="3.2" fill="#0F172A" opacity="0.32"/>
@@ -163,6 +207,7 @@ export function paintVehicleMarker(
     selected?: boolean;
     id?: string;
     alarm?: boolean;
+    style?: MapMarkerStyle;
   } = {},
 ): void {
   const prev = Number.parseFloat(el.dataset.heading ?? '');
@@ -173,12 +218,13 @@ export function paintVehicleMarker(
   el.innerHTML = vehicleMarkerSvg(type, color, { ...opts, heading });
   el.classList.toggle('is-selected', Boolean(opts.selected));
   el.classList.toggle('is-alarm', Boolean(opts.alarm));
+  el.classList.toggle('is-nav', opts.style === 'navigation');
 }
 
 export function vehicleMarkerDataUrl(
   type: VehicleType | undefined,
   color: string,
-  opts: { heading?: number; selected?: boolean; id?: string } = {},
+  opts: { heading?: number; selected?: boolean; id?: string; style?: MapMarkerStyle } = {},
 ): string {
   return svgDataUrl(vehicleMarkerSvg(type, color, opts));
 }
@@ -202,9 +248,14 @@ export function selectedMarkerDataUrl(color: string): string {
     </svg>`);
 }
 
-/** Vehicle on a track / replay head — same body as the live fleet map. */
-export function headingArrowDataUrl(color: string, heading: number): string {
-  return vehicleMarkerDataUrl('car', color, { heading });
+/** Vehicle on a track / replay head — same chrome as the live fleet map. */
+export function headingArrowDataUrl(
+  color: string,
+  heading: number,
+  type: VehicleType | undefined = 'car',
+  style: MapMarkerStyle = 'vehicle',
+): string {
+  return vehicleMarkerDataUrl(type, color, { heading, style });
 }
 
 /** Cluster marker: a filled bubble with the member count (§2.4 clustering). */

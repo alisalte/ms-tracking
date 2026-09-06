@@ -5,6 +5,14 @@ import type { ApiResponse } from '@/types/api.types';
 import { normalizeApiError } from './errors';
 import { refreshTokensSingleFlight } from './token-refresh';
 
+/** HTTP headers cannot carry non-ASCII org names; percent-encode when needed. */
+function needsPercentEncode(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 127) return true;
+  }
+  return false;
+}
+
 /**
  * Pre-configured Axios instance for FleetVision API calls.
  *
@@ -51,10 +59,18 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
   // Prefer a header already set on this request (the login form). Otherwise
   // fall back to the stored session tenant, then the standalone key.
-  if (!config.headers.get('X-Tenant-Id')) {
+  // Non-ASCII org names (e.g. «شرکت سامان») must be percent-encoded — HTTP
+  // headers are ByteString and Node/undici reject or mojibake them otherwise.
+  const existingTenant = config.headers.get('X-Tenant-Id');
+  if (existingTenant && needsPercentEncode(existingTenant)) {
+    config.headers.set('X-Tenant-Id', encodeURIComponent(existingTenant));
+  } else if (!existingTenant) {
     const tenantId = isLogin ? getTenantId() : (stored?.tenantId ?? getTenantId());
     if (tenantId) {
-      config.headers.set('X-Tenant-Id', tenantId);
+      config.headers.set(
+        'X-Tenant-Id',
+        needsPercentEncode(tenantId) ? encodeURIComponent(tenantId) : tenantId,
+      );
     }
   }
   return config;

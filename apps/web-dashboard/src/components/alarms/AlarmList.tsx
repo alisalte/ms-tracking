@@ -15,6 +15,7 @@ import {
 } from '@/components/alarms/AlarmTypeIcon';
 import { Badge, Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
 import { localizeAlarmMessage } from '@/lib/alarm-copy';
+import { formatDate } from '@/lib/format-date';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmListProps {
@@ -35,7 +36,7 @@ function relative(iso: string, t: (k: string, opts?: Record<string, unknown>) =>
   if (min < 60) return t('dashboard.relative.minutes', { count: min });
   const hr = Math.round(min / 60);
   if (hr < 24) return t('dashboard.relative.hours', { count: hr });
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return formatDate(iso, { month: 'short', day: 'numeric' });
 }
 
 export function AlarmList({ alarms, loading = false, selectedId, onSelect }: AlarmListProps) {

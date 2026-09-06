@@ -206,12 +206,29 @@ function buildMockFleet(): MapVehicle[] {
   const rand = seeded(20260808);
   const fleet: MapVehicle[] = [];
 
+  /** One of each map color, clustered so status hues are easy to compare. */
+  const colorSamples: Array<{
+    state: MapVehicle['state'];
+    presence: VehiclePresence;
+    heading: number;
+    speed: number;
+    type: VehicleType;
+  }> = [
+    { state: 'driving', presence: 'ONLINE', heading: 0, speed: 62, type: 'car' },
+    { state: 'idle', presence: 'ONLINE', heading: 45, speed: 0, type: 'car' },
+    { state: 'overspeed', presence: 'ONLINE', heading: 90, speed: 128, type: 'truck' },
+    { state: 'stopped', presence: 'ONLINE', heading: 135, speed: 0, type: 'car' },
+    { state: 'offline', presence: 'OFFLINE', heading: 180, speed: 0, type: 'truck' },
+    { state: 'stopped', presence: 'STALE', heading: 225, speed: 0, type: 'trailer' },
+  ];
+
   for (let i = 0; i < 40; i++) {
-    const type = TYPES[Math.floor(rand() * TYPES.length)] ?? 'truck';
+    const sample = colorSamples[i];
+    const type = sample?.type ?? TYPES[Math.floor(rand() * TYPES.length)] ?? 'truck';
     const roll = rand();
-    // Realistic-ish state distribution: ~55% driving, ~15% idle, ~15% stopped, ~12% offline, ~3% overspeed.
-    const state: MapVehicle['state'] =
-      roll > 0.97
+    const state: MapVehicle['state'] = sample
+      ? sample.state
+      : roll > 0.97
         ? 'overspeed'
         : roll > 0.85
           ? 'offline'
@@ -221,26 +238,30 @@ function buildMockFleet(): MapVehicle[] {
               ? 'idle'
               : 'driving';
     const moving = state === 'driving' || state === 'overspeed';
-    const heading = moving ? Math.round(rand() * 360) : 0;
+    const heading = sample?.heading ?? (moving ? Math.round(rand() * 360) : 0);
     const speed =
-      state === 'overspeed'
+      sample?.speed ??
+      (state === 'overspeed'
         ? 115 + Math.round(rand() * 25)
         : state === 'driving'
           ? 40 + Math.round(rand() * 60)
-          : 0;
-    // Spread within ~±0.06° (~6 km) of the depot at [51.338, 35.719].
-    const lat = +(35.719 + (rand() - 0.5) * 0.12).toFixed(5);
-    const lng = +(51.338 + (rand() - 0.5) * 0.12).toFixed(5);
-    const updatedAt = new Date(now - Math.round(rand() * 600_000)).toISOString(); // last 0–10 min
-    // REAL Sprint E fields: the device connection projection (§18) mirrors the
-    // movement state offline/online split so the dashboard stat chips, the map
-    // presence filters, and the list rows agree in mock mode. Devices that are
-    // not transmitting report an older last-seen (§19).
-    const presence: VehiclePresence = state === 'offline' ? 'OFFLINE' : 'ONLINE';
+          : 0);
+    const angle = (i / Math.max(colorSamples.length, 1)) * Math.PI * 2;
+    const lat = sample
+      ? +(35.719 + Math.sin(angle) * 0.005).toFixed(5)
+      : +(35.719 + (rand() - 0.5) * 0.12).toFixed(5);
+    const lng = sample
+      ? +(51.338 + Math.cos(angle) * 0.005).toFixed(5)
+      : +(51.338 + (rand() - 0.5) * 0.12).toFixed(5);
+    const updatedAt = new Date(now - Math.round(rand() * 600_000)).toISOString();
+    const presence: VehiclePresence =
+      sample?.presence ?? (state === 'offline' ? 'OFFLINE' : 'ONLINE');
     const lastSeenAt =
       presence === 'OFFLINE'
-        ? new Date(now - 6 * 3600_000 - Math.round(rand() * 3600_000)).toISOString() // 6–7h ago
-        : updatedAt;
+        ? new Date(now - 6 * 3600_000 - Math.round(rand() * 3600_000)).toISOString()
+        : presence === 'STALE'
+          ? new Date(now - 20 * 60_000).toISOString()
+          : updatedAt;
     fleet.push({
       id: `mv${i + 1}`,
       label: `${TYPE_LABEL[type]}-${String(100 + i)}`,

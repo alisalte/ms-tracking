@@ -14,12 +14,14 @@ import {
   AssignRoleUseCase,
   ChangeUserStatusUseCase,
   CreateApiKeyUseCase,
+  CreateTenantAccessUseCase,
   CreateUserUseCase,
   LoginUseCase,
   LogoutUseCase,
   ProvisionTenantUseCase,
   RefreshTokenUseCase,
   RevokeApiKeyUseCase,
+  TenantLifecycleUseCase,
   UpdateUserUseCase,
 } from '../../application/index.js';
 import type { IdentityConfig } from '../../config/identity.config.js';
@@ -261,7 +263,22 @@ export class AuthModule {
             r: RoleRepository,
             u: UserRepository,
             h: PasswordHasher,
-          ) => new ProvisionTenantUseCase(t, r, u, h),
+          ) => new ProvisionTenantUseCase(t, r, u, h, { minLength: config.PASSWORD_MIN_LENGTH }),
+        },
+        {
+          provide: TenantLifecycleUseCase,
+          inject: [TenantRepository],
+          useFactory: (t: TenantRepository) => new TenantLifecycleUseCase(t),
+        },
+        {
+          provide: CreateTenantAccessUseCase,
+          inject: [TenantRepository, RoleRepository, CreateUserUseCase, AssignRoleUseCase],
+          useFactory: (
+            t: TenantRepository,
+            r: RoleRepository,
+            createUser: CreateUserUseCase,
+            assignRole: AssignRoleUseCase,
+          ) => new CreateTenantAccessUseCase(t, r, createUser, assignRole),
         },
         // Bootstrap seed.
         {

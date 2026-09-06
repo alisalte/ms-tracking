@@ -12,8 +12,10 @@ import { useTranslation } from 'react-i18next';
 
 import { circleToPolygonRing } from '@/components/geofences/GeofenceDrawMap';
 import { useFollowBasemap } from '@/hooks/useBasemap';
+import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
+import type { MapMarkerStyle } from '@/lib/map-marker-style';
 import {
   clusterMarkerDataUrl,
   getVehicleIcon,
@@ -90,11 +92,11 @@ function ageLabel(updatedAt: string | undefined, t: TFunction) {
 }
 
 /** Icon identity: rebuild the marker image only when this changes. */
-function iconKey(v: MapVehicle, selected: boolean): string {
+function iconKey(v: MapVehicle, selected: boolean, style: MapMarkerStyle): string {
   const headingBucket = Math.round(v.heading / 5) * 5;
   const kind = getVehicleIcon(v);
   const alarm = v.state === 'overspeed' ? 'a' : 'n';
-  return `${kind}|${vehicleColor(v)}|${selected ? 'sel' : 'n'}|${alarm}|h${headingBucket}`;
+  return `${kind}|${style}|${vehicleColor(v)}|${selected ? 'sel' : 'n'}|${alarm}|h${headingBucket}`;
 }
 
 const FLEET_BASEMAP_BEFORE = ['geofence-fill', 'history-track-line'] as const;
@@ -139,6 +141,7 @@ export function FleetMap({
   const clusterMarkersRef = useRef<MaplibreMarker[]>([]);
 
   useFollowBasemap(mapRef, FLEET_BASEMAP_BEFORE, mapReady);
+  const [markerStyle] = useMapMarkerStyle();
 
   // The latest fleet for the focus effect (which must not re-run on data change).
   const vehiclesRef = useRef(vehicles);
@@ -322,19 +325,19 @@ export function FleetMap({
         if (feat.kind !== 'point') continue;
         const v = feat.vehicle;
         seen.add(v.id);
-        const key = iconKey(v, v.id === selectedId);
+        const key = iconKey(v, v.id === selectedId, markerStyle);
         const existing = vehicleMarkersRef.current.get(v.id);
         if (existing) {
           existing.marker.setLngLat([v.lng, v.lat]);
           if (existing.key !== key) {
-            applyVehicleIcon(existing.el, v, v.id === selectedId);
+            applyVehicleIcon(existing.el, v, v.id === selectedId, markerStyle);
             existing.key = key;
           }
           continue;
         }
         const el = document.createElement('div');
         el.className = 'fv-vehicle-marker';
-        applyVehicleIcon(el, v, v.id === selectedId);
+        applyVehicleIcon(el, v, v.id === selectedId, markerStyle);
         el.setAttribute('aria-label', v.label);
         el.style.cursor = 'pointer';
         // Colors come from the .fv-map-popup CSS (light + dark aware) — inline
@@ -380,7 +383,7 @@ export function FleetMap({
     return () => {
       map.off('moveend', onMove);
     };
-  }, [vehicles, selectedId, paused, t]);
+  }, [vehicles, selectedId, paused, t, markerStyle]);
 
   // Historical track overlay (Sprint F §9): gap-aware MultiLineString.
   useEffect(() => {
@@ -455,11 +458,12 @@ export function FleetMap({
       const applyIcon = (el: HTMLElement) => {
         const prev = Number.parseFloat(el.dataset.heading ?? '');
         const heading = markerHeading(playbackHead.heading, Number.isFinite(prev) ? prev : 0);
-        const key = `${playbackHead.type ?? 'unknown'}|h${Math.round(heading / 5) * 5}`;
+        const key = `${markerStyle}|${playbackHead.type ?? 'unknown'}|h${Math.round(heading / 5) * 5}`;
         if (el.dataset.iconKey === key) return;
         paintVehicleMarker(el, playbackHead.type, mapAccents.vehicleActive, {
           heading: playbackHead.heading,
           id: 'playback',
+          style: markerStyle,
         });
         el.dataset.iconKey = key;
       };
@@ -478,7 +482,7 @@ export function FleetMap({
     };
     if (map.loaded() || map.isStyleLoaded()) sync();
     else runWhenStyleReady(map, sync);
-  }, [playbackHead]);
+  }, [playbackHead, markerStyle]);
   useEffect(
     () => () => {
       playbackMarkerRef.current?.remove();
@@ -540,12 +544,18 @@ export function FleetMap({
 }
 
 /** Set the marker image: body silhouette by type, tint by status, rotate by heading. */
-function applyVehicleIcon(el: HTMLElement, v: MapVehicle, selected: boolean) {
+function applyVehicleIcon(
+  el: HTMLElement,
+  v: MapVehicle,
+  selected: boolean,
+  style: MapMarkerStyle,
+) {
   el.classList.toggle('is-selected', selected);
   paintVehicleMarker(el, getVehicleIcon(v), vehicleColor(v), {
     heading: v.heading,
     selected,
     id: v.id,
     alarm: v.state === 'overspeed',
+    style,
   });
 }

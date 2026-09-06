@@ -127,6 +127,32 @@ describe('localizeNotificationTitle', () => {
     });
     expect(title).toBe('Overspeed: Truck-42');
   });
+
+  it('does not put a vehicle GUID in the title', async () => {
+    await i18n.changeLanguage('en');
+    const guid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const title = localizeNotificationTitle(
+      i18n.t.bind(i18n),
+      {
+        eventType: 'overspeed',
+        title: `Speeding: ${guid}`,
+        vehicleId: guid,
+        metadata: { vehicleName: guid, speed: 92, speedLimit: 80 },
+      },
+      'Tehran truck · 12A345',
+    );
+    expect(title).toBe('Overspeed: Tehran truck · 12A345');
+    expect(title).not.toContain(guid);
+
+    const body = localizeNotificationBody(i18n.t.bind(i18n), {
+      eventType: 'overspeed',
+      title: `Speeding: ${guid}`,
+      body: `Vehicle ${guid} exceeded the speed limit (92 km/h in a 80 km/h zone).`,
+      metadata: { speed: 92, speedLimit: 80 },
+    });
+    expect(body).toContain('92');
+    expect(body).not.toContain(guid);
+  });
 });
 
 describe('localizeEventType', () => {

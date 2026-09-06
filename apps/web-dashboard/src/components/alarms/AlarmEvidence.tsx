@@ -14,6 +14,7 @@ import { AlarmEventVideo } from '@/components/alarms/AlarmEventVideo';
 import { Button, Spinner } from '@/components/tailwind-ui';
 import type { AlarmMdvrClip } from '@/components/video/useMdvrResources';
 import { useAlarmEvidence } from '@/hooks/useAlarmEvidence';
+import { formatTime } from '@/lib/format-date';
 import { downloadBlob, downloadHlsPlaylist } from '@/lib/video-stream';
 import type { Alarm } from '@/types/alarm.types';
 
@@ -226,11 +227,7 @@ function ClipGroup({
           {items.map((clip) => {
             const fromMs = fromMdvrBcdTime(clip.resource.startTime);
             const label = Number.isFinite(fromMs)
-              ? new Date(fromMs).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })
+              ? formatTime(fromMs, { second: '2-digit' })
               : clip.resource.startTime;
             return (
               <li key={`${clip.channel.id}-${clip.resource.startTime}-${clip.resource.avType}`}>

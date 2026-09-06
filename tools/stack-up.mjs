@@ -45,6 +45,7 @@ const APP_SERVICES = {
   'mdvr-streamer-service': 'apps/mdvr-streamer-service',
   'media-service': 'apps/media-service',
   'web-dashboard': 'apps/web-dashboard',
+  'tenant-admin': 'apps/tenant-admin',
   'map-engine': 'apps/map-engine-service',
 };
 

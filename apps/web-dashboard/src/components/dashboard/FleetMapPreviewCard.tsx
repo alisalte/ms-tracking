@@ -7,6 +7,7 @@ import { Link } from 'react-router';
 import { useMapVehicles } from '@/api/fleet.api';
 import { Skeleton } from '@/components/tailwind-ui';
 import { NO_OVERLAY_LAYERS, useFollowBasemap } from '@/hooks/useBasemap';
+import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { PRESENCE_COLORS, paintVehicleMarker, vehicleColor } from '@/lib/map-markers';
 import type { VehiclePresence } from '@/types/fleet.types';
@@ -39,6 +40,7 @@ export function FleetMapPreviewCard() {
   const { data, isLoading, isError, refetch } = useMapVehicles();
   const vehicles = data ?? [];
   useFollowBasemap(mapRef, NO_OVERLAY_LAYERS, mapReady);
+  const [markerStyle] = useMapMarkerStyle();
 
   // Initialize the map once. Language/basemap swaps go through useFollowBasemap.
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
@@ -76,7 +78,11 @@ export function FleetMapPreviewCard() {
       markersRef.current = vehicles.map((v) => {
         const el = document.createElement('div');
         el.className = 'fv-vehicle-marker';
-        paintVehicleMarker(el, v.type, vehicleColor(v), { heading: v.heading, id: v.id });
+        paintVehicleMarker(el, v.type, vehicleColor(v), {
+          heading: v.heading,
+          id: v.id,
+          style: markerStyle,
+        });
         el.setAttribute('aria-label', v.label);
         el.style.cursor = 'pointer';
         const presence = v.presence ?? 'UNKNOWN';
@@ -97,7 +103,7 @@ export function FleetMapPreviewCard() {
 
     if (map.loaded()) apply();
     else map.once('load', apply);
-  }, [vehicles, t]);
+  }, [vehicles, t, markerStyle]);
 
   return (
     <DashboardCard

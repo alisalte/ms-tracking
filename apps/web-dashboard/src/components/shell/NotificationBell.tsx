@@ -20,12 +20,19 @@ import {
 } from '@/api/notification.api';
 import { Button, Spinner } from '@/components/tailwind-ui';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
-import { localizeNotificationBody, localizeNotificationTitle } from '@/lib/alarm-copy';
+import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
+import {
+  localizeEventType,
+  localizeNotificationBody,
+  notificationVehicleName,
+} from '@/lib/alarm-copy';
+import { relativeTime } from '@/lib/relative-time';
 
 export function NotificationBell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const vehicleCaptionOf = useVehicleCaptionOf();
 
   // Realtime: new notifications arrive over WebSocket and update the caches
   // incrementally; the 30s unread-count polling stays as a fallback.
@@ -98,44 +105,61 @@ export function NotificationBell() {
               </p>
             ) : (
               <ul className="fv-scroll m-0 max-h-90 list-none overflow-y-auto p-0">
-                {items.slice(0, 10).map((n) => (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!n.read) markAsRead.mutate(n.id);
-                        setOpen(false);
-                        if (n.link) navigate(n.link);
-                      }}
-                      className={`flex w-full cursor-pointer flex-col gap-0.5 border-none px-3.5 py-2.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
-                        n.read ? 'bg-transparent' : 'bg-gray-50 dark:bg-white/5'
-                      }`}
-                    >
-                      <span className="flex w-full items-center gap-1.5">
-                        {!n.read && (
+                {items.slice(0, 10).map((n) => {
+                  const vehicle = notificationVehicleName(n, vehicleCaptionOf(n.vehicleId));
+                  const reason = localizeNotificationBody(t, n);
+                  const typeLabel = localizeEventType(t, n.eventType);
+                  return (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!n.read) markAsRead.mutate(n.id);
+                          setOpen(false);
+                          if (n.link) navigate(n.link);
+                        }}
+                        className={`flex w-full cursor-pointer flex-col gap-0.5 border-none px-3.5 py-2.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                          n.read ? 'bg-transparent' : 'bg-gray-50 dark:bg-white/5'
+                        }`}
+                      >
+                        <span className="flex w-full items-center gap-1.5">
+                          {!n.read && (
+                            <span
+                              aria-hidden
+                              className={`size-1.5 shrink-0 rounded-full ${
+                                n.severity === 'critical' ? 'bg-danger-500' : 'bg-brand-500'
+                              }`}
+                            />
+                          )}
                           <span
-                            aria-hidden
-                            className={`size-1.5 shrink-0 rounded-full ${
-                              n.severity === 'critical' ? 'bg-danger-500' : 'bg-brand-500'
+                            className={`min-w-0 flex-1 truncate text-sm ${
+                              n.read
+                                ? 'font-normal text-gray-700 dark:text-graydark-700'
+                                : 'font-semibold text-gray-900 dark:text-white'
                             }`}
-                          />
-                        )}
-                        <span
-                          className={`min-w-0 flex-1 truncate text-sm ${
-                            n.read
-                              ? 'font-normal text-gray-700 dark:text-graydark-700'
-                              : 'font-semibold text-gray-900 dark:text-white'
-                          }`}
-                        >
-                          {localizeNotificationTitle(t, n)}
+                          >
+                            {typeLabel}
+                          </span>
                         </span>
-                      </span>
-                      <span className="w-full truncate text-xs text-gray-500 dark:text-graydark-600">
-                        {localizeNotificationBody(t, n)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                        {vehicle ? (
+                          <span className="w-full truncate text-xs font-medium text-gray-700 dark:text-graydark-700">
+                            {vehicle}
+                          </span>
+                        ) : null}
+                        {reason && reason !== typeLabel && reason !== vehicle ? (
+                          <span className="w-full truncate text-xs text-gray-500 dark:text-graydark-600">
+                            {reason}
+                          </span>
+                        ) : null}
+                        {n.createdAt ? (
+                          <span className="w-full text-[11px] text-gray-400 dark:text-graydark-500">
+                            {relativeTime(n.createdAt, t)}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <div className="border-t border-gray-200 p-2 dark:border-white/5">

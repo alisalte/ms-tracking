@@ -75,7 +75,7 @@ export async function login(
   const wire = await apiPost<unknown, LoginResponseWire>(
     '/auth/login',
     { email, password },
-    { headers: { 'X-Tenant-Id': tenantId } },
+    { headers: { 'X-Tenant-Id': encodeURIComponent(tenantId) } },
   );
   return mapLoginResponse(wire);
 }

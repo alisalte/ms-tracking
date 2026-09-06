@@ -25,6 +25,7 @@ group "default" {
     "media-service",
     "map-engine",
     "web-dashboard",
+    "tenant-admin",
   ]
 }
 
@@ -96,4 +97,10 @@ target "web-dashboard" {
     VITE_GPS_WS_URL            = "/gps-ws"
     VITE_NOTIFICATION_WS_URL   = "/notif-ws"
   }
+}
+
+target "tenant-admin" {
+  context    = "."
+  dockerfile = "apps/tenant-admin/Dockerfile"
+  tags       = ["${REGISTRY}/tenant-admin:${TAG}"]
 }

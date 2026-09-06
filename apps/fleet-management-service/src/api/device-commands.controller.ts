@@ -4,6 +4,7 @@
  *
  *   GET    /api/v1/device-commands/catalog         ← the Meitrack MDVR command
  *                                                     catalog (UI form source)
+ *   GET    /api/v1/device-commands                 (tenant history, ?cursor&limit&status)
  *   POST   /api/v1/device-commands/bulk            (same command, many devices)
  *   GET    /api/v1/device-commands/:id             (single record)
  *   POST   /api/v1/devices/:deviceId/commands      (issue — QUEUED, async ack)
@@ -46,6 +47,36 @@ export class DeviceCommandsController {
   @RequirePermissions('telemetry.command.read')
   public async catalog() {
     return { data: this.commands.catalog() };
+  }
+
+  /**
+   * Tenant-wide command history (optional status / commandCode filters).
+   * Declared before :id so `/device-commands` is not captured as an id.
+   */
+  @Get()
+  @RequirePermissions('telemetry.command.read')
+  public async list(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('commandCode') commandCode?: string,
+  ) {
+    const query = deviceCommandListQuerySchema.parse({
+      cursor,
+      limit,
+      status,
+      commandCode,
+    });
+    const page = await this.commands.list(
+      readActor(auth),
+      {
+        status: query.status,
+        commandCode: query.commandCode,
+      },
+      { cursor: query.cursor, limit: query.limit },
+    );
+    return page;
   }
 
   /**

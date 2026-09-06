@@ -30,6 +30,21 @@ export const createUserSchema = z.object({
 });
 export type CreateUserDto = z.infer<typeof createUserSchema>;
 
+export const provisionTenantSchema = z.object({
+  name: z.string().trim().min(2).max(128),
+  tier: z.enum(['STANDARD', 'PROFESSIONAL', 'ENTERPRISE']),
+  region: z.string().trim().min(2).max(64),
+  admin_email: z.string().email(),
+  admin_username: z.string().min(3).max(64),
+  admin_password: z.string().min(12),
+});
+export type ProvisionTenantDto = z.infer<typeof provisionTenantSchema>;
+
+export const createTenantAccessSchema = createUserSchema.extend({
+  role_name: z.enum(['tenant-admin', 'fleet-admin', 'viewer']).default('viewer'),
+});
+export type CreateTenantAccessDto = z.infer<typeof createTenantAccessSchema>;
+
 export const createApiKeySchema = z.object({
   name: z.string().min(1).max(128),
   scopes: z.array(z.string()).min(1),

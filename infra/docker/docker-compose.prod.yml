@@ -120,3 +120,10 @@ services:
     image: ${IMAGE_REGISTRY}/web-dashboard:${IMAGE_TAG}
     ports: !override
       - "${WEB_PORT:-8080}:8080"
+
+  tenant-admin:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/tenant-admin:${IMAGE_TAG}
+    ports: !override
+      - "${TENANT_ADMIN_PORT:-8082}:8080"

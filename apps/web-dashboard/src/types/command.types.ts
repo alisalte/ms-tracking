@@ -4,6 +4,7 @@
  * Protocol V2.0 command catalog).
  *
  *   GET  /device-commands/catalog            → CommandDef[] (form source)
+ *   GET  /device-commands                    → Page<DeviceCommandRecord> (tenant)
  *   GET  /device-commands/:id                → DeviceCommandRecord
  *   POST /devices/:id/commands               → DeviceCommandRecord (QUEUED)
  *   GET  /devices/:id/commands               → Page<DeviceCommandRecord>
@@ -28,6 +29,24 @@ export type CommandCategory =
   | 'media'
   | 'system'
   | 'custom';
+
+/** Display order for category tabs (protocol grouping, not alphabetical). */
+export const COMMAND_CATEGORY_ORDER: readonly CommandCategory[] = [
+  'tracking',
+  'network',
+  'phone',
+  'alerts',
+  'geofence',
+  'device',
+  'outputs',
+  'rfid',
+  'temperature',
+  'fuel',
+  'tpms',
+  'media',
+  'system',
+  'custom',
+];
 
 /** Parameter primitives the dynamic form is rendered from. */
 export type CommandParamType = 'number' | 'string' | 'enum' | 'boolean';

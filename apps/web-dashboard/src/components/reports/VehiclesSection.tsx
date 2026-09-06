@@ -23,6 +23,7 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Badge, Button, Modal } from '@/components/tailwind-ui';
+import { formatDateTime } from '@/lib/format-date';
 import { Download, Map as MapIcon } from 'lucide-react';
 
 function fmtSec(s: number | null): string {
@@ -294,12 +295,12 @@ function IdleParkingTable({ range }: { range: ReportRange }) {
     {
       id: 'start',
       headerKey: 'reports.cols.start',
-      render: (r) => new Date(r.startedAt).toLocaleString(),
+      render: (r) => formatDateTime(r.startedAt),
     },
     {
       id: 'end',
       headerKey: 'reports.cols.end',
-      render: (r) => (r.endedAt ? new Date(r.endedAt).toLocaleString() : '—'),
+      render: (r) => (r.endedAt ? formatDateTime(r.endedAt) : '—'),
     },
     { id: 'duration', headerKey: 'reports.cols.duration', render: (r) => fmtSec(r.durationSec) },
     {

@@ -1,47 +1,71 @@
 /**
  * CommandCatalogPanel — category-tabbed browser over the Meitrack MDVR command
- * catalog. Commands without parameters dispatch directly (confirm dialog for
- * safety-sensitive ones); parameterized commands open CommandParamDialog.
+ * catalog. One category is shown at a time so the page stays short; search
+ * looks across every category. Commands without parameters dispatch directly
+ * (confirm dialog for safety-sensitive ones); parameterized commands open
+ * CommandParamDialog.
  */
 import { Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Alert, Badge, Button, Card, Input, Spinner, Tabs } from '@/components/tailwind-ui';
-import type { CommandCategory, CommandDef } from '@/types/command.types';
+import { Alert, Badge, Card, Input, Spinner, Tabs } from '@/components/tailwind-ui';
+import {
+  COMMAND_CATEGORY_ORDER,
+  type CommandCategory,
+  type CommandDef,
+} from '@/types/command.types';
 
 interface CommandCatalogPanelProps {
   catalog: CommandDef[];
   loading?: boolean;
   disabled?: boolean;
+  /** Override the banner shown while the catalog is disabled. */
+  disabledHintKey?: string;
   /** Parameterized-command callback (opens the form dialog). */
   onConfigure: (command: CommandDef) => void;
   /** No-parameter-command callback (direct dispatch). */
   onDispatch: (command: CommandDef) => void;
 }
 
+type CategoryTab = CommandCategory | 'all';
+
 export function CommandCatalogPanel({
   catalog,
   loading,
   disabled,
+  disabledHintKey = 'commands.selectDeviceFirst',
   onConfigure,
   onDispatch,
 }: CommandCatalogPanelProps) {
   const { t, i18n } = useTranslation();
   const fa = i18n.language?.startsWith('fa');
-  const [category, setCategory] = useState<CommandCategory | 'all'>('all');
+  const [category, setCategory] = useState<CategoryTab>('tracking');
   const [search, setSearch] = useState('');
 
-  const categories = useMemo(() => {
-    const seen = new Set<string>();
-    for (const c of catalog) seen.add(c.category);
-    return [...seen].sort() as CommandCategory[];
+  const counts = useMemo(() => {
+    const map = new Map<CommandCategory, number>();
+    for (const c of catalog) {
+      map.set(c.category, (map.get(c.category) ?? 0) + 1);
+    }
+    return map;
   }, [catalog]);
+
+  const categories = useMemo(
+    () => COMMAND_CATEGORY_ORDER.filter((c) => (counts.get(c) ?? 0) > 0),
+    [counts],
+  );
+
+  useEffect(() => {
+    if (category === 'all') return;
+    if (categories.length === 0) return;
+    if (!categories.includes(category)) setCategory(categories[0] ?? 'all');
+  }, [categories, category]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return catalog.filter((c) => {
-      if (category !== 'all' && c.category !== category) return false;
+      if (!q && category !== 'all' && c.category !== category) return false;
       if (!q) return true;
       return (
         c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.nameFa.includes(q)
@@ -58,44 +82,58 @@ export function CommandCatalogPanel({
     );
   }
 
+  const searching = search.trim().length > 0;
+  const hasCatalog = catalog.length > 0;
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
+      {hasCatalog && <TextFieldMini value={search} onChange={setSearch} />}
+
+      {hasCatalog && (
         <Tabs
-          className="min-w-0 flex-1"
-          aria-label={t('commands.title', { defaultValue: 'Command Center' })}
-          value={category}
-          onChange={(v) => setCategory(v)}
+          className="min-w-0"
+          aria-label={t('commands.categoriesLabel', { defaultValue: 'Command categories' })}
+          value={searching ? 'all' : category}
+          onChange={(v) => {
+            setCategory(v);
+            if (searching) setSearch('');
+          }}
           tabs={[
-            { value: 'all' as const, label: t('commands.categories.all', { defaultValue: 'All' }) },
             ...categories.map((c) => ({
               value: c,
               label: t(`commands.categories.${c}`, { defaultValue: c }),
+              count: counts.get(c),
+              testid: `command-category-${c}`,
             })),
+            {
+              value: 'all' as const,
+              label: t('commands.categories.all', { defaultValue: 'All' }),
+              count: catalog.length,
+              testid: 'command-category-all',
+            },
           ]}
         />
-        <Button size="sm" variant="ghost" onClick={() => setSearch('')} disabled={!search}>
-          {t('common.clear', { defaultValue: 'Clear' })}
-        </Button>
-      </div>
-
-      <TextFieldMini value={search} onChange={setSearch} />
+      )}
 
       {disabled && (
         <Alert variant="info">
-          {t('commands.selectDeviceFirst', {
+          {t(disabledHintKey, {
             defaultValue: 'Select one or more devices to enable commands.',
           })}
         </Alert>
       )}
 
-      {filtered.length === 0 && (
+      {filtered.length === 0 && !disabled && (
         <p className="p-4 text-center text-sm text-gray-500 dark:text-graydark-600">
           {t('commands.noMatch', { defaultValue: 'No commands match.' })}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+      <div
+        role="tabpanel"
+        id={`panel-${searching ? 'all' : category}`}
+        className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]"
+      >
         {filtered.map((cmd) => (
           <Card
             key={cmd.code}

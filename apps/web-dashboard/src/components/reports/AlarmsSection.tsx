@@ -1,24 +1,24 @@
 /**
- * AlarmsSection — the TailAdmin alarm report (Sprint J §12/§13, Phase 8
- * port): summary chips by severity/status, severity filter, per-vehicle/type
- * breakdown table with a View Alarm link into the existing alarms page (§39),
- * CSV export (backend blob, gated on report.export). Alarm counts come from
- * the alarm engine's records only (§63).
+ * AlarmsSection — summary chips, severity/type charts, breakdown table, CSV.
  */
-import { useState } from 'react';
+import type { ApexOptions } from 'apexcharts';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getApiErrorMessage } from '@/api/errors';
 import { type ReportRange, exportReportCsv, useAlarmReport } from '@/api/report.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
+import { ApexChart } from '@/components/dashboard/ApexChart';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
-import { Badge, Button } from '@/components/tailwind-ui';
+import { Badge, Button, Card, CardHeader } from '@/components/tailwind-ui';
 import { localizeEventType } from '@/lib/alarm-copy';
+import { shortLabel } from '@/lib/report-format';
+import { chart } from '@/theme/palette';
 import { Bell, Download } from 'lucide-react';
 
-const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const;
 
 export function AlarmsSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
@@ -26,6 +26,60 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
   const [severity, setSeverity] = useState('');
   const [exporting, setExporting] = useState(false);
   const q = useAlarmReport(range, severity ? { severity } : {});
+  const summary = q.data?.summary;
+  const items = q.data?.items ?? [];
+
+  const severityMix = useMemo(() => {
+    if (!summary) return [];
+    return [
+      { label: t('rules.severities.CRITICAL'), value: summary.critical, color: chart.critical },
+      { label: t('rules.severities.HIGH'), value: summary.high, color: chart.high },
+      { label: t('rules.severities.MEDIUM'), value: summary.medium, color: chart.medium },
+      { label: t('rules.severities.LOW'), value: summary.low, color: chart.low },
+      { label: t('rules.severities.INFO'), value: summary.info, color: chart.info },
+    ].filter((s) => s.value > 0);
+  }, [summary, t]);
+
+  const typeRows = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of items) {
+      map.set(r.type, (map.get(r.type) ?? 0) + r.total);
+    }
+    return [...map.entries()]
+      .map(([type, total]) => ({ type, total, label: localizeEventType(t, type) }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [items, t]);
+
+  const donutOptions = useMemo<ApexOptions>(
+    () => ({
+      labels: severityMix.map((s) => s.label),
+      colors: severityMix.map((s) => s.color),
+      legend: { position: 'bottom' },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '68%',
+            labels: { show: true, total: { show: true, label: t('reports.kpi.alarms') } },
+          },
+        },
+      },
+    }),
+    [severityMix, t],
+  );
+
+  const typeOptions = useMemo<ApexOptions>(
+    () => ({
+      colors: [chart.speeding],
+      plotOptions: { bar: { horizontal: true, barHeight: '68%', borderRadius: 6 } },
+      xaxis: { categories: typeRows.map((r) => shortLabel(r.label)) },
+    }),
+    [typeRows],
+  );
+  const typeSeries = useMemo(
+    () => [{ name: t('reports.cols.total'), data: typeRows.map((r) => r.total) }],
+    [typeRows, t],
+  );
 
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label ?? '—' },
@@ -84,14 +138,13 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Summary chips */}
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Badge color="gray">{`${t('reports.kpi.alarms')}: ${q.data?.summary.total ?? 0}`}</Badge>
-        <Badge color="danger">{`${t('reports.kpi.open')}: ${q.data?.summary.open ?? 0}`}</Badge>
+        <Badge color="gray">{`${t('reports.kpi.alarms')}: ${summary?.total ?? 0}`}</Badge>
+        <Badge color="danger">{`${t('reports.kpi.open')}: ${summary?.open ?? 0}`}</Badge>
         {SEVERITIES.map((s) => (
           <Badge key={s} color="gray">
-            {`${t(`rules.severities.${s}`, { defaultValue: s })}: ${(q.data?.summary as unknown as Record<string, number>)?.[s.toLowerCase()] ?? 0}`}
+            {`${t(`rules.severities.${s}`, { defaultValue: s })}: ${(summary as unknown as Record<string, number> | undefined)?.[s.toLowerCase()] ?? 0}`}
           </Badge>
         ))}
       </div>
@@ -130,14 +183,47 @@ export function AlarmsSection({ range }: { range: ReportRange }) {
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <ReportsTable
-          columns={columns}
-          rows={q.data?.items ?? []}
-          rowKey={(r) => `${r.vehicleId ?? 'none'}-${r.type}-${r.severity}`}
-          emptyKey="reports.empty"
-          dense
-        />
+        <>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Card>
+              <CardHeader title={t('reports.charts.alarmSeverity')} />
+              {severityMix.length === 0 ? (
+                <EmptyChart label={t('reports.charts.empty')} />
+              ) : (
+                <ApexChart
+                  type="donut"
+                  series={severityMix.map((s) => s.value)}
+                  options={donutOptions}
+                  height={260}
+                />
+              )}
+            </Card>
+            <Card>
+              <CardHeader title={t('reports.charts.alarmByType')} />
+              {typeRows.length === 0 ? (
+                <EmptyChart label={t('reports.charts.empty')} />
+              ) : (
+                <ApexChart type="bar" series={typeSeries} options={typeOptions} height={260} />
+              )}
+            </Card>
+          </div>
+          <ReportsTable
+            columns={columns}
+            rows={items}
+            rowKey={(r) => `${r.vehicleId ?? 'none'}-${r.type}-${r.severity}`}
+            emptyKey="reports.empty"
+            dense
+          />
+        </>
       )}
+    </div>
+  );
+}
+
+function EmptyChart({ label }: { label: string }) {
+  return (
+    <div className="flex h-[220px] items-center justify-center">
+      <p className="text-sm text-gray-500 dark:text-graydark-600">{label}</p>
     </div>
   );
 }

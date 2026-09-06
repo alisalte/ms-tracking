@@ -17,6 +17,7 @@ import {
   type TenantTier,
   User as UserClass,
 } from '../../domain/index.js';
+import { assertPasswordPolicy } from '../../domain/password-policy.js';
 import type { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 import type { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
 import type { UserRepository } from '../../infrastructure/persistence/user.repository.js';
@@ -46,9 +47,11 @@ export class ProvisionTenantUseCase {
     private readonly roles: RoleRepository,
     private readonly users: UserRepository,
     private readonly hasher: PasswordHasher,
+    private readonly policy: { minLength: number } = { minLength: 12 },
   ) {}
 
   public async execute(input: ProvisionTenantInput): Promise<ProvisionedTenant> {
+    assertPasswordPolicy(input.adminPassword, this.policy);
     const tenantId = randomUUID();
     const tenantCtx = buildEventContext(tenantId, 'tenant', input.correlationId);
     const tenant = TenantClass.provision(

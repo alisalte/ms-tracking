@@ -12,8 +12,12 @@ import {
   type TenantStatus,
   type TenantTier,
 } from '../../domain/index.js';
+import {
+  type TenantSettings,
+  type TenantSettingsPatch,
+  mergeTenantSettings,
+} from '../../domain/tenant-settings.js';
 import { withoutTenantContext } from './tenant-context.js';
-import { mergeTenantSettings, type TenantSettings, type TenantSettingsPatch } from '../../domain/tenant-settings.js';
 
 export interface TenantRow {
   id: string;
@@ -41,6 +45,14 @@ export class TenantRepository {
     });
   }
 
+  /** Platform list — every tenant, newest first (SaaS-Ops console). */
+  public async list(): Promise<Array<{ tenant: Tenant; createdAt: Date }>> {
+    return withoutTenantContext(this.knex, async (trx) => {
+      const rows = await trx<TenantRow>('iam.tenants').orderBy('created_at', 'desc');
+      return rows.map((row) => ({ tenant: this.toDomain(row), createdAt: row.created_at }));
+    });
+  }
+
   /**
    * Resolve a tenant identifier to its canonical UUID.
    *
@@ -56,7 +68,7 @@ export class TenantRepository {
     if (!trimmed) return null;
     return withoutTenantContext(this.knex, async (trx) => {
       const row = await trx<TenantRow>('iam.tenants')
-        .whereRaw('LOWER(name) = LOWER(?)', trimmed)
+        .whereRaw('LOWER(name) = LOWER(?)', [trimmed])
         .first();
       return row?.id ?? null;
     });
@@ -101,7 +113,10 @@ export class TenantRepository {
     });
   }
 
-  public async saveSettings(id: string, patch: TenantSettingsPatch): Promise<TenantSettings | null> {
+  public async saveSettings(
+    id: string,
+    patch: TenantSettingsPatch,
+  ): Promise<TenantSettings | null> {
     return withoutTenantContext(this.knex, async (trx) => {
       const row = await trx<TenantRow>('iam.tenants').where({ id }).first();
       if (!row) return null;

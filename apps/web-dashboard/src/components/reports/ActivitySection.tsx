@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { type ReportRange, useActivity } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Badge } from '@/components/tailwind-ui';
+import { formatDateTime } from '@/lib/format-date';
 
 const KIND_TONE: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'gray'> = {
   TRIP_STARTED: 'success',
@@ -78,7 +79,7 @@ export function ActivitySection({ range }: { range: ReportRange }) {
               className="flex flex-wrap items-center gap-2.5 border-b border-gray-100 py-2 last:border-b-0 dark:border-white/5"
             >
               <span className="min-w-37 text-xs tabular-nums text-gray-500 dark:text-graydark-600">
-                {new Date(e.at).toLocaleString()}
+                {formatDateTime(e.at)}
               </span>
               <Badge color={KIND_TONE[e.kind] ?? 'gray'}>{e.kind}</Badge>
               <span className="min-w-27 truncate text-sm text-gray-800 dark:text-graydark-800">

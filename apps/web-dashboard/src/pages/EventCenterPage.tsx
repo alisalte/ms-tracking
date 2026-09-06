@@ -13,12 +13,10 @@
  * is gated on `notification.read` (the permission the list API enforces).
  */
 import { Activity, ArrowRight } from 'lucide-react';
-import { useMemo } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { useVehicles } from '@/api/asset.api';
 import { useNotificationsPage } from '@/api/notification.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import {
@@ -33,14 +31,15 @@ import {
   Spinner,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
 import {
   localizeEventType,
   localizeNotificationBody,
   localizeNotificationTitle,
+  notificationVehicleName,
 } from '@/lib/alarm-copy';
-import { displayLabel } from '@/lib/ids';
+import { formatDate, formatDateTime } from '@/lib/format-date';
 import { relativeTime } from '@/lib/relative-time';
-import { formatVehicleLabel } from '@/lib/vehicle-label';
 import type { Notification } from '@/types/notification.types';
 
 const SEVERITIES = ['critical', 'high', 'normal', 'low'] as const;
@@ -59,13 +58,9 @@ function severityBadgeColor(severity: string): 'danger' | 'warning' | 'info' | '
   }
 }
 
-/** Day bucket label (locale date; grouping key doubles as the heading). */
+/** Day bucket label (active calendar; grouping key doubles as the heading). */
 function dayLabel(iso: string, locale: string): string {
-  return new Date(iso).toLocaleDateString(locale.startsWith('fa') ? 'fa-IR' : locale, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatDate(iso, { weekday: 'short', month: 'short', day: 'numeric' }, locale);
 }
 
 export function EventCenterPage() {
@@ -74,7 +69,7 @@ export function EventCenterPage() {
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: vehicles } = useVehicles();
+  const vehicleCaptionOf = useVehicleCaptionOf();
 
   const eventType = params.get('eventType') ?? undefined;
   const severity = params.get('severity') ?? undefined;
@@ -118,14 +113,6 @@ export function EventCenterPage() {
     }
     return Array.from(map.entries());
   }, [filtered, i18n.language]);
-
-  const vehicleLabelOf = useMemo(() => {
-    const labels = new Map((vehicles ?? []).map((v) => [v.id, formatVehicleLabel(v)] as const));
-    return (id: string | undefined) => {
-      if (!id) return '';
-      return labels.get(id) || displayLabel(id) || '';
-    };
-  }, [vehicles]);
 
   const selected =
     filtered.find((n) => n.id === selectedId) ?? page.items.find((n) => n.id === selectedId);
@@ -225,7 +212,7 @@ export function EventCenterPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span className="truncate text-sm font-semibold text-gray-800 dark:text-graydark-800">
-                            {localizeNotificationTitle(t, n)}
+                            {localizeNotificationTitle(t, n, vehicleCaptionOf(n.vehicleId))}
                           </span>
                           <Badge color="gray" className="shrink-0">
                             {localizeEventType(t, n.eventType)}
@@ -241,7 +228,6 @@ export function EventCenterPage() {
                         </div>
                         <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-graydark-600">
                           {localizeNotificationBody(t, n)}
-                          {n.vehicleId ? ` · ${vehicleLabelOf(n.vehicleId) || n.vehicleId}` : ''}
                         </p>
                       </div>
                       <span className="shrink-0 text-xs tabular-nums text-gray-400 dark:text-graydark-600">
@@ -273,7 +259,7 @@ export function EventCenterPage() {
         size="md"
         title={
           selected
-            ? localizeNotificationTitle(t, selected)
+            ? localizeNotificationTitle(t, selected, vehicleCaptionOf(selected.vehicleId))
             : t('events.detail.heading', { defaultValue: 'Event detail' })
         }
         subtitle={
@@ -285,7 +271,9 @@ export function EventCenterPage() {
         {selected ? (
           <EventDetailContent
             event={selected}
-            vehicleLabel={vehicleLabelOf(selected.vehicleId) || selected.vehicleId || '—'}
+            vehicleLabel={
+              notificationVehicleName(selected, vehicleCaptionOf(selected.vehicleId)) || '—'
+            }
             onOpenAlarm={
               selected.link
                 ? () => {
@@ -315,10 +303,7 @@ function EventDetailContent({
 }) {
   const { t } = useTranslation();
   const when = event.createdAt ? new Date(event.createdAt) : null;
-  const whenLabel =
-    when && !Number.isNaN(when.getTime())
-      ? when.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-      : '—';
+  const whenLabel = when && !Number.isNaN(when.getTime()) ? formatDateTime(when) : '—';
 
   return (
     <div className="flex flex-col gap-5">

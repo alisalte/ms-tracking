@@ -1,17 +1,17 @@
 /**
  * CommandCenterPage — device configuration over TCP (`/commands`).
  *
- * Full downstream-command flow (Meitrack MDVR GPRS Protocol V2.0):
- *   select one or many devices (meitrack protocol) → browse the command
- *   catalog by category → parameterized dialog (or direct dispatch) →
- *   POST /devices/:id/commands or POST /device-commands/bulk → async
- *   gateway write + device D82 ack → history table polls the status
- *   transitions live (single-device selection).
+ * Two entry points:
+ *   - Menu: pick a device *type* (T622, MD522S, …). The catalog is filtered
+ *     to that class and the command goes to every ACTIVE unit of the type.
+ *     No IMEI checklist.
+ *   - Device: `/commands?device=<id>` from the unit itself. Catalog + history
+ *     are only for that device.
  *
- * Backend: fleet-management-service device-commands API (06 §11.3) → Kafka
- * command.request → device-gateway CommandDispatcher → socket write.
+ * History in menu mode groups a bulk send as “sent to N devices”; expanding
+ * a row lists each IMEI and its reply.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -25,24 +25,27 @@ import { CommandParamDialog } from '@/components/commands/CommandParamDialog';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { Card, PageHeader, Select } from '@/components/tailwind-ui';
+import { Card, PageHeader, Select, Tabs } from '@/components/tailwind-ui';
+import { commandClassFromModel, filterCatalogForClass } from '@/lib/command-capability';
 import type { Device } from '@/types/asset.types';
 import type { CommandDef, CommandStatus } from '@/types/command.types';
 
 const STATUS_FILTERS: CommandStatus[] = ['QUEUED', 'SENT', 'ACKED', 'FAILED', 'EXPIRED'];
+const PAGE_TABS = ['catalog', 'history'] as const;
+type PageTab = (typeof PAGE_TABS)[number];
+
+function readPageTab(value: string | null): PageTab {
+  return value === 'history' ? 'history' : 'catalog';
+}
 
 export function CommandCenterPage() {
   const { t } = useTranslation();
   const toast = useToast();
 
-  // Deep link: /commands?device=<id> (device-popup "message") preselects the
-  // device. Derived from react-router search params (not a one-shot
-  // window.location read) so in-SPA navigation to a new ?device= stays live.
   const [searchParams, setSearchParams] = useSearchParams();
-  const deepLinkedId = searchParams.get('device');
-  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
-    deepLinkedId ? [deepLinkedId] : [],
-  );
+  const lockedId = searchParams.get('device');
+  const typeFilter = searchParams.get('type') ?? '';
+  const pageTab = readPageTab(searchParams.get('tab'));
   const [statusFilter, setStatusFilter] = useState<CommandStatus | ''>('');
   const [configuring, setConfiguring] = useState<CommandDef | null>(null);
   const [confirming, setConfirming] = useState<CommandDef | null>(null);
@@ -62,36 +65,77 @@ export function CommandCenterPage() {
     refetch: refetchCatalog,
   } = useCommandCatalog();
 
-  const historyDeviceId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null;
+  const meitrackDevices = useMemo(
+    () => (devices ?? []).filter((d) => d.protocol === 'meitrack'),
+    [devices],
+  );
+  const lockedDevice: Device | null = useMemo(
+    () => meitrackDevices.find((d) => d.id === lockedId) ?? null,
+    [meitrackDevices, lockedId],
+  );
+
+  const selectedIds = useMemo(() => {
+    if (lockedDevice) return [lockedDevice.id];
+    if (!typeFilter) return [];
+    return meitrackDevices
+      .filter((d) => d.model === typeFilter && d.status === 'ACTIVE')
+      .map((d) => d.id);
+  }, [lockedDevice, typeFilter, meitrackDevices]);
+
+  const selectedDevices: Device[] = useMemo(
+    () => meitrackDevices.filter((d) => selectedIds.includes(d.id)),
+    [meitrackDevices, selectedIds],
+  );
+  const selectedCount = selectedIds.length;
+  const deviceClass = commandClassFromModel(lockedDevice?.model ?? (typeFilter || null));
+  const visibleCatalog = useMemo(
+    () => filterCatalogForClass(catalog ?? [], lockedDevice || typeFilter ? deviceClass : null),
+    [catalog, lockedDevice, typeFilter, deviceClass],
+  );
+
+  const historyDeviceId = lockedDevice?.id ?? null;
   const {
     data: history,
     isLoading: historyLoading,
     isError: historyIsError,
     error: historyError,
     refetch: refetchHistory,
-  } = useCommandHistory(historyDeviceId, statusFilter || undefined);
+  } = useCommandHistory(historyDeviceId, statusFilter || undefined, {
+    tenant: !lockedId,
+  });
   const sendMutation = useIssueCommands();
 
-  // Only meitrack devices speak the MDVR command set (backend rejects others).
-  const meitrackDevices = useMemo(
-    () => (devices ?? []).filter((d) => d.protocol === 'meitrack'),
-    [devices],
-  );
-  const selectedDevices: Device[] = useMemo(
-    () => meitrackDevices.filter((d) => selectedIds.includes(d.id)),
-    [meitrackDevices, selectedIds],
-  );
-  const selectedCount = selectedIds.length;
+  const historyRows = useMemo(() => {
+    const rows = history ?? [];
+    if (lockedDevice || !typeFilter) return rows;
+    const typeIds = new Set(meitrackDevices.filter((d) => d.model === typeFilter).map((d) => d.id));
+    return rows.filter((r) => typeIds.has(r.deviceId));
+  }, [history, lockedDevice, typeFilter, meitrackDevices]);
 
-  useEffect(() => {
-    if (deepLinkedId) setSelectedIds([deepLinkedId]);
-  }, [deepLinkedId]);
+  const deviceLabel = useMemo(() => {
+    const byId = new Map(meitrackDevices.map((d) => [d.id, d.imei] as const));
+    return (id: string) => byId.get(id) ?? id;
+  }, [meitrackDevices]);
 
-  const selectDevices = (next: string[]) => {
-    setSelectedIds(next);
+  const setTypeFilter = (model: string) => {
     const params = new URLSearchParams(searchParams);
-    if (next.length === 1 && next[0]) params.set('device', next[0]);
-    else params.delete('device');
+    params.delete('device');
+    if (model) params.set('type', model);
+    else params.delete('type');
+    setSearchParams(params, { replace: true });
+  };
+
+  const clearLockedDevice = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('device');
+    if (lockedDevice?.model) params.set('type', lockedDevice.model);
+    setSearchParams(params, { replace: true });
+  };
+
+  const setPageTab = (next: PageTab) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'catalog') params.delete('tab');
+    else params.set('tab', next);
     setSearchParams(params, { replace: true });
   };
 
@@ -126,10 +170,16 @@ export function CommandCenterPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title={t('commands.title', { defaultValue: 'Command Center' })}
-        description={t('commands.subtitle', {
-          defaultValue:
-            'Configure one device or apply the same setting to many — tracking, geo-fences, alerts, outputs, media and system commands (Meitrack MDVR).',
-        })}
+        description={
+          lockedDevice
+            ? t('commands.subtitleDevice', {
+                defaultValue: 'Settings for this device only.',
+              })
+            : t('commands.subtitleType', {
+                defaultValue:
+                  'Pick a device type to apply the same setting to every unit of that type.',
+              })
+        }
       />
 
       {devicesIsError && (
@@ -140,79 +190,100 @@ export function CommandCenterPage() {
 
       <CommandDevicePicker
         devices={meitrackDevices}
-        selectedIds={selectedIds}
-        onChange={selectDevices}
+        lockedDevice={lockedDevice}
+        typeFilter={typeFilter}
+        onTypeChange={setTypeFilter}
+        onClearDevice={clearLockedDevice}
         loading={devicesLoading}
         disabled={devicesIsError}
       />
 
-      {historyDeviceId && selectedDevices[0] && (
-        <Card flush className="flex flex-wrap items-center gap-3 p-3">
-          <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
-            {t('commands.history.title', { defaultValue: 'Command history' })}
-          </h2>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as CommandStatus | '')}
-            wrapperClassName="w-40"
-            aria-label={t('commands.history.filterStatus', { defaultValue: 'Status' })}
-            options={[
-              { value: '', label: t('common.all', { defaultValue: 'All' }) },
-              ...STATUS_FILTERS.map((s) => ({
-                value: s,
-                label: t(`commands.status.${s}`, { defaultValue: s }),
-              })),
-            ]}
-          />
-          <span className="flex-1 text-xs text-gray-500 dark:text-graydark-600">
-            {selectedDevices[0].imei}
-          </span>
-        </Card>
-      )}
+      <Tabs
+        aria-label={t('commands.title', { defaultValue: 'Command Center' })}
+        value={pageTab}
+        onChange={setPageTab}
+        tabs={[
+          {
+            value: 'catalog',
+            label: t('commands.tabs.catalog', { defaultValue: 'Commands' }),
+            testid: 'commands-tab-catalog',
+          },
+          {
+            value: 'history',
+            label: t('commands.tabs.history', { defaultValue: 'History' }),
+            testid: 'commands-tab-history',
+          },
+        ]}
+      />
 
-      {selectedCount > 1 && (
-        <p className="text-xs text-gray-500 dark:text-graydark-600">
-          {t('commands.history.bulkHint', {
-            defaultValue:
-              'Command history is shown when a single device is selected. {{count}} devices will receive the next command.',
-            count: selectedCount,
-          })}
-        </p>
-      )}
-
-      <Card flush className="p-3">
-        {catalogIsError ? (
-          <ErrorState error={catalogError} onRetry={() => void refetchCatalog()} />
-        ) : (
-          <PermissionGate
-            requires={PERMISSIONS.commandSend}
-            fallback={
-              <p className="p-4 text-sm text-gray-500 dark:text-graydark-600">
-                {t('commands.noSendPermission', {
-                  defaultValue: 'You lack permission to send commands (read-only).',
-                })}
-              </p>
-            }
-          >
-            <CommandCatalogPanel
-              catalog={catalog ?? []}
-              loading={catalogLoading}
-              disabled={selectedCount === 0}
-              onConfigure={(cmd) => setConfiguring(cmd)}
-              onDispatch={(cmd) => setConfirming(cmd)}
-            />
-          </PermissionGate>
-        )}
-      </Card>
-
-      {historyDeviceId && (
-        <Card flush className="p-3">
-          {historyIsError ? (
-            <ErrorState error={historyError} onRetry={() => void refetchHistory()} />
+      {pageTab === 'catalog' && (
+        <Card flush className="p-3" id="panel-catalog" role="tabpanel">
+          {catalogIsError ? (
+            <ErrorState error={catalogError} onRetry={() => void refetchCatalog()} />
           ) : (
-            <CommandHistoryTable rows={history ?? []} loading={historyLoading} />
+            <PermissionGate
+              requires={PERMISSIONS.commandSend}
+              fallback={
+                <p className="p-4 text-sm text-gray-500 dark:text-graydark-600">
+                  {t('commands.noSendPermission', {
+                    defaultValue: 'You lack permission to send commands (read-only).',
+                  })}
+                </p>
+              }
+            >
+              <CommandCatalogPanel
+                catalog={visibleCatalog}
+                loading={catalogLoading}
+                disabled={selectedCount === 0}
+                disabledHintKey={
+                  lockedId ? 'commands.selectDeviceFirst' : 'commands.selectTypeFirst'
+                }
+                onConfigure={(cmd) => setConfiguring(cmd)}
+                onDispatch={(cmd) => setConfirming(cmd)}
+              />
+            </PermissionGate>
           )}
         </Card>
+      )}
+
+      {pageTab === 'history' && (
+        <div id="panel-history" role="tabpanel" className="flex flex-col gap-3">
+          <Card flush className="flex flex-wrap items-center gap-3 p-3">
+            <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+              {t('commands.history.title', { defaultValue: 'Command history' })}
+            </h2>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as CommandStatus | '')}
+              wrapperClassName="w-40"
+              aria-label={t('commands.history.filterStatus', { defaultValue: 'Status' })}
+              options={[
+                { value: '', label: t('common.all', { defaultValue: 'All' }) },
+                ...STATUS_FILTERS.map((s) => ({
+                  value: s,
+                  label: t(`commands.status.${s}`, { defaultValue: s }),
+                })),
+              ]}
+            />
+            {lockedDevice && (
+              <span className="flex-1 text-xs text-gray-500 dark:text-graydark-600">
+                {lockedDevice.imei}
+              </span>
+            )}
+          </Card>
+          <Card flush className="p-3">
+            {historyIsError ? (
+              <ErrorState error={historyError} onRetry={() => void refetchHistory()} />
+            ) : (
+              <CommandHistoryTable
+                rows={historyRows}
+                loading={historyLoading}
+                grouped={!lockedDevice}
+                deviceLabel={deviceLabel}
+              />
+            )}
+          </Card>
+        </div>
       )}
 
       <CommandParamDialog

@@ -20,6 +20,15 @@ import { i18n } from '@/i18n';
 import { NotificationCenterPage } from '@/pages/NotificationCenterPage';
 import type { Notification } from '@/types/notification.types';
 
+const GUID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+vi.mock('@/api/asset.api', () => ({
+  useVehicles: () => ({
+    data: [{ id: GUID, name: 'Tehran truck', plate: '12A345', code: 'V1' }],
+    isLoading: false,
+  }),
+}));
+
 // ── API mocks ──────────────────────────────────────────────────────────────
 
 const markAllAsRead = vi.fn().mockResolvedValue(undefined);
@@ -50,6 +59,19 @@ vi.mock('@/api/notification.api', () => ({
         category: 'alarm',
         eventType: 'device_offline',
         read: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'n3',
+        title: `Speeding: ${GUID}`,
+        body: `Vehicle ${GUID} exceeded the speed limit (92 km/h in a 80 km/h zone).`,
+        severity: 'high',
+        priority: 'high',
+        category: 'alarm',
+        eventType: 'overspeed',
+        vehicleId: GUID,
+        metadata: { speed: 92, speedLimit: 80, vehicleName: GUID },
+        read: false,
         createdAt: new Date().toISOString(),
       },
     ],
@@ -175,11 +197,22 @@ describe('NotificationBell', () => {
   it('opens the dropdown, lists notifications, and marks all read', async () => {
     renderBell();
     fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
-    expect(await screen.findByText('Overspeed: TRK-1')).toBeDefined();
-    expect(screen.getByText('Device offline: TRK-2')).toBeDefined();
+    expect((await screen.findAllByText('Overspeed')).length).toBeGreaterThan(0);
+    expect(screen.getByText('TRK-1')).toBeDefined();
+    expect(screen.getByText('Device offline')).toBeDefined();
+    expect(screen.getByText('TRK-2')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: /mark all read/i }));
     await waitFor(() => expect(markAllAsRead).toHaveBeenCalled());
+  });
+
+  it('shows the vehicle name and reason instead of a GUID', async () => {
+    renderBell();
+    fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+    expect(await screen.findByText(/Tehran truck/)).toBeDefined();
+    expect(screen.getByText(/12A345/)).toBeDefined();
+    expect(screen.queryByText(GUID)).toBeNull();
+    expect(screen.getByText(/92/)).toBeDefined();
   });
 
   it('links to the Notification Center via "view all"', async () => {
@@ -192,7 +225,7 @@ describe('NotificationBell', () => {
   it('marks a notification read when clicked', async () => {
     renderBell();
     fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
-    const item = await screen.findByText('Overspeed: TRK-1');
+    const item = await screen.findByText('TRK-1');
     fireEvent.click(item);
     await waitFor(() => expect(markAsRead).toHaveBeenCalledWith('n1'));
   });

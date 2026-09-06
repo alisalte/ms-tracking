@@ -21,6 +21,7 @@ import {
   IdCard,
   Link2,
   Link2Off,
+  MessageSquare,
   Phone,
   Smartphone,
   Truck,
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
 
 import {
   useBindDeviceToVehicle,
@@ -46,7 +48,7 @@ import {
 import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { queryKeys } from '@/api/query-keys';
 import { registerDefaultMdvrChannels } from '@/api/video.api';
-import { PermissionGate } from '@/auth/permissions';
+import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import {
   deviceProtocolColor,
   deviceStatusColor,
@@ -79,6 +81,7 @@ import {
   displayDeviceRoles,
   primaryDeviceRole,
 } from '@/lib/device-roles';
+import { formatDate, formatDateTime } from '@/lib/format-date';
 import type { AssetTab } from '@/pages/AssetManagementPage';
 import type {
   BoundDevice,
@@ -220,7 +223,7 @@ function MetaRow({
 
 /** ISO → local string ('—' when null). */
 function isoToLocal(iso: string | null | undefined): string {
-  return iso ? new Date(iso).toLocaleString() : '—';
+  return formatDateTime(iso);
 }
 
 function Section({ label, children }: { label: string; children: ReactNode }) {
@@ -633,6 +636,7 @@ function DeviceDetailDrawer({
   drivers: Driver[];
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { data: device, isLoading } = useDeviceDetail(deviceId);
   const open = Boolean(deviceId);
   const vehicle = useMemo(
@@ -706,6 +710,20 @@ function DeviceDetailDrawer({
                 value={assignedDriver ? driverFullName(assignedDriver) : t('map.popup.unassigned')}
               />
             </Section>
+
+            {device.protocol === 'meitrack' && (
+              <PermissionGate requires={PERMISSIONS.commandRead}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  fullWidth
+                  leftIcon={<MessageSquare size={14} />}
+                  onClick={() => navigate(`/commands?device=${device.id}`)}
+                >
+                  {t('assets.device.openCommands', { defaultValue: 'Commands' })}
+                </Button>
+              </PermissionGate>
+            )}
 
             <Divider />
             <Section label={t('assets.device.connection')}>
@@ -835,9 +853,7 @@ function DriverDetailDrawer({
               <MetaRow
                 icon={<Calendar />}
                 label={t('assets.driver.licenseExpires')}
-                value={
-                  driver.licenseExpires ? new Date(driver.licenseExpires).toLocaleDateString() : '—'
-                }
+                value={driver.licenseExpires ? formatDate(driver.licenseExpires) : '—'}
               />
               <MetaRow
                 icon={<IdCard />}

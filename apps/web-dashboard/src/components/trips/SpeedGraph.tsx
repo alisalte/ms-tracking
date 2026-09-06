@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import { EChart } from '@/components/dashboard/EChart';
 import { Skeleton } from '@/components/tailwind-ui';
+import { formatTime } from '@/lib/format-date';
 import { useThemeContext } from '@/theme/ThemeRegistry';
 import { status } from '@/theme/palette';
 import type { TripWaypoint } from '@/types/fleet.types';
@@ -19,7 +20,7 @@ interface SpeedGraphProps {
 
 /** HH:MM label for a waypoint timestamp. */
 function timeLabel(ts: string): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return formatTime(ts);
 }
 
 /**

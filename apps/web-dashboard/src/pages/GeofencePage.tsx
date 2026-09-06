@@ -41,6 +41,7 @@ import {
   Table,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { formatDate, formatDateTime } from '@/lib/format-date';
 import { displayLabel } from '@/lib/ids';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mapAccents, status } from '@/theme/palette';
@@ -245,7 +246,7 @@ export function GeofencePage() {
                       )}
                     </TD>
                     <TD>{g.alertOn.join(' · ')}</TD>
-                    <TD>{g.createdAt ? new Date(g.createdAt).toLocaleDateString() : '—'}</TD>
+                    <TD>{formatDate(g.createdAt)}</TD>
                   </tr>
                 ))
               )}
@@ -453,10 +454,8 @@ function GeofenceDetailDialog({
           )}
         </div>
         <p className="text-xs text-gray-400 dark:text-graydark-600">
-          {t('geofences.createdAt')}{' '}
-          {geofence.createdAt ? new Date(geofence.createdAt).toLocaleString() : '—'} ·{' '}
-          {t('geofences.updatedAt')}{' '}
-          {geofence.updatedAt ? new Date(geofence.updatedAt).toLocaleString() : '—'}
+          {t('geofences.createdAt')} {formatDateTime(geofence.createdAt)} ·{' '}
+          {t('geofences.updatedAt')} {formatDateTime(geofence.updatedAt)}
         </p>
       </div>
     </Modal>

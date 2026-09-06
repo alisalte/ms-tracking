@@ -38,6 +38,7 @@ import {
   localizeSourceEventType,
 } from '@/lib/alarm-copy';
 import { hasAlarmCoordinates } from '@/lib/alarm-evidence';
+import { formatDateTime } from '@/lib/format-date';
 import type { Alarm } from '@/types/alarm.types';
 
 interface AlarmDetailDrawerProps {
@@ -346,8 +347,5 @@ function DetailRow({
 
 /** Locale-aware timestamp formatter. */
 function fmt(iso: string): string {
-  if (!iso) return '—';
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return '—';
-  return parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  return formatDateTime(iso);
 }

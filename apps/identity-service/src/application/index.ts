@@ -8,4 +8,6 @@ export * from './auth/refresh.use-case.js';
 export * from './auth/logout.use-case.js';
 export * from './users/user.use-cases.js';
 export * from './tenants/provision-tenant.use-case.js';
+export * from './tenants/tenant-lifecycle.use-case.js';
+export * from './tenants/create-tenant-access.use-case.js';
 export * from './apikeys/api-key.use-cases.js';

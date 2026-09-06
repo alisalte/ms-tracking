@@ -19,6 +19,7 @@ import { TripReplayMap } from '@/components/trips/TripReplayMap';
 import { TripSummary } from '@/components/trips/TripSummary';
 import { TripTimeline } from '@/components/trips/TripTimeline';
 import { useTripPlayback } from '@/components/trips/useTripPlayback';
+import { formatDate, formatDateTime, formatTime } from '@/lib/format-date';
 import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
 import { shouldUseMock } from '@/lib/mock-gate';
@@ -82,19 +83,13 @@ export function TripDetailPage() {
     return () => window.clearTimeout(timer);
   }, [waypoints.length, playback.play, playback.setSpeed]);
 
-  const startLabel = useMemo(
-    () =>
-      trip
-        ? new Date(trip.startTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-        : '',
-    [trip],
-  );
+  const startLabel = useMemo(() => (trip ? formatDateTime(trip.startTime) : ''), [trip]);
 
   /** Compact start date for the page title (matches the roster's date column). */
   const dateLabel = useMemo(
     () =>
       trip
-        ? new Date(trip.startTime).toLocaleDateString([], {
+        ? formatDate(trip.startTime, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -292,7 +287,7 @@ export function TripDetailPage() {
                   </span>
                 </p>
                 <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
-                  {new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatTime(e.ts)}
                 </span>
               </div>
             ))}

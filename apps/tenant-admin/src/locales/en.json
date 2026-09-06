@@ -1,0 +1,75 @@
+{
+  "app": {
+    "title": "Tenant administration",
+    "subtitle": "Provision organisations and grant dashboard access"
+  },
+  "auth": {
+    "login": "Sign in",
+    "hint": "Use the platform (seed) organisation. Tenant-admin of that org can manage all tenants.",
+    "tenant": "Organisation name",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "error": "Sign-in failed",
+    "forbidden": "This account cannot manage tenants. Sign in with a platform operator."
+  },
+  "nav": {
+    "tenants": "Tenants",
+    "create": "New tenant",
+    "logout": "Sign out",
+    "lang": "EN"
+  },
+  "tenants": {
+    "title": "Tenants",
+    "empty": "No tenants yet.",
+    "name": "Name",
+    "tier": "Tier",
+    "region": "Region",
+    "status": "Status",
+    "created": "Created",
+    "actions": "Actions",
+    "open": "Manage",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "confirmSuspend": "Suspend this tenant? Users will not be able to sign in to the fleet dashboard."
+  },
+  "create": {
+    "title": "Create tenant",
+    "name": "Organisation name",
+    "tier": "Plan",
+    "region": "Region",
+    "adminEmail": "Admin email",
+    "adminUsername": "Admin username",
+    "adminPassword": "Admin password",
+    "passwordHint": "At least 12 characters, with upper, lower, digit, and a symbol.",
+    "submit": "Create tenant and admin",
+    "success": "Tenant created."
+  },
+  "detail": {
+    "title": "Tenant",
+    "users": "Access",
+    "addUser": "Grant access",
+    "email": "Email",
+    "username": "Username",
+    "password": "Password",
+    "displayName": "Display name",
+    "role": "Role",
+    "status": "Status",
+    "lastLogin": "Last login",
+    "suspendUser": "Suspend",
+    "activateUser": "Activate",
+    "submitUser": "Create user",
+    "userCreated": "User created."
+  },
+  "roles": {
+    "tenant-admin": "Tenant admin",
+    "fleet-admin": "Fleet admin",
+    "viewer": "Viewer"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back"
+  }
+}

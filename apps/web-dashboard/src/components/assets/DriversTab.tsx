@@ -22,6 +22,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { formatDate } from '@/lib/format-date';
 import type { Device, Driver, DriverStatus, Vehicle } from '@/types/asset.types';
 import { UserRound } from 'lucide-react';
 
@@ -130,8 +131,7 @@ export function DriversTab({
                     : 'text-xs text-gray-500 dark:text-graydark-600'
                 }
               >
-                {t('assets.driver.licenseExpiry')}:{' '}
-                {new Date(d.licenseExpires).toLocaleDateString()}
+                {t('assets.driver.licenseExpiry')}: {formatDate(d.licenseExpires)}
               </span>
             )}
           </div>

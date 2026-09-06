@@ -23,12 +23,20 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ReportRange, useFleetOverview, useTrend } from '@/api/report.api';
+import {
+  type ReportRange,
+  type TrendPointWire,
+  useFleetOverview,
+  useTrend,
+} from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
-import { mixedDistanceTrips } from '@/components/dashboard/distance-trips-mixed';
 import { KpiChip, KpiTile } from '@/components/dashboard/KpiTile';
+import { mixedDistanceTrips } from '@/components/dashboard/distance-trips-mixed';
+import { ReportCatalog } from '@/components/reports/ReportCatalog';
+import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
+import { formatDate, formatTime } from '@/lib/format-date';
 import { hoursFromSec } from '@/lib/hours-from-sec';
 import { chart } from '@/theme/palette';
 import type { ApexOptions } from 'apexcharts';
@@ -44,6 +52,7 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
     return (
       // biome-ignore lint/a11y/useSemanticElements: role=status loading region.
       <div className="flex flex-col gap-4" role="status" aria-label={t('common.loading')}>
+        <ReportCatalog />
         <Skeleton className="h-4 w-56" />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {Array.from({ length: 12 }, (_, i) => (
@@ -60,15 +69,23 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
     );
   }
   if (overview.isError) {
-    return <ErrorState error={overview.error} onRetry={() => overview.refetch()} />;
+    return (
+      <div className="flex flex-col gap-4">
+        <ReportCatalog />
+        <ErrorState error={overview.error} onRetry={() => overview.refetch()} />
+      </div>
+    );
   }
   const o = overview.data;
   if (!o) {
     /* No payload without an error — an honest empty state, never a fake one. */
     return (
-      <Card flush className="p-2">
-        <EmptyState icon={<Activity />} title={t('reports.empty')} />
-      </Card>
+      <div className="flex flex-col gap-4">
+        <ReportCatalog />
+        <Card flush className="p-2">
+          <EmptyState icon={<Activity />} title={t('reports.empty')} />
+        </Card>
+      </div>
     );
   }
 
@@ -81,15 +98,31 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
     i18n.language,
   );
 
+  const dailyColumns: Column<TrendPointWire>[] = [
+    {
+      id: 'day',
+      headerKey: 'reports.daily.day',
+      render: (r) => formatDate(`${r.day}T00:00:00Z`),
+    },
+    {
+      id: 'distance',
+      headerKey: 'reports.cols.distance',
+      render: (r) => `${r.distanceKm.toFixed(1)} km`,
+    },
+    { id: 'trips', headerKey: 'reports.cols.trips', render: (r) => String(r.trips) },
+    { id: 'alarms', headerKey: 'reports.cols.total', render: (r) => String(r.alarms) },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
+      <ReportCatalog />
       <p data-testid="report-freshness" className="text-xs text-gray-500 dark:text-graydark-600">
         {t('reports.freshness', {
           freshness:
             o.freshness === 'NEAR_REALTIME'
               ? t('reports.freshnessNear')
               : t('reports.freshnessAgg'),
-          asOf: new Date(o.dataAsOf).toLocaleTimeString(),
+          asOf: formatTime(o.dataAsOf),
         })}
       </p>
 
@@ -251,12 +284,7 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
             ) : (trend.data?.points.length ?? 0) === 0 ? (
               <EmptyChart label={t('reports.charts.empty')} />
             ) : (
-              <ApexChart
-                type="line"
-                series={mixed.series}
-                options={mixed.options}
-                height={300}
-              />
+              <ApexChart type="line" series={mixed.series} options={mixed.options} height={300} />
             )}
           </ChartCard>
         </div>
@@ -287,6 +315,20 @@ export function ReportsOverviewSection({ range }: { range: ReportRange }) {
           )}
         </ChartCard>
       </div>
+      {(trend.data?.points.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+            {t('reports.daily.title')}
+          </h2>
+          <ReportsTable
+            columns={dailyColumns}
+            rows={trend.data?.points ?? []}
+            rowKey={(r) => r.day}
+            dense
+          />
+        </div>
+      )}
+
       <ChartCard title={t('reports.charts.stateDistribution')}>
         {/* Same payload as the KPI row above, so loading/error are already
             handled — only the all-zero case needs its own empty state. */}

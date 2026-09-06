@@ -22,6 +22,7 @@ import {
   Toolbar,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { formatDateTime } from '@/lib/format-date';
 import { displayLabel } from '@/lib/ids';
 import type { AuditAction, AuditCategory, AuditEntry } from '@/types/admin.types';
 
@@ -82,7 +83,7 @@ export function AuditSection() {
       sortBy: (e) => e.timestamp,
       render: (e) => (
         <span className="text-xs text-gray-500 dark:text-graydark-600">
-          {new Date(e.timestamp).toLocaleString()}
+          {formatDateTime(e.timestamp)}
         </span>
       ),
     },

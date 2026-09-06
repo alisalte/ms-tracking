@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ReportRange } from '@/api/report.api';
-import { Button } from '@/components/tailwind-ui';
+import { Button, Input } from '@/components/tailwind-ui';
 
 const PRESETS: Array<{ id: 'today' | 'yesterday' | '7d' | '30d' }> = [
   { id: 'today' },
@@ -90,21 +90,23 @@ export function ReportRangePicker({
       </button>
       {isCustom && (
         <div className="flex items-center gap-1.5">
-          <input
+          <Input
             type="datetime-local"
             value={fromInput}
             onChange={(e) => setFromInput(e.target.value)}
             aria-label={t('reports.range.from')}
-            className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+            wrapperClassName="w-auto"
+            className="h-8 px-2 text-[13px]"
           />
           {/* Directional affordance — mirrors in RTL. */}
           <ArrowRight size={14} aria-hidden className="shrink-0 text-gray-400 rtl:rotate-180" />
-          <input
+          <Input
             type="datetime-local"
             value={toInput}
             onChange={(e) => setToInput(e.target.value)}
             aria-label={t('reports.range.to')}
-            className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+            wrapperClassName="w-auto"
+            className="h-8 px-2 text-[13px]"
           />
           <Button size="sm" onClick={applyCustom} data-testid="report-range-apply">
             {t('reports.range.apply')}

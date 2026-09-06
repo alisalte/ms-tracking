@@ -1,5 +1,6 @@
 import type { ApexOptions } from 'apexcharts';
 
+import { formatDate } from '@/lib/format-date';
 import { chart } from '@/theme/palette';
 
 /**
@@ -115,7 +116,7 @@ export function mixedDistanceTrips(
 function formatUtcDay(day: string, locale: string): string {
   const d = new Date(`${day}T00:00:00.000Z`);
   if (Number.isNaN(d.getTime())) return day.slice(5);
-  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return formatDate(d, { month: 'short', day: 'numeric', timeZone: 'UTC' }, locale);
 }
 
 function formatKmTick(v: number): string {

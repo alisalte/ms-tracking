@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HISTORY_PRESETS, type HistoryPresetId } from '@/api/map.api';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
-import { Button, IconButton, ListboxSelect, Tooltip } from '@/components/tailwind-ui';
+import { Button, IconButton, Input, ListboxSelect, Tooltip } from '@/components/tailwind-ui';
 
 /** Custom [from, to] ISO window (Sprint I §29 — date/time range). */
 export interface CustomRange {
@@ -166,20 +166,22 @@ export function MapToolbar({
         )}
         {mode === 'history' && historyPreset === 'custom' && (
           <div className="flex items-center gap-1.5">
-            <input
+            <Input
               type="datetime-local"
               value={fromInput}
               onChange={(e) => setFromInput(e.target.value)}
               aria-label={t('map.history.from')}
-              className="h-8 rounded-full border border-gray-300 bg-white px-3.5 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+              wrapperClassName="w-auto"
+              className="h-8 rounded-full px-3.5 text-[13px]"
             />
             <span className="text-xs text-gray-400">→</span>
-            <input
+            <Input
               type="datetime-local"
               value={toInput}
               onChange={(e) => setToInput(e.target.value)}
               aria-label={t('map.history.to')}
-              className="h-8 rounded-full border border-gray-300 bg-white px-3.5 text-[13px] text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+              wrapperClassName="w-auto"
+              className="h-8 rounded-full px-3.5 text-[13px]"
             />
             <Button
               size="sm"

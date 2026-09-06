@@ -2,6 +2,7 @@ import { Pause, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { IconButton, SegmentedControl } from '@/components/tailwind-ui';
+import { formatTime } from '@/lib/format-date';
 import { status } from '@/theme/palette';
 import type { TripEvent, TripWaypoint } from '@/types/fleet.types';
 import { PLAYBACK_SPEEDS, type PlaybackSpeed } from './useTripPlayback';
@@ -59,15 +60,9 @@ export function TripTimeline({
   };
 
   const current = waypoints[index];
-  const startLabel = first
-    ? new Date(first.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '—';
-  const endLabel = last
-    ? new Date(last.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '—';
-  const nowLabel = current
-    ? new Date(current.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : startLabel;
+  const startLabel = first ? formatTime(first.ts) : '—';
+  const endLabel = last ? formatTime(last.ts) : '—';
+  const nowLabel = current ? formatTime(current.ts) : startLabel;
 
   return (
     <div className="flex flex-col gap-3">

@@ -23,6 +23,7 @@ import { UserRepository } from '../../infrastructure/persistence/user.repository
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
 import { loginSchema, refreshSchema } from './auth.dto.js';
+import { tenantHeaderCandidates } from './tenant-header.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -40,28 +41,22 @@ export class AuthController {
   /**
    * Resolve the `X-Tenant-Id` header to a canonical tenant UUID.
    *
-   * Accepts a UUID (passed through) or a tenant name/slug like "FleetVision"
-   * (resolved via `iam.tenants`, case-insensitive). This keeps INV-I02 intact —
-   * the tenant_id reaching the use case is always server-verified — while
-   * letting a human type a friendly name instead of an unguessable UUID. Throws
-   * a generic error (surfaced as 401 by the exception filter) when the tenant
-   * is missing/unknown, to avoid a tenant-enumeration oracle.
+   * Accepts a UUID or a tenant name (ASCII or percent-encoded Unicode, e.g.
+   * "شرکت سامان"). Names are resolved via `iam.tenants` case-insensitively.
+   * INV-I02: the tenant_id reaching the use case is always server-verified.
+   * Unknown / missing header → generic credentials error (no tenant oracle).
    */
-  private async resolveTenantId(rawTenantId: string | undefined): Promise<string> {
-    if (!rawTenantId || !rawTenantId.trim()) {
-      // Missing header — still a credentials failure (generic, no oracle).
-      throw new InvalidCredentialsError();
+  private async resolveTenantId(rawTenantId: string | string[] | undefined): Promise<string> {
+    const raw = Array.isArray(rawTenantId) ? rawTenantId[0] : rawTenantId;
+    const candidates = tenantHeaderCandidates(raw);
+    if (candidates.length === 0) throw new InvalidCredentialsError();
+
+    for (const candidate of candidates) {
+      if (UUID_RE.test(candidate)) return candidate;
+      const resolved = await this.tenants.resolveId(candidate);
+      if (resolved) return resolved;
     }
-    const trimmed = rawTenantId.trim();
-    // Already a UUID — accept directly (the use case still verifies the tenant).
-    if (UUID_RE.test(trimmed)) return trimmed;
-    // Otherwise treat it as a tenant name/slug and resolve to the UUID.
-    const resolved = await this.tenants.resolveId(trimmed);
-    if (!resolved) {
-      // Unknown tenant — generic credentials error (no tenant enumeration).
-      throw new InvalidCredentialsError();
-    }
-    return resolved;
+    throw new InvalidCredentialsError();
   }
 
   @Post('login')

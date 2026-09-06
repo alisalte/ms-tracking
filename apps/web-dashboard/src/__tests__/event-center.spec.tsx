@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/auth/auth.store';
 import { RequirePermission } from '@/components/common/RequirePermission';
 import { i18n } from '@/i18n';
+import { formatDate } from '@/lib/format-date';
 import { EventCenterPage } from '@/pages/EventCenterPage';
 import type { Notification } from '@/types/notification.types';
 
@@ -146,7 +147,6 @@ describe('EventCenterPage — timeline rendering', () => {
     renderEvents();
     expect(screen.getByText('Event Center')).toBeTruthy();
     expect(screen.getByText('Overspeed: TRK-1')).toBeTruthy();
-    expect(screen.getByText(/v-trk-1/)).toBeTruthy();
     // "Overspeed"/"Geofence Entry" appear in the type-filter options AND the
     // event chips.
     expect(screen.getAllByText('Overspeed').length).toBeGreaterThanOrEqual(2);
@@ -156,16 +156,16 @@ describe('EventCenterPage — timeline rendering', () => {
   it('groups events into day buckets', () => {
     renderEvents();
     // Today's bucket + yesterday's bucket both render as headings.
-    const today = new Date(now).toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    const yesterday = new Date(now - 26 * 3600_000).toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
+    const today = formatDate(now, { weekday: 'short', month: 'short', day: 'numeric' }, 'en');
+    const yesterday = formatDate(
+      now - 26 * 3600_000,
+      {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      },
+      'en',
+    );
     expect(screen.getByText(today)).toBeTruthy();
     expect(screen.getByText(yesterday)).toBeTruthy();
   });
@@ -175,7 +175,7 @@ describe('EventCenterPage — timeline rendering', () => {
     fireEvent.click(screen.getByText('Overspeed: TRK-1'));
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(screen.getByText('Vehicle')).toBeTruthy();
-    expect(screen.getByText('v-trk-1')).toBeTruthy();
+    expect(screen.getAllByText('TRK-1').length).toBeGreaterThan(0);
   });
 
   it('opens the related alarm from the event drawer', () => {

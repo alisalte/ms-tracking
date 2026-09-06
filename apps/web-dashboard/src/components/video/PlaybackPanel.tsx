@@ -22,11 +22,12 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type MdvrResource, fromMdvrBcdTime } from '@/api/video.api';
-import { Alert, Badge, Spinner } from '@/components/tailwind-ui';
+import { Alert, Badge, Input, Spinner } from '@/components/tailwind-ui';
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { useMdvrPlayback } from '@/components/video/useMdvrPlayback';
 import { useMdvrResources } from '@/components/video/useMdvrResources';
 import { isMdvrChannel } from '@/components/video/useStreamSession';
+import { formatDateTime, formatTime } from '@/lib/format-date';
 import { toggleFullscreen } from '@/lib/video-stream';
 import type { CameraChannel } from '@/types/video.types';
 
@@ -34,14 +35,10 @@ import type { CameraChannel } from '@/types/video.types';
 const PLAYBACK_MS_PER_SECOND = 1000;
 
 function fmtTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatTime(ms, { second: '2-digit' });
 }
 function fmtFull(ms: number): string {
-  return new Date(ms).toLocaleString();
+  return formatDateTime(ms);
 }
 function toDateInput(ms: number): string {
   const d = new Date(ms);
@@ -257,30 +254,20 @@ export function PlaybackPanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-gray-700 dark:text-graydark-800">
-            {t('notifications.center.filters.from', { defaultValue: 'From' })}
-          </span>
-          <input
-            type="datetime-local"
-            value={fromInput}
-            onChange={(e) => setFromInput(e.target.value)}
-            aria-label={t('notifications.center.filters.from', { defaultValue: 'From' })}
-            className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-gray-700 dark:text-graydark-800">
-            {t('notifications.center.filters.to', { defaultValue: 'To' })}
-          </span>
-          <input
-            type="datetime-local"
-            value={toInput}
-            onChange={(e) => setToInput(e.target.value)}
-            aria-label={t('notifications.center.filters.to', { defaultValue: 'To' })}
-            className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
-          />
-        </label>
+        <Input
+          type="datetime-local"
+          label={t('notifications.center.filters.from', { defaultValue: 'From' })}
+          value={fromInput}
+          onChange={(e) => setFromInput(e.target.value)}
+          wrapperClassName="min-w-40"
+        />
+        <Input
+          type="datetime-local"
+          label={t('notifications.center.filters.to', { defaultValue: 'To' })}
+          value={toInput}
+          onChange={(e) => setToInput(e.target.value)}
+          wrapperClassName="min-w-40"
+        />
         {mdvr && (
           <button
             type="button"

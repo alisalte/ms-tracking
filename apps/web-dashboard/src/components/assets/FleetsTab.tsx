@@ -19,6 +19,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { formatDate } from '@/lib/format-date';
 import type { Fleet, FleetStatus, Vehicle } from '@/types/asset.types';
 import { FolderTree } from 'lucide-react';
 
@@ -126,7 +127,7 @@ export function FleetsTab({
       sortBy: (f) => f.updatedAt,
       render: (f) => (
         <span className="text-xs text-gray-500 dark:text-graydark-600">
-          {new Date(f.updatedAt).toLocaleDateString()}
+          {formatDate(f.updatedAt)}
         </span>
       ),
     },

@@ -13,6 +13,7 @@ import { userStatusColor } from '@/components/admin/admin-meta';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Badge, Button, Drawer, Spinner } from '@/components/tailwind-ui';
+import { formatDate, formatDateTime } from '@/lib/format-date';
 import type { AdminUserStatus } from '@/types/admin.types';
 
 interface UserDetailDrawerProps {
@@ -94,13 +95,10 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
             {user.lastLoginAt && (
               <MetaRow
                 label={t('admin.users.colLastLogin')}
-                value={new Date(user.lastLoginAt).toLocaleString()}
+                value={formatDateTime(user.lastLoginAt)}
               />
             )}
-            <MetaRow
-              label={t('admin.users.created')}
-              value={new Date(user.createdAt).toLocaleDateString()}
-            />
+            <MetaRow label={t('admin.users.created')} value={formatDate(user.createdAt)} />
           </div>
 
           <hr className="my-2 border-gray-100 dark:border-white/5" />

@@ -1,10 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <!-- Top-down sedan. Fill = currentColor (status). Nose = north. -->
-  <rect x="17.8" y="19.4" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
-  <rect x="42" y="19.4" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
-  <rect x="17.8" y="40.8" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
-  <rect x="42" y="40.8" width="4.2" height="9.2" rx="1.3" fill="#0B0F19"/>
-  <path d="M24.8 6.4 C21.6 6.6 19.2 10 18.6 14.8 L17.6 22.2 C16.8 25 16.6 28 16.6 32 L16.6 42.6 C16.6 49.2 18.8 53.8 23 56.2 C26.8 58.4 37.2 58.4 41 56.2 C45.2 53.8 47.4 49.2 47.4 42.6 L47.4 32 C47.4 28 47.2 25 46.4 22.2 L45.4 14.8 C44.8 10 42.4 6.6 39.2 6.4 C35 5.8 29 5.8 24.8 6.4 Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.9" paint-order="stroke fill" stroke-linejoin="round"/>
-  <path d="M25.8 18.8 H38.2 L36.4 28.6 H27.6 Z" fill="#243044"/>
-  <rect x="26.4" y="29.2" width="11.2" height="11.6" rx="1.4" fill="#0B0F19" opacity="0.35"/>
+  <!-- Photorealistic top-down sedan. Fill = currentColor (status). Nose = north. -->
+  <ellipse cx="17.1" cy="21" rx="2.95" ry="5.7" fill="#0B0F19"/>
+  <ellipse cx="46.9" cy="21" rx="2.95" ry="5.7" fill="#0B0F19"/>
+  <ellipse cx="17.1" cy="44" rx="2.95" ry="5.9" fill="#0B0F19"/>
+  <ellipse cx="46.9" cy="44" rx="2.95" ry="5.9" fill="#0B0F19"/>
+  <path d="M24.8 4.6 C20.6 4.8 17.2 7.6 16.2 12.2 C15.4 16.2 14.6 19.2 14.2 22.8 C13.8 26.4 13.6 30.2 13.6 33.4 C13.6 38.4 13.8 43.2 14.6 47.4 C15.4 52.2 17.4 56.2 21.6 58.2 C25.2 60 38.8 60 42.4 58.2 C46.6 56.2 48.6 52.2 49.4 47.4 C50.2 43.2 50.4 38.4 50.4 33.4 C50.4 30.2 50.2 26.4 49.8 22.8 C49.4 19.2 48.6 16.2 47.8 12.2 C46.8 7.6 43.4 4.8 39.2 4.6 C34.6 4.2 29.4 4.2 24.8 4.6 Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.9" paint-order="stroke fill" stroke-linejoin="round"/>
+  <path d="M24.8 18.8 H39.2 L36.8 28.6 H27.2 Z" fill="#1E293B"/>
+  <rect x="26.6" y="28.8" width="10.8" height="12.4" rx="1.5" fill="#0B0F19" opacity="0.35"/>
+  <path d="M27 41.6 H37 L39.4 51 H24.6 Z" fill="#1E293B" opacity="0.96"/>
 </svg>

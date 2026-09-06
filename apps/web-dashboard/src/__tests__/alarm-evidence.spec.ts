@@ -51,7 +51,7 @@ describe('alarmEvidenceWindow', () => {
     const raised = '2026-09-05T12:00:00.000Z';
     const win = alarmEvidenceWindow(raised);
     expect(win).not.toBeNull();
-    expect(win?.toMs - win!.fromMs).toBe(10 * 60 * 1000);
+    expect(win!.toMs - win!.fromMs).toBe(10 * 60 * 1000);
     expect(new Date(win!.fromMs).toISOString()).toBe('2026-09-05T11:55:00.000Z');
     expect(new Date(win!.toMs).toISOString()).toBe('2026-09-05T12:05:00.000Z');
   });

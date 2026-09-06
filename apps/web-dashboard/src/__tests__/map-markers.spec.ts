@@ -90,6 +90,33 @@ describe('vehicleMarkerSvg', () => {
     expect(svg).toContain('stroke="#FFFFFF"');
   });
 
+  it('car marker uses the photorealistic top-down sprite', () => {
+    const svg = vehicleMarkerSvg('car', '#12B76A', { id: 'sedan' });
+    expect(svg).toContain('car-top');
+    expect(svg).toContain('fvsedan-photomask');
+    expect(svg).toContain('mix-blend-mode:color');
+  });
+
+  it('heavy vehicles use photorealistic top-down sprites', () => {
+    expect(vehicleMarkerSvg('truck', '#12B76A', { id: 'trk' })).toContain('truck-top');
+    expect(vehicleMarkerSvg('trailer', '#12B76A', { id: 'trl' })).toContain('trailer-top');
+  });
+
+  it('navigation style paints a status-colored heading dart in a circle', () => {
+    const svg = vehicleMarkerSvg('truck', '#12B76A', {
+      id: 'nav',
+      style: 'navigation',
+      heading: 90,
+    });
+    expect(svg).toContain('rotate(90 24 24)');
+    expect(svg).not.toContain('truck-top');
+    expect(svg).toContain('r="18.6"');
+    expect(svg).toContain('fill="none"');
+    expect(svg).toContain('stroke="#12B76A"');
+    expect(svg).toContain('fill="#12B76A"');
+    expect(svg).toContain('M24 8.2');
+  });
+
   it('selection uses a white hull stroke, not a circular halo or pin', () => {
     const svg = vehicleMarkerSvg('van', '#98A2B3', { selected: true, id: 'sel' });
     expect(svg).not.toContain('r="27"');
@@ -111,12 +138,20 @@ describe('vehicleMarkerSvg', () => {
     expect(vehicleMarkerSvg('truck', '#F04438', { id: 'alm' })).not.toContain('r="5.2"');
   });
 
-  it('headingArrowDataUrl uses the same vehicle body', () => {
-    const url = headingArrowDataUrl('#06B6D4', 90);
+  it('headingArrowDataUrl uses the requested vehicle body on the track', () => {
+    const url = headingArrowDataUrl('#06B6D4', 90, 'truck');
     expect(url).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
     const svg = decodeURIComponent(url.split(',')[1] ?? '');
-    expect(svg).toContain('-body');
+    expect(svg).toContain('truck-top');
     expect(svg).toContain('rotate(90 32 32)');
+  });
+
+  it('headingArrowDataUrl can render the navigation chevron', () => {
+    const svg = decodeURIComponent(
+      headingArrowDataUrl('#06B6D4', 45, 'car', 'navigation').split(',')[1] ?? '',
+    );
+    expect(svg).toContain('rotate(45 24 24)');
+    expect(svg).not.toContain('car-top');
   });
 
   it('paintVehicleMarker reuses the last valid heading when the next fix has none', () => {

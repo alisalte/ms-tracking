@@ -169,7 +169,7 @@ export function mergeLivePositions(
     } else if (pos) {
       // The live wire carries no ignition flag — moving is provable, at rest
       // is reported as idle (the same default the bootstrap uses for unknown).
-      state = pos.speedKph > 2 ? 'driving' : 'idle';
+      state = pos.speedKph > 100 ? 'overspeed' : pos.speedKph > 2 ? 'driving' : 'idle';
     } else {
       state = v.state; // no position delta — keep the bootstrapped movement state
     }

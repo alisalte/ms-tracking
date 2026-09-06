@@ -1,6 +1,8 @@
 import type { InputHTMLAttributes, ReactNode } from 'react';
 import { forwardRef, useId } from 'react';
 
+import { DateField } from './DateField';
+
 /**
  * Input — TailAdmin text field primitive (Tailwind).
  *
@@ -30,6 +32,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     className = '',
     wrapperClassName = '',
     id,
+    type,
+    value,
     ...rest
   },
   ref,
@@ -39,6 +43,23 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const errorId = error ? `${inputId}-error` : undefined;
   const hintId = hint ? `${inputId}-hint` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
+
+  if (type === 'date' || type === 'datetime-local') {
+    return (
+      <DateField
+        ref={ref}
+        id={inputId}
+        type={type as 'date' | 'datetime-local'}
+        value={value as string | undefined}
+        label={label}
+        error={error}
+        hint={hint}
+        className={className}
+        wrapperClassName={wrapperClassName}
+        {...rest}
+      />
+    );
+  }
 
   return (
     <div className={`flex w-full flex-col gap-1.5 ${wrapperClassName}`}>
@@ -59,6 +80,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           id={inputId}
+          type={type}
+          value={value}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={`h-9 w-full rounded-lg border bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-graydark-300 dark:text-white dark:placeholder:text-graydark-600 ${

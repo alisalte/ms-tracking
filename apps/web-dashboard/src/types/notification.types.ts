@@ -33,6 +33,8 @@ export interface Notification {
   /** Alarm/event type (overspeed, geofence_enter, …). */
   eventType: string;
   vehicleId?: string;
+  /** Server template context (vehicleName, speed, geofenceName, …). */
+  metadata?: Record<string, unknown>;
   read: boolean;
   /** ISO timestamp. */
   createdAt: string;

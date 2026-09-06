@@ -43,7 +43,7 @@ export const queryKeys = {
     all: ['commands'] as const,
     catalog: () => [...queryKeys.commands.all, 'catalog'] as const,
     history: (deviceId: string | null) =>
-      [...queryKeys.commands.all, 'history', deviceId ?? 'all'] as const,
+      [...queryKeys.commands.all, 'history', deviceId ?? 'none'] as const,
     detail: (id: string) => [...queryKeys.commands.all, 'detail', id] as const,
   },
   assets: {

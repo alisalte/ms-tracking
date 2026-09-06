@@ -24,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
-import { decorateTripEvents } from '@/lib/trip-events';
+import { TRIP_SPEED_LIMIT_KMH, decorateTripEvents } from '@/lib/trip-events';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
 import type { Alarm } from '@/types/alarm.types';
@@ -54,6 +54,7 @@ function movementState(
   if (presence === 'OFFLINE' || presence === 'UNKNOWN') return 'offline';
   if (presence === 'STALE') return 'stopped';
   if (!pos) return 'stopped';
+  if (pos.speedKph > TRIP_SPEED_LIMIT_KMH) return 'overspeed';
   if (pos.speedKph > 2) return 'driving';
   return pos.ignitionOn === false ? 'stopped' : 'idle';
 }
@@ -115,8 +116,8 @@ function fetchFleetStats(): Promise<FleetStats> {
       totalVehicles: fleet.length,
       online,
       offline: fleet.length - online,
-      stale: 0,
-      unknown: 0,
+      stale: fleet.filter((v) => v.presence === 'STALE').length,
+      unknown: fleet.filter((v) => v.presence === 'UNKNOWN').length,
       totalFleets: 0,
       totalDevices: 0,
     });

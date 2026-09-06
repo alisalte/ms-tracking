@@ -3,6 +3,7 @@
  * (06 §11.3 SendDeviceCommand; Meitrack MDVR GPRS Protocol V2.0).
  *
  *   GET  /device-commands/catalog          → { data: CommandDef[] }
+ *   GET  /device-commands                  → Page<DeviceCommandRecord> (tenant history)
  *   GET  /device-commands/:id              → { data: DeviceCommandRecord }
  *   POST /devices/:deviceId/commands       { commandCode, params?, ttlSec? }
  *   GET  /devices/:deviceId/commands       (?cursor&limit&status&commandCode)
@@ -42,10 +43,12 @@ async function fetchCatalog(): Promise<CommandDef[]> {
 async function fetchHistory(
   deviceId: string | null,
   status?: CommandStatus,
+  tenant = false,
 ): Promise<DeviceCommandRecord[]> {
   const real = async (): Promise<DeviceCommandRecord[]> => {
-    if (!deviceId) return [];
-    const page = await apiGetRaw<Page<DeviceCommandRecord>>(`/devices/${deviceId}/commands`, {
+    if (!deviceId && !tenant) return [];
+    const path = deviceId ? `/devices/${deviceId}/commands` : '/device-commands';
+    const page = await apiGetRaw<Page<DeviceCommandRecord>>(path, {
       limit: 200,
       ...(status ? { status } : {}),
     });
@@ -111,14 +114,20 @@ export function useCommandCatalog() {
 }
 
 /**
- * Command history for a device (null = none selected). Polls while any row is
- * in-flight (QUEUED/SENT) so ack transitions appear without a manual refresh.
+ * Command history for one device, or the whole tenant (`tenant: true`) so
+ * bulk sends can be grouped in the menu-mode history tab.
  */
-export function useCommandHistory(deviceId: string | null, status?: CommandStatus) {
+export function useCommandHistory(
+  deviceId: string | null,
+  status?: CommandStatus,
+  options?: { tenant?: boolean },
+) {
+  const tenant = Boolean(options?.tenant);
+  const scope = deviceId ?? (tenant ? 'tenant' : null);
   return useQuery({
-    queryKey: [...queryKeys.commands.history(deviceId), status ?? 'any'],
-    queryFn: () => fetchHistory(deviceId, status),
-    enabled: Boolean(deviceId),
+    queryKey: [...queryKeys.commands.history(scope), status ?? 'any'],
+    queryFn: () => fetchHistory(deviceId, status, tenant),
+    enabled: Boolean(deviceId) || tenant,
     refetchInterval: (query) => {
       const rows = query.state.data;
       const inFlight = rows?.some((r) => r.status === 'QUEUED' || r.status === 'SENT');

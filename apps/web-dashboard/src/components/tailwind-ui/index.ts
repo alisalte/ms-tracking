@@ -27,6 +27,8 @@ export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
 export { IconButton } from './IconButton';
 export type { IconButtonProps } from './IconButton';
+export { DateField } from './DateField';
+export type { DateFieldProps } from './DateField';
 export { Input } from './Input';
 export type { InputProps } from './Input';
 export { Modal } from './Modal';
