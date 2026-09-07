@@ -3,22 +3,22 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Card, Skeleton } from '@/components/tailwind-ui';
+import { formatNumber } from '@/lib/format-number';
 
 /**
- * KpiTile — TailAdmin metric card (solid surface, square icon well).
+ * KpiTile — compact metric card for the live dashboard row.
  *
  * REAL counts only: `value` comes from a live query — never a fabricated delta
  * or sparkline (§22). The optional `footer` chip carries a REAL secondary fact
  * supplied by the caller.
  */
 
-/** Semantic icon-well classes — TailAdmin 50-tint wells, not glass chips. */
 const TONES = {
-  brand: 'bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-300',
-  success: 'bg-success-50 text-success-500 dark:bg-success-500/15 dark:text-success-400',
-  warning: 'bg-warning-50 text-warning-500 dark:bg-warning-500/15 dark:text-warning-400',
-  danger: 'bg-danger-50 text-danger-500 dark:bg-danger-500/15 dark:text-danger-400',
-  info: 'bg-info-50 text-info-500 dark:bg-info-500/15 dark:text-info-400',
+  brand: 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300',
+  success: 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-400',
+  warning: 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-400',
+  danger: 'bg-danger-50 text-danger-600 dark:bg-danger-500/15 dark:text-danger-400',
+  info: 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-300',
   teal: 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-300',
   purple: 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300',
   gray: 'bg-gray-100 text-gray-500 dark:bg-white/8 dark:text-graydark-600',
@@ -52,7 +52,7 @@ export function KpiTile({
   footer,
   onClick,
 }: KpiTileProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const chip = TONES[tone];
 
   return (
@@ -71,27 +71,25 @@ export function KpiTile({
       }
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
-      className={`fv-kpi group relative flex min-h-[108px] flex-col p-5 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-        onClick
-          ? 'cursor-pointer hover:border-brand-300 dark:hover:border-brand-500/40'
-          : ''
+      className={`fv-kpi group relative flex min-h-[104px] flex-col p-4 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
+        onClick ? 'cursor-pointer hover:border-brand-300 dark:hover:border-brand-500/40' : ''
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-500 dark:text-graydark-600">
+          <p className="truncate text-[13px] font-medium text-gray-500 dark:text-graydark-600">
             {t(labelKey)}
           </p>
-          <div className="mt-2 min-w-0">
+          <div className="mt-1.5 min-w-0">
             {loading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <p className="flex items-baseline gap-1 text-[1.75rem] leading-none font-bold tabular-nums tracking-tight text-gray-800 dark:text-white">
+              <p className="flex items-baseline gap-1 text-[1.65rem] leading-none font-bold tabular-nums tracking-tight text-gray-800 dark:text-white">
                 {value === null || value === undefined ? (
                   '—'
                 ) : (
                   <>
-                    {value.toLocaleString()}
+                    {formatNumber(value, i18n.language)}
                     {suffix && (
                       <span className="text-sm font-semibold text-gray-400 dark:text-graydark-500">
                         {suffix}
@@ -105,12 +103,12 @@ export function KpiTile({
         </div>
         <span
           aria-hidden
-          className={`inline-flex size-12 shrink-0 items-center justify-center rounded-xl [&_svg]:size-6 ${chip}`}
+          className={`inline-flex size-10 shrink-0 items-center justify-center rounded-xl [&_svg]:size-5 ${chip}`}
         >
           <Icon strokeWidth={1.75} />
         </span>
       </div>
-      <div className="mt-auto flex min-h-[20px] items-center pt-3">{footer}</div>
+      <div className="mt-auto flex min-h-[18px] items-center pt-2.5">{footer}</div>
     </Card>
   );
 }
@@ -132,7 +130,7 @@ export function KpiChip({
   }[tone];
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] leading-4 font-medium tabular-nums ${cls}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium tabular-nums ${cls}`}
     >
       {children}
     </span>

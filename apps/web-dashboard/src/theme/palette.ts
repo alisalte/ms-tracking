@@ -60,42 +60,42 @@ export const status = {
 } as const;
 
 /**
- * Official ApexCharts demo palette
- * (https://apexcharts.com/javascript-chart-demos/ — default theme colors).
- * Chart series use these hues so dashboard/report charts match the demos.
+ * FleetVision chart hues — muted, SaaS-grade (not the neon Apex demo set).
+ * Tuned to the navy/indigo shell: emerald for healthy/moving, rose for
+ * alerts, honey amber for warning/idle, indigo for information.
  */
 export const apex = {
-  blue: '#008FFB',
-  green: '#00E396',
-  yellow: '#FEB019',
-  red: '#FF4560',
-  purple: '#775DD0',
-  indigo: '#3F51B5',
-  slate: '#546E7A',
-  rose: '#D4526E',
-  brown: '#8D5B4C',
-  orange: '#F86624',
-  cyan: '#26A69A',
-  magenta: '#D10CE8',
+  blue: '#4C6FFF',
+  green: '#16B364',
+  yellow: '#E8A317',
+  red: '#E5484D',
+  purple: '#7A5AF8',
+  indigo: '#3E63DD',
+  slate: '#8B9CB3',
+  rose: '#E5484D',
+  brown: '#C08B5C',
+  orange: '#F06D3F',
+  cyan: '#12A594',
+  magenta: '#D6409F',
 } as const;
 
-/** Default series order used by ApexCharts JavaScript demos. */
+/** Default multi-series order — distinct but harmonious on white cards. */
 export const apexPalette: readonly string[] = [
   apex.blue,
   apex.green,
   apex.yellow,
   apex.red,
   apex.purple,
-  apex.indigo,
   apex.cyan,
   apex.orange,
-  apex.rose,
+  apex.indigo,
+  apex.slate,
   apex.magenta,
 ];
 
 /**
- * Semantic series colors for fleet charts — Apex demo hues, domain meaning
- * preserved (moving stays green, speeding stays red, …).
+ * Semantic series colors for fleet charts. Domain meaning is preserved
+ * (moving stays green, speeding stays red, …) with the refined hues above.
  */
 export const chart = {
   moving: apex.green,
@@ -106,12 +106,12 @@ export const chart = {
   stopped: apex.slate,
   noTelemetry: apex.indigo,
   distance: apex.blue,
-  trips: apex.green,
+  trips: apex.cyan,
   engine: apex.cyan,
   odometer: apex.indigo,
   peak: apex.orange,
   speeding: apex.red,
-  geofence: apex.indigo,
+  geofence: apex.purple,
   fcw: apex.purple,
   dtc: apex.cyan,
   lowBattery: apex.brown,
@@ -126,11 +126,11 @@ export const chart = {
   resolved: apex.green,
 } as const;
 
-/** Donut/pie slice separators — match the card surface so slices look like Apex demos. */
+/** Donut/pie slice separators — match the card surface. */
 export const chartSurface = {
   light: '#FFFFFF',
   dark: '#1A2231',
-  tooltipGlow: 'rgba(0, 143, 251, 0.18)',
+  tooltipGlow: 'rgba(76, 111, 255, 0.16)',
 } as const;
 
 /** Map/marker accents — vehicle states, geofences, selected routes. */

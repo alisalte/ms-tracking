@@ -152,11 +152,14 @@ export function Sidebar({ mobileOpen, collapsed, onMobileClose, onToggleCollapse
         ))}
       </nav>
 
-      {/* Footer version strip */}
+      {/* Footer status strip */}
       {!collapsed && (
-        <div className="relative z-10 m-3 shrink-0 rounded-xl border border-white/8 bg-white/[0.035] px-4 py-3 text-xs text-graydark-500 shadow-inner shadow-white/[0.02]">
-          <div className="font-semibold text-graydark-800">FleetVision</div>
-          <div>
+        <div className="relative z-10 m-3 shrink-0 rounded-xl border border-white/8 bg-white/[0.035] px-3.5 py-3 text-xs text-graydark-500">
+          <div className="flex items-center gap-2 font-semibold text-graydark-800">
+            <span className="fv-live-dot inline-block size-2 shrink-0" aria-hidden />
+            {t('nav.consoleReady')}
+          </div>
+          <div className="mt-1 ps-4">
             v{pkg.version} · {t('nav.secureConsole')}
           </div>
         </div>

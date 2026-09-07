@@ -72,10 +72,13 @@
     "commands": "فرمان‌ها",
     "notifications": "اعلان‌ها",
     "events": "رویدادها",
-    "secureConsole": "کنسول عملیات امن"
+    "secureConsole": "کنسول عملیات امن",
+    "consoleReady": "کنسول آماده"
   },
   "common": {
     "search": "جستجو...",
+    "searchFleet": "جستجو در ناوگان، خودروها، مکان‌ها…",
+    "applications": "برنامه‌ها",
     "alerts": "هشدارها",
     "help": "راهنما",
     "logout": "خروج",
@@ -167,6 +170,9 @@
   "dashboard": {
     "title": "داشبورد ناوگان",
     "subtitle": "نمای کلی زنده‌ی عملیات",
+    "welcomeNamed": "{{name}} عزیز، به داشبورد FleetVision خوش آمدید",
+    "bannerPhotoAlt": "کامیون ناوگان در بزرگراه",
+    "todayLabel": "امروز",
     "live": "زنده",
     "noChange": "۰",
     "export": "خروجی",
@@ -187,6 +193,7 @@
       "parked": "پارک شده",
       "activeDevices": "دستگاه‌های فعال",
       "activeAlarms": "هشدارهای فعال",
+      "onlineConnections": "اتصالات آنلاین",
       "distance7d": "مسافت (۷ روز اخیر)",
       "trips7d": "سفرها (۷ روز اخیر)",
       "utilization": "میانگین بهره‌وری",
@@ -275,8 +282,16 @@
       "activeAlerts": "هشدارهای فعال",
       "attention": "خودروهای نیازمند توجه",
       "utilization": "به‌کارگیری ناوگان",
-      "mapPreview": "نقشه‌ی ناوگان",
+      "mapPreview": "موقعیت ناوگان",
       "openMap": "باز کردن نقشه",
+      "vehicleList": "خودروها",
+      "usageTrend": "روند استفاده از ناوگان",
+      "maintenanceStatus": "وضعیت تعمیر و نگهداری",
+      "upcomingPm": "موارد نگهداری پیشگیرانه",
+      "totalRequests": "دستور کارها",
+      "insights": "تحلیل‌های بیشتر",
+      "speedKmh": "{{value}} کیلومتر بر ساعت",
+      "viewAllShort": "مشاهده همه",
       "weather": "آب‌وهوا",
       "alertTypes": "انواع هشدار",
       "performance": "برترین خودروها بر اساس مسافت",
@@ -303,12 +318,17 @@
       "live": "وضعیت زنده‌ی ناوگان",
       "liveHint": "لحظه‌ای از نقشه و وضعیت دستگاه",
       "period": "عملکرد بازه",
-      "periodHint": "۷ روز اخیر · شاخص‌های گزارش‌گیری (UTC)"
+      "periodHint": "۷ روز اخیر · شاخص‌های گزارش‌گیری (UTC)",
+      "insights": "گزارش‌های تکمیلی"
     },
     "empty": {
       "alerts": "هیچ هشدار فعلی وجود ندارد — ناوگان آرام است.",
       "attention": "در حال حاضر چیزی نیازمند توجه نیست.",
-      "performance": "هنوز داده‌ی سفری موجود نیست."
+      "performance": "هنوز داده‌ی سفری موجود نیست.",
+      "activity": "هنوز خودرویی برای نمودار وجود ندارد.",
+      "maintenance": "دستورکارهای تعمیرات هنوز متصل نشده‌اند.",
+      "upcomingPm": "برنامه نگهداری پیشگیرانه هنوز در دسترس نیست.",
+      "vehicleList": "هیچ خودرویی موقعیت ارسال نمی‌کند."
     },
     "kpi": {
       "activeVehicles": "خودروهای فعال",
@@ -317,16 +337,26 @@
       "onlineDevices": "دستگاه‌های آنلاین"
     },
     "sections": {
-      "activity": "فعالیت ناوگان",
-      "health": "سلامت ناوگان",
-      "events": "رویدادهای اخیر"
+      "activity": "وضعیت ناوگان",
+      "health": "سلامت خودروها",
+      "events": "آخرین فعالیت‌ها"
     },
     "health": {
       "connectivity": "اتصال دستگاه‌ها",
       "gpsReporting": "گزارش GPS",
       "gpsValue": "{{reported}} از {{total}} خودرو در حال ارسال",
       "stalePositions": "موقعیت‌های قدیمی",
-      "offlineDevices": "دستگاه‌های آفلاین"
+      "offlineDevices": "دستگاه‌های آفلاین",
+      "onlineDevices": "آنلاین",
+      "staleDevices": "غیربه‌روز",
+      "healthyShare": "ترکیب دستگاه‌ها"
+    },
+    "maintenance": {
+      "inProgress": "در حال انجام",
+      "completed": "تکمیل‌شده",
+      "pending": "در انتظار",
+      "openPortal": "باز کردن تعمیرات",
+      "waitingBackend": "در انتظار سرویس vehicle-maintenance-service"
     },
     "severities": {
       "critical": "بحرانی",
@@ -2073,7 +2103,19 @@
     "changePasswordHelp": "رمز عبور خود را از طریق فرایند ایمیل بازنشانی کنید.",
     "changePasswordAction": "تغییر رمز عبور",
     "allPermissions": "دسترسی کامل",
-    "rolePermCount": "{{roles}} نقش · {{permissions}} دسترسی"
+    "rolePermCount": "{{roles}} نقش · {{permissions}} دسترسی",
+    "changePhoto": "تغییر عکس",
+    "addPhoto": "یک عکس پروفایل بگذارید تا شما را بشناسند.",
+    "photoHint": "همین عکس در هدر هم دیده می‌شود.",
+    "removePhoto": "حذف عکس",
+    "changeCover": "عکس کاور",
+    "removeCover": "حذف کاور",
+    "photoError": "این تصویر قابل استفاده نبود. JPG یا PNG را امتحان کنید.",
+    "stats": {
+      "organization": "سازمان",
+      "roles": "نقش‌ها",
+      "permissions": "دسترسی‌ها"
+    }
   },
   "validation": {
     "tenantId": {

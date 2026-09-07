@@ -106,7 +106,7 @@ export function TenantDetailPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-full flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link to="/tenants" className="text-sm text-brand-600 no-underline">
           ← {t('common.back')}

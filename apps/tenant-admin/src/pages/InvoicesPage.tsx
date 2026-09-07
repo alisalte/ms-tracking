@@ -21,7 +21,7 @@ export function InvoicesPage() {
   }, []);
 
   return (
-    <div>
+    <div className="flex min-h-full flex-1 flex-col">
       {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {rows.length === 0 && !error ? (
         <EmptyState
@@ -38,7 +38,7 @@ export function InvoicesPage() {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
+        <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-stone-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-start text-slate-500">
               <tr>

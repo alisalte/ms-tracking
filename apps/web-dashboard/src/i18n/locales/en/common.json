@@ -72,10 +72,13 @@
     "commands": "Commands",
     "notifications": "Notifications",
     "events": "Events",
-    "secureConsole": "Secure ops console"
+    "secureConsole": "Secure ops console",
+    "consoleReady": "Console ready"
   },
   "common": {
     "search": "Search...",
+    "searchFleet": "Search fleet, vehicles, locations…",
+    "applications": "Applications",
     "alerts": "Alerts",
     "help": "Help",
     "logout": "Sign Out",
@@ -167,6 +170,9 @@
   "dashboard": {
     "title": "Fleet Dashboard",
     "subtitle": "Live operational overview",
+    "welcomeNamed": "Hello {{name}}, welcome to FleetVision",
+    "bannerPhotoAlt": "Fleet truck on the highway",
+    "todayLabel": "Today",
     "live": "Live",
     "noChange": "0",
     "export": "Export",
@@ -186,7 +192,8 @@
       "moving": "Moving",
       "parked": "Parked",
       "activeDevices": "Active Devices",
-      "activeAlarms": "Active Alarms",
+      "activeAlarms": "Active Alerts",
+      "onlineConnections": "Online Connections",
       "distance7d": "Distance (last 7 days)",
       "trips7d": "Trips (last 7 days)",
       "utilization": "Avg utilization",
@@ -275,8 +282,16 @@
       "activeAlerts": "Active Alerts",
       "attention": "Vehicles Needing Attention",
       "utilization": "Fleet Utilization",
-      "mapPreview": "Fleet Map",
+      "mapPreview": "Fleet location",
       "openMap": "Open map",
+      "vehicleList": "Vehicles",
+      "usageTrend": "Fleet usage trend",
+      "maintenanceStatus": "Maintenance & service",
+      "upcomingPm": "Upcoming PM items",
+      "totalRequests": "Work orders",
+      "insights": "More insights",
+      "speedKmh": "{{value}} km/h",
+      "viewAllShort": "View all",
       "weather": "Weather",
       "alertTypes": "Alert Types",
       "performance": "Top Vehicles by Distance",
@@ -303,12 +318,17 @@
       "live": "Live fleet status",
       "liveHint": "Point-in-time from map join + device presence",
       "period": "Period performance",
-      "periodHint": "Last 7 days · reporting KPIs (UTC)"
+      "periodHint": "Last 7 days · reporting KPIs (UTC)",
+      "insights": "Additional reporting"
     },
     "empty": {
       "alerts": "No active alerts — fleet is quiet.",
       "attention": "Nothing needs attention right now.",
-      "performance": "No trip data yet."
+      "performance": "No trip data yet.",
+      "activity": "No vehicles to chart yet.",
+      "maintenance": "Maintenance work orders are not connected yet.",
+      "upcomingPm": "No preventive-maintenance schedule is available yet.",
+      "vehicleList": "No vehicles reporting a location."
     },
     "kpi": {
       "activeVehicles": "Active Vehicles",
@@ -317,16 +337,26 @@
       "onlineDevices": "Online Devices"
     },
     "sections": {
-      "activity": "Vehicle Activity",
-      "health": "Fleet Health",
-      "events": "Recent Events"
+      "activity": "Fleet status",
+      "health": "Vehicle health",
+      "events": "Latest activities"
     },
     "health": {
       "connectivity": "Device connectivity",
       "gpsReporting": "GPS reporting",
       "gpsValue": "{{reported}} of {{total}} vehicles reporting",
       "stalePositions": "Stale positions",
-      "offlineDevices": "Offline devices"
+      "offlineDevices": "Offline devices",
+      "onlineDevices": "Online",
+      "staleDevices": "Stale",
+      "healthyShare": "Device mix"
+    },
+    "maintenance": {
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "pending": "Pending",
+      "openPortal": "Open maintenance",
+      "waitingBackend": "Waiting for vehicle-maintenance-service"
     },
     "severities": {
       "critical": "Critical",
@@ -2073,7 +2103,19 @@
     "changePasswordHelp": "Reset your password via the email flow.",
     "changePasswordAction": "Change password",
     "allPermissions": "Full access",
-    "rolePermCount": "{{roles}} roles · {{permissions}} permissions"
+    "rolePermCount": "{{roles}} roles · {{permissions}} permissions",
+    "changePhoto": "Change photo",
+    "addPhoto": "Add a profile photo so operators recognize you.",
+    "photoHint": "This photo also appears in the header.",
+    "removePhoto": "Remove photo",
+    "changeCover": "Cover photo",
+    "removeCover": "Remove cover",
+    "photoError": "That image could not be used. Try a JPG or PNG.",
+    "stats": {
+      "organization": "Organization",
+      "roles": "Roles",
+      "permissions": "Permissions"
+    }
   },
   "validation": {
     "tenantId": {

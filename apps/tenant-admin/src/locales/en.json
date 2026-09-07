@@ -35,7 +35,14 @@
     "outstanding": "Outstanding",
     "expiredLicenses": "{{n}} expired licenses",
     "byPlan": "Contracted value by plan",
-    "recentInvoices": "Recent invoices"
+    "recentInvoices": "Recent invoices",
+    "licensesActive": "Active licenses",
+    "collectionRate": "Collection rate",
+    "suspendedOf": "{{n}} suspended",
+    "licenseMix": "License status",
+    "invoiceMix": "Invoice status",
+    "topTenants": "Highest contract value",
+    "noChartData": "No data to chart"
   },
   "tenants": {
     "title": "Tenants",
@@ -197,7 +204,8 @@
   "licenseStatus": {
     "ACTIVE": "Active",
     "GRACE": "Grace",
-    "EXPIRED": "Expired"
+    "EXPIRED": "Expired",
+    "NONE": "No license"
   },
   "meter": {
     "users": "Users",

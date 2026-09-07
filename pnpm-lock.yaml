@@ -729,6 +729,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@6.4.3(@types/node@22.10.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.19.2)(yaml@2.6.1))
+      apexcharts:
+        specifier: ^7.0.0
+        version: 7.0.0
       axios:
         specifier: ^1.8.1
         version: 1.19.0
@@ -741,6 +744,9 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.8
+      react-apexcharts:
+        specifier: ^2.1.1
+        version: 2.1.1(apexcharts@7.0.0)(react@19.2.8)
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)

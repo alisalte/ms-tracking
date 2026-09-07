@@ -62,7 +62,7 @@ export function TenantsPage() {
   const loc = i18n.language.startsWith('fa') ? 'fa-IR-u-ca-persian' : 'en-GB';
 
   return (
-    <div>
+    <div className="flex min-h-full flex-1 flex-col">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">{t('tenants.listHint')}</p>
       </div>
@@ -70,7 +70,7 @@ export function TenantsPage() {
       {rows.length === 0 && !error ? (
         <p className="text-slate-500">{t('tenants.empty')}</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white">
+        <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-stone-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-start text-slate-500">
               <tr>

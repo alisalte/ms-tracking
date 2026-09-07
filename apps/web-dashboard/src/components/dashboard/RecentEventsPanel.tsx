@@ -1,28 +1,24 @@
 import type { TFunction } from 'i18next';
-import { AlertOctagon } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useActiveAlarms } from '@/api/fleet.api';
 import { alarmTypeIcon } from '@/components/alarms/AlarmTypeIcon';
-import { Badge } from '@/components/tailwind-ui';
 import { localizeAlarmMessage, localizeAlarmType, mapAlarmType } from '@/lib/alarm-copy';
+import { formatTime } from '@/lib/format-date';
 import type { AlertSeverity, FleetAlert } from '@/types/fleet.types';
 
 import { DashboardCard } from './DashboardCard';
 
-/** Severity → tailwind badge tone + icon tint. */
-const SEVERITY_TONE: Record<AlertSeverity, { badge: 'danger' | 'warning' | 'gray'; text: string }> =
-  {
-    critical: { badge: 'danger', text: 'text-danger-600 dark:text-danger-400' },
-    warning: { badge: 'warning', text: 'text-warning-600 dark:text-warning-400' },
-    info: { badge: 'gray', text: 'text-gray-500 dark:text-graydark-600' },
-  };
+const SEVERITY_DOT: Record<AlertSeverity, string> = {
+  critical: 'bg-danger-400',
+  warning: 'bg-warning-400',
+  info: 'bg-info-400',
+};
 
-/** Severity rank for the CRITICAL → warning → info sort (§1.4). */
 const SEVERITY_RANK: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
 
-/** Relative time, locale-aware — keeps the live panel feeling fresh (§0.6). */
 function relativeTime(iso: string, t: TFunction) {
   const then = new Date(iso).getTime();
   const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
@@ -43,17 +39,13 @@ export function sortAlerts(alerts: FleetAlert[]): FleetAlert[] {
 }
 
 /**
- * RecentEventsPanel — TailAdmin port of the severity-sorted alert feed
- * (Phase 4 "Recent Events" + "Alarm Summary").
+ * RecentEventsPanel — live alarm/activity feed from notification-service.
  *
- * Same REAL source (notification-service via useActiveAlarms): a severity
- * summary chip row (critical / warning / informational counts), the latest six
- * events with type, vehicle, detail, and relative time, and a "view all" link
- * to alarm management (/alarms). Rows keep their original deep-link to the
- * live map. Honest error/empty states — never fabricated rows (§22).
+ * Navy timeline on the dashboard (reference layout). Honest empty/error;
+ * never fabricated rows (§22).
  */
 export function RecentEventsPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useActiveAlarms();
   const alerts = data ? sortAlerts(data) : [];
 
@@ -64,8 +56,8 @@ export function RecentEventsPanel() {
   return (
     <DashboardCard
       titleKey="dashboard.sections.events"
-      accent="danger"
-      icon={AlertOctagon}
+      icon={Activity}
+      variant="navy"
       live
       loading={isLoading && !isError}
       empty={alerts.length === 0 && !isLoading && !isError}
@@ -76,36 +68,36 @@ export function RecentEventsPanel() {
         alerts.length > 0 ? (
           <Link
             to="/alarms"
-            className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            className="text-xs font-semibold text-indigo-200 no-underline hover:text-white"
           >
-            {t('dashboard.widgets.viewAll', { count: alerts.length })} →
+            {t('dashboard.widgets.viewAllShort')} →
           </Link>
         ) : undefined
       }
     >
-      <ul className="flex list-none flex-col gap-1 p-0">
-        {alerts.slice(0, 6).map((alert) => {
+      <ul className="relative m-0 flex list-none flex-col gap-0 p-0">
+        <span aria-hidden className="absolute start-[18px] top-2 bottom-2 w-px bg-white/10" />
+        {alerts.slice(0, 7).map((alert) => {
           const catalogType = mapAlarmType(alert.type);
           const Icon = alarmTypeIcon(catalogType);
-          const tone = SEVERITY_TONE[alert.severity];
           return (
             <li key={alert.id}>
               <Link to="/map" className="block no-underline">
-                <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg px-1.5 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
-                  <span
-                    className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-current/15 bg-current/10 [&_svg]:size-4 ${tone.text}`}
-                  >
+                <span className="relative grid grid-cols-[36px_1fr_auto] items-start gap-2.5 rounded-xl px-1 py-2 transition-colors hover:bg-white/5">
+                  <span className="relative z-10 inline-flex size-9 items-center justify-center rounded-xl bg-white/8 text-white [&_svg]:size-4">
+                    <span
+                      aria-hidden
+                      className={`absolute -end-0.5 -top-0.5 size-2 rounded-full ${SEVERITY_DOT[alert.severity]}`}
+                    />
                     <Icon aria-hidden />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-gray-800 dark:text-graydark-800">
+                    <span className="block truncate text-sm font-semibold text-white">
                       {localizeAlarmType(t, catalogType)}
-                      <span className="font-medium text-gray-500 dark:text-graydark-600">
-                        {' · '}
-                        {alert.vehicleLabel}
-                      </span>
                     </span>
-                    <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
+                    <span className="block truncate text-xs text-indigo-200/80">
+                      {alert.vehicleLabel}
+                      {' · '}
                       {localizeAlarmMessage(t, {
                         type: catalogType,
                         message: alert.detail,
@@ -113,8 +105,11 @@ export function RecentEventsPanel() {
                       })}
                     </span>
                   </span>
-                  <span className="text-xs whitespace-nowrap tabular-nums text-gray-400 dark:text-graydark-600">
-                    {relativeTime(alert.occurredAt, t)}
+                  <span className="pt-0.5 text-[11px] whitespace-nowrap tabular-nums text-indigo-200/70">
+                    {formatTime(alert.occurredAt, undefined, i18n.language)}
+                    <span className="mt-0.5 block text-end opacity-70">
+                      {relativeTime(alert.occurredAt, t)}
+                    </span>
                   </span>
                 </span>
               </Link>
@@ -123,18 +118,17 @@ export function RecentEventsPanel() {
         })}
       </ul>
 
-      {/* Alarm summary chips — severity counts at a glance */}
       {alerts.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-white/5">
-          <Badge color="danger">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3 text-[11px] text-indigo-100">
+          <span>
             {t('dashboard.severities.critical')}: {critical}
-          </Badge>
-          <Badge color="warning">
+          </span>
+          <span>
             {t('dashboard.severities.warning')}: {warning}
-          </Badge>
-          <Badge color="gray">
+          </span>
+          <span>
             {t('dashboard.severities.info')}: {info}
-          </Badge>
+          </span>
         </div>
       )}
     </DashboardCard>

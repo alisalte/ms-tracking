@@ -3,12 +3,13 @@
  *
  * Brand-tinted fallback. Sizes match TailAdmin's avatar scale.
  */
+import { useState } from 'react';
 export interface AvatarProps {
   src?: string;
   alt?: string;
   /** Initials when no image (falls back to first letter of `name`). */
   name?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   className?: string;
 }
 
@@ -19,6 +20,7 @@ const SIZES = {
   lg: 'size-12 text-base',
   xl: 'size-16 text-xl',
   '2xl': 'size-20 text-2xl',
+  '3xl': 'size-32 text-4xl',
 };
 
 function initials(name?: string): string | undefined {
@@ -29,6 +31,9 @@ function initials(name?: string): string | undefined {
 }
 
 export function Avatar({ src, alt, name, size = 'sm', className = '' }: AvatarProps) {
+  const [failedSrc, setFailedSrc] = useState<string | undefined>();
+  const showImage = Boolean(src) && src !== failedSrc;
+
   const cls = [
     'inline-flex items-center justify-center rounded-full font-semibold shrink-0',
     'bg-brand-500 text-white overflow-hidden',
@@ -38,8 +43,15 @@ export function Avatar({ src, alt, name, size = 'sm', className = '' }: AvatarPr
     .filter(Boolean)
     .join(' ');
 
-  if (src) {
-    return <img src={src} alt={alt ?? name ?? ''} className={cls} />;
+  if (showImage && src) {
+    return (
+      <img
+        src={src}
+        alt={alt ?? name ?? ''}
+        className={`${cls} object-cover`}
+        onError={() => setFailedSrc(src)}
+      />
+    );
   }
   return <span className={cls}>{initials(name) ?? '?'}</span>;
 }

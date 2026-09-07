@@ -35,7 +35,14 @@
     "outstanding": "ماندهٔ پرداخت‌نشده",
     "expiredLicenses": "{{n}} لایسنس منقضی",
     "byPlan": "درآمد قراردادی به تفکیک پلن",
-    "recentInvoices": "آخرین فاکتورها"
+    "recentInvoices": "آخرین فاکتورها",
+    "licensesActive": "لایسنس فعال",
+    "collectionRate": "نرخ وصول",
+    "suspendedOf": "{{n}} تعلیق‌شده",
+    "licenseMix": "وضعیت لایسنس‌ها",
+    "invoiceMix": "وضعیت فاکتورها",
+    "topTenants": "بیشترین مبلغ قرارداد",
+    "noChartData": "داده‌ای برای نمودار نیست"
   },
   "tenants": {
     "title": "مستأجران",
@@ -197,7 +204,8 @@
   "licenseStatus": {
     "ACTIVE": "فعال",
     "GRACE": "ارفاق",
-    "EXPIRED": "منقضی"
+    "EXPIRED": "منقضی",
+    "NONE": "بدون لایسنس"
   },
   "meter": {
     "users": "کاربر",

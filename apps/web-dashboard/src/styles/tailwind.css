@@ -111,21 +111,20 @@
  * the sidebar links, dashboard widgets, and the tailwind-ui barrel.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/* Sidebar nav link — TailAdmin pill with active + hover states. */
+/* Sidebar nav link — enterprise rail (12px radius, start-edge active mark). */
 .fv-sidebar-link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   width: 100%;
-  padding-block: 0.625rem;
+  padding-block: 0.6rem;
   padding-inline: 0.875rem;
-  /* Material Dashboard signature: full-pill nav items on the dark rail. */
-  border-radius: 999px;
+  border-radius: 12px;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-graydark-700);
-  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s
-    ease;
+  transition: background-color 0.16s ease, color 0.16s ease;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -133,18 +132,25 @@
   white-space: nowrap;
 }
 .fv-sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.075);
+  background: rgba(255, 255, 255, 0.07);
   color: #ffffff;
-  transform: translateX(2px);
-}
-html[dir="rtl"] .fv-sidebar-link:hover {
-  transform: translateX(-2px);
 }
 .fv-sidebar-link[data-active="true"] {
-  background: linear-gradient(135deg, var(--color-brand-500), var(--color-brand-800));
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(91, 124, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.06);
   color: #ffffff;
-  box-shadow: 0 12px 28px rgba(70, 95, 251, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+.fv-sidebar-link[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: #8ea2ff;
+}
+html[dir="rtl"] .fv-sidebar-link[data-active="true"]::before {
+  border-radius: 4px 0 0 4px;
 }
 
 /* Subtle focus ring for keyboard nav (a11y). */
@@ -166,31 +172,41 @@ html[dir="rtl"] .fv-sidebar-link:hover {
   background: transparent;
 }
 
-/* Premium card surface used across Tailwind widgets. */
+/* Premium card surface — solid enterprise cards, 12–16px radius via utilities. */
 .fv-surface {
-  background: rgba(255, 255, 255, 0.86);
-  border-color: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 18px 45px rgba(16, 24, 40, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px) saturate(1.25);
+  background: #ffffff;
+  border-color: var(--color-gray-200);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
+  backdrop-filter: none;
 }
 .dark .fv-surface {
-  background: rgba(31, 41, 55, 0.72);
+  background: var(--color-graydark-300);
   border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
 }
 
-/* KPI tiles — solid TailAdmin metric card (no glass, no lift). */
+/* KPI tiles — compact metric cards on the same solid surface. */
 .fv-surface.fv-kpi {
   background: #ffffff;
   border-color: var(--color-gray-200);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
-  backdrop-filter: none;
 }
 .dark .fv-surface.fv-kpi {
   background: var(--color-graydark-300);
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: none;
-  backdrop-filter: none;
+}
+
+/* Navy activity rail used on the dashboard (matches the sidebar family). */
+.fv-surface.fv-navy {
+  background: linear-gradient(180deg, #1c2450 0%, #151c40 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+  color: #e8ecff;
+}
+.dark .fv-surface.fv-navy {
+  background: linear-gradient(180deg, #161c3e 0%, #10162f 100%);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Freshness dot — live indicator (kept in sync with global.css @keyframes). */

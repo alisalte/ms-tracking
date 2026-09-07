@@ -51,6 +51,8 @@ export interface DashboardCardProps {
   onRetry?: () => void;
   /** Remove default padding (children manage spacing, e.g. charts/maps). */
   flush?: boolean;
+  /** Navy surface for the activity rail (light-mode contrast panel). */
+  variant?: 'default' | 'navy';
   className?: string;
   children?: ReactNode;
 }
@@ -76,11 +78,13 @@ export function DashboardCard({
   error,
   onRetry,
   flush = false,
+  variant = 'default',
   className = '',
   children,
 }: DashboardCardProps) {
   const { t } = useTranslation();
   const heading = title ?? (titleKey ? t(titleKey) : null);
+  const navy = variant === 'navy';
 
   let body: ReactNode;
   if (error !== undefined && error !== null) {
@@ -88,24 +92,26 @@ export function DashboardCard({
   } else if (loading) {
     body = (
       <div className="flex flex-col gap-2.5" aria-hidden>
-        <Skeleton className="h-4 w-1/2" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-3 w-3/4" />
+        <Skeleton className={`h-4 w-1/2 ${navy ? 'bg-white/15' : ''}`} />
+        <Skeleton className={`h-24 w-full ${navy ? 'bg-white/10' : ''}`} />
+        <Skeleton className={`h-3 w-3/4 ${navy ? 'bg-white/15' : ''}`} />
       </div>
     );
   } else if (empty) {
-    body = <EmptyState title={t(emptyKey ?? 'common.noData')} />;
+    body = (
+      <EmptyState
+        title={t(emptyKey ?? 'common.noData')}
+        className={navy ? 'py-8 [&_p]:text-indigo-100' : ''}
+      />
+    );
   } else {
     body = children;
   }
 
   return (
-    <Card
-      flush
-      className={`group relative h-full transition-shadow duration-300 hover:shadow-md ${className}`}
-    >
+    <Card flush className={`group relative h-full ${navy ? 'fv-navy' : ''} ${className}`}>
       {/* Colored top-edge accent hairline (fades to transparent). */}
-      {accent && (
+      {accent && !navy && (
         <span
           aria-hidden
           className={`absolute inset-x-0 top-0 h-[2.5px] rounded-t-2xl bg-gradient-to-r to-transparent ${ACCENTS[accent]}`}
@@ -116,16 +122,22 @@ export function DashboardCard({
           {Icon && (
             <span
               aria-hidden
-              className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full [&_svg]:size-4 ${
-                accent
-                  ? ICON_CHIPS[accent]
-                  : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-graydark-600'
+              className={`inline-flex size-8 shrink-0 items-center justify-center rounded-xl [&_svg]:size-4 ${
+                navy
+                  ? 'bg-white/10 text-white'
+                  : accent
+                    ? ICON_CHIPS[accent]
+                    : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-graydark-600'
               }`}
             >
               <Icon />
             </span>
           )}
-          <h3 className="truncate text-sm font-bold text-gray-800 dark:text-white">{heading}</h3>
+          <h3
+            className={`truncate text-sm font-bold ${navy ? 'text-white' : 'text-gray-800 dark:text-white'}`}
+          >
+            {heading}
+          </h3>
           {live && <LiveBadge />}
         </div>
         {action && <div className="shrink-0">{action}</div>}

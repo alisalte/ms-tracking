@@ -133,7 +133,10 @@ export function TenantCreatePage() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[1fr_240px]">
+    <form
+      onSubmit={onSubmit}
+      className="grid min-h-full flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_280px]"
+    >
       <div className="flex flex-col gap-4">
         <div className="rounded-xl border border-stone-200 bg-white p-4">
           <h1 className="text-xl font-bold">{t('create.title')}</h1>

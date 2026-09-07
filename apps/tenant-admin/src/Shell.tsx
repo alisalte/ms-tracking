@@ -46,8 +46,8 @@ export function Shell() {
   };
 
   return (
-    <div className="min-h-screen bg-paper md:flex">
-      <aside className="no-print flex flex-col bg-ink-950 text-slate-200 md:min-h-screen md:w-52">
+    <div className="flex h-svh flex-col overflow-hidden bg-paper print:h-auto print:overflow-visible md:flex-row">
+      <aside className="no-print flex shrink-0 flex-col bg-ink-950 text-slate-200 md:h-full md:w-52">
         <Link to="/" className="flex items-center gap-2.5 px-4 py-4 no-underline">
           <span className="grid size-8 place-items-center rounded-lg bg-brand-500 text-white">
             <Building2 className="size-4" />
@@ -78,8 +78,8 @@ export function Shell() {
           ))}
         </nav>
       </aside>
-      <div className="min-w-0 flex-1">
-        <header className="no-print border-b border-stone-200 bg-white">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="no-print shrink-0 border-b border-stone-200 bg-white">
           <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5">
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-slate-400">{heading.crumb}</p>
@@ -123,8 +123,10 @@ export function Shell() {
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-[1280px] px-4 py-4 lg:px-5">
-          <Outlet />
+        <main className="flex min-h-0 flex-1 flex-col overflow-auto p-4 lg:p-5">
+          <div className="flex min-h-full min-w-0 flex-1 flex-col">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

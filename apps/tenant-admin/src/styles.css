@@ -27,6 +27,12 @@ html[dir="ltr"] body {
   font-family: "Roboto", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 }
 
+.apexcharts-canvas,
+.apexcharts-tooltip,
+.apexcharts-legend {
+  font-family: inherit !important;
+}
+
 @media print {
   .no-print {
     display: none !important;

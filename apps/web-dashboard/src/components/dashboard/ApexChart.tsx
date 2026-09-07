@@ -2,8 +2,8 @@ import type { ApexOptions } from 'apexcharts';
 import { type ComponentProps, useMemo } from 'react';
 import Chart from 'react-apexcharts';
 
-import { apexPalette, chartSurface, neutral } from '@/theme/palette';
 import { useThemeContext } from '@/theme/ThemeRegistry';
+import { apexPalette, chartSurface, neutral } from '@/theme/palette';
 
 /** Chart types accepted by react-apexcharts Props. */
 export type ApexChartType = NonNullable<ComponentProps<typeof Chart>['type']>;
@@ -22,18 +22,12 @@ export interface ApexChartProps {
 }
 
 /**
- * ApexChart — theme-aware wrapper styled after the official ApexCharts
- * JavaScript demos (https://apexcharts.com/javascript-chart-demos/):
- * demo palette, smooth spline, gradient area fills, rounded columns,
- * drop-shadow lines, and donut separators on the page background.
+ * ApexChart — theme-aware wrapper for dashboard and report charts.
+ *
+ * Uses the FleetVision chart palette (indigo / emerald / amber / rose),
+ * soft area gradients, rounded columns, and donut separators on the card.
  */
-export function ApexChart({
-  type,
-  series,
-  options,
-  height = 260,
-  className = '',
-}: ApexChartProps) {
+export function ApexChart({ type, series, options, height = 260, className = '' }: ApexChartProps) {
   const { mode } = useThemeContext();
   const isDark = mode === 'dark';
 
@@ -42,7 +36,8 @@ export function ApexChart({
     const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.07)';
     const sliceStroke = isDark ? chartSurface.dark : chartSurface.light;
     const isCartesian = type === 'line' || type === 'area' || type === 'bar';
-    const isRadial = type === 'donut' || type === 'pie' || type === 'polarArea' || type === 'radialBar';
+    const isRadial =
+      type === 'donut' || type === 'pie' || type === 'polarArea' || type === 'radialBar';
 
     const base: ApexOptions = {
       chart: {
@@ -64,11 +59,11 @@ export function ApexChart({
             ? {
                 enabled: true,
                 enabledOnSeries: [0],
-                top: 6,
+                top: 4,
                 left: 0,
-                blur: 8,
+                blur: 10,
                 color: apexPalette[0],
-                opacity: 0.22,
+                opacity: 0.14,
               }
             : { enabled: false },
         foreColor: axisColor,
@@ -98,15 +93,15 @@ export function ApexChart({
               gradient: {
                 shade: isDark ? 'dark' : 'light',
                 type: 'vertical',
-                shadeIntensity: 0.55,
-                opacityFrom: 0.52,
-                opacityTo: 0.06,
-                stops: [0, 90, 100],
+                shadeIntensity: 0.35,
+                opacityFrom: 0.38,
+                opacityTo: 0.04,
+                stops: [0, 85, 100],
               },
             }
           : type === 'bar'
-            ? { type: 'solid', opacity: 1 }
-            : { opacity: 0.92 },
+            ? { type: 'solid', opacity: 0.92 }
+            : { opacity: 0.96 },
       // ApexCharts 7 Globals.globalVars reads config.markers.size — never omit.
       markers:
         type === 'line' || type === 'area'

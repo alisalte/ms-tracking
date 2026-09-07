@@ -26,7 +26,7 @@ export function ReportsPage() {
   const currency = data.kpis.currency;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-full flex-1 flex-col gap-4">
       <div className="flex justify-end">
         <button
           type="button"
@@ -37,7 +37,7 @@ export function ReportsPage() {
         </button>
       </div>
 
-      <section className="print-sheet rounded-2xl border border-stone-200 bg-white p-5">
+      <section className="print-sheet min-h-0 flex-1 rounded-2xl border border-stone-200 bg-white p-5">
         <h2 className="font-semibold">{t('reports.byTenant')}</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">

@@ -4,6 +4,21 @@ export function formatMoney(amount: number, currency = 'IRR', locale = 'fa-IR'):
   return `${n} ${currency}`;
 }
 
+export function formatCompactNumber(amount: number, locale = 'fa-IR'): string {
+  const loc = locale.startsWith('fa') ? 'fa-IR' : 'en-GB';
+  const fa = locale.startsWith('fa');
+  const abs = Math.abs(amount);
+  const fmt = (n: number) =>
+    new Intl.NumberFormat(loc, { maximumFractionDigits: Math.abs(n) >= 10 ? 0 : 1 }).format(n);
+
+  if (abs >= 1_000_000_000)
+    return fa ? `${fmt(amount / 1_000_000_000)} میلیارد` : `${fmt(amount / 1_000_000_000)}B`;
+  if (abs >= 1_000_000)
+    return fa ? `${fmt(amount / 1_000_000)} میلیون` : `${fmt(amount / 1_000_000)}M`;
+  if (abs >= 1_000) return fa ? `${fmt(amount / 1_000)} هزار` : `${fmt(amount / 1_000)}k`;
+  return new Intl.NumberFormat(loc, { maximumFractionDigits: 0 }).format(amount || 0);
+}
+
 export function estimateTotal(input: {
   basePrice: number;
   maxUsers: number;

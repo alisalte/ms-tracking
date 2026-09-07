@@ -50,7 +50,7 @@ export function AppLayout() {
   useSilentRefresh();
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(70,95,251,0.10),transparent_34%),linear-gradient(180deg,#f8fbff_0%,#eef2f7_100%)] text-gray-900 dark:bg-[radial-gradient(circle_at_top_left,rgba(70,95,251,0.18),transparent_32%),linear-gradient(180deg,#101722_0%,#161e29_100%)] dark:text-graydark-900">
+    <div className="relative flex h-screen overflow-hidden bg-[#f3f5f8] text-gray-900 dark:bg-[#101722] dark:text-graydark-900">
       <Sidebar
         mobileOpen={mobileOpen}
         collapsed={collapsed}

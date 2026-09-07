@@ -291,6 +291,7 @@ vi.mock('maplibre-gl', () => {
       getLayer: () => undefined,
       removeLayer: vi.fn(),
       removeSource: vi.fn(),
+      resize: vi.fn(),
       remove: vi.fn(),
     })),
     Marker: maplibre.Marker,
@@ -448,8 +449,10 @@ describe('FleetDashboard — rendering + KPIs', () => {
     expect(tileCardText(screen.getByText('Moving', { selector: 'p' }))).toContain('1');
     expect(tileCardText(screen.getByText('Idle', { selector: 'p' }))).toContain('1');
     expect(tileCardText(screen.getByText('Parked', { selector: 'p' }))).toContain('1');
-    expect(tileCardText(screen.getByText('Offline', { selector: 'p' }))).toContain('87');
-    expect(tileCardText(screen.getByText('Active Alarms', { selector: 'p' }))).toContain('3');
+    expect(tileCardText(screen.getByText('Online Connections', { selector: 'p' }))).toContain(
+      '184',
+    );
+    expect(tileCardText(screen.getByText('Active Alerts', { selector: 'p' }))).toContain('3');
     expect(tileCardText(screen.getByText('Active Devices', { selector: 'p' }))).toContain('3');
   });
 
@@ -516,7 +519,7 @@ describe('FleetDashboard — activity + fleet health', () => {
 describe('FleetDashboard — recent events + alarm summary', () => {
   it('renders severity-sorted events with vehicle labels and summary chips', () => {
     renderDashboard();
-    expect(screen.getByText('Recent Events')).toBeTruthy();
+    expect(screen.getByText('Latest activities')).toBeTruthy();
     // The three fixture vehicles all appear in the feed (sorted critical-first).
     expect(screen.getByText(/Truck-42/)).toBeTruthy();
     expect(screen.getByText(/Truck-19/)).toBeTruthy();
@@ -581,7 +584,7 @@ describe('FleetDashboard — map preview', () => {
     });
     renderDashboard();
     // Activity donut keeps its honest empty placeholder…
-    expect(screen.getAllByText(/No active alerts/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/No vehicles to chart/i)).toBeTruthy();
     // …while the preview map stays MOUNTED with a light chip overlay
     // (never replaced by a body-level empty state).
     expect(screen.getByTestId('map-preview-empty')).toBeTruthy();

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { NotificationBell } from '@/components/shell/NotificationBell';
 import { IconButton } from '@/components/tailwind-ui';
+import { AppsMenu } from './AppsMenu';
 import { Breadcrumb } from './Breadcrumb';
 import { LanguageMenu } from './LanguageMenu';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -28,7 +29,7 @@ export function Header({ onMobileMenu }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-white/70 bg-white/82 ps-2.5 pe-4 shadow-sm shadow-gray-900/[0.03] backdrop-blur-xl dark:border-white/8 dark:bg-graydark-200/82 dark:shadow-black/15">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-gray-200/80 bg-white/92 ps-2.5 pe-4 shadow-sm shadow-gray-900/[0.03] backdrop-blur-xl dark:border-white/8 dark:bg-graydark-200/90 dark:shadow-black/15">
       {/* Mobile hamburger */}
       <IconButton
         variant="ghost"
@@ -45,12 +46,12 @@ export function Header({ onMobileMenu }: HeaderProps) {
       <div className="min-w-0 flex-1" />
 
       {/* Global search — planned; inert today, parity with the previous topbar */}
-      <div className="hidden h-9 max-w-72 w-full items-center gap-2 rounded-full border border-gray-200/80 bg-gray-50/80 px-3.5 shadow-inner shadow-gray-900/[0.02] transition-colors focus-within:border-brand-500 focus-within:bg-white md:flex dark:border-white/15 dark:bg-white/6 dark:focus-within:border-brand-500 dark:focus-within:bg-graydark-300/90">
-        <Search size={15} className="shrink-0 text-gray-400 dark:text-graydark-600" aria-hidden />
+      <div className="hidden h-10 max-w-md w-full items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 transition-colors focus-within:border-brand-500 focus-within:bg-white md:flex dark:border-white/15 dark:bg-white/6 dark:focus-within:border-brand-500 dark:focus-within:bg-graydark-300/90">
+        <Search size={16} className="shrink-0 text-gray-400 dark:text-graydark-600" aria-hidden />
         <input
           type="search"
           aria-label="global search"
-          placeholder={t('common.search')}
+          placeholder={t('common.searchFleet')}
           disabled
           className="h-full w-full min-w-0 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none dark:text-graydark-800 dark:placeholder:text-graydark-600"
         />
@@ -65,6 +66,7 @@ export function Header({ onMobileMenu }: HeaderProps) {
         </IconButton>
 
         <ThemeSwitcher />
+        <AppsMenu />
         <LanguageMenu />
         <UserMenu />
       </div>

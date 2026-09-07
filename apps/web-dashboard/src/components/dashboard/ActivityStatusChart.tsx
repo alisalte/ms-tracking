@@ -67,7 +67,14 @@ export function ActivityStatusChart({
     () => ({
       labels,
       colors,
-      legend: { position: 'right', offsetY: 20 },
+      legend: {
+        position: 'right',
+        offsetY: 12,
+        formatter: (name, opts) => {
+          const value = opts?.w.globals.series[opts.seriesIndex];
+          return `${name}  ${typeof value === 'number' ? value : ''}`;
+        },
+      },
       plotOptions: {
         pie: {
           donut: {
@@ -94,7 +101,7 @@ export function ActivityStatusChart({
       icon={PieChartIcon}
       loading={loading}
       empty={!loading && counts.driving + counts.idle + counts.stopped + counts.offline === 0}
-      emptyKey="dashboard.empty.alerts"
+      emptyKey="dashboard.empty.activity"
       error={error}
       onRetry={onRetry}
       flush
