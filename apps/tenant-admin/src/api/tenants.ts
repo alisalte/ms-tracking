@@ -34,6 +34,15 @@ export interface TenantLicense {
   session_absolute_hours: number;
   max_concurrent_sessions: number;
   features: Record<string, unknown>;
+  currency: string;
+  base_price: number;
+  unit_price_users: number;
+  unit_price_vehicles: number;
+  unit_price_devices: number;
+  unit_price_drivers: number;
+  unit_price_storage_gib: number;
+  unit_price_download_gib: number;
+  estimated_total: number;
   quotas: {
     users: QuotaMeter;
     vehicles: QuotaMeter;
@@ -83,6 +92,14 @@ export interface LicenseFields {
   login_hours_end?: number | null;
   timezone?: string;
   notes?: string | null;
+  currency?: string;
+  base_price?: number;
+  unit_price_users?: number;
+  unit_price_vehicles?: number;
+  unit_price_devices?: number;
+  unit_price_drivers?: number;
+  unit_price_storage_gib?: number;
+  unit_price_download_gib?: number;
 }
 
 export async function listTenants(): Promise<TenantRow[]> {

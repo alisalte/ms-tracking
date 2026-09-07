@@ -9,10 +9,11 @@ import {
   type QuotaMeter,
   type TenantLicense,
   daysRemaining,
+  estimateContractTotal,
   licenseStatus,
   quotaLimit,
   quotaMeter,
-} from '../../domain/tenant-license.js';
+} from '../../domain/index.js';
 import { withoutTenantContext } from './tenant-context.js';
 
 export interface LicenseRow {
@@ -36,6 +37,14 @@ export interface LicenseRow {
   timezone: string;
   notes: string | null;
   features: Record<string, unknown> | string | null;
+  currency?: string;
+  base_price?: string | number;
+  unit_price_users?: string | number;
+  unit_price_vehicles?: string | number;
+  unit_price_devices?: string | number;
+  unit_price_drivers?: string | number;
+  unit_price_storage_gib?: string | number;
+  unit_price_download_gib?: string | number;
 }
 
 export interface UsageRow {
@@ -70,6 +79,15 @@ export interface LicenseSnapshot {
   session_absolute_hours: number;
   max_concurrent_sessions: number;
   features: Record<string, unknown>;
+  currency: string;
+  base_price: number;
+  unit_price_users: number;
+  unit_price_vehicles: number;
+  unit_price_devices: number;
+  unit_price_drivers: number;
+  unit_price_storage_gib: number;
+  unit_price_download_gib: number;
+  estimated_total: number;
   quotas: LicenseQuotas;
 }
 
@@ -111,6 +129,14 @@ export function rowToLicense(row: LicenseRow): TenantLicense {
     timezone: row.timezone,
     notes: row.notes,
     features: asFeatures(row.features),
+    currency: row.currency || 'IRR',
+    basePrice: num(row.base_price ?? 0),
+    unitPriceUsers: num(row.unit_price_users ?? 0),
+    unitPriceVehicles: num(row.unit_price_vehicles ?? 0),
+    unitPriceDevices: num(row.unit_price_devices ?? 0),
+    unitPriceDrivers: num(row.unit_price_drivers ?? 0),
+    unitPriceStorageGib: num(row.unit_price_storage_gib ?? 0),
+    unitPriceDownloadGib: num(row.unit_price_download_gib ?? 0),
   };
 }
 
@@ -136,6 +162,14 @@ function licenseToRow(license: TenantLicense): Record<string, unknown> {
     timezone: license.timezone,
     notes: license.notes,
     features: JSON.stringify(license.features),
+    currency: license.currency,
+    base_price: license.basePrice,
+    unit_price_users: license.unitPriceUsers,
+    unit_price_vehicles: license.unitPriceVehicles,
+    unit_price_devices: license.unitPriceDevices,
+    unit_price_drivers: license.unitPriceDrivers,
+    unit_price_storage_gib: license.unitPriceStorageGib,
+    unit_price_download_gib: license.unitPriceDownloadGib,
     updated_at: new Date(),
   };
 }
@@ -254,6 +288,15 @@ export class TenantLicenseRepository {
       session_absolute_hours: license.sessionAbsoluteHours,
       max_concurrent_sessions: license.maxConcurrentSessions,
       features: license.features,
+      currency: license.currency,
+      base_price: license.basePrice,
+      unit_price_users: license.unitPriceUsers,
+      unit_price_vehicles: license.unitPriceVehicles,
+      unit_price_devices: license.unitPriceDevices,
+      unit_price_drivers: license.unitPriceDrivers,
+      unit_price_storage_gib: license.unitPriceStorageGib,
+      unit_price_download_gib: license.unitPriceDownloadGib,
+      estimated_total: estimateContractTotal(license),
       quotas: {
         users: quotaMeter(counts.users, quotaLimit(license, 'users')),
         vehicles: quotaMeter(counts.vehicles, quotaLimit(license, 'vehicles')),

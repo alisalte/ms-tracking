@@ -21,6 +21,7 @@ import {
   ProvisionTenantUseCase,
   RefreshTokenUseCase,
   RevokeApiKeyUseCase,
+  TenantBillingUseCase,
   TenantEntitlementUseCase,
   TenantLifecycleUseCase,
   UpdateUserUseCase,
@@ -35,6 +36,7 @@ import {
   RefreshStore,
   RoleRepository,
   SessionStore,
+  TenantInvoiceRepository,
   TenantLicenseRepository,
   TenantRepository,
   TokenService,
@@ -45,6 +47,7 @@ import { AuditController } from '../audit/audit.controller.js';
 import { RolesController } from '../iam/roles.controller.js';
 import { UsersController } from '../iam/users.controller.js';
 import { BootstrapSeed } from '../shared/bootstrap-seed.js';
+import { BillingController } from '../tenants/billing.controller.js';
 import { TenantsController } from '../tenants/tenants.controller.js';
 import { ApiKeysController } from './api-keys.controller.js';
 import { AuthController } from './auth.controller.js';
@@ -81,6 +84,7 @@ export class AuthModule {
         UsersController,
         RolesController,
         TenantsController,
+        BillingController,
         AuditController,
       ],
       providers: [
@@ -99,6 +103,20 @@ export class AuthModule {
           provide: TenantLicenseRepository,
           inject: [KNEX_TOKEN],
           useFactory: (knex: Knex) => new TenantLicenseRepository(knex),
+        },
+        {
+          provide: TenantInvoiceRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: Knex) => new TenantInvoiceRepository(knex),
+        },
+        {
+          provide: TenantBillingUseCase,
+          inject: [TenantInvoiceRepository, TenantLicenseRepository, TenantRepository],
+          useFactory: (
+            invoices: TenantInvoiceRepository,
+            licenses: TenantLicenseRepository,
+            tenants: TenantRepository,
+          ) => new TenantBillingUseCase(invoices, licenses, tenants),
         },
         {
           provide: TenantEntitlementUseCase,

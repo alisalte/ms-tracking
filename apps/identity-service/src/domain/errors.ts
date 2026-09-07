@@ -119,3 +119,19 @@ export class TenantSessionLimitError extends DomainError {
     super('Concurrent session limit reached.', { reason: 'TENANT_SESSION_LIMIT' });
   }
 }
+
+/** A non-void invoice already exists for this license period. */
+export class InvoiceAlreadyIssuedError extends DomainError {
+  public readonly code = 'CONFLICT';
+  constructor() {
+    super('An invoice already exists for this billing period.');
+  }
+}
+
+/** Invoice cannot be paid or voided in its current status. */
+export class InvoiceIllegalStatusError extends DomainError {
+  public readonly code = 'CONFLICT';
+  constructor(status: string) {
+    super(`Invoice cannot be changed from status ${status}.`);
+  }
+}

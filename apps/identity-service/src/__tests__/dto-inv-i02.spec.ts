@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   createApiKeySchema,
   createUserSchema,
+  generateInvoiceSchema,
   loginSchema,
   provisionTenantSchema,
   putTenantLicenseSchema,
@@ -77,5 +78,15 @@ describe('INV-I02: tenant_id is forbidden in request DTOs', () => {
     const put = putTenantLicenseSchema.safeParse({ max_users: 12, tenant_id: 't1' });
     expect(put.success).toBe(true);
     if (put.success) expect(put.data).not.toHaveProperty('tenant_id');
+  });
+
+  it('generate-invoice schema strips tenant_id', () => {
+    const result = generateInvoiceSchema.safeParse({
+      due_days: 30,
+      tax_rate: 0,
+      tenant_id: 't1',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty('tenant_id');
   });
 });

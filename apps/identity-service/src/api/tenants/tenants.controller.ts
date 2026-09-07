@@ -339,5 +339,13 @@ function licenseDtoToPatch(
     timezone: dto.timezone,
     notes: dto.notes,
     features: dto.features,
+    currency: dto.currency,
+    basePrice: dto.base_price,
+    unitPriceUsers: dto.unit_price_users,
+    unitPriceVehicles: dto.unit_price_vehicles,
+    unitPriceDevices: dto.unit_price_devices,
+    unitPriceDrivers: dto.unit_price_drivers,
+    unitPriceStorageGib: dto.unit_price_storage_gib,
+    unitPriceDownloadGib: dto.unit_price_download_gib,
   };
 }

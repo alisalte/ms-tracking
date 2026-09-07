@@ -34,6 +34,14 @@ export interface PlanDefaults {
   readonly sessionIdleMinutes: number;
   readonly sessionAbsoluteHours: number;
   readonly timezone: string;
+  readonly currency: string;
+  readonly basePrice: number;
+  readonly unitPriceUsers: number;
+  readonly unitPriceVehicles: number;
+  readonly unitPriceDevices: number;
+  readonly unitPriceDrivers: number;
+  readonly unitPriceStorageGib: number;
+  readonly unitPriceDownloadGib: number;
 }
 
 export interface TenantLicense {
@@ -57,6 +65,14 @@ export interface TenantLicense {
   readonly timezone: string;
   readonly notes: string | null;
   readonly features: Record<string, unknown>;
+  readonly currency: string;
+  readonly basePrice: number;
+  readonly unitPriceUsers: number;
+  readonly unitPriceVehicles: number;
+  readonly unitPriceDevices: number;
+  readonly unitPriceDrivers: number;
+  readonly unitPriceStorageGib: number;
+  readonly unitPriceDownloadGib: number;
 }
 
 export interface QuotaMeter {
@@ -82,6 +98,14 @@ export const PLAN_DEFAULTS: Record<LicensePlanCode, PlanDefaults> = {
     sessionIdleMinutes: 30,
     sessionAbsoluteHours: 8,
     timezone: 'Asia/Tehran',
+    currency: 'IRR',
+    basePrice: 0,
+    unitPriceUsers: 0,
+    unitPriceVehicles: 0,
+    unitPriceDevices: 0,
+    unitPriceDrivers: 0,
+    unitPriceStorageGib: 0,
+    unitPriceDownloadGib: 0,
   },
   STANDARD: {
     planCode: 'STANDARD',
@@ -98,6 +122,14 @@ export const PLAN_DEFAULTS: Record<LicensePlanCode, PlanDefaults> = {
     sessionIdleMinutes: 30,
     sessionAbsoluteHours: 12,
     timezone: 'Asia/Tehran',
+    currency: 'IRR',
+    basePrice: 15_000_000,
+    unitPriceUsers: 250_000,
+    unitPriceVehicles: 100_000,
+    unitPriceDevices: 60_000,
+    unitPriceDrivers: 80_000,
+    unitPriceStorageGib: 25_000,
+    unitPriceDownloadGib: 10_000,
   },
   PROFESSIONAL: {
     planCode: 'PROFESSIONAL',
@@ -114,6 +146,14 @@ export const PLAN_DEFAULTS: Record<LicensePlanCode, PlanDefaults> = {
     sessionIdleMinutes: 45,
     sessionAbsoluteHours: 16,
     timezone: 'Asia/Tehran',
+    currency: 'IRR',
+    basePrice: 45_000_000,
+    unitPriceUsers: 200_000,
+    unitPriceVehicles: 80_000,
+    unitPriceDevices: 45_000,
+    unitPriceDrivers: 70_000,
+    unitPriceStorageGib: 20_000,
+    unitPriceDownloadGib: 8_000,
   },
   ENTERPRISE: {
     planCode: 'ENTERPRISE',
@@ -130,6 +170,14 @@ export const PLAN_DEFAULTS: Record<LicensePlanCode, PlanDefaults> = {
     sessionIdleMinutes: 60,
     sessionAbsoluteHours: 24,
     timezone: 'Asia/Tehran',
+    currency: 'IRR',
+    basePrice: 120_000_000,
+    unitPriceUsers: 150_000,
+    unitPriceVehicles: 50_000,
+    unitPriceDevices: 30_000,
+    unitPriceDrivers: 50_000,
+    unitPriceStorageGib: 15_000,
+    unitPriceDownloadGib: 5_000,
   },
   CUSTOM: {
     planCode: 'CUSTOM',
@@ -146,6 +194,14 @@ export const PLAN_DEFAULTS: Record<LicensePlanCode, PlanDefaults> = {
     sessionIdleMinutes: 30,
     sessionAbsoluteHours: 12,
     timezone: 'Asia/Tehran',
+    currency: 'IRR',
+    basePrice: 15_000_000,
+    unitPriceUsers: 250_000,
+    unitPriceVehicles: 100_000,
+    unitPriceDevices: 60_000,
+    unitPriceDrivers: 80_000,
+    unitPriceStorageGib: 25_000,
+    unitPriceDownloadGib: 10_000,
   },
 };
 
@@ -282,5 +338,13 @@ export function buildLicense(
     timezone: overrides.timezone ?? defaults.timezone,
     notes: overrides.notes ?? null,
     features: overrides.features ?? {},
+    currency: overrides.currency ?? defaults.currency,
+    basePrice: overrides.basePrice ?? defaults.basePrice,
+    unitPriceUsers: overrides.unitPriceUsers ?? defaults.unitPriceUsers,
+    unitPriceVehicles: overrides.unitPriceVehicles ?? defaults.unitPriceVehicles,
+    unitPriceDevices: overrides.unitPriceDevices ?? defaults.unitPriceDevices,
+    unitPriceDrivers: overrides.unitPriceDrivers ?? defaults.unitPriceDrivers,
+    unitPriceStorageGib: overrides.unitPriceStorageGib ?? defaults.unitPriceStorageGib,
+    unitPriceDownloadGib: overrides.unitPriceDownloadGib ?? defaults.unitPriceDownloadGib,
   };
 }

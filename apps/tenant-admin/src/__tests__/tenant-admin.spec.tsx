@@ -59,4 +59,14 @@ describe('create tenant form', () => {
     const expires = screen.getByLabelText(/^(انقضا|Expires)$/) as HTMLInputElement;
     expect(expires.value).toBe(addDaysIso(14));
   });
+
+  it('shows unit prices for rented resources', () => {
+    render(
+      <MemoryRouter>
+        <TenantCreatePage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText(/مبلغ هر خودرو|Per vehicle/i)).toBeInTheDocument();
+    expect(screen.getByText(/جمع قرارداد|Contract total/i)).toBeInTheDocument();
+  });
 });

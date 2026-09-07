@@ -11,4 +11,5 @@ export * from './tenants/provision-tenant.use-case.js';
 export * from './tenants/tenant-lifecycle.use-case.js';
 export * from './tenants/create-tenant-access.use-case.js';
 export * from './tenants/tenant-entitlement.use-case.js';
+export * from './tenants/tenant-billing.use-case.js';
 export * from './apikeys/api-key.use-cases.js';

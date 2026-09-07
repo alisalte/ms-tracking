@@ -13,6 +13,7 @@ export * from './user.js';
 export * from './tenant.js';
 export * from './tenant-settings.js';
 export * from './tenant-license.js';
+export * from './tenant-invoice.js';
 export * from './role.js';
 export * from './api-key.js';
 export * from './refresh-token-family.js';

@@ -67,6 +67,14 @@ export const tenantLicenseFieldsSchema = z.object({
   timezone: z.string().trim().min(1).max(64).optional(),
   notes: z.string().max(2000).nullable().optional(),
   features: z.record(z.unknown()).optional(),
+  currency: z.string().trim().min(3).max(8).optional(),
+  base_price: z.number().int().min(0).optional(),
+  unit_price_users: z.number().int().min(0).optional(),
+  unit_price_vehicles: z.number().int().min(0).optional(),
+  unit_price_devices: z.number().int().min(0).optional(),
+  unit_price_drivers: z.number().int().min(0).optional(),
+  unit_price_storage_gib: z.number().int().min(0).optional(),
+  unit_price_download_gib: z.number().int().min(0).optional(),
 });
 export type TenantLicenseFieldsDto = z.infer<typeof tenantLicenseFieldsSchema>;
 
@@ -89,6 +97,13 @@ export const putTenantUsageSchema = z.object({
   download_bytes_month: z.number().int().min(0).optional(),
 });
 export type PutTenantUsageDto = z.infer<typeof putTenantUsageSchema>;
+
+export const generateInvoiceSchema = z.object({
+  due_days: z.number().int().min(0).max(365).optional(),
+  tax_rate: z.number().min(0).max(1).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+export type GenerateInvoiceDto = z.infer<typeof generateInvoiceSchema>;
 
 export const createTenantAccessSchema = createUserSchema.extend({
   role_name: z.enum(['tenant-admin', 'fleet-admin', 'viewer']).default('viewer'),

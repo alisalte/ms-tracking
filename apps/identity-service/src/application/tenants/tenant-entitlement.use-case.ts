@@ -11,6 +11,7 @@ import {
 } from '../../domain/errors.js';
 import {
   type LicensePlanCode,
+  PLAN_DEFAULTS,
   type QuotaMetric,
   type TenantLicense,
   buildLicense,
@@ -42,6 +43,14 @@ export type LicensePatch = Partial<{
   timezone: string;
   notes: string | null;
   features: Record<string, unknown>;
+  currency: string;
+  basePrice: number;
+  unitPriceUsers: number;
+  unitPriceVehicles: number;
+  unitPriceDevices: number;
+  unitPriceDrivers: number;
+  unitPriceStorageGib: number;
+  unitPriceDownloadGib: number;
 }>;
 
 @Injectable()
@@ -108,6 +117,8 @@ export class TenantEntitlementUseCase {
     const current = await this.licenses.findByTenantId(tenantId);
     if (!current) throw new NotFoundError('License');
     const nextPlan = patch.planCode ?? current.planCode;
+    const planChanged = nextPlan !== current.planCode;
+    const defaults = PLAN_DEFAULTS[nextPlan];
     const next: TenantLicense = {
       ...current,
       planCode: nextPlan,
@@ -130,6 +141,25 @@ export class TenantEntitlementUseCase {
       timezone: patch.timezone ?? current.timezone,
       notes: patch.notes === undefined ? current.notes : patch.notes,
       features: patch.features ?? current.features,
+      currency: patch.currency ?? current.currency,
+      basePrice: patch.basePrice ?? (planChanged ? defaults.basePrice : current.basePrice),
+      unitPriceUsers:
+        patch.unitPriceUsers ?? (planChanged ? defaults.unitPriceUsers : current.unitPriceUsers),
+      unitPriceVehicles:
+        patch.unitPriceVehicles ??
+        (planChanged ? defaults.unitPriceVehicles : current.unitPriceVehicles),
+      unitPriceDevices:
+        patch.unitPriceDevices ??
+        (planChanged ? defaults.unitPriceDevices : current.unitPriceDevices),
+      unitPriceDrivers:
+        patch.unitPriceDrivers ??
+        (planChanged ? defaults.unitPriceDrivers : current.unitPriceDrivers),
+      unitPriceStorageGib:
+        patch.unitPriceStorageGib ??
+        (planChanged ? defaults.unitPriceStorageGib : current.unitPriceStorageGib),
+      unitPriceDownloadGib:
+        patch.unitPriceDownloadGib ??
+        (planChanged ? defaults.unitPriceDownloadGib : current.unitPriceDownloadGib),
     };
     await this.licenses.save(next);
     return next;

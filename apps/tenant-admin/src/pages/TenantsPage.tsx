@@ -4,14 +4,15 @@ import { Link } from 'react-router';
 
 import { apiMessage } from '@/api/client';
 import {
-  type QuotaMeter,
   type TenantLicense,
   type TenantRow,
   listTenants,
   reactivateTenant,
   suspendTenant,
 } from '@/api/tenants';
+import { MiniQuotaRow } from '@/components/QuotaMeter';
 import { bytesToGib } from '@/lib/license';
+import { formatMoney } from '@/lib/money';
 
 export function TenantsPage() {
   const { t, i18n } = useTranslation();
@@ -62,20 +63,14 @@ export function TenantsPage() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t('tenants.title')}</h1>
-        <Link
-          to="/new"
-          className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white no-underline"
-        >
-          {t('nav.create')}
-        </Link>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm text-slate-500">{t('tenants.listHint')}</p>
       </div>
       {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {rows.length === 0 && !error ? (
         <p className="text-slate-500">{t('tenants.empty')}</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-start text-slate-500">
               <tr>
@@ -83,6 +78,7 @@ export function TenantsPage() {
                 <th className="px-4 py-3 font-medium">{t('tenants.license')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.remaining')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.usage')}</th>
+                <th className="px-4 py-3 font-medium">{t('tenants.amount')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.status')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.created')}</th>
                 <th className="px-4 py-3 font-medium">{t('tenants.actions')}</th>
@@ -101,6 +97,11 @@ export function TenantsPage() {
                   <td className="px-4 py-3 text-slate-600">{remainingLabel(r.license, t)}</td>
                   <td className="px-4 py-3">
                     <MiniMeters license={r.license} />
+                  </td>
+                  <td className="px-4 py-3 text-sm tabular-nums text-slate-700">
+                    {r.license
+                      ? formatMoney(r.license.estimated_total, r.license.currency, loc)
+                      : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -185,39 +186,20 @@ function remainingLabel(
 }
 
 function MiniMeters({ license }: { license?: TenantLicense | null }) {
+  const { t } = useTranslation();
   if (!license) return <span className="text-slate-400">—</span>;
   return (
-    <div className="flex min-w-40 flex-col gap-1">
-      <MiniMeter meter={license.quotas.vehicles} label="V" />
-      <MiniMeter meter={license.quotas.users} label="U" />
-      <MiniMeter
+    <div className="flex min-w-44 flex-col gap-1.5">
+      <MiniQuotaRow meter={license.quotas.vehicles} label={t('meter.vehicles')} />
+      <MiniQuotaRow meter={license.quotas.users} label={t('meter.users')} />
+      <MiniQuotaRow
         meter={{
           ...license.quotas.storage_bytes,
           used: bytesToGib(license.quotas.storage_bytes.used),
           limit: bytesToGib(license.quotas.storage_bytes.limit),
         }}
-        label="S"
+        label={t('meter.storage')}
       />
-    </div>
-  );
-}
-
-function MiniMeter({ meter, label }: { meter: QuotaMeter; label: string }) {
-  const color =
-    meter.state === 'exceeded'
-      ? 'bg-red-500'
-      : meter.state === 'warn'
-        ? 'bg-amber-500'
-        : 'bg-brand-500';
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="w-3 text-[10px] text-slate-400">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-        <div className={`h-full ${color}`} style={{ width: `${Math.min(100, meter.pct)}%` }} />
-      </div>
-      <span className="w-16 text-end text-[10px] tabular-nums text-slate-500">
-        {meter.used}/{meter.limit}
-      </span>
     </div>
   );
 }

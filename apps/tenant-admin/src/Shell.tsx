@@ -1,14 +1,41 @@
-import { Building2, LogOut, Plus } from 'lucide-react';
+import { BarChart3, Building2, FileText, LayoutDashboard, LogOut, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 
 import { i18n } from '@/i18n';
 import { clearSession, loadSession } from '@/lib/session';
 
+const NAV = [
+  { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/tenants', key: 'nav.tenants', icon: Building2, end: false },
+  { to: '/invoices', key: 'nav.invoices', icon: FileText, end: false },
+  { to: '/reports', key: 'nav.reports', icon: BarChart3, end: false },
+] as const;
+
+function headingFor(pathname: string, t: (k: string) => string) {
+  if (pathname === '/') return { title: t('dash.title'), crumb: t('nav.dashboard'), create: true };
+  if (pathname === '/tenants')
+    return { title: t('tenants.title'), crumb: t('nav.tenants'), create: true };
+  if (pathname === '/tenants/new')
+    return { title: t('create.title'), crumb: t('nav.tenants'), create: false };
+  if (pathname.startsWith('/tenants/'))
+    return { title: t('detail.title'), crumb: t('nav.tenants'), create: false };
+  if (pathname === '/invoices')
+    return { title: t('invoices.title'), crumb: t('nav.invoices'), create: false };
+  if (pathname.startsWith('/invoices/')) {
+    return { title: t('invoices.document'), crumb: t('nav.invoices'), create: false };
+  }
+  if (pathname === '/reports')
+    return { title: t('reports.title'), crumb: t('nav.reports'), create: false };
+  return { title: t('app.title'), crumb: t('app.title'), create: true };
+}
+
 export function Shell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const session = loadSession();
+  const heading = headingFor(pathname, t);
 
   const toggleLang = () => {
     const next = i18n.language.startsWith('fa') ? 'en' : 'fa';
@@ -19,60 +46,87 @@ export function Shell() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <Link
-            to="/"
-            className="flex items-center gap-2 font-semibold text-slate-900 no-underline"
-          >
-            <Building2 className="size-5 text-brand-500" />
-            {t('app.title')}
-          </Link>
-          <nav className="flex items-center gap-2 text-sm">
+    <div className="min-h-screen bg-paper md:flex">
+      <aside className="no-print flex flex-col bg-ink-950 text-slate-200 md:min-h-screen md:w-52">
+        <Link to="/" className="flex items-center gap-2.5 px-4 py-4 no-underline">
+          <span className="grid size-8 place-items-center rounded-lg bg-brand-500 text-white">
+            <Building2 className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-white">
+              {t('app.title')}
+            </span>
+          </span>
+        </Link>
+        <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-1 md:flex-col md:overflow-visible">
+          {NAV.map((item) => (
             <NavLink
-              to="/"
-              end
+              key={item.to}
+              to={item.to}
+              end={item.end}
               className={({ isActive }) =>
-                `rounded-lg px-3 py-1.5 no-underline ${isActive ? 'bg-brand-50 text-brand-600' : 'text-slate-600'}`
+                `inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm no-underline ${
+                  isActive
+                    ? 'bg-white/10 font-medium text-white'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`
               }
             >
-              {t('nav.tenants')}
+              <item.icon className="size-4 shrink-0" />
+              {t(item.key)}
             </NavLink>
-            <NavLink
-              to="/new"
-              className={({ isActive }) =>
-                `inline-flex items-center gap-1 rounded-lg px-3 py-1.5 no-underline ${isActive ? 'bg-brand-50 text-brand-600' : 'text-slate-600'}`
-              }
-            >
-              <Plus className="size-4" />
-              {t('nav.create')}
-            </NavLink>
-            <button
-              type="button"
-              onClick={toggleLang}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
-            >
-              {i18n.language.startsWith('fa') ? 'EN' : 'فا'}
-            </button>
-            <span className="hidden text-xs text-slate-400 sm:inline">{session?.tenantName}</span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-slate-600"
-              onClick={() => {
-                clearSession();
-                navigate('/login');
-              }}
-            >
-              <LogOut className="size-4" />
-              {t('nav.logout')}
-            </button>
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <Outlet />
-      </main>
+          ))}
+        </nav>
+      </aside>
+      <div className="min-w-0 flex-1">
+        <header className="no-print border-b border-stone-200 bg-white">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-slate-400">{heading.crumb}</p>
+              <h1 className="truncate text-lg font-bold leading-tight text-ink-900">
+                {heading.title}
+              </h1>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {heading.create && (
+                <Link
+                  to="/tenants/new"
+                  className="inline-flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white no-underline"
+                >
+                  <Plus className="size-4" />
+                  <span className="hidden sm:inline">{t('nav.create')}</span>
+                </Link>
+              )}
+              {session?.tenantName && (
+                <span className="hidden max-w-40 truncate rounded-full bg-stone-100 px-2.5 py-1 text-xs text-slate-600 sm:inline">
+                  {session.tenantName}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={toggleLang}
+                className="rounded-lg border border-stone-200 px-2 py-1 text-xs"
+              >
+                {i18n.language.startsWith('fa') ? 'EN' : 'فا'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-slate-600"
+                onClick={() => {
+                  clearSession();
+                  navigate('/login');
+                }}
+              >
+                <LogOut className="size-4" />
+                <span className="hidden sm:inline">{t('nav.logout')}</span>
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto max-w-[1280px] px-4 py-4 lg:px-5">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 {
   "app": {
-    "title": "Tenant administration",
-    "subtitle": "Provision organisations and grant dashboard access"
+    "title": "Tenant console",
+    "subtitle": "Rent, invoice, and report on organisations"
   },
   "auth": {
     "login": "Sign in",
+    "hero": "Set rental prices, issue invoices, and see the books.",
     "hint": "Use the platform (seed) organisation. Tenant-admin of that org can manage all tenants.",
     "tenant": "Organisation name",
     "email": "Email",
@@ -14,10 +15,27 @@
     "forbidden": "This account cannot manage tenants. Sign in with a platform operator."
   },
   "nav": {
+    "dashboard": "Dashboard",
     "tenants": "Tenants",
+    "invoices": "Invoices",
+    "reports": "Reports",
     "create": "New tenant",
     "logout": "Sign out",
     "lang": "EN"
+  },
+  "dash": {
+    "title": "Rental dashboard",
+    "subtitle": "Contracts, invoices, and license health at a glance.",
+    "tenants": "Tenants",
+    "activeOf": "{{n}} active",
+    "contracted": "Contracted value",
+    "expiring": "{{n}} expiring soon",
+    "collected": "Collected",
+    "invoicesIssued": "{{n}} invoices issued",
+    "outstanding": "Outstanding",
+    "expiredLicenses": "{{n}} expired licenses",
+    "byPlan": "Contracted value by plan",
+    "recentInvoices": "Recent invoices"
   },
   "tenants": {
     "title": "Tenants",
@@ -30,6 +48,8 @@
     "license": "License",
     "remaining": "Remaining",
     "usage": "Usage",
+    "amount": "Contract amount",
+    "listHint": "License health, usage, and contract amount per organisation.",
     "actions": "Actions",
     "open": "Manage",
     "suspend": "Suspend",
@@ -41,6 +61,7 @@
     "name": "Organisation name",
     "tier": "Plan",
     "region": "Region",
+    "adminSection": "Admin account",
     "adminEmail": "Admin email",
     "adminUsername": "Admin username",
     "adminPassword": "Admin password",
@@ -50,7 +71,7 @@
     "plan": "License plan",
     "expires": "Expires",
     "starts": "Starts",
-    "advanced": "Quotas, storage, and sign-in policy",
+    "advanced": "Sign-in and session policy",
     "maxUsers": "Users",
     "maxVehicles": "Vehicles",
     "maxDevices": "Devices",
@@ -66,6 +87,20 @@
     "notes": "Contract notes",
     "graceDays": "Grace days after expiry",
     "unrestricted": "No hour limit"
+  },
+  "pricing": {
+    "title": "Rental rates",
+    "hint": "Set a quantity and unit price for every resource you rent. The invoice is built from these figures.",
+    "base": "Plan fee",
+    "currency": "Currency",
+    "perVehicle": "Per vehicle",
+    "perUser": "Per user",
+    "perDevice": "Per device",
+    "perDriver": "Per personnel",
+    "perStorage": "Per GiB storage",
+    "perDownload": "Per GiB download",
+    "estimate": "Contract total",
+    "periodHint": "For the full license period, based on the selected caps."
   },
   "detail": {
     "title": "Tenant",
@@ -86,16 +121,71 @@
     "licenseStatus": "License status",
     "daysLeft": "{{count}} days left",
     "expiredAgo": "Expired {{count}} days ago",
+    "remainingLabel": "days until expiry",
+    "overdueLabel": "days past expiry",
+    "tabOverview": "Overview",
+    "tabRates": "Rates",
+    "tabInvoices": "Invoices",
+    "tabAccess": "Access",
     "grace": "Grace period",
     "quotas": "Resource quotas",
-    "saveLicense": "Save license",
+    "saveLicense": "Save license and rates",
     "licenseSaved": "License updated.",
     "usageTitle": "Storage and download",
     "storageUsedGib": "Storage used (GiB)",
     "downloadUsedGib": "Download this month (GiB)",
     "saveUsage": "Save usage",
     "usageSaved": "Usage counters saved.",
-    "sessionPolicy": "Sign-in policy"
+    "sessionPolicy": "License, rates, and sign-in policy"
+  },
+  "invoices": {
+    "title": "Invoices",
+    "subtitle": "Documents issued for rental periods.",
+    "empty": "No invoices issued yet.",
+    "emptyTitle": "No invoices yet",
+    "emptyBody": "Open a tenant and issue the period invoice from its license rates.",
+    "goTenants": "Go to tenants",
+    "generate": "Issue period invoice",
+    "generateHint": "At the end of the period the invoice is built from this license’s rates and caps.",
+    "created": "Invoice issued.",
+    "number": "Number",
+    "status": "Status",
+    "period": "Period",
+    "total": "Total",
+    "document": "Rental invoice",
+    "issued": "Issued",
+    "due": "Due",
+    "item": "Description",
+    "qty": "Qty",
+    "unit": "Unit price",
+    "lineTotal": "Line total",
+    "subtotal": "Subtotal",
+    "tax": "Tax",
+    "print": "Print",
+    "markPaid": "Mark paid",
+    "void": "Void",
+    "confirmVoid": "Void this invoice?"
+  },
+  "invoiceStatus": {
+    "ISSUED": "Issued",
+    "PAID": "Paid",
+    "VOID": "Void",
+    "OVERDUE": "Overdue"
+  },
+  "lineType": {
+    "PLAN": "Plan fee",
+    "VEHICLES": "Vehicles",
+    "USERS": "Users",
+    "DEVICES": "Devices",
+    "DRIVERS": "Personnel",
+    "STORAGE": "Storage",
+    "DOWNLOAD": "Download"
+  },
+  "reports": {
+    "title": "Financial report",
+    "subtitle": "Contract, invoiced, and outstanding amounts by tenant and plan.",
+    "byTenant": "Tenant report",
+    "invoiced": "Invoiced"
   },
   "plans": {
     "TRIAL": "Trial (14 days)",
@@ -115,7 +205,8 @@
     "devices": "Devices",
     "drivers": "Personnel",
     "storage": "Storage",
-    "download": "Download"
+    "download": "Download",
+    "left": "left"
   },
   "roles": {
     "tenant-admin": "Tenant admin",

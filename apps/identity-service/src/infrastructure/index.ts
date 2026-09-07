@@ -7,6 +7,7 @@ export * from './persistence/tenant-context.js';
 export * from './persistence/user.repository.js';
 export * from './persistence/tenant.repository.js';
 export * from './persistence/tenant-license.repository.js';
+export * from './persistence/tenant-invoice.repository.js';
 export * from './persistence/role.repository.js';
 export * from './persistence/api-key.repository.js';
 export * from './persistence/auth.repository.js';
