@@ -173,15 +173,27 @@ export function useSnapshot() {
 // ── MDVR live stream (AB2 RTMP push + MediaMTX HLS) ─────────────────────────
 
 /**
- * Same RTMP/HLS key as md300-main `live.js` (`RTMP_PATH = live/md300`).
- * Camera is selected by the AB2/AB3/AB4 channel byte, not a URL suffix —
- * the MD300 drops extra path segments and publishes `live/md300`.
+ * Base RTMP/HLS key as md300-main `live.js` (`RTMP_PATH = live/md300`).
+ *
+ * The MD300 drops extra path SEGMENTS (`live/md300/2`, `live/md300/pb` both
+ * publish as `live/md300`), so a camera cannot be addressed by a sub-path.
+ * The stream NAME is honoured though, so each camera gets its own key —
+ * without that every tile resolves to one MediaMTX path and camera 2 can
+ * only ever show whatever camera 1 is pushing.
  */
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
-export function mdvrStreamKey(_logicalChannel = 1): string {
-  return MDVR_RTMP_PATH;
+/**
+ * Per-camera stream key. Channel 1 keeps the historical bare key (that is what
+ * fleet-management's auto-AB2-on-connect uses); every other camera appends
+ * `_<channel>` so two cameras can publish at the same time instead of fighting
+ * for one MediaMTX path. Keep in sync with `mdvrChannelStreamPath`
+ * (fleet-management), `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
+ */
+export function mdvrStreamKey(logicalChannel = 1): string {
+  const n = Number(logicalChannel);
+  return Number.isFinite(n) && n > 1 ? `${MDVR_RTMP_PATH}_${n}` : MDVR_RTMP_PATH;
 }
 
 /** Host:port the device is told to push RTMP to (rewritten off-loopback server-side). */
@@ -197,12 +209,17 @@ export function mdvrHlsUrl(_imei?: string, logicalChannel = 1): string {
 }
 
 /**
- * AB4 still carries `live/md300/pb` so the command bytes differ from live AB2.
- * The MD300 ACKs that URL but publishes `live/md300` (extra path dropped).
- * The HLS player must therefore watch the live key, not `/pb`.
+ * AB4 carries `<key>/pb` and the unit really does publish the SD-card stream
+ * there — verified against a live MD300: while `live/md300` carried the live
+ * camera, `live/md300/pb` had its own RTMP publisher with its own H.264 track.
+ *
+ * The player must therefore watch `/pb`. Watching the bare live key (what this
+ * code used to do, on the assumption that the unit dropped the extra segment)
+ * shows the LIVE camera while a recording is playing — the recording streams on
+ * into a path with zero readers.
  */
-export function mdvrPlaybackStreamKey(_logicalChannel = 1): string {
-  return `${mdvrStreamKey()}/pb`;
+export function mdvrPlaybackStreamKey(logicalChannel = 1): string {
+  return `${mdvrStreamKey(logicalChannel)}/pb`;
 }
 
 export function mdvrPlaybackRtmpUrl(_imei?: string, logicalChannel = 1): string {
@@ -211,8 +228,9 @@ export function mdvrPlaybackRtmpUrl(_imei?: string, logicalChannel = 1): string 
   return `rtmp://${server}:${tcpPort}/${mdvrPlaybackStreamKey(logicalChannel)}`;
 }
 
+/** HLS for the recording, NOT the live camera (nginx passes `/pb` straight through). */
 export function mdvrPlaybackHlsUrl(_imei?: string, logicalChannel = 1): string {
-  return mdvrHlsUrl(_imei, logicalChannel);
+  return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrPlaybackStreamKey(logicalChannel)}/index.m3u8`;
 }
 
 /** Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS in the operator's local clock. */
@@ -250,12 +268,27 @@ export interface MdvrResource {
   fileLen: number;
   eventCode: number;
   subEventCode: number;
+  /** D01 filename when this row is a JPEG (D00 download). */
+  filename?: string;
 }
 
 export function mdvrResourceKind(avType: number): 'video' | 'photo' {
   return avType === 4 ? 'photo' : 'video';
 }
 
+/** Parse `response_text` JSON written by the D01 photo-list command-ack. */
+export function parseMdvrPhotoListAck(responseText: string | null | undefined): string[] {
+  if (!responseText) return [];
+  try {
+    const parsed = JSON.parse(responseText) as { photoNames?: unknown };
+    if (!Array.isArray(parsed.photoNames)) return [];
+    return parsed.photoNames.filter(
+      (name): name is string => typeof name === 'string' && name.trim().length > 0,
+    );
+  } catch {
+    return [];
+  }
+}
 /** Parse `response_text` JSON written by the D00 photo-download command-ack. */
 export function parseMdvrPhotoAck(
   responseText: string | null | undefined,

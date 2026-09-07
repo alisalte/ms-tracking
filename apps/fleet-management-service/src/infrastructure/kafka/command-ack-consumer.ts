@@ -43,6 +43,21 @@ interface CommandEventEnvelope {
   } | null;
 }
 
+/**
+ * AB8/D01 often echo `OK` before the binary/name list. Marking ACKED on that
+ * first OK drops the real list (latestPendingByCode finds nothing). Keep the
+ * row pending until `resources` / `photoNames` arrive.
+ */
+export function shouldKeepPendingForListPayload(
+  code: string,
+  payload: string,
+  hasList: boolean,
+): boolean {
+  if (hasList) return false;
+  if (code !== 'AB8' && code !== 'D01') return false;
+  return /^ok$/i.test(payload.trim());
+}
+
 /** True when the device payload is an explicit failure, not a value-bearing readback. */
 export function isDeviceErrorResponse(payload: string): boolean {
   const p = payload.trim();
@@ -174,6 +189,17 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
     if (!pending) return; // already terminal or unknown — nothing to do.
 
     const resources = env.telemetry?.resources;
+    const photoNamesEarly = env.telemetry?.photoNames;
+    if (
+      shouldKeepPendingForListPayload(
+        code,
+        payload,
+        Array.isArray(resources) || Array.isArray(photoNamesEarly),
+      )
+    ) {
+      return;
+    }
+
     if (Array.isArray(resources)) {
       await this.commands.markAcked(
         tenantId,

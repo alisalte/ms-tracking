@@ -38,7 +38,7 @@ COPY packages/auth/package.json ./packages/auth/
 COPY packages/web/package.json ./packages/web/
 COPY packages/meitrack-media-protocol/package.json ./packages/meitrack-media-protocol/
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked pnpm install --filter @fleetvision/media-service... --frozen-lockfile --ignore-scripts
 
 # Copy source and build the service + its workspace package deps.
 COPY packages ./packages
@@ -58,9 +58,9 @@ ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" \
 # pnpm comes from the builder's corepack cache — the runtime stage never re-downloads it (flaky-registry-proof).
 COPY --from=builder /root/.cache/node/corepack /root/.cache/node/corepack
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked \
     corepack enable && corepack prepare pnpm@9.15.0 --activate \
-    && pnpm install --prod --frozen-lockfile --ignore-scripts \
+    && pnpm install --prod --filter @fleetvision/media-service... --frozen-lockfile --ignore-scripts \
     && chown -R node:node /app
 
 COPY --from=builder --chown=node:node /app/apps/media-service/dist ./apps/media-service/dist

@@ -244,7 +244,14 @@ function rebuildChanged() {
   console.log(`\n→ docker compose build (${changed.length}): ${changed.join(', ')}`);
   // Skip provenance/SBOM uploads — they HEAD Docker Hub even when FROM layers
   // are already local, and that TLS handshake often times out.
-  compose(['build', '--provenance=false', ...changed], true);
+  // Compose on this host has no `build --parallel`; batch instead so 12
+  // concurrent `pnpm install`s do not race the shared BuildKit cache / npm.
+  const batchSize = 3;
+  for (let i = 0; i < changed.length; i += batchSize) {
+    const batch = changed.slice(i, i + batchSize);
+    console.log(`  batch ${Math.floor(i / batchSize) + 1}: ${batch.join(', ')}`);
+    compose(['build', '--provenance=false', ...batch], true);
+  }
   saveStamps({ ...stamps, ...Object.fromEntries(changed.map((s) => [s, fingerprints[s]])) });
   console.log('✓ images rebuilt\n');
 }

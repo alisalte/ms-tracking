@@ -7,7 +7,8 @@
 
 # ---- Stage 1: build ----------------------------------------------------------
 FROM node:22-bookworm-slim AS builder
-ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" CI=1
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" CI=1 \
+    npm_config_fetch_retries=5 npm_config_fetch_timeout=120000
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
@@ -35,7 +36,7 @@ COPY packages/auth/package.json ./packages/auth/
 COPY packages/web/package.json ./packages/web/
 COPY packages/meitrack-media-protocol/package.json ./packages/meitrack-media-protocol/
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --filter @fleetvision/mdvr-streamer-service --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked pnpm install --filter @fleetvision/mdvr-streamer-service --frozen-lockfile
 
 # Build the protocol package then the service (tsc project references).
 COPY packages/shared-kernel ./packages/shared-kernel

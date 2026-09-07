@@ -6,6 +6,7 @@ import {
   type AlarmMediaResource,
   alarmEventMediaHint,
   alarmEventPhotoName,
+  alarmEventVideoWindow,
   alarmEvidenceWindow,
   hasAlarmCoordinates,
   isAlarmEventMedia,
@@ -43,6 +44,28 @@ describe('hasAlarmCoordinates', () => {
   it('rejects the 0,0 placeholder', () => {
     expect(hasAlarmCoordinates({ lat: 0, lng: 0 })).toBe(false);
     expect(hasAlarmCoordinates({ lat: 35.72, lng: 51.39 })).toBe(true);
+  });
+});
+
+describe('alarmEventVideoWindow', () => {
+  it('uses raisedAt when the photo filename clock is a different day', () => {
+    const photo = parseMdvrEventPhotoName('240823120005_CH2_E126S128_0.jpg');
+    const raised = '2026-09-06T19:30:00.000Z';
+    const win = alarmEventVideoWindow(photo, raised);
+    const raisedMs = Date.parse(raised);
+    expect(win).not.toBeNull();
+    expect(win!.fromMs).toBe(raisedMs - 60_000);
+    expect(win!.toMs).toBe(raisedMs + 3 * 60 * 1000);
+  });
+
+  it('keeps the photo timestamp when it is close to the alarm', () => {
+    const raised = new Date(2026, 8, 5, 12, 0, 9);
+    const bcd = `${String(raised.getFullYear()).slice(-2)}${String(raised.getMonth() + 1).padStart(2, '0')}${String(raised.getDate()).padStart(2, '0')}120009`;
+    const photo = parseMdvrEventPhotoName(`${bcd}_CH2_E126S8_0.jpg`);
+    const win = alarmEventVideoWindow(photo, raised.toISOString());
+    expect(win).not.toBeNull();
+    expect(photo).not.toBeNull();
+    expect(win!.fromMs).toBe(photo!.capturedAtMs - 60_000);
   });
 });
 

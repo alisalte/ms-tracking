@@ -79,51 +79,51 @@ const MAX_RETRIES = 3;
 const RECONNECT_BASE_MS = 1000;
 
 /**
- * A real MD300 only ever pushes ONE RTMP stream, to ONE shared key
- * (`live/md300` — see `MDVR_RTMP_PATH`): the AB2 `channel` byte selects which
- * camera feeds it, but a second AB2 for a different channel just steals the
- * device's single output rather than opening a second stream. So the lock
- * below is per-IMEI (per device), not per-channel: only one logical channel
- * may hold the live session at a time. A tile asking for a channel that
- * isn't the current holder is BLOCKED — it must not send its own AB2 (that
- * would just fight the active tile for the same RTMP key) — and is notified
- * to retry once the holder releases.
+ * Each camera publishes to its OWN RTMP/HLS key (`mdvrStreamKey`), so two
+ * cameras on one MD300 can be live at the same time — they no longer fight
+ * over a single MediaMTX path (which is what made every tile show camera 1).
  *
- * The operator can steal the stream: `stealMdvrLive` asks the holder to
- * yield (AB3) so the requested channel can send AB2. Same RTMP key, new
- * camera byte — that is how this MD300 actually switches cameras.
+ * The lock below is therefore keyed per (IMEI, channel), i.e. per camera: it
+ * only stops two tiles showing the SAME camera from firing duplicate AB2s
+ * (they share one session via `refCount`), and serialises AB3-stop before a
+ * re-open of that camera. Different cameras never contend.
  */
 type MdvrDeviceLock = {
   channel: number;
   refCount: number;
   start: Promise<void>;
-  /** Tiles waiting on a different channel, notified once this lock frees. */
+  /** Tiles waiting on this camera, notified once its lock frees. */
   waiters: Set<() => void>;
   /** Holder tile: bump retry so its effect tears down and releases. */
   yielders: Set<() => void>;
 };
+/** Lock identity: one live RTMP session per camera, not per device. */
+function liveKey(imei: string, channel: number): string {
+  return `${imei}#${channel}`;
+}
 const mdvrLocks = new Map<string, MdvrDeviceLock>();
 /** In-flight AB3 so a reconnect cannot send AB2 before stop is queued. */
 const mdvrStopping = new Map<string, Promise<void>>();
-/** Operator-chosen channel for this IMEI (cleared when that channel takes the lock). */
+/** Operator-chosen camera for this key (cleared when it takes the lock). */
 const mdvrPreferred = new Map<string, number>();
-/** Waiters parked while the lock is empty but another channel is preferred. */
+/** Waiters parked while the lock is empty but another camera is preferred. */
 const mdvrPendingWaiters = new Map<string, Set<() => void>>();
 /** Delayed AB3 after the live tile unmounts (React Strict Mode remounts in between). */
 const mdvrDelayedStop = new Map<string, ReturnType<typeof setTimeout>>();
 
-/** Register to be notified (once) the next time this IMEI's lock frees up. */
-function waitForMdvrRelease(imei: string, onFree: () => void): () => void {
-  const lock = mdvrLocks.get(imei);
+/** Register to be notified (once) the next time this camera's lock frees up. */
+function waitForMdvrRelease(imei: string, channel: number, onFree: () => void): () => void {
+  const key = liveKey(imei, channel);
+  const lock = mdvrLocks.get(key);
   if (lock) {
     lock.waiters.add(onFree);
     return () => lock.waiters.delete(onFree);
   }
-  if (mdvrPreferred.has(imei)) {
-    let pending = mdvrPendingWaiters.get(imei);
+  if (mdvrPreferred.has(key)) {
+    let pending = mdvrPendingWaiters.get(key);
     if (!pending) {
       pending = new Set();
-      mdvrPendingWaiters.set(imei, pending);
+      mdvrPendingWaiters.set(key, pending);
     }
     pending.add(onFree);
     return () => pending.delete(onFree);
@@ -133,17 +133,17 @@ function waitForMdvrRelease(imei: string, onFree: () => void): () => void {
 }
 
 /**
- * Try to become (or join) the single live holder for this IMEI.
- * `blocked: true` means a DIFFERENT channel already owns the device's one
- * RTMP stream — the caller must not call `start` itself.
+ * Try to become (or join) the live holder for THIS camera. Two tiles on the
+ * same camera share one AB2 session; different cameras never block each other.
  */
 function acquireMdvrLive(
   imei: string,
   channel: number,
   start: () => Promise<void>,
 ): { blocked: boolean; start: Promise<void> } {
-  const existing = mdvrLocks.get(imei);
-  const preferred = mdvrPreferred.get(imei);
+  const key = liveKey(imei, channel);
+  const existing = mdvrLocks.get(key);
+  const preferred = mdvrPreferred.get(key);
   if (existing) {
     if (existing.channel === channel) {
       existing.refCount += 1;
@@ -159,12 +159,12 @@ function acquireMdvrLive(
   if (preferred !== undefined && preferred !== channel) {
     return { blocked: true, start: Promise.resolve() };
   }
-  const delayed = mdvrDelayedStop.get(imei);
+  const delayed = mdvrDelayedStop.get(key);
   if (delayed !== undefined) {
     clearTimeout(delayed);
-    mdvrDelayedStop.delete(imei);
+    mdvrDelayedStop.delete(key);
   }
-  const afterStop = mdvrStopping.get(imei) ?? Promise.resolve();
+  const afterStop = mdvrStopping.get(key) ?? Promise.resolve();
   const lock: MdvrDeviceLock = {
     channel,
     refCount: 1,
@@ -172,33 +172,32 @@ function acquireMdvrLive(
     waiters: new Set(),
     yielders: new Set(),
   };
-  mdvrLocks.set(imei, lock);
-  const pending = mdvrPendingWaiters.get(imei);
+  mdvrLocks.set(key, lock);
+  const pending = mdvrPendingWaiters.get(key);
   if (pending) {
-    mdvrPendingWaiters.delete(imei);
+    mdvrPendingWaiters.delete(key);
     for (const notify of pending) notify();
   }
   lock.start.catch(() => {
-    if (mdvrLocks.get(imei) === lock) mdvrLocks.delete(imei);
+    if (mdvrLocks.get(key) === lock) mdvrLocks.delete(key);
   });
   return { blocked: false, start: lock.start };
 }
 
 /**
- * Ask this IMEI to switch its single live RTMP push to `channel`.
- * The current holder yields so the requested camera can send AB2 (no AB3 —
- * this MD300 often never republishes after stop). Same-channel is still a
- * yield: the HLS key is shared, so the live tile can be showing a different
- * camera than the lock thinks (e.g. after an out-of-band AB2).
+ * Re-open this camera's live push (operator picked it again). Each camera has
+ * its own RTMP key, so this never takes the stream away from another camera —
+ * it just nudges this camera's tile to (re)send AB2 if it is not already live.
  */
 export function stealMdvrLive(imei: string, channel: number): void {
-  mdvrPreferred.set(imei, channel);
-  const existing = mdvrLocks.get(imei);
+  const key = liveKey(imei, channel);
+  mdvrPreferred.set(key, channel);
+  const existing = mdvrLocks.get(key);
   if (existing) {
     for (const yieldHolder of [...existing.yielders]) yieldHolder();
     return;
   }
-  const pending = mdvrPendingWaiters.get(imei);
+  const pending = mdvrPendingWaiters.get(key);
   if (pending) {
     for (const notify of [...pending]) notify();
   }
@@ -214,36 +213,30 @@ export function resetMdvrLiveForTests(): void {
   mdvrDelayedStop.clear();
 }
 
-/** Release a held lock (no-op if this channel never held it — a blocked waiter). */
+/** Release this camera's lock (no-op if this tile never held it). */
 function releaseMdvrLive(imei: string, channel: number, stop: () => Promise<void>): void {
-  const existing = mdvrLocks.get(imei);
+  const key = liveKey(imei, channel);
+  const existing = mdvrLocks.get(key);
   if (!existing || existing.channel !== channel) return;
   existing.refCount -= 1;
   if (existing.refCount > 0) return;
-  mdvrLocks.delete(imei);
+  mdvrLocks.delete(key);
   const waiters = [...existing.waiters];
-  const preferred = mdvrPreferred.get(imei);
 
-  if (preferred !== undefined && preferred !== channel) {
-    mdvrLog(`soft-release channel=${channel} imei=${imei} → preferred=${preferred} (no AB3)`);
-    for (const notify of waiters) notify();
-    return;
-  }
-
-  // This camera was the live one. Delay AB3 so React Strict Mode remount
-  // (and the incoming preferred tile) can re-acquire the same RTMP session.
-  mdvrPreferred.delete(imei);
+  // Delay AB3 so a React Strict Mode remount can re-acquire the same RTMP
+  // session instead of stopping and restarting the camera for nothing.
+  mdvrPreferred.delete(key);
   const delayed = setTimeout(() => {
-    mdvrDelayedStop.delete(imei);
-    if (mdvrLocks.has(imei)) return;
+    mdvrDelayedStop.delete(key);
+    if (mdvrLocks.has(key)) return;
     mdvrLog(`AB3 after release channel=${channel} imei=${imei}`);
     const stopping = stop().catch(() => undefined);
-    mdvrStopping.set(imei, stopping);
+    mdvrStopping.set(key, stopping);
     void stopping.finally(() => {
-      if (mdvrStopping.get(imei) === stopping) mdvrStopping.delete(imei);
+      if (mdvrStopping.get(key) === stopping) mdvrStopping.delete(key);
     });
   }, 50);
-  mdvrDelayedStop.set(imei, delayed);
+  mdvrDelayedStop.set(key, delayed);
   for (const notify of waiters) notify();
 }
 
@@ -435,13 +428,13 @@ export function useStreamSession(
       const lock = acquireMdvrLive(imei, logicalChannel, startAb2);
 
       if (lock.blocked) {
-        const holder = mdvrLocks.get(imei)?.channel ?? mdvrPreferred.get(imei) ?? null;
+        const holder = mdvrLocks.get(liveKey(imei, logicalChannel))?.channel ?? null;
         mdvrLog(
-          `channel=${logicalChannel} BLOCKED — device=${deviceId} imei=${imei} is already streaming channel ${holder} (a real MD300 pushes one RTMP stream at a time); not sending a competing AB2 — will retry once that tile closes or the operator switches.`,
+          `channel=${logicalChannel} BLOCKED — device=${deviceId} imei=${imei} already has a live session for this camera; not sending a competing AB2 — will retry once that tile closes.`,
         );
         teardown();
         setBlockedByChannel(holder);
-        const unsubscribe = waitForMdvrRelease(imei, () => {
+        const unsubscribe = waitForMdvrRelease(imei, logicalChannel, () => {
           if (cancelled) return;
           setRetryTrigger((n) => n + 1);
         });
@@ -451,7 +444,7 @@ export function useStreamSession(
         };
       }
 
-      const yielders = mdvrLocks.get(imei)?.yielders;
+      const yielders = mdvrLocks.get(liveKey(imei, logicalChannel))?.yielders;
       const onYield = () => {
         if (!cancelled) setRetryTrigger((n) => n + 1);
       };

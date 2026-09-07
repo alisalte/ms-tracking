@@ -39,6 +39,9 @@ HTMLCanvasElement.prototype.toBlob = vi.fn((cb: BlobCallback | null) => {
   cb?.(new Blob(['x'], { type: 'image/jpeg' }));
 });
 
+URL.createObjectURL = vi.fn(() => 'blob:mdvr-photo');
+URL.revokeObjectURL = vi.fn();
+
 function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
 }
@@ -227,7 +230,7 @@ describe('VideoWallPage — view tabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: /playback/i }));
 
     // Pick the first available channel + Load — the transport enables.
-    const channelSelect = screen.getByRole('combobox');
+    const channelSelect = screen.getByRole('combobox', { name: /camera/i });
     const firstOption = channelSelect.querySelectorAll('option')[1];
     fireEvent.change(channelSelect, { target: { value: firstOption?.value ?? '' } });
     fireEvent.click(screen.getByTestId('playback-load'));
@@ -235,6 +238,11 @@ describe('VideoWallPage — view tabs', () => {
     await waitFor(() => {
       expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).toBeNull();
     });
+    const speed = screen.getByTestId('video-playback-speed') as HTMLSelectElement;
+    expect(speed.value).toBe('1');
+    fireEvent.change(speed, { target: { value: '2' } });
+    expect(speed.value).toBe('2');
+    expect(screen.getByTestId('video-playback-snapshot')).toBeTruthy();
     // Play → pause toggles playback state.
     fireEvent.click(screen.getByTestId('video-playback-play'));
     expect(screen.getByTestId('video-playback-pause')).toBeTruthy();
@@ -252,7 +260,7 @@ describe('VideoWallPage — view tabs', () => {
     await waitForChannelsShort();
     fireEvent.click(screen.getByRole('tab', { name: /playback/i }));
 
-    const channelSelect = screen.getByRole('combobox');
+    const channelSelect = screen.getByRole('combobox', { name: /camera/i });
     const firstOption = channelSelect.querySelectorAll('option')[1];
     fireEvent.change(channelSelect, { target: { value: firstOption?.value ?? '' } });
     fireEvent.click(screen.getByTestId('playback-load'));
@@ -282,6 +290,7 @@ const resourcesOverride = vi.hoisted(() => ({
     fileLen: number;
     eventCode: number;
     subEventCode: number;
+    filename?: string;
   }>,
   photos: [] as Array<{
     channel: number;
@@ -293,9 +302,14 @@ const resourcesOverride = vi.hoisted(() => ({
     fileLen: number;
     eventCode: number;
     subEventCode: number;
+    filename?: string;
   }>,
   search: vi.fn(),
   reset: vi.fn(),
+  fetchPhoto: vi.fn(async (_deviceId: string, _filename: string, _isCancelled: () => boolean) => ({
+    blob: new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' }),
+    filename: 'shot.jpg',
+  })),
 }));
 
 const mdvrMockChannel = vi.hoisted(() => ({
@@ -349,9 +363,15 @@ vi.mock('@/api/client', async (importOriginal) => {
   };
 });
 
-vi.mock('@/components/video/useMdvrResources', () => ({
-  useMdvrResources: () => resourcesOverride,
-}));
+vi.mock('@/components/video/useMdvrResources', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/video/useMdvrResources')>();
+  return {
+    ...actual,
+    useMdvrResources: () => resourcesOverride,
+    fetchMdvrPhoto: (...args: Parameters<typeof actual.fetchMdvrPhoto>) =>
+      resourcesOverride.fetchPhoto(...args),
+  };
+});
 
 describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)', () => {
   afterEach(() => {
@@ -361,6 +381,7 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     resourcesOverride.videos = [];
     resourcesOverride.photos = [];
     resourcesOverride.search.mockClear();
+    resourcesOverride.fetchPhoto.mockClear();
     resetMdvrLiveForTests();
   });
 
@@ -373,40 +394,58 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     });
   });
 
-  it('blocks a second channel on the same MDVR device instead of racing it live', async () => {
-    // A real MD300 only pushes one RTMP stream at a time — opening both of a
-    // device's channels must not fire two competing AB2s; the second tile
-    // stays honestly "blocked" until the first one closes.
+  it('streams both cameras of one MDVR device at the same time', async () => {
+    // Each camera publishes to its own RTMP key, so opening both channels must
+    // fire an AB2 per camera and leave neither tile blocked. With one shared
+    // key the second camera could only ever show camera 1's picture.
+    const { apiPost } = await import('@/api/client');
     mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
+    vi.mocked(apiPost).mockClear();
     renderWall('/video?device=device-1');
     await screen.findByText('Video Wall');
     await waitFor(() => {
       expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
       expect(document.querySelector('[data-tile="MD300 Sim · CH2"]')).not.toBeNull();
     });
-    // Exactly one of the two tiles is held back — never both, never neither.
     await waitFor(() => {
-      expect(screen.getAllByText(/is live on this device/).length).toBe(1);
+      const channels = vi
+        .mocked(apiPost)
+        .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2')
+        .map((call) => (call[1] as { params?: { channel?: number } })?.params?.channel);
+      expect(new Set(channels)).toEqual(new Set([1, 2]));
     });
+    // Neither tile is held back behind the other any more.
+    expect(screen.queryAllByText(/is live on this device/).length).toBe(0);
   });
 
-  it('switches the live MDVR camera when the blocked tile is clicked', async () => {
+  it('points each camera tile at its own HLS key', async () => {
+    const { apiPost } = await import('@/api/client');
     mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
+    vi.mocked(apiPost).mockClear();
     renderWall('/video?device=device-1');
     await screen.findByText('Video Wall');
-    const switchBtn = await screen.findByTestId('mdvr-switch-channel');
-    fireEvent.click(switchBtn);
     await waitFor(() => {
-      expect(screen.getByText(/Camera 2 is live on this device/)).toBeInTheDocument();
+      const urls = vi
+        .mocked(apiPost)
+        .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2')
+        .map((call) => (call[1] as { params?: { uploadUrl?: string } })?.params?.uploadUrl);
+      expect(urls).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/\/live\/md300$/),
+          expect.stringMatching(/\/live\/md300_2$/),
+        ]),
+      );
     });
-    expect(screen.queryByText(/Camera 1 is live on this device/)).toBeNull();
   });
 
   it('re-sends AB2 when the operator re-picks the camera that is already live', async () => {
     const { apiPost } = await import('@/api/client');
     mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
     renderWall('/video?device=device-1');
-    await screen.findByTestId('mdvr-switch-channel');
+    await screen.findByText('Video Wall');
+    await waitFor(() => {
+      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+    });
     vi.mocked(apiPost).mockClear();
     fireEvent.click(screen.getByTestId('dock-channel-ch-mdvr-1'));
     await waitFor(() => {
@@ -454,12 +493,13 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
         fileLen: 2048,
         eventCode: 0,
         subEventCode: 0,
+        filename: '260904110000_CH1_E126S8_0.jpg',
       },
     ];
     renderWall('/video?view=playback');
     await screen.findByTestId('playback-load');
 
-    const channelSelect = screen.getByRole('combobox');
+    const channelSelect = screen.getByRole('combobox', { name: /camera/i });
     fireEvent.change(channelSelect, { target: { value: mdvrMockChannel.id } });
 
     expect(screen.getByTestId('playback-search')).toBeTruthy();
@@ -471,9 +511,52 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     expect(resourcesOverride.search).toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId('playback-clip-video-0'));
+    // Clicking a clip starts playback, so the transport offers Pause.
     await waitFor(() => {
-      expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).toBeNull();
+      expect(screen.getByTestId('video-playback-pause').getAttribute('disabled')).toBeNull();
     });
+    // The playhead must stay at the clip start while the device is still
+    // starting the stream. It used to advance at 1000× (dt is already ms), so
+    // the window was exhausted in ~0.5s and the video was paused on its first
+    // frame — which looked like "the recording will not play".
+    const timeline = screen.getByTestId('video-playback-timeline') as HTMLInputElement;
+    expect(Number(timeline.value)).toBe(Number(timeline.min));
+    expect(Number(timeline.value)).toBeLessThan(Number(timeline.max));
+  });
+
+  it('opens a listed photo as a still instead of live video', async () => {
+    mdvrOverride.channels = [mdvrMockChannel];
+    resourcesOverride.status = 'ready';
+    resourcesOverride.photos = [
+      {
+        channel: 1,
+        startTime: '260904110000',
+        endTime: '260904110001',
+        avType: 4,
+        streamType: 0,
+        capType: 0,
+        fileLen: 2048,
+        eventCode: 0,
+        subEventCode: 0,
+        filename: '260904110000_CH1_E126S8_0.jpg',
+      },
+    ];
+    renderWall('/video?view=playback');
+    await screen.findByTestId('playback-load');
+    fireEvent.change(screen.getByRole('combobox', { name: /camera/i }), {
+      target: { value: mdvrMockChannel.id },
+    });
+
+    fireEvent.click(screen.getByTestId('playback-clip-photo-0'));
+    await waitFor(() => {
+      expect(resourcesOverride.fetchPhoto).toHaveBeenCalledWith(
+        'device-1',
+        '260904110000_CH1_E126S8_0.jpg',
+        expect.any(Function),
+      );
+      expect(screen.getByTestId('playback-photo-preview')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/no recording available/i)).toBeNull();
   });
 });
 
@@ -554,27 +637,44 @@ describe('mapMediaChannel wire shape', () => {
     expect(ch.sourceLabel).toBe('MDVR 867191086416152');
   });
 
-  it('builds AB2 RTMP and HLS URLs from the IMEI', async () => {
+  it('gives every camera its own RTMP/HLS key so two cameras can be live at once', async () => {
     const { mdvrRtmpUploadUrl, mdvrHlsUrl } = await import('@/api/video.api');
+    // Camera 1 keeps the historical bare key (auto-AB2-on-connect uses it).
     expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300$/);
     expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/index.m3u8');
-    expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300$/);
-    expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300/index.m3u8');
+    // Camera 2 must NOT collide with camera 1 — otherwise both tiles resolve to
+    // one MediaMTX path and camera 2 can only ever show camera 1's picture.
+    expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300_2$/);
+    expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300_2/index.m3u8');
+    expect(mdvrHlsUrl('867191086416152', 2)).not.toBe(mdvrHlsUrl('867191086416152', 1));
   });
 
-  it('builds a sibling playback RTMP/HLS path so AB4 does not clobber live', async () => {
-    const { mdvrPlaybackRtmpUrl, mdvrPlaybackHlsUrl, toMdvrBcdTime } = await import(
+  it('watches the /pb path for recordings, not the live camera', async () => {
+    const { mdvrPlaybackRtmpUrl, mdvrPlaybackHlsUrl, mdvrHlsUrl, toMdvrBcdTime } = await import(
       '@/api/video.api'
     );
-    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300\/pb$/);
-    expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain('/media-hls/live/md300/index.m3u8');
+    // AB4 publishes the SD-card clip to `<camera key>/pb` (verified on a live
+    // MD300). Pointing the player at the live key instead plays the LIVE
+    // camera while the recording streams into a path nobody reads.
+    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300_2\/pb$/);
+    expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain(
+      '/media-hls/live/md300/pb/index.m3u8',
+    );
+    expect(mdvrPlaybackHlsUrl('867191086416152', 2)).toContain(
+      '/media-hls/live/md300_2/pb/index.m3u8',
+    );
+    expect(mdvrPlaybackHlsUrl('867191086416152', 1)).not.toBe(mdvrHlsUrl('867191086416152', 1));
     expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toMatch(/^\d{12}$/);
   });
 
   it('round-trips MDVR BCD timestamps and parses an AB8 ack JSON', async () => {
-    const { fromMdvrBcdTime, toMdvrBcdTime, parseMdvrResourceAck, mdvrResourceKind } = await import(
-      '@/api/video.api'
-    );
+    const {
+      fromMdvrBcdTime,
+      toMdvrBcdTime,
+      parseMdvrResourceAck,
+      parseMdvrPhotoListAck,
+      mdvrResourceKind,
+    } = await import('@/api/video.api');
     const ms = new Date(2026, 8, 4, 11, 30, 5).getTime();
     expect(fromMdvrBcdTime(toMdvrBcdTime(ms))).toBe(ms);
     const rows = parseMdvrResourceAck(
@@ -605,5 +705,9 @@ describe('mapMediaChannel wire shape', () => {
     expect(mdvrResourceKind(rows[0]?.avType ?? 0)).toBe('video');
     expect(mdvrResourceKind(rows[1]?.avType ?? 0)).toBe('photo');
     expect(parseMdvrResourceAck('not-json')).toEqual([]);
+    expect(
+      parseMdvrPhotoListAck(JSON.stringify({ photoNames: ['a.jpg', '', 1, 'b.jpg'] })),
+    ).toEqual(['a.jpg', 'b.jpg']);
+    expect(parseMdvrPhotoListAck('not-json')).toEqual([]);
   });
 });

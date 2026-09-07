@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router';
 
 import { fromMdvrBcdTime } from '@/api/video.api';
 import { AlarmEventVideo } from '@/components/alarms/AlarmEventVideo';
+import { AlarmPhotoCapture } from '@/components/alarms/AlarmPhotoCapture';
 import { Button, Spinner } from '@/components/tailwind-ui';
 import type { AlarmMdvrClip } from '@/components/video/useMdvrResources';
 import { useAlarmEvidence } from '@/hooks/useAlarmEvidence';
@@ -77,6 +78,8 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
           { minutes: 5 },
         )}
       </p>
+
+      {evidence.hasCamera && <AlarmPhotoCapture channels={evidence.mdvrChannels} />}
 
       {idle && !evidence.loadRequested && evidence.hasCamera ? (
         <Button
@@ -151,6 +154,9 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
                 channel={evidence.videoChannel}
                 fromMs={evidence.videoWindow.fromMs}
                 toMs={evidence.videoWindow.toMs}
+                fallbackFromMs={evidence.window?.fromMs}
+                fallbackToMs={evidence.window?.toMs}
+                fallbackChannels={evidence.mdvrChannels}
                 onDownload={downloadVideo}
               />
             ) : (

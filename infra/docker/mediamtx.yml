@@ -1,11 +1,17 @@
 # MediaMTX — MD300/MDVR live ingest (AB2 RTMP push → HLS).
-# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300
-# Browser plays same-origin /media-hls/live/md300/index.m3u8 (nginx → :8888).
+# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300   (camera 1)
+#                rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_2 (camera 2), …
+# Browser plays same-origin /media-hls/live/md300[_N]/index.m3u8 (nginx → :8888).
+#
+# One path per camera: the AB2 channel byte picks the camera, but the unit
+# publishes every camera to whatever stream key the AB2 uploadUrl carries. With
+# a single shared key the second camera cannot publish alongside the first, so
+# every tile ends up showing camera 1 — hence `<key>_<channel>` per camera.
 #
 # Camera 1 publishes H.264 (RTMP codec 7). Camera 2 publishes legacy HEVC
 # (RTMP codec 12) which MediaMTX < 1.16.2 rejects. After ingest, ffmpeg
-# re-encodes to H.264 on live/md300_web so Linux Chrome can play it; nginx
-# maps /media-hls/live/md300 → that transcoded path.
+# re-encodes each camera to H.264 on `<path>_web` so Linux Chrome can play it;
+# nginx maps /media-hls/live/md300[_N] → that transcoded path.
 
 logLevel: info
 
@@ -23,6 +29,7 @@ api: yes
 apiAddress: :9997
 
 paths:
+  # Camera 1 — the historical bare key (also used by auto-AB2-on-connect).
   live/md300:
     runOnReady: >
       ffmpeg -hide_banner -loglevel warning
@@ -33,5 +40,102 @@ paths:
       -c:a copy
       -f flv rtmp://127.0.0.1:1935/live/md300_web
     runOnReadyRestart: yes
+  # Cameras 2..4 — one ingest path each, transcoded to its own `_web` twin.
+  # Spelled out rather than a regex so the output path is a literal (no
+  # dependency on shell expansion of $MTX_PATH inside runOnReady).
+  live/md300_2:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -map 0:a?
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -c:a copy
+      -f flv rtmp://127.0.0.1:1935/live/md300_2_web
+    runOnReadyRestart: yes
+  live/md300_3:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -map 0:a?
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -c:a copy
+      -f flv rtmp://127.0.0.1:1935/live/md300_3_web
+    runOnReadyRestart: yes
+  live/md300_4:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -map 0:a?
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -c:a copy
+      -f flv rtmp://127.0.0.1:1935/live/md300_4_web
+    runOnReadyRestart: yes
+  # AB4 SD-card playback publishes to `<camera key>/pb`. It needs the SAME
+  # ffmpeg normalisation as live: served raw, hls.js polls the playlist forever
+  # and almost never pulls a segment (the unit's file-playback stream has
+  # irregular PTS — that is what `-fflags +genpts` fixes — and camera 2's
+  # recordings are HEVC). nginx maps /media-hls/<key>/pb → `<key>/pb_web`.
+  #
+  # `-g 50 …` forces a 2s GOP: the device's own keyframes are ~10s apart, which
+  # made segments 10s long and kept MediaMTX's leading EXT-X-GAP placeholder in
+  # the window for ~70s (hls.js starts at the head and dies on it).
+  #
+  # Audio is DROPPED (`-an`). The recorded audio makes Chrome's MSE audio
+  # SourceBuffer fail with `mediaSourceRequiresReset` / `bufferAppendingError`
+  # — a FATAL hls.js error that ends the MediaSource and takes the perfectly
+  # good video down with it. Re-encoding to clean AAC was tried first and the
+  # SourceBuffer still failed, so the timing of the recorded audio (not its
+  # codec) is the problem. Live playback keeps its audio; recordings are
+  # video-only until the device's audio timing can be normalised properly.
+  live/md300/pb:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -an
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 50 -keyint_min 50 -sc_threshold 0
+      -f flv rtmp://127.0.0.1:1935/live/md300/pb_web
+    runOnReadyRestart: yes
+  live/md300_2/pb:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -an
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 50 -keyint_min 50 -sc_threshold 0
+      -f flv rtmp://127.0.0.1:1935/live/md300_2/pb_web
+    runOnReadyRestart: yes
+  live/md300_3/pb:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -an
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 50 -keyint_min 50 -sc_threshold 0
+      -f flv rtmp://127.0.0.1:1935/live/md300_3/pb_web
+    runOnReadyRestart: yes
+  live/md300_4/pb:
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -an
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 50 -keyint_min 50 -sc_threshold 0
+      -f flv rtmp://127.0.0.1:1935/live/md300_4/pb_web
+    runOnReadyRestart: yes
   live/md300_web:
+  live/md300_2_web:
+  live/md300_3_web:
+  live/md300_4_web:
+  live/md300/pb_web:
+  live/md300_2/pb_web:
+  live/md300_3/pb_web:
+  live/md300_4/pb_web:
   all_others:

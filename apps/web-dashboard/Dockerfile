@@ -8,7 +8,8 @@
 
 # ---- Stage 1: build the SPA -----------------------------------------------
 FROM node:22-bookworm-slim AS builder
-ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" CI=1
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" CI=1 \
+    npm_config_fetch_retries=5 npm_config_fetch_timeout=120000
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
@@ -36,7 +37,7 @@ COPY packages/auth/package.json ./packages/auth/
 COPY packages/web/package.json ./packages/web/
 COPY packages/meitrack-media-protocol/package.json ./packages/meitrack-media-protocol/
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked pnpm install --filter @fleetvision/web-dashboard... --frozen-lockfile --ignore-scripts
 
 # Copy the dashboard source and build the production bundle.
 # Same-origin Socket.IO paths so the SPA works behind this nginx (no :3001/:3010).

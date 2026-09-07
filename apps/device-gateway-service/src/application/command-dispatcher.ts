@@ -80,6 +80,8 @@ const HOLD_WHEN_OFFLINE = new Set([
   'ABB',
   'DA6',
   'DB4',
+  'D00',
+  'D01',
   'E91',
 ]);
 /** Match fleet-management max command TTL (600s) so A10 locate survives until GPRS. */

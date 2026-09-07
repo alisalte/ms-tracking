@@ -14,9 +14,14 @@ interface HLSLivePlayerProps {
   /** Fires once the playlist is parsed / native HLS has a source. */
   onReady?: () => void;
   objectFit?: 'cover' | 'contain';
+  /** Live edge snap. Recorded AB4 push should stay false so leftover live segments are not skipped-to. */
+  lowLatencyMode?: boolean;
 }
 
 const POLL_MS = 2000;
+
+/** hls.js media-error recoveries before we stop (avoids an endless fatal loop). */
+const MAX_MEDIA_RECOVERIES = 2;
 
 /** Console tag so `[MDVR]` is easy to filter/search in devtools. */
 function mdvrLog(...args: unknown[]): void {
@@ -24,23 +29,61 @@ function mdvrLog(...args: unknown[]): void {
   console.log('[MDVR]', ...args);
 }
 
+/**
+ * A 200 playlist is not the same as a playable one: MediaMTX serves the muxer
+ * as soon as it exists and pads the window with `#EXT-X-GAP` / `gap.mp4`
+ * placeholders until the source settles. hls.js starts at the head of the
+ * window, so a single leading gap is enough to make it emit `fragGap`
+ * ("GAP tag found") and stall on a black frame — having *some* real segment
+ * later in the window does not save it.
+ *
+ * So wait for a window with NO gaps at all. The placeholders age out as
+ * segments rotate (the playback transcode forces a 2s GOP so that takes
+ * seconds, not the ~70s the device's 10s keyframe spacing would cost).
+ */
+async function hasPlayableSegment(
+  url: string,
+  signal: AbortSignal,
+  depth = 0,
+): Promise<{ ready: boolean; status: number }> {
+  const res = await fetch(url, { method: 'GET', cache: 'no-store', signal });
+  if (res.status !== 200) return { ready: false, status: res.status };
+  const lines = (await res.text())
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const entries = lines.filter((line) => !line.startsWith('#'));
+  if (lines.some((line) => line.startsWith('#EXTINF'))) {
+    const hasGap =
+      lines.some((line) => line.startsWith('#EXT-X-GAP')) ||
+      entries.some((line) => line.startsWith('gap.'));
+    return { ready: !hasGap && entries.length > 0, status: 200 };
+  }
+  // Master playlist — check the first variant it points at.
+  const variant = entries[0];
+  if (!variant || depth > 2) return { ready: false, status: 200 };
+  return hasPlayableSegment(new URL(variant, url).toString(), signal, depth + 1);
+}
+
 async function waitForPlaylist(url: string, signal: AbortSignal): Promise<boolean> {
   let attempt = 0;
   while (!signal.aborted) {
     attempt++;
     try {
-      const res = await fetch(url, { method: 'GET', cache: 'no-store', signal });
+      const res = await hasPlayableSegment(url, signal);
       // nginx maps MediaMTX's empty-path 404 → 204 so the console stays quiet.
-      if (res.status === 200) {
+      if (res.ready) {
         mdvrLog(`playlist ready after ${attempt} poll(s): ${url}`);
         return true;
       }
       if (attempt === 1 || attempt % 5 === 0) {
         mdvrLog(
           `waiting for playlist (attempt ${attempt}, HTTP ${res.status}): ${url} — ${
-            res.status === 204
-              ? 'MediaMTX has no publisher yet (device has not pushed RTMP to :1935).'
-              : 'unexpected status.'
+            res.status === 200
+              ? 'playlist is up but every entry is still an EXT-X-GAP placeholder; waiting for the first real segment.'
+              : res.status === 204
+                ? 'MediaMTX has no publisher yet (device has not pushed RTMP to :1935).'
+                : 'unexpected status.'
           }`,
         );
       }
@@ -57,7 +100,10 @@ async function waitForPlaylist(url: string, signal: AbortSignal): Promise<boolea
 }
 
 export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
-  function HLSLivePlayer({ hlsUrl, muted = true, onReady, objectFit = 'cover' }, ref) {
+  function HLSLivePlayer(
+    { hlsUrl, muted = true, onReady, objectFit = 'cover', lowLatencyMode = true },
+    ref,
+  ) {
     const innerRef = useRef<HTMLVideoElement | null>(null);
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
@@ -87,14 +133,17 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
         void video.play()?.catch?.((err) => mdvrLog('native video.play() rejected:', err));
       };
 
+      let mediaRecoveries = 0;
+
       const attachHls = () => {
         mdvrLog(`attaching hls.js to ${hlsUrl}`);
+        mediaRecoveries = 0;
         hls?.destroy();
         hls = new Hls({
           liveSyncDurationCount: 3,
           liveMaxLatencyDurationCount: 6,
           enableWorker: true,
-          lowLatencyMode: true,
+          lowLatencyMode,
         });
         hls.loadSource(hlsUrl);
         hls.attachMedia(video);
@@ -120,7 +169,23 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
               }
             }, POLL_MS);
           } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            mdvrLog(`hls.js media error — attempting recoverMediaError(): ${hlsUrl}`);
+            // Escalate the way hls.js documents it, and STOP after that: a bad
+            // audio track (`mediaSourceRequiresReset` on the audio
+            // SourceBuffer) otherwise loops fatal → recover → fatal forever and
+            // takes the perfectly good video down with it.
+            mediaRecoveries += 1;
+            if (mediaRecoveries > MAX_MEDIA_RECOVERIES) {
+              mdvrLog(
+                `hls.js media error persisted after ${MAX_MEDIA_RECOVERIES} recovery attempts (${data.details}, buffer=${data.sourceBufferName ?? 'n/a'}) — giving up instead of looping.`,
+              );
+              return;
+            }
+            if (mediaRecoveries > 1) {
+              mdvrLog(`hls.js media error — swapAudioCodec() + recover (#${mediaRecoveries})`);
+              hls?.swapAudioCodec();
+            } else {
+              mdvrLog(`hls.js media error — attempting recoverMediaError(): ${hlsUrl}`);
+            }
             hls?.recoverMediaError();
           }
         });
@@ -143,7 +208,7 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
         video.removeAttribute('src');
         video.load();
       };
-    }, [hlsUrl]);
+    }, [hlsUrl, lowLatencyMode]);
 
     return (
       <video

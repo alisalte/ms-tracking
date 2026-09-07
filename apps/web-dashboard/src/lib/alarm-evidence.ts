@@ -253,16 +253,24 @@ export function parseMdvrEventPhotoName(name: string | undefined): MdvrEventPhot
 }
 
 /** Short playback window around the event snapshot (or `raisedAt`). */
+const EVENT_VIDEO_PRE_MS = 60_000;
+const EVENT_VIDEO_POST_MS = 3 * 60 * 1000;
+/** Ignore photo BCD time when it is a different day from the alarm (device clock / YY). */
+const PHOTO_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
+
 export function alarmEventVideoWindow(
   photo: MdvrEventPhotoRef | null,
   raisedAt: string,
 ): { fromMs: number; toMs: number } | null {
-  const t =
-    photo && Number.isFinite(photo.capturedAtMs)
-      ? photo.capturedAtMs
-      : new Date(raisedAt).getTime();
+  const raised = new Date(raisedAt).getTime();
+  const photoMs = photo && Number.isFinite(photo.capturedAtMs) ? photo.capturedAtMs : Number.NaN;
+  const photoTrustworthy =
+    Number.isFinite(photoMs) &&
+    Number.isFinite(raised) &&
+    Math.abs(photoMs - raised) <= PHOTO_CLOCK_SKEW_MS;
+  const t = photoTrustworthy ? photoMs : Number.isFinite(raised) ? raised : photoMs;
   if (!Number.isFinite(t)) return null;
-  return { fromMs: t - 15_000, toMs: t + 45_000 };
+  return { fromMs: t - EVENT_VIDEO_PRE_MS, toMs: t + EVENT_VIDEO_POST_MS };
 }
 
 export function evidenceChannelForPhoto(

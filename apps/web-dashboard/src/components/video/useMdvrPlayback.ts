@@ -1,9 +1,15 @@
 /**
  * useMdvrPlayback — AB4 RTMP playback from the MDVR SD card (Meitrack §3.x).
  *
- * Load sends AB4 (startTime/endTime + RTMP URL). The device pushes recorded
- * video to MediaMTX on the live key (`live/md300` — `/pb` is dropped).
- * Seek is AB5 drag; teardown is AB5 end. Non-MDVR channels never hit this hook.
+ * AB4 publishes the SD-card clip to its OWN key, `<camera key>/pb` — verified
+ * on a live MD300, where `live/md300/pb` carried the recording (frame stamped
+ * with the clip's own date) while `live/md300` carried the live camera. The
+ * player therefore watches `/pb` (`mdvrPlaybackHlsUrl`); watching the live key
+ * showed the live camera while the recording streamed on unread.
+ *
+ * AB2 still primes the RTMP socket first, then AB4 retargets, with a settle
+ * delay before HLS attaches. Seek is AB5 drag; teardown is AB5 end. Non-MDVR
+ * channels never hit this hook.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -14,10 +20,25 @@ import {
   mdvrRtmpUploadUrl,
   toMdvrBcdTime,
 } from '@/api/video.api';
+import { waitForMdvrCommand } from '@/components/video/useMdvrResources';
 import { isMdvrChannel } from '@/components/video/useStreamSession';
+import type { DeviceCommandRecord } from '@/types/command.types';
 import type { CameraChannel } from '@/types/video.types';
 
 const PLAYBACK_TIMEOUT_MS = 120_000;
+/**
+ * How long to wait for the clip's RTMP push to reach MediaMTX after AB4 is
+ * ACKed. The unit ACKs immediately but can take ~2 minutes to actually start
+ * publishing (measured: AB4 ACK 22:39:15 → publisher on `<key>/pb` 22:41:06),
+ * and the MediaMTX transcode adds a few seconds on top. A 120s budget expired
+ * just before the stream arrived and surfaced a false "timeout".
+ */
+const STREAM_ARRIVAL_TIMEOUT_MS = 240_000;
+const AB2_ACK_MS = 25_000;
+/** After live RTMP is up, wait before AB4 so the socket is actually publishing. */
+const AB2_SETTLE_MS = 1_500;
+/** After AB4 ACK, wait before HLS so MediaMTX is no longer the live camera. */
+const AB4_SWITCH_MS = 2_000;
 
 export type MdvrPlaybackStatus = 'idle' | 'starting' | 'waiting' | 'ready' | 'error';
 
@@ -29,6 +50,7 @@ function mdvrLog(...args: unknown[]): void {
 export function useMdvrPlayback() {
   const [channel, setChannel] = useState<CameraChannel | null>(null);
   const [hlsUrl, setHlsUrl] = useState<string | null>(null);
+  const [playerKey, setPlayerKey] = useState(0);
   const [status, setStatus] = useState<MdvrPlaybackStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const genRef = useRef(0);
@@ -59,21 +81,29 @@ export function useMdvrPlayback() {
     }
   }, []);
 
-  const startLive = useCallback(async (ch: CameraChannel) => {
+  const startLive = useCallback(async (ch: CameraChannel, isCancelled: () => boolean) => {
     if (!ch.deviceId || !ch.imei) return;
     const logicalChannel = ch.logicalChannel ?? 1;
     const uploadUrl = mdvrRtmpUploadUrl(ch.imei, logicalChannel);
     mdvrLog(`AB2 prime live → device=${ch.deviceId} channel=${logicalChannel} url=${uploadUrl}`);
     try {
-      await apiPost(`/devices/${ch.deviceId}/commands`, {
-        commandCode: 'AB2',
-        params: {
-          uploadUrl,
-          channel: logicalChannel,
-          dataType: '0',
-          streamType: '0',
+      const queued = await apiPost<Record<string, unknown>, DeviceCommandRecord>(
+        `/devices/${ch.deviceId}/commands`,
+        {
+          commandCode: 'AB2',
+          params: {
+            uploadUrl,
+            channel: logicalChannel,
+            dataType: '0',
+            streamType: '0',
+          },
         },
-      });
+      );
+      try {
+        await waitForMdvrCommand(queued.id, AB2_ACK_MS, isCancelled);
+      } catch (err) {
+        mdvrLog('AB2 prime wait (best-effort):', err);
+      }
     } catch (err) {
       mdvrLog('AB2 prime live failed (best-effort):', err);
     }
@@ -91,7 +121,7 @@ export function useMdvrPlayback() {
   }, [endDevice, clearWaitTimer]);
 
   const start = useCallback(
-    async (ch: CameraChannel, fromMs: number, toMs: number, avType = '3') => {
+    async (ch: CameraChannel, fromMs: number, toMs: number, avType = '0') => {
       const gen = ++genRef.current;
       clearWaitTimer();
       setChannel(ch);
@@ -101,14 +131,16 @@ export function useMdvrPlayback() {
 
       if (!isMdvrChannel(ch) || !ch.deviceId || !ch.imei) {
         setStatus('idle');
-        return;
+        return false;
       }
 
-      // MD300 playback reuses the live RTMP socket. Stopping live first leaves
-      // AB4 connecting then idle-timing-out without a publisher.
-      await startLive(ch);
-      await new Promise((r) => setTimeout(r, 2500));
-      if (gen !== genRef.current) return;
+      const cancelled = () => gen !== genRef.current;
+
+      // Prime the RTMP socket with AB2, but do not attach HLS yet — that playlist
+      // is still the live camera until AB4 retargets the encoder.
+      await startLive(ch, cancelled);
+      await new Promise((r) => setTimeout(r, AB2_SETTLE_MS));
+      if (cancelled()) return false;
 
       const logicalChannel = ch.logicalChannel ?? 1;
       const url = mdvrPlaybackRtmpUrl(ch.imei, logicalChannel);
@@ -117,34 +149,45 @@ export function useMdvrPlayback() {
         `AB4 start device=${ch.deviceId} cam=${logicalChannel} ${toMdvrBcdTime(fromMs)}–${toMdvrBcdTime(toMs)} url=${url}`,
       );
       try {
-        await apiPost(`/devices/${ch.deviceId}/commands`, {
-          commandCode: 'AB4',
-          params: {
-            url,
-            channel: logicalChannel,
-            avType,
-            streamType: '0',
-            capType: '0',
-            startTime: toMdvrBcdTime(fromMs),
-            endTime: toMdvrBcdTime(toMs),
+        const queued = await apiPost<Record<string, unknown>, DeviceCommandRecord>(
+          `/devices/${ch.deviceId}/commands`,
+          {
+            commandCode: 'AB4',
+            params: {
+              url,
+              channel: logicalChannel,
+              avType,
+              streamType: '0',
+              capType: '0',
+              startTime: toMdvrBcdTime(fromMs),
+              endTime: toMdvrBcdTime(toMs),
+            },
           },
-        });
+        );
+        const done = await waitForMdvrCommand(queued.id, PLAYBACK_TIMEOUT_MS, cancelled);
+        if (done.status !== 'ACKED') {
+          throw new Error(done.error ?? done.responseText ?? `AB4 ${done.status}`);
+        }
       } catch (err) {
-        if (gen !== genRef.current) return;
+        if (cancelled()) return false;
         mdvrLog('AB4 failed:', err);
         setStatus('error');
         setError(err instanceof Error ? err.message : 'AB4 failed');
-        return;
+        return false;
       }
-      if (gen !== genRef.current) return;
-      setHlsUrl(mdvrPlaybackHlsUrl(ch.imei, logicalChannel));
+      await new Promise((r) => setTimeout(r, AB4_SWITCH_MS));
+      if (cancelled()) return false;
+      // Bust cached live segments and remount so hls.js does not keep the live edge.
+      setPlayerKey((k) => k + 1);
+      setHlsUrl(`${mdvrPlaybackHlsUrl(ch.imei, logicalChannel)}?pb=${Date.now()}`);
       setStatus('waiting');
       timeoutRef.current = setTimeout(() => {
-        if (gen !== genRef.current) return;
+        if (cancelled()) return;
         if (statusRef.current !== 'waiting' && statusRef.current !== 'starting') return;
         setStatus('error');
         setError('timeout');
-      }, PLAYBACK_TIMEOUT_MS);
+      }, STREAM_ARRIVAL_TIMEOUT_MS);
+      return true;
     },
     [startLive, clearWaitTimer],
   );
@@ -186,6 +229,7 @@ export function useMdvrPlayback() {
   return {
     channel,
     hlsUrl,
+    playerKey,
     status,
     error,
     start,

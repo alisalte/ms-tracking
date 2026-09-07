@@ -92,17 +92,26 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
 }
 
 /**
- * md300 `live.js` tells the unit `rtmp://IP:1935/live/md300` — camera is the
- * AB2/AB4 channel byte, not a URL suffix. Extra path segments are dropped
- * and MediaMTX never sees a publisher on `live/md300/2`.
+ * md300 `live.js` tells the unit `rtmp://IP:1935/live/md300`. Extra path
+ * SEGMENTS are dropped by the unit (`live/md300/2` and `live/md300/pb` both
+ * publish as `live/md300`), so a camera cannot be addressed by a sub-path —
+ * but the stream NAME is honoured, so each camera publishes to its own key.
+ *
+ * Channel 1 keeps the bare key (auto-AB2-on-connect and existing deployments
+ * depend on it); channel N > 1 becomes `<base>_<N>`. Without this every camera
+ * lands on one MediaMTX path, so the second camera can only ever show whatever
+ * the first one is pushing. Keep in sync with `mdvrStreamKey` (dashboard),
+ * `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
 function mdvrChannelStreamPath(
   base: string,
-  _channel: unknown,
+  channel: unknown,
   kind: 'live' | 'playback' = 'live',
 ): string {
   const root = (base || 'live/md300').replace(/^\/+|\/+$/g, '');
-  return kind === 'playback' ? `${root}/pb` : root;
+  const n = Number(channel);
+  const perCamera = Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
+  return kind === 'playback' ? `${perCamera}/pb` : perCamera;
 }
 
 export class DeviceCommandService {
