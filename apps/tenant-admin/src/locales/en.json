@@ -134,6 +134,8 @@
     "tabRates": "Rates",
     "tabInvoices": "Invoices",
     "tabAccess": "Access",
+    "noLicenseTitle": "No license on this tenant",
+    "noLicenseBody": "Assign a plan and rates on the Rates tab after a license is created for this organisation.",
     "grace": "Grace period",
     "quotas": "Resource quotas",
     "saveLicense": "Save license and rates",

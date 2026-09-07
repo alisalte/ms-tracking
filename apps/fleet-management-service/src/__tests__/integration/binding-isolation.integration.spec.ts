@@ -59,8 +59,8 @@ d('fleet-management integration — binding, resolve, IMEI, isolation (§30/§31
     const bindingRepo = new BindingRepository(c.knex);
     fleets = new FleetService(c.knex, fleetRepo, audit);
     vehicles = new VehicleService(c.knex, vehicleRepo, fleetRepo, audit);
-    devices = new DeviceService(c.knex, deviceRepo, audit);
     binding = new BindingService(c.knex, vehicleRepo, deviceRepo, bindingRepo, audit);
+    devices = new DeviceService(c.knex, deviceRepo, audit, null, vehicleRepo, binding, fleetRepo);
   });
 
   beforeEach(async () => {
@@ -203,6 +203,37 @@ d('fleet-management integration — binding, resolve, IMEI, isolation (§30/§31
   it('resolve returns found:false for an unknown IMEI', async () => {
     const res = await devices.resolve(imei('35777777777770'));
     expect(res.found).toBe(false);
+  });
+
+  it('enrolls an unknown IMEI as an ACTIVE device bound to a new vehicle', async () => {
+    const im = imei('35888888888880');
+    const first = await devices.enroll(actorFor(TENANT_A), { imei: im, protocol: 'meitrack' });
+    expect(first.found).toBe(true);
+    if (!first.found) return;
+    expect(first.device.status).toBe('ACTIVE');
+    expect(first.device.tenantId).toBe(TENANT_A);
+    expect(first.device.protocol).toBe('meitrack');
+    expect(first.device.vehicleId).toBeTruthy();
+
+    const again = await devices.enroll(actorFor(TENANT_A), { imei: im, protocol: 'meitrack' });
+    expect(again.found).toBe(true);
+    if (!again.found) return;
+    expect(again.device.deviceId).toBe(first.device.deviceId);
+    expect(again.device.vehicleId).toBe(first.device.vehicleId);
+
+    const list = await binding.listDevicesForVehicle(actorFor(TENANT_A), first.device.vehicleId!);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.deviceId).toBe(first.device.deviceId);
+  });
+
+  it('enroll places the vehicle in an existing ACTIVE fleet rather than always creating AUTO', async () => {
+    const fleet = await fleets.create(actorFor(TENANT_A), { name: 'Ops', code: 'OPS' });
+    const im = imei('35888888888881');
+    const res = await devices.enroll(actorFor(TENANT_A), { imei: im, protocol: 'gt06' });
+    expect(res.found).toBe(true);
+    if (!res.found || !res.device.vehicleId) return;
+    const vehicle = await vehicles.get(actorFor(TENANT_A), res.device.vehicleId);
+    expect(vehicle.fleetId).toBe(fleet.id);
   });
 
   it('resolve returns a SUSPENDED device (gateway maps to disabled) and a suspended tenant', async () => {

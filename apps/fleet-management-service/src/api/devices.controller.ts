@@ -3,6 +3,7 @@
  * §8, §14, §18, §19).
  *
  *   GET    /api/v1/devices/resolve?imei=    ← SERVICE-ONLY (API key). Global IMEI → trusted identity.
+ *   POST   /api/v1/devices/enroll           ← SERVICE-ONLY (API key). First-packet auto-provision.
  *   POST   /api/v1/devices
  *   GET    /api/v1/devices                  (?cursor&limit&status&protocol&manufacturer&vehicleId&imei&search)
  *   GET    /api/v1/devices/:id
@@ -37,6 +38,7 @@ import type { DeviceService } from '../application/device.service.js';
 import {
   createDeviceSchema,
   deviceListQuerySchema,
+  enrollDeviceSchema,
   importDevicesBodySchema,
   updateDeviceSchema,
 } from '../application/validation/schemas.js';
@@ -64,6 +66,31 @@ export class DevicesController {
     }
     if (!imei) return { found: false, tenantActive: false };
     const result = await this.devices.resolve(imei);
+    if (!result.found) return { found: false, tenantActive: result.tenantActive };
+    return {
+      found: true,
+      tenantActive: result.tenantActive,
+      device: result.device,
+    };
+  }
+
+  /**
+   * First-packet auto-provision. Static `enroll` is declared before `:id`.
+   * Same API-key-only rule as resolve so a tenant-admin JWT cannot mint
+   * devices across tenants via wildcard `*`.
+   */
+  @Post('enroll')
+  @HttpCode(200)
+  @RequirePermissions('device.registry.resolve')
+  public async enroll(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(enrollDeviceSchema)) body: unknown,
+  ) {
+    if (auth.authMethod !== 'API_KEY') {
+      throw new ForbiddenException('Device enroll is a service-only endpoint.');
+    }
+    const result = await this.devices.enroll(actorFrom(auth, req), body as never);
     if (!result.found) return { found: false, tenantActive: result.tenantActive };
     return {
       found: true,

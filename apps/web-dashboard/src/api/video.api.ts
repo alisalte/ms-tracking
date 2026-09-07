@@ -209,6 +209,15 @@ export function mdvrHlsUrl(_imei?: string, logicalChannel = 1): string {
 }
 
 /**
+ * Raw ingest playlist (no ffmpeg `_web` rewrite). A 200 here means the device
+ * is already publishing RTMP; the wall must not send another AB2 or MediaMTX
+ * drops the publisher (`type 0/2 chunk but expected type 3`).
+ */
+export function mdvrIngestHlsUrl(_imei?: string, logicalChannel = 1): string {
+  return `${window.location.protocol}//${window.location.host}/media-hls-ingest/${mdvrStreamKey(logicalChannel)}/index.m3u8`;
+}
+
+/**
  * AB4 carries `<key>/pb` and the unit really does publish the SD-card stream
  * there — verified against a live MD300: while `live/md300` carried the live
  * camera, `live/md300/pb` had its own RTMP publisher with its own H.264 track.

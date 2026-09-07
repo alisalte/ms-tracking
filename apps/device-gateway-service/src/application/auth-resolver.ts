@@ -35,13 +35,21 @@ export interface AuthResolverOptions {
   readonly l1TtlMs: number;
   /** L2 Redis TTL (seconds) — 06 §7.2 says 5m. */
   readonly l2TtlSeconds: number;
+  /**
+   * On L3 miss, ask the registry to create the device in the API-key tenant.
+   * Default off so unit tests stay fail-closed; production on-prem is on.
+   */
+  readonly autoEnroll: boolean;
 }
 
 const DEFAULT_OPTIONS: AuthResolverOptions = {
   l1MaxEntries: 10_000,
   l1TtlMs: 30_000,
   l2TtlSeconds: 300,
+  autoEnroll: false,
 };
+
+const ENROLLABLE_PROTOCOLS = new Set(['gt06', 'jt808', 'meitrack', 'stub']);
 
 /** The auth resolution outcome the dispatcher acts on. */
 export type AuthOutcome =
@@ -69,8 +77,11 @@ export class AuthResolver {
    * Resolve a serial/IMEI to a device identity. Walks L1 → L2 → L3, caching
    * upward on a miss. Returns an AuthOutcome; never throws — failure modes are
    * mapped to outcome reasons (06 §7.3) so the caller closes cleanly.
+   *
+   * `protocolHint` is the adapter id (gt06/meitrack/…) used only when auto-enroll
+   * creates a new device. Unknown/disabled/suspended stay fail-closed.
    */
-  public async resolve(serialOrImei: string): Promise<AuthOutcome> {
+  public async resolve(serialOrImei: string, protocolHint?: string): Promise<AuthOutcome> {
     // L1.
     const l1Hit = this.l1.get(serialOrImei);
     if (l1Hit && l1Hit.expiresAt > Date.now() && l1Hit.device.status === 'ACTIVE') {
@@ -86,7 +97,10 @@ export class AuthResolver {
     }
 
     // L3 (source of truth).
-    const resolution = await this.resolveL3(serialOrImei);
+    let resolution = await this.resolveL3(serialOrImei);
+    if (!resolution.found && this.options.autoEnroll) {
+      resolution = await this.tryEnroll(serialOrImei, protocolHint);
+    }
     if (!resolution.found) {
       return { ok: false, reason: 'unknown' };
     }
@@ -117,6 +131,27 @@ export class AuthResolver {
       // L3 unreachable — fail-safe close (06 §7.3).
       this.logger.warn(`L3 registry unreachable: ${(err as Error).message} — fail-closed.`);
       return { found: false } as const;
+    }
+  }
+
+  private async tryEnroll(
+    serialOrImei: string,
+    protocolHint?: string,
+  ): Promise<{ found: false } | { found: true; device: ResolvedDevice }> {
+    if (!this.registry.enroll) return { found: false };
+    const protocol = protocolHint && ENROLLABLE_PROTOCOLS.has(protocolHint) ? protocolHint : null;
+    if (!protocol) return { found: false };
+    try {
+      const enrolled = await this.registry.enroll(serialOrImei, protocol);
+      if (enrolled.found) {
+        this.logger.log(`Auto-enrolled imei=${serialOrImei} protocol=${protocol}`);
+      }
+      return enrolled;
+    } catch (err) {
+      this.logger.warn(
+        `Auto-enroll failed for imei=${serialOrImei}: ${(err as Error).message} — fail-closed.`,
+      );
+      return { found: false };
     }
   }
 

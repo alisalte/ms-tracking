@@ -1,7 +1,7 @@
 /**
  * VideoWallPage — the TailAdmin operations video hub (`/video`, Phase 7).
  *
- * Three views over the same channel catalog:
+ * Four views over the same channel catalog:
  * - WALL: the HikCentral-style video wall (toolbar + dock + grid). Owns the
  *   wall state (division, tile assignments, spotlight, rotation, alerts) and
  *   syncs shareable bits to the URL (`?d=16`, `?spotlight=1`) per 10 §7.4.
@@ -10,11 +10,12 @@
  * - CAMERAS: the camera/channel management table (status + availability).
  * - PLAYBACK: MDVR SD-card review (AB4 → MediaMTX HLS) plus an honest empty
  *   state for channels that have no device recording path.
+ * - CALIBRATE: live driver camera + GPRS CD1 (DMS pose calibration).
  *
  * Keyboard: `f` toggles whole-wall fullscreen; `1..6` pick the division
  * presets (wall view only). Shortcuts are ignored while typing in inputs.
  */
-import { Camera, History, LayoutGrid, Settings } from 'lucide-react';
+import { Camera, History, LayoutGrid, ScanLine, Settings } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -24,6 +25,7 @@ import { Button } from '@/components/tailwind-ui';
 import { CamerasPanel } from '@/components/video/CamerasPanel';
 import { ChannelDock } from '@/components/video/ChannelDock';
 import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
+import { DriverCalibrationPanel } from '@/components/video/DriverCalibrationPanel';
 import { PlaybackPanel } from '@/components/video/PlaybackPanel';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
@@ -33,7 +35,9 @@ import { emptyTiles } from '@/mock/video-data';
 import { MAX_LIVE_TILES, WALL_DIVISIONS } from '@/types/video.types';
 import type { CameraChannel, VideoWall, WallDivision, WallTile } from '@/types/video.types';
 
-type ViewTab = 'wall' | 'cameras' | 'playback';
+type ViewTab = 'wall' | 'cameras' | 'playback' | 'calibrate';
+
+const VIEW_TABS: readonly ViewTab[] = ['wall', 'cameras', 'playback', 'calibrate'];
 
 /** Parse + clamp the division from URL search params. */
 function readDivision(params: URLSearchParams): WallDivision {
@@ -56,7 +60,7 @@ export function VideoWallPage() {
 
   const [tab, setTab] = useState<ViewTab>(() => {
     const v = params.get('view');
-    return v === 'cameras' || v === 'playback' ? v : 'wall';
+    return v && (VIEW_TABS as readonly string[]).includes(v) ? (v as ViewTab) : 'wall';
   });
   const [division, setDivision] = useState<WallDivision>(() => readDivision(params));
   const [tiles, setTiles] = useState<WallTile[]>(() => emptyTiles(readDivision(params)));
@@ -281,6 +285,11 @@ export function VideoWallPage() {
       label: t('video.tabs.playback', { defaultValue: 'Playback' }),
       icon: <History size={15} />,
     },
+    {
+      id: 'calibrate' as const,
+      label: t('video.tabs.calibrate', { defaultValue: 'Calibrate' }),
+      icon: <ScanLine size={15} />,
+    },
   ];
 
   return (
@@ -382,6 +391,12 @@ export function VideoWallPage() {
             initialFrom={params.get('from')}
             initialTo={params.get('to')}
           />
+        </div>
+      )}
+
+      {tab === 'calibrate' && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <DriverCalibrationPanel channels={channels} initialDeviceId={params.get('device')} />
         </div>
       )}
 

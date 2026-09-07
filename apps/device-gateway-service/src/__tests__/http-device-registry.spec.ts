@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
 import { HttpDeviceRegistry } from '../infrastructure/registry/http-device-registry.js';
 
 /** Stub global fetch with a per-test responder. */
-function stubFetch(responder: (url: string) => { status: number; body: unknown }): void {
-  const fakeFetch: typeof fetch = async (input) => {
+function stubFetch(
+  responder: (url: string, init?: RequestInit) => { status: number; body: unknown },
+): void {
+  const fakeFetch: typeof fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : String(input);
-    const { status, body } = responder(url);
+    const { status, body } = responder(url, init);
     return {
       ok: status >= 200 && status < 300,
       status,
@@ -105,5 +107,50 @@ describe('HttpDeviceRegistry (Sprint C §17/§18/§22/§7.3)', () => {
   it('tenantActive defaults fail-safe (false) for an unseen tenant', async () => {
     const registry = new HttpDeviceRegistry({ baseUrl: 'http://localhost:3006', apiKey: 'k' });
     await expect(registry.tenantActive('never-seen')).resolves.toBe(false);
+  });
+
+  it('enrolls an unknown IMEI via POST /devices/enroll', async () => {
+    let calledUrl = '';
+    let calledMethod = '';
+    let calledBody: unknown;
+    stubFetch((url, init) => {
+      calledUrl = url;
+      calledMethod = init?.method ?? 'GET';
+      calledBody = init?.body ? JSON.parse(String(init.body)) : null;
+      return {
+        status: 200,
+        body: {
+          found: true,
+          tenantActive: true,
+          device: {
+            deviceId: 'dev-new',
+            tenantId: 'tenant-1',
+            status: 'ACTIVE',
+            protocol: 'meitrack',
+            vehicleId: 'veh-new',
+          },
+        },
+      };
+    });
+    const registry = new HttpDeviceRegistry({
+      baseUrl: 'http://localhost:3006/',
+      apiKey: 'fv_test_key',
+    });
+    const res = await registry.enroll('351234567890124', 'meitrack');
+    expect(res.found).toBe(true);
+    if (res.found) {
+      expect(res.device.deviceId).toBe('dev-new');
+      expect(res.device.pairedVehicleId).toBe('veh-new');
+    }
+    expect(calledUrl).toContain('/api/v1/devices/enroll');
+    expect(calledMethod).toBe('POST');
+    expect(calledBody).toEqual({ imei: '351234567890124', protocol: 'meitrack' });
+    await expect(registry.tenantActive('tenant-1')).resolves.toBe(true);
+  });
+
+  it('enroll fail-closes on HTTP 400 (invalid IMEI)', async () => {
+    stubFetch(() => ({ status: 400, body: { message: 'bad imei' } }));
+    const registry = new HttpDeviceRegistry({ baseUrl: 'http://localhost:3006', apiKey: 'k' });
+    await expect(registry.enroll('nope', 'meitrack')).resolves.toEqual({ found: false });
   });
 });

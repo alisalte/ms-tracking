@@ -80,10 +80,13 @@ export class DeviceStatusRepository {
   }
 
   /**
-   * Refresh last_seen_at only (Sprint D §9). Called throttled from the position
+   * Refresh last_seen_at (Sprint D §9). Called throttled from the position
    * pipeline (≈ once per GPS_LAST_SEEN_FLUSH_SECONDS per device — never per
    * packet). UPDATE-only: 0 rows when the lifecycle pipeline hasn't created the
    * device's row yet (it will, on the next lifecycle event).
+   *
+   * STALE → ONLINE: a fresh accepted fix is proof of life. Do not resurrect
+   * OFFLINE (that requires AUTHENTICATED from the gateway).
    */
   public async touchLastSeen(tenantId: string, deviceId: string, lastSeenAt: Date): Promise<void> {
     await this.knex
@@ -91,7 +94,12 @@ export class DeviceStatusRepository {
       .from(TABLE)
       .whereRaw('tenant_id = ?::uuid', [tenantId])
       .whereRaw('device_id = ?::uuid', [deviceId])
-      .update({ last_seen_at: lastSeenAt, updated_at: this.knex.fn.now() });
+      .whereRaw("state IN ('ONLINE', 'STALE')")
+      .update({
+        last_seen_at: lastSeenAt,
+        state: 'ONLINE',
+        updated_at: this.knex.fn.now(),
+      });
   }
 
   /**

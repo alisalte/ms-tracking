@@ -2,9 +2,11 @@
  * HttpDeviceRegistry — the production `DeviceRegistry` implementation.
  *
  * Resolves an IMEI to trusted device identity by calling fleet-management-service's
- * `/api/v1/devices/resolve` endpoint over HTTP. The gateway therefore NEVER knows
- * fleet-management's database schema (Sprint C §17) — it depends only on the
- * `DeviceRegistry` port + the resolve response contract.
+ * `/api/v1/devices/resolve` endpoint over HTTP. On a miss, `enroll()` POSTs
+ * `/api/v1/devices/enroll` so an SMS-configured unit is provisioned in the
+ * API-key tenant. The gateway therefore NEVER knows fleet-management's database
+ * schema (Sprint C §17) — it depends only on the `DeviceRegistry` port + the
+ * resolve/enroll response contract.
  *
  * Performance (§22): this is the auth-resolver's L3, reached ONLY on an L1+L2 cache
  * miss (L1 ~30s, L2 Redis ~5min). A hot device never hits HTTP here — roughly one
@@ -106,6 +108,90 @@ export class HttpDeviceRegistry implements DeviceRegistry {
     return { found: false };
   }
 
+  public async enroll(serialOrImei: string, protocol: string): Promise<Resolution> {
+    if (!this.apiKey) {
+      this.logger.warn('No FLEET_REGISTRY_API_KEY configured — cannot enroll (fail-closed).');
+      return { found: false };
+    }
+    const url = `${this.baseUrl}/api/v1/devices/enroll`;
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const backoff = this.retryBackoffMs * 2 ** (attempt - 1);
+        await sleep(backoff);
+      }
+      try {
+        const outcome = await this.enrollOnce(url, serialOrImei, protocol);
+        if (outcome.kind === 'result') return outcome.value;
+        if (!outcome.transient) return { found: false };
+        lastError = new Error(`HTTP ${outcome.status}`);
+      } catch (err) {
+        lastError = err as Error;
+      }
+    }
+    this.logger.warn(
+      `fleet enroll exhausted retries for imei=${serialOrImei}: ${lastError?.message} — fail-closed.`,
+    );
+    return { found: false };
+  }
+
+  private async enrollOnce(
+    url: string,
+    serialOrImei: string,
+    protocol: string,
+  ): Promise<
+    | { readonly kind: 'result'; readonly value: Resolution }
+    | { readonly kind: 'retry'; readonly status: number; readonly transient: boolean }
+  > {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(this.timeoutMs, 10_000));
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-API-Key': this.apiKey,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imei: serialOrImei, protocol }),
+        signal: controller.signal,
+      });
+      if (res.status === 400 || res.status === 404) {
+        return { kind: 'result', value: { found: false } };
+      }
+      if (!res.ok) {
+        if (isTransientStatus(res.status)) {
+          return { kind: 'retry', status: res.status, transient: true };
+        }
+        this.logger.warn(
+          `fleet enroll HTTP ${res.status} for imei=${serialOrImei} — fail-closed (non-retryable).`,
+        );
+        return { kind: 'retry', status: res.status, transient: false };
+      }
+      return { kind: 'result', value: this.parseResolution((await res.json()) as ResolveResponse) };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private parseResolution(body: ResolveResponse): Resolution {
+    if (!body.found || !body.device) {
+      if (body.device === undefined && body.found) {
+        this.logger.warn('fleet registry found=true but no device body — fail-closed.');
+      }
+      return { found: false };
+    }
+    const d = body.device;
+    const device: ResolvedDevice = {
+      deviceId: d.deviceId,
+      tenantId: d.tenantId,
+      status: d.status as ResolvedDevice['status'],
+      pairedVehicleId: d.vehicleId ?? null,
+    };
+    this.cacheTenantActive(d.tenantId, body.tenantActive === true);
+    return { found: true, device };
+  }
+
   private async resolveOnce(
     url: string,
     serialOrImei: string,
@@ -131,22 +217,7 @@ export class HttpDeviceRegistry implements DeviceRegistry {
         );
         return { kind: 'retry', status: res.status, transient: false };
       }
-      const body = (await res.json()) as ResolveResponse;
-      if (!body.found || !body.device) {
-        if (body.device === undefined && body.found) {
-          this.logger.warn('fleet resolve found=true but no device body — fail-closed.');
-        }
-        return { kind: 'result', value: { found: false } };
-      }
-      const d = body.device;
-      const device: ResolvedDevice = {
-        deviceId: d.deviceId,
-        tenantId: d.tenantId,
-        status: d.status as ResolvedDevice['status'],
-        pairedVehicleId: d.vehicleId ?? null,
-      };
-      this.cacheTenantActive(d.tenantId, body.tenantActive === true);
-      return { kind: 'result', value: { found: true, device } };
+      return { kind: 'result', value: this.parseResolution((await res.json()) as ResolveResponse) };
     } finally {
       clearTimeout(timer);
     }

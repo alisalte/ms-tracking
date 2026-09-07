@@ -44,11 +44,19 @@ export interface SessionManagerOptions {
    * well within the detection window).
    */
   readonly supersededCheckIntervalMs?: number;
+  /**
+   * Re-emit AUTHENTICATED/ACTIVE at most this often while the socket is live.
+   * gps-engine's ONLINE→STALE sweeper keys off last_seen_at; MDVR command ACKs
+   * and heartbeats never publish a GPS fix, so without this keepalive the map
+   * paints a connected unit STALE after GPS_STALE_AFTER_SECONDS.
+   */
+  readonly keepaliveLifecycleMs?: number;
 }
 
 const DEFAULT_SESSION_OPTIONS = {
   authGraceMs: 15_000,
   supersededCheckIntervalMs: 15_000,
+  keepaliveLifecycleMs: 60_000,
 };
 
 export interface SessionLifecycleEmitter {
@@ -102,6 +110,8 @@ export class SessionManager {
   private readonly establishedAt = new Map<string, number>();
   /** Last time each session was checked for cross-instance supersession. */
   private readonly supersededCheckedAt = new Map<string, number>();
+  /** Last keepalive session-lifecycle emit (throttled ACTIVE/AUTHENTICATED). */
+  private readonly lastKeepaliveAt = new Map<string, number>();
 
   constructor(
     private readonly redisStore: SessionRedisStore | null,
@@ -201,9 +211,14 @@ export class SessionManager {
     await this.emitLifecycle(session, 'ACTIVE', null);
   }
 
-  /** Refresh liveness + the global TTL (called on each frame after auth). */
+  /**
+   * Refresh liveness + the global TTL (called on each inbound frame after auth).
+   * Also re-projects ONLINE to gps-engine on a throttle so a live GPRS session
+   * without GPS (MDVR video / command ACKs) is not swept STALE.
+   */
   public async touch(session: DeviceSession): Promise<void> {
     await this.refreshGlobal(session);
+    await this.emitKeepalive(session);
   }
 
   /** Look up the local session owning a device (command dispatch path). */
@@ -252,6 +267,7 @@ export class SessionManager {
     );
     this.establishedAt.delete(id);
     this.supersededCheckedAt.delete(id);
+    this.lastKeepaliveAt.delete(id);
     const terminator = this.terminators.get(id);
     this.terminators.delete(id);
     this.writers.delete(id);
@@ -386,6 +402,16 @@ export class SessionManager {
 
   private ttlFor(transport: Transport): number {
     return transport === 'udp' ? this.options.udpTtlSeconds : this.options.tcpTtlSeconds;
+  }
+
+  private async emitKeepalive(session: DeviceSession): Promise<void> {
+    if (!session.deviceId || !session.isLive) return;
+    const id = session.id as string;
+    const now = Date.now();
+    const last = this.lastKeepaliveAt.get(id) ?? 0;
+    if (now - last < this.options.keepaliveLifecycleMs) return;
+    this.lastKeepaliveAt.set(id, now);
+    await this.emitLifecycle(session, session.state, 'KEEPALIVE');
   }
 
   private async refreshGlobal(session: DeviceSession): Promise<void> {

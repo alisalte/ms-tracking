@@ -8,6 +8,8 @@
 import Hls from 'hls.js';
 import { forwardRef, useEffect, useRef } from 'react';
 
+import { mediaPlaylistIsReady } from '@/lib/hls-playlist';
+
 interface HLSLivePlayerProps {
   hlsUrl: string | null;
   muted?: boolean;
@@ -18,7 +20,25 @@ interface HLSLivePlayerProps {
   lowLatencyMode?: boolean;
 }
 
-const POLL_MS = 2000;
+/** Fast enough to catch the first real segment without waiting a full GOP. */
+const POLL_MS = 500;
+/** Back off empty/error polls so MediaMTX is not asked to create/destroy an HLS muxer 2×/s. */
+const POLL_EMPTY_MAX_MS = 3000;
+
+function playlistWaitReason(status: number, requireGapFree: boolean): string {
+  if (status === 200) {
+    return requireGapFree
+      ? 'playlist is up but still has EXT-X-GAP placeholders; waiting for a gap-free window.'
+      : 'playlist is up but the newest segment is still a GAP placeholder; waiting for the first real segment.';
+  }
+  if (status === 204) {
+    return 'MediaMTX has no publisher yet (device has not pushed RTMP to :1935, or ffmpeg transcode is still starting).';
+  }
+  if (status === 500 || status === 502 || status === 503) {
+    return 'HLS muxer not ready (ffmpeg transcode still starting).';
+  }
+  return 'unexpected status.';
+}
 
 /** hls.js media-error recoveries before we stop (avoids an endless fatal loop). */
 const MAX_MEDIA_RECOVERIES = 2;
@@ -30,63 +50,60 @@ function mdvrLog(...args: unknown[]): void {
 }
 
 /**
- * A 200 playlist is not the same as a playable one: MediaMTX serves the muxer
- * as soon as it exists and pads the window with `#EXT-X-GAP` / `gap.mp4`
- * placeholders until the source settles. hls.js starts at the head of the
- * window, so a single leading gap is enough to make it emit `fragGap`
- * ("GAP tag found") and stall on a black frame — having *some* real segment
- * later in the window does not save it.
+ * A 200 playlist is not the same as a playable one: MediaMTX pads the window
+ * with `#EXT-X-GAP` placeholders. Live attaches once the *newest* segment is
+ * real (hls.js sits on the live edge). Playback still waits for a gap-free
+ * window so a start-from-head attach cannot stall on a leading placeholder.
  *
- * So wait for a window with NO gaps at all. The placeholders age out as
- * segments rotate (the playback transcode forces a 2s GOP so that takes
- * seconds, not the ~70s the device's 10s keyframe spacing would cost).
+ * Waiting for every GAP to age out of a 7×~10s window is what made the wall
+ * look "broken" after a pull — the stream was up, the player just would not
+ * start for minutes.
  */
 async function hasPlayableSegment(
   url: string,
   signal: AbortSignal,
+  requireGapFree: boolean,
   depth = 0,
 ): Promise<{ ready: boolean; status: number }> {
   const res = await fetch(url, { method: 'GET', cache: 'no-store', signal });
   if (res.status !== 200) return { ready: false, status: res.status };
-  const lines = (await res.text())
+  const text = await res.text();
+  if (mediaPlaylistIsReady(text, requireGapFree)) return { ready: true, status: 200 };
+  const lines = text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  const entries = lines.filter((line) => !line.startsWith('#'));
   if (lines.some((line) => line.startsWith('#EXTINF'))) {
-    const hasGap =
-      lines.some((line) => line.startsWith('#EXT-X-GAP')) ||
-      entries.some((line) => line.startsWith('gap.'));
-    return { ready: !hasGap && entries.length > 0, status: 200 };
+    return { ready: false, status: 200 };
   }
-  // Master playlist — check the first variant it points at.
-  const variant = entries[0];
+  const variant = lines.find((line) => !line.startsWith('#'));
   if (!variant || depth > 2) return { ready: false, status: 200 };
-  return hasPlayableSegment(new URL(variant, url).toString(), signal, depth + 1);
+  return hasPlayableSegment(new URL(variant, url).toString(), signal, requireGapFree, depth + 1);
 }
 
-async function waitForPlaylist(url: string, signal: AbortSignal): Promise<boolean> {
+async function waitForPlaylist(
+  url: string,
+  signal: AbortSignal,
+  requireGapFree: boolean,
+): Promise<boolean> {
   let attempt = 0;
   while (!signal.aborted) {
     attempt++;
     try {
-      const res = await hasPlayableSegment(url, signal);
-      // nginx maps MediaMTX's empty-path 404 → 204 so the console stays quiet.
+      const res = await hasPlayableSegment(url, signal, requireGapFree);
       if (res.ready) {
         mdvrLog(`playlist ready after ${attempt} poll(s): ${url}`);
         return true;
       }
       if (attempt === 1 || attempt % 5 === 0) {
         mdvrLog(
-          `waiting for playlist (attempt ${attempt}, HTTP ${res.status}): ${url} — ${
-            res.status === 200
-              ? 'playlist is up but every entry is still an EXT-X-GAP placeholder; waiting for the first real segment.'
-              : res.status === 204
-                ? 'MediaMTX has no publisher yet (device has not pushed RTMP to :1935).'
-                : 'unexpected status.'
-          }`,
+          `waiting for playlist (attempt ${attempt}, HTTP ${res.status}): ${url} — ${playlistWaitReason(res.status, requireGapFree)}`,
         );
       }
+      const delay =
+        res.status === 200 ? POLL_MS : Math.min(POLL_EMPTY_MAX_MS, POLL_MS + attempt * 150);
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
     } catch (err) {
       if (signal.aborted) return false;
       if (attempt === 1 || attempt % 5 === 0) {
@@ -134,14 +151,15 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
       };
 
       let mediaRecoveries = 0;
+      const requireGapFree = !lowLatencyMode;
 
       const attachHls = () => {
         mdvrLog(`attaching hls.js to ${hlsUrl}`);
         mediaRecoveries = 0;
         hls?.destroy();
         hls = new Hls({
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: 6,
+          liveSyncDurationCount: lowLatencyMode ? 1 : 3,
+          liveMaxLatencyDurationCount: lowLatencyMode ? 4 : 6,
           enableWorker: true,
           lowLatencyMode,
         });
@@ -163,7 +181,7 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
             mdvrLog(`hls.js network error — will re-poll playlist and retry: ${hlsUrl}`);
             retryTimer = setTimeout(() => {
               if (!destroyed) {
-                void waitForPlaylist(hlsUrl, ac.signal).then((ok) => {
+                void waitForPlaylist(hlsUrl, ac.signal, requireGapFree).then((ok) => {
                   if (ok && !destroyed) attachHls();
                 });
               }
@@ -192,7 +210,7 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
       };
 
       mdvrLog(`waiting for playlist to become available: ${hlsUrl}`);
-      void waitForPlaylist(hlsUrl, ac.signal).then((ok) => {
+      void waitForPlaylist(hlsUrl, ac.signal, requireGapFree).then((ok) => {
         if (!ok || destroyed) return;
         if (video.canPlayType('application/vnd.apple.mpegurl')) attachNative();
         else if (Hls.isSupported()) attachHls();

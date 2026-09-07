@@ -51,6 +51,12 @@ export interface DeviceRegistry {
 
   /** Whether the owning tenant is active (06 §7.3 — tenant suspended → close). */
   tenantActive(tenantId: string): Promise<boolean>;
+
+  /**
+   * First-packet auto-provision. Optional — when absent, an L3 miss stays
+   * unknown (fail-closed). Production HttpDeviceRegistry implements this.
+   */
+  enroll?(serialOrImei: string, protocol: string): Promise<Resolution>;
 }
 
 /**

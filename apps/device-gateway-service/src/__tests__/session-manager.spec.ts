@@ -59,13 +59,19 @@ describe('SessionManager — local index + lifecycle (06 §6)', () => {
     );
   });
 
-  it('markActive emits the ACTIVE transition', async () => {
+  it('touch re-emits ACTIVE (throttled) so a live session without GPS stays ONLINE', async () => {
     const s = newSession();
     manager.track(s);
     await manager.registerAuthenticated(s);
     s.activate(NOW);
     await manager.markActive(s);
-    expect(emitter.events.some((e) => e.state === 'ACTIVE')).toBe(true);
+    const afterActive = emitter.events.length;
+    await manager.touch(s);
+    expect(emitter.events.length).toBe(afterActive + 1);
+    expect(emitter.events.at(-1)?.state).toBe('ACTIVE');
+    expect(emitter.events.at(-1)?.reason).toBe('KEEPALIVE');
+    await manager.touch(s);
+    expect(emitter.events.length).toBe(afterActive + 1);
   });
 
   it('close removes the session from both indexes + emits DISCONNECTED', async () => {

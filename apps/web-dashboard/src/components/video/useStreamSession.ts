@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiGet, apiPost } from '@/api/client';
-import { mdvrHlsUrl, mdvrRtmpUploadUrl } from '@/api/video.api';
+import { mdvrHlsUrl, mdvrIngestHlsUrl, mdvrRtmpUploadUrl } from '@/api/video.api';
 import { MockMediaSignalingClient, type StreamHandle, openStream } from '@/lib/video-stream';
 import { mockStreamSession } from '@/mock/video-data';
 import type { DeviceCommandRecord } from '@/types/command.types';
@@ -71,6 +71,16 @@ const STATS_REFRESH_MS = 2000;
 
 /** Connection timeout — RTMP ingest from the device can take ~10–20s; GPRS may lag. */
 const CONNECTION_TIMEOUT_MS = 120_000;
+
+/**
+ * MD300 camera 1 often stalls its RTMP handshake if camera 2 dials :1935 in
+ * the same second (TCP opens, then i/o timeout before "is publishing").
+ * Stagger later cameras so cam1 can finish first.
+ */
+const AB2_STAGGER_MS = 3_000;
+
+/** Vitest must not hit a live MediaMTX or wait 3s between cameras. */
+const MDVR_LIVE_IO = import.meta.env.MODE !== 'test';
 
 /** Max automatic reconnect attempts. */
 const MAX_RETRIES = 3;
@@ -383,7 +393,34 @@ export function useStreamSession(
       const uploadUrl = mdvrRtmpUploadUrl(imei, logicalChannel);
       const url = mdvrHlsUrl(imei, logicalChannel);
 
+      const ingestIsLive = async (): Promise<boolean> => {
+        try {
+          const res = await fetch(mdvrIngestHlsUrl(imei, logicalChannel), {
+            method: 'GET',
+            cache: 'no-store',
+          });
+          return res.status === 200;
+        } catch {
+          return false;
+        }
+      };
+
       const startAb2 = async () => {
+        const stagger = MDVR_LIVE_IO ? Math.max(0, logicalChannel - 1) * AB2_STAGGER_MS : 0;
+        if (stagger > 0) {
+          mdvrLog(
+            `stagger AB2 channel=${logicalChannel} by ${stagger}ms so camera 1 can finish the RTMP handshake`,
+          );
+          await new Promise((r) => setTimeout(r, stagger));
+          if (cancelled) return;
+        }
+        if (MDVR_LIVE_IO && (await ingestIsLive())) {
+          mdvrLog(
+            `ingest already live channel=${logicalChannel} — skip AB2 so we do not drop the RTMP publisher`,
+          );
+          setHlsUrl(url);
+          return;
+        }
         mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
           uploadUrl,
           channel: logicalChannel,
@@ -457,12 +494,21 @@ export function useStreamSession(
 
       timeoutTimerRef.current = setTimeout(() => {
         if (cancelled) return;
-        mdvrLog(
-          `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. Check: is the device connected to device-gateway (AUTHENTICATED)? Is AB2 still HELD (see device-gateway logs)? Is the device pushing RTMP to :1935?`,
-        );
-        teardown();
-        setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
-        scheduleReconnect();
+        void ingestIsLive().then((live) => {
+          if (cancelled) return;
+          if (live) {
+            mdvrLog(
+              `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) but ingest is live channel=${logicalChannel} — waiting for ffmpeg HLS; not sending AB3`,
+            );
+            return;
+          }
+          mdvrLog(
+            `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. Check: is the device connected to device-gateway (AUTHENTICATED)? Is AB2 still HELD (see device-gateway logs)? Is the device pushing RTMP to :1935?`,
+          );
+          teardown();
+          setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
+          scheduleReconnect();
+        });
       }, CONNECTION_TIMEOUT_MS);
 
       void lock.start.catch((err) => {

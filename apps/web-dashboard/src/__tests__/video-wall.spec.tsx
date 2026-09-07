@@ -224,6 +224,12 @@ describe('VideoWallPage — view tabs', () => {
     expect(screen.getByTestId('video-playback-play').getAttribute('disabled')).not.toBeNull();
   });
 
+  it('switches to Calibrate and explains that an MDVR is required', async () => {
+    renderWall();
+    fireEvent.click(screen.getByRole('tab', { name: /calibrate/i }));
+    expect(screen.getByText(/no mdvr camera devices/i)).toBeTruthy();
+  });
+
   it('loads a playback window and drives the transport locally', async () => {
     renderWall();
     await waitForChannelsShort();
@@ -466,6 +472,22 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     });
   });
 
+  it('sends CD1 from the Calibrate tab for the driver camera', async () => {
+    const { apiPost } = await import('@/api/client');
+    mdvrOverride.channels = [mdvrMockChannel, mdvrMockChannel2];
+    vi.mocked(apiPost).mockClear();
+    renderWall('/video?view=calibrate&device=device-1');
+    await screen.findByText(/driver calibration/i);
+    fireEvent.click(screen.getByTestId('calibrate-start'));
+    await waitFor(() => {
+      const cd1 = vi
+        .mocked(apiPost)
+        .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'CD1');
+      expect(cd1.length).toBeGreaterThan(0);
+      expect((cd1.at(-1)?.[1] as { params?: { action?: string } })?.params?.action).toBe('1');
+    });
+  });
+
   it('searches the MDVR date window and plays a listed clip', async () => {
     mdvrOverride.channels = [mdvrMockChannel];
     resourcesOverride.status = 'ready';
@@ -647,6 +669,14 @@ describe('mapMediaChannel wire shape', () => {
     expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300_2$/);
     expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300_2/index.m3u8');
     expect(mdvrHlsUrl('867191086416152', 2)).not.toBe(mdvrHlsUrl('867191086416152', 1));
+  });
+
+  it('probes raw ingest HLS (no _web rewrite) so a live publisher is not sent a second AB2', async () => {
+    const { mdvrIngestHlsUrl, mdvrHlsUrl } = await import('@/api/video.api');
+    expect(mdvrIngestHlsUrl('867191086416152', 2)).toContain(
+      '/media-hls-ingest/live/md300_2/index.m3u8',
+    );
+    expect(mdvrIngestHlsUrl('867191086416152', 2)).not.toBe(mdvrHlsUrl('867191086416152', 2));
   });
 
   it('watches the /pb path for recordings, not the live camera', async () => {

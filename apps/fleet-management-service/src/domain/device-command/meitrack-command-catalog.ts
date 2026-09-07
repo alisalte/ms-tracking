@@ -3087,6 +3087,29 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     expectResponse: true,
     supportsReadback: true,
   },
+  {
+    code: 'CD1',
+    name: 'Start DMS Calibration',
+    nameFa: 'شروع کالیبراسیون راننده (DMS)',
+    category: 'media',
+    description:
+      'Start driver monitoring (DMS) pose calibration. The driver sits centered and looks forward until the unit finishes.',
+    descriptionFa:
+      'شروع کالیبراسیون وضعیت راننده (DMS). راننده وسط کادر می‌نشیند و مستقیم نگاه می‌کند تا دستگاه تمام کند.',
+    params: [
+      {
+        key: 'action',
+        label: 'Action',
+        labelFa: 'عملیات',
+        type: 'enum',
+        options: [{ value: '1', label: 'Start', labelFa: 'شروع' }],
+        required: false,
+        defaultValue: '1',
+      },
+    ],
+    expectResponse: true,
+    supportsReadback: false,
+  },
 
   // ==========================================================================
   // SYSTEM (§3.64, §3.51, §3.61, §3.83–§3.89)
@@ -3512,6 +3535,8 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
           `,${str(raw, 'smoking') ?? 0},${str(raw, 'phoneCall') ?? 0}`,
       );
     }
+    case 'CD1':
+      return text(`CD1,${str(raw, 'action') ?? '1'}`);
 
     // --- geofence ----------------------------------------------------------
     case 'B05':

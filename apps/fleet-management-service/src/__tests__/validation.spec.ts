@@ -6,6 +6,7 @@ import {
   createFleetSchema,
   createVehicleSchema,
   deviceStatusSchema,
+  enrollDeviceSchema,
   importDevicesBodySchema,
   importVehicleRowSchema,
   importVehiclesBodySchema,
@@ -107,6 +108,15 @@ describe('validation schemas (§16, INV-I02)', () => {
       protocol: 'teltonika',
     });
     expect(r.success).toBe(false);
+  });
+
+  it('enrollDeviceSchema requires a Luhn IMEI and a known protocol', () => {
+    const imei = validImei('35123456789012');
+    expect(enrollDeviceSchema.parse({ imei, protocol: 'meitrack' })).toEqual({
+      imei,
+      protocol: 'meitrack',
+    });
+    expect(enrollDeviceSchema.safeParse({ imei: '123', protocol: 'meitrack' }).success).toBe(false);
   });
 
   it('deviceStatusSchema accepts the four lifecycle states', () => {

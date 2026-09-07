@@ -109,6 +109,22 @@ export const deviceGatewayConfigSchema = baseConfigSchema.merge(authConfigSchema
     FLEET_REGISTRY_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
     /** Fleet registry retry backoff base (ms). */
     FLEET_REGISTRY_RETRY_BACKOFF_MS: z.coerce.number().int().min(10).default(250),
+    /**
+     * On first GPRS packet from an unknown IMEI, POST /devices/enroll so the
+     * unit is registered in the API-key tenant (SMS/manual config → live).
+     * Off = historic fail-closed unknown-IMEI reject.
+     */
+    GATEWAY_AUTO_ENROLL: z.preprocess((v) => {
+      if (v === undefined || v === null) return true;
+      if (typeof v === 'boolean') return v;
+      if (typeof v === 'number') return v !== 0;
+      if (typeof v === 'string') {
+        const s = v.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'on'].includes(s)) return true;
+        if (['0', 'false', 'no', 'off', ''].includes(s)) return false;
+      }
+      return v;
+    }, z.boolean()),
   }),
 );
 

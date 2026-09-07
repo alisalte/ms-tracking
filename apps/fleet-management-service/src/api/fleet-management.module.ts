@@ -144,6 +144,7 @@ export class FleetManagementModule {
             'REGISTRY_INVALIDATION_PUBLISHER',
             VehicleRepository,
             BINDING_SERVICE,
+            FleetRepository,
           ],
           useFactory: (
             knex: unknown,
@@ -152,7 +153,17 @@ export class FleetManagementModule {
             invalidation: RegistryInvalidationPublisher,
             vehicles: VehicleRepository,
             bindings: BindingService,
-          ) => new DeviceService(knex as never, devices, audit, invalidation, vehicles, bindings),
+            fleets: FleetRepository,
+          ) =>
+            new DeviceService(
+              knex as never,
+              devices,
+              audit,
+              invalidation,
+              vehicles,
+              bindings,
+              fleets,
+            ),
         },
         // Dashboard count aggregate (Sprint E §21) — read-only, existing domains.
         {

@@ -88,7 +88,7 @@ export class PacketDispatcher {
     for (const msg of messages) {
       // Stage 3: auth/resolve on LOGIN (06 §7). Fail-closed: unknown/disabled → close.
       if (msg.type === 'LOGIN') {
-        const outcome = await this.deps.authResolver.resolve(msg.serialOrImei);
+        const outcome = await this.deps.authResolver.resolve(msg.serialOrImei, adapter.id);
         if (!outcome.ok) {
           // INVARIANT #1: never publish pre-auth — and here we cannot even auth.
           this.logger.warn(
@@ -139,7 +139,7 @@ export class PacketDispatcher {
         if (!msg.serialOrImei) {
           continue; // anonymous pre-auth frame → drop silently; auth-grace closes later.
         }
-        const outcome = await this.deps.authResolver.resolve(msg.serialOrImei);
+        const outcome = await this.deps.authResolver.resolve(msg.serialOrImei, adapter.id);
         if (!outcome.ok) {
           this.logger.warn(
             `Auth failed for imei=${msg.serialOrImei} reason=${outcome.reason} — closing session.`,
@@ -179,11 +179,16 @@ export class PacketDispatcher {
       ) {
         session.activate(raw.receivedAt);
         await this.deps.sessionManager.markActive(session);
-      } else if (
-        session.state === 'ACTIVE' &&
-        (normalized.type === 'POSITION' || normalized.type === 'TELEMETRY')
-      ) {
-        session.recordData(raw.receivedAt);
+      } else if (session.canPublish()) {
+        // Command ACKs (AB2/AB3) and alarms also prove the socket is live —
+        // MDVR often sends those for minutes with no GPS. Refresh last_seen
+        // so the map stays ONLINE instead of sweeping to STALE.
+        if (
+          session.state === 'ACTIVE' &&
+          (normalized.type === 'POSITION' || normalized.type === 'TELEMETRY')
+        ) {
+          session.recordData(raw.receivedAt);
+        }
         await this.deps.sessionManager.touch(session);
       }
 

@@ -1,12 +1,37 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { describe, expect, it, vi } from 'vitest';
 
 import { addDaysIso } from '@/lib/license';
 import { canManageTenants } from '@/lib/session';
 import { LoginPage } from '@/pages/LoginPage';
 import { TenantCreatePage } from '@/pages/TenantCreatePage';
+import { TenantDetailPage } from '@/pages/TenantDetailPage';
 import '@/i18n';
+
+vi.mock('@/api/tenants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/tenants')>();
+  return {
+    ...actual,
+    getTenant: vi.fn(async () => ({
+      id: 't1',
+      name: 'FleetVision',
+      tier: 'STANDARD',
+      region: 'IR',
+      status: 'ACTIVE',
+      license: null,
+    })),
+    listTenantUsers: vi.fn(async () => []),
+  };
+});
+
+vi.mock('@/api/billing', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/billing')>();
+  return {
+    ...actual,
+    listInvoices: vi.fn(async () => []),
+  };
+});
 
 describe('tenant-admin access gate', () => {
   it('allows wildcard and billing.tenant.manage', () => {
@@ -68,5 +93,28 @@ describe('create tenant form', () => {
     );
     expect(screen.getByLabelText(/مبلغ هر خودرو|Per vehicle/i)).toBeInTheDocument();
     expect(screen.getByText(/جمع قرارداد|Contract total/i)).toBeInTheDocument();
+  });
+});
+
+describe('tenant detail tabs', () => {
+  it('renders visible section tabs and switches to Access', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('tenant-detail-tabs')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /نمای کلی|Overview/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /دسترسی|Access/i }));
+    expect(screen.getByRole('tab', { name: /دسترسی|Access/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /ایجاد کاربر|Create user/i })).toBeInTheDocument();
   });
 });

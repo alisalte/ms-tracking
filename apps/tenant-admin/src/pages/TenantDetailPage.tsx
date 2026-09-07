@@ -122,24 +122,33 @@ export function TenantDetailPage() {
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</p>
       )}
 
-      {license && (
-        <LicenseHero name={tenant?.name ?? t('detail.title')} license={license} loc={loc} />
-      )}
-
-      <div className="flex gap-1 overflow-x-auto rounded-lg bg-stone-200/70 p-1">
+      <div
+        role="tablist"
+        aria-label={t('detail.title')}
+        data-testid="tenant-detail-tabs"
+        className="flex gap-1 overflow-x-auto rounded-xl border border-stone-300 bg-white p-1 shadow-sm"
+      >
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
+            role="tab"
+            aria-selected={tab === item.id}
             onClick={() => setTab(item.id)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              tab === item.id ? 'bg-white font-semibold text-ink-900 shadow-sm' : 'text-slate-600'
+            className={`cursor-pointer whitespace-nowrap rounded-lg border-none px-3 py-1.5 text-sm font-semibold transition-colors ${
+              tab === item.id
+                ? 'bg-ink-900 text-white shadow-sm'
+                : 'bg-transparent text-slate-600 hover:bg-stone-100 hover:text-ink-900'
             }`}
           >
             {item.label}
           </button>
         ))}
       </div>
+
+      {license && (
+        <LicenseHero name={tenant?.name ?? t('detail.title')} license={license} loc={loc} />
+      )}
 
       {tab === 'overview' && license && (
         <section className="rounded-xl border border-stone-200 bg-white p-4">
@@ -241,12 +250,28 @@ export function TenantDetailPage() {
         />
       )}
 
-      {tab === 'invoices' && license && (
+      {tab === 'overview' && !license && (
+        <EmptyState
+          icon={<FileText className="size-5" />}
+          title={t('detail.noLicenseTitle')}
+          body={t('detail.noLicenseBody')}
+        />
+      )}
+
+      {tab === 'rates' && !license && (
+        <EmptyState
+          icon={<FileText className="size-5" />}
+          title={t('detail.noLicenseTitle')}
+          body={t('detail.noLicenseBody')}
+        />
+      )}
+
+      {tab === 'invoices' && (
         <InvoicePanel
           invoices={invoices}
           busy={invoiceBusy}
           loc={loc}
-          currency={license.currency}
+          currency={license?.currency ?? 'IRR'}
           onGenerate={async () => {
             setInvoiceBusy(true);
             setError(null);

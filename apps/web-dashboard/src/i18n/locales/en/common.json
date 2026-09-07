@@ -713,7 +713,8 @@
     "tabs": {
       "wall": "Wall",
       "cameras": "Cameras",
-      "playback": "Playback"
+      "playback": "Playback",
+      "calibrate": "Calibrate"
     },
     "keyboardHint": "F: fullscreen · 1-6: layout",
     "cameras": {
@@ -762,6 +763,21 @@
       "waiting": "Waiting for the device to push recorded video…",
       "timeout": "The device did not start playback. Check GPRS, and that this window exists on the SD card.",
       "failed": "Playback command failed: {{message}}"
+    },
+    "calibrate": {
+      "title": "Driver calibration (DMS)",
+      "instructions": "The driver sits centered in the frame and looks straight ahead, then press Start. The unit finishes when the pose stays stable for a few seconds. The green face box from the Meitrack phone app is a local Wi-Fi overlay and will not appear on this live stream.",
+      "device": "Device",
+      "camera": "Driver camera",
+      "start": "Start calibration",
+      "waiting": "Command sent — waiting for the device to acknowledge…",
+      "ackedTitle": "Calibration started on the device",
+      "ackedBody": "Keep the driver still and looking forward until the unit finishes. You will not see the phone app's green box here.",
+      "failedTitle": "Calibration command failed",
+      "failedBody": "The device did not accept CD1. It must be online on GPRS (the same link as live video).",
+      "empty": "No MDVR camera devices",
+      "emptyHelp": "Register an MD300 (or similar) with live cameras. Calibration uses the driver-facing channel and GPRS command CD1.",
+      "noPreview": "Live preview is waiting for this camera. You can still send Start if the unit is on GPRS."
     },
     "setup": {
       "open": "Camera Setup",

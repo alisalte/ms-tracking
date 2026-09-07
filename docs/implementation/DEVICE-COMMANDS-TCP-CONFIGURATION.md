@@ -2,7 +2,7 @@
 
 Full downstream command path: **UI → fleet-management → Kafka → device-gateway → device TCP socket**, closing the documented P2 gap "Device command dispatch — MISSING" (PROJECT_STATUS_REPORT §31/§961) and replacing the CommandCenterPage placeholder.
 
-Command surface: **every TCP-settable command of the Meitrack MDVR GPRS Protocol V2.0 (2024-03-20)** — 74 catalog entries across 14 categories, plus a raw-text escape hatch.
+Command surface: **every TCP-settable command of the Meitrack MDVR GPRS Protocol V2.0 (2024-03-20)** plus DMS calibration from GPRS Total Command V1.3 §3.130 — catalog entries across 14 categories, plus a raw-text escape hatch.
 
 ## Flow
 
@@ -44,7 +44,7 @@ CommandCenterPage (/commands)
 | temperature | C40 C41 C42 C43 C44 C46 |
 | fuel | C47 C48 C49 |
 | tpms | DA0 DA1 DA2 DA3 DA4 DA5 |
-| media | A9A A9B A9C A9D A9E A9F AA0 AA1 AA4 AB2 AB3 AB4 AB5 AB8 B64 BB8 CB8 |
+| media | A9A A9B A9C A9D A9E A9F AA0 AA1 AA4 AB2 AB3 AB4 AB5 AB8 B64 BB8 CB8 CD1 |
 | system | C03 C61 CFF DA6 DB4 E91 F00 F01 F02 F09 F11 |
 | custom | RAW (validated passthrough, e.g. `A19,5`) |
 

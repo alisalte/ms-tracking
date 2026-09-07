@@ -116,4 +116,53 @@ describe('AuthResolver — 3-tier ladder (06 §7)', () => {
     await resolver.resolve('imei-6'); // L1 cleared → must re-resolve
     expect(l3calls).toBe(before + 1);
   });
+
+  it('auto-enrolls an unknown IMEI when enabled and a protocol hint is present', async () => {
+    const enrolled: ResolvedDevice = {
+      deviceId: 'dev-auto',
+      tenantId: 'tenant-1',
+      status: 'ACTIVE',
+      pairedVehicleId: 'veh-auto',
+    };
+    let enrollCalls = 0;
+    const wrappedRegistry: DeviceRegistry = {
+      async resolve() {
+        return { found: false };
+      },
+      async tenantActive() {
+        return true;
+      },
+      async enroll(imei, protocol) {
+        enrollCalls++;
+        expect(imei).toBe('imei-new');
+        expect(protocol).toBe('meitrack');
+        return { found: true, device: enrolled };
+      },
+    };
+    const resolver = new AuthResolver(redis as never, wrappedRegistry, { autoEnroll: true });
+    const out = await resolver.resolve('imei-new', 'meitrack');
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.device.deviceId).toBe('dev-auto');
+    expect(enrollCalls).toBe(1);
+  });
+
+  it('does not enroll when auto-enroll is off (fail-closed unknown)', async () => {
+    let enrollCalls = 0;
+    const wrappedRegistry: DeviceRegistry = {
+      async resolve() {
+        return { found: false };
+      },
+      async tenantActive() {
+        return true;
+      },
+      async enroll() {
+        enrollCalls++;
+        return { found: false };
+      },
+    };
+    const resolver = new AuthResolver(redis as never, wrappedRegistry);
+    const out = await resolver.resolve('imei-new', 'meitrack');
+    expect(out).toEqual({ ok: false, reason: 'unknown' });
+    expect(enrollCalls).toBe(0);
+  });
 });

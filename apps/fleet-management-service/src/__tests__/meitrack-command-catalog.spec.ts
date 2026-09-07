@@ -72,6 +72,7 @@ describe('meitrack command catalog', () => {
       'C49',
       'C61',
       'C90',
+      'CD1',
       'CB8',
       'CFF',
       'D10',
@@ -235,6 +236,11 @@ describe('meitrack command catalog', () => {
     });
   });
 
+  it('CD1 starts DMS driver calibration (§3.130: CD1,1)', () => {
+    expect(build('CD1', {})).toEqual({ kind: 'text', text: 'CD1,1' });
+    expect(build('CD1', { action: '1' })).toEqual({ kind: 'text', text: 'CD1,1' });
+  });
+
   // --- geofence (§3.33, §3.38) -------------------------------------------------
   it('B05 formats 6-decimal coordinates (§3.33 example)', () => {
     expect(
@@ -302,9 +308,10 @@ describe('meitrack command catalog', () => {
 
   // --- media (§3.86) --------------------------------------------------------------
   it('CB8 accepts comma-separated event,channel,seconds,priority entries (regression: allowComma was missing)', () => {
-    expect(
-      build('CB8', { operation: '1', entries: '1,1,10,1;2,2,20,2' }),
-    ).toEqual({ kind: 'text', text: 'CB8,1;1,1,10,1;2,2,20,2' });
+    expect(build('CB8', { operation: '1', entries: '1,1,10,1;2,2,20,2' })).toEqual({
+      kind: 'text',
+      text: 'CB8,1;1,1,10,1;2,2,20,2',
+    });
   });
 
   // --- outputs (§3.49, §3.74) ----------------------------------------------------

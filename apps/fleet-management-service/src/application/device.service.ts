@@ -15,6 +15,9 @@ import type { Page } from '@fleetvision/shared-kernel';
  * - `resolve(imei)` is the gateway's trusted lookup: global IMEI → identity, with
  *   the owning tenant's active-status checked. It is the source of truth for the
  *   device-gateway's auth-resolver L3 (cached upward; never per-packet).
+ * - `enroll(imei)` is first-packet auto-provision: create the device (and a
+ *   bound vehicle) in the API-key tenant so an SMS-configured unit appears on
+ *   the map without a prior dashboard step. Idempotent on IMEI.
  */
 import {
   ConflictException,
@@ -22,14 +25,20 @@ import {
   HttpException,
   NotFoundException,
 } from '@nestjs/common';
-import type { DeviceResolution, DeviceStatus } from '../domain/device/device-types.js';
-import type { DeviceRecord } from '../domain/device/device-types.js';
+import type {
+  DeviceRecord,
+  DeviceResolution,
+  DeviceRole,
+  DeviceStatus,
+  Protocol,
+} from '../domain/device/device-types.js';
 import type { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
 import type { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import {
   type DeviceListFilters,
   DeviceRepository,
 } from '../infrastructure/persistence/device.repository.js';
+import type { FleetRepository } from '../infrastructure/persistence/fleet.repository.js';
 import type {
   VehicleRepository,
   VehicleRow,
@@ -41,6 +50,7 @@ import type { ImportResult } from './import-result.js';
 import type { ActorContext } from './service-context.js';
 import {
   type CreateDeviceInput,
+  type EnrollDeviceInput,
   type UpdateDeviceInput,
   importDeviceRowSchema,
 } from './validation/schemas.js';
@@ -56,6 +66,8 @@ export class DeviceService {
     private readonly vehicles: VehicleRepository | null = null,
     /** Optional — used by spreadsheet import to bind after create. */
     private readonly bindings: BindingService | null = null,
+    /** Optional — used by first-packet enroll to place the auto-created vehicle. */
+    private readonly fleets: FleetRepository | null = null,
   ) {}
 
   // --- Management API -------------------------------------------------------
@@ -221,6 +233,40 @@ export class DeviceService {
     return this.devices.resolveByImei(imei);
   }
 
+  /**
+   * First-packet auto-provision for the API-key tenant. Idempotent: an existing
+   * IMEI is returned as-is (and unbound units in this tenant get a vehicle).
+   * Duplicate-IMEI races fall back to resolve.
+   */
+  public async enroll(ctx: ActorContext, input: EnrollDeviceInput): Promise<DeviceResolution> {
+    const existing = await this.resolve(input.imei);
+    if (existing.found) {
+      if (existing.device.tenantId === ctx.tenantId && !existing.device.vehicleId) {
+        await this.autoProvisionVehicle(ctx, existing.device.deviceId, input);
+        return this.resolve(input.imei);
+      }
+      return existing;
+    }
+
+    try {
+      const device = await this.create(ctx, {
+        imei: input.imei,
+        serialNumber: input.imei,
+        manufacturer: input.manufacturer ?? manufacturerFor(input.protocol),
+        model: input.model,
+        protocol: input.protocol,
+        status: 'ACTIVE',
+      });
+      await this.autoProvisionVehicle(ctx, device.id, input);
+    } catch (err) {
+      if (err instanceof ConflictException && /IMEI/i.test(err.message)) {
+        return this.resolve(input.imei);
+      }
+      throw err;
+    }
+    return this.resolve(input.imei);
+  }
+
   private async resolveVehicle(tenantId: string, vehicleCode: string): Promise<VehicleRow | null> {
     if (!this.vehicles) return null;
     const out: VehicleRow[] = [];
@@ -249,6 +295,95 @@ export class DeviceService {
         return;
       }
       throw err;
+    }
+  }
+
+  /**
+   * Create (or reuse) a fleet, a vehicle named after the IMEI, and bind the
+   * device so it shows on the map. Map presence is vehicles × status × GPS —
+   * an unbound device never appears there.
+   */
+  private async autoProvisionVehicle(
+    ctx: ActorContext,
+    deviceId: string,
+    input: EnrollDeviceInput,
+  ): Promise<void> {
+    const vehicles = this.vehicles;
+    const bindings = this.bindings;
+    const fleets = this.fleets;
+    if (!vehicles || !bindings || !fleets) return;
+    const fleetId = await this.ensureAutoFleet(ctx);
+    const vehicleCode = `D${input.imei}`;
+    let vehicleId: string;
+    const existingVehicle = await vehicles.findByCode(ctx.tenantId, vehicleCode);
+    if (existingVehicle) {
+      vehicleId = existingVehicle.id;
+    } else {
+      try {
+        const row = await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
+          await assertTenantResourceQuota(trx, ctx.tenantId, 'vehicles');
+          const created = await vehicles.create(trx, ctx.tenantId, {
+            fleetId,
+            name: `Device ${input.imei}`,
+            code: vehicleCode,
+          });
+          await this.audit.append(trx, {
+            ...this.entry(ctx, 'vehicle.created', created.id, null, created),
+            resourceType: 'vehicle',
+          });
+          return created;
+        });
+        vehicleId = row.id;
+      } catch (err) {
+        if (err instanceof TenantQuotaDeniedError) throw new ForbiddenException(err.message);
+        const mapped = mapUniqueViolation(err);
+        const clash = await vehicles.findByCode(ctx.tenantId, vehicleCode);
+        if (clash) {
+          vehicleId = clash.id;
+        } else {
+          throw mapped;
+        }
+      }
+    }
+    const roles = rolesFor(input.protocol);
+    try {
+      await bindings.bind(ctx, vehicleId, deviceId, { roles, isPrimary: true });
+    } catch (err) {
+      if (err instanceof ConflictException && /already bound/i.test(err.message)) return;
+      if (err instanceof ConflictException && /primary/i.test(err.message)) {
+        await bindings.bind(ctx, vehicleId, deviceId, { roles, isPrimary: false });
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /** Prefer an existing ACTIVE fleet; otherwise create tenant-local `AUTO`. */
+  private async ensureAutoFleet(ctx: ActorContext): Promise<string> {
+    const fleets = this.fleets;
+    if (!fleets) throw new ForbiddenException('Auto-enroll is not wired.');
+    const auto = await fleets.findByCode(ctx.tenantId, AUTO_FLEET_CODE);
+    if (auto && auto.status === 'ACTIVE') return auto.id;
+    const page = await fleets.list(ctx.tenantId, { status: 'ACTIVE' }, { limit: 1 });
+    if (page.data[0]) return page.data[0].id;
+    try {
+      const row = await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
+        const created = await fleets.create(trx, ctx.tenantId, {
+          name: AUTO_FLEET_NAME,
+          code: AUTO_FLEET_CODE,
+        });
+        await this.audit.append(trx, {
+          ...this.entry(ctx, 'fleet.created', created.id, null, created),
+          resourceType: 'fleet',
+        });
+        return created;
+      });
+      return row.id;
+    } catch (err) {
+      const mapped = mapUniqueViolation(err);
+      const existing = await fleets.findByCode(ctx.tenantId, AUTO_FLEET_CODE);
+      if (existing) return existing.id;
+      throw mapped;
     }
   }
 
@@ -281,4 +416,24 @@ function importErrorMessage(err: unknown): string {
   if (err instanceof HttpException) return err.message;
   if (err instanceof Error) return err.message;
   return 'Import failed.';
+}
+
+const AUTO_FLEET_CODE = 'AUTO';
+const AUTO_FLEET_NAME = 'Auto-enrolled';
+
+function manufacturerFor(protocol: Protocol): string {
+  switch (protocol) {
+    case 'meitrack':
+      return 'Meitrack';
+    case 'gt06':
+      return 'Concox';
+    case 'jt808':
+      return 'JT808';
+    default:
+      return 'Auto';
+  }
+}
+
+function rolesFor(protocol: Protocol): DeviceRole[] {
+  return protocol === 'meitrack' ? ['TRACKER', 'MDVR'] : ['TRACKER'];
 }

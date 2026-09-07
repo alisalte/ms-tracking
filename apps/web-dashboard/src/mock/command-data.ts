@@ -157,6 +157,17 @@ export function mockCommandCatalog(): CommandDef[] {
       supportsReadback: false,
     },
     {
+      code: 'CD1',
+      name: 'Start DMS Calibration',
+      nameFa: 'شروع کالیبراسیون راننده (DMS)',
+      category: 'media' as CommandCategory,
+      description: 'Start driver monitoring pose calibration.',
+      descriptionFa: 'شروع کالیبراسیون وضعیت راننده.',
+      params: [],
+      expectResponse: true,
+      supportsReadback: false,
+    },
+    {
       code: 'C01',
       name: 'Output Control',
       nameFa: 'کنترل خروجی‌ها',

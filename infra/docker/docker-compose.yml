@@ -494,6 +494,8 @@ services:
       # IMEI → device identity resolution (service API key; see header comment).
       FLEET_REGISTRY_URL: http://fleet-management-service:3006
       FLEET_REGISTRY_API_KEY: ${FLEET_REGISTRY_API_KEY:-}
+      # First GPRS packet from an unknown IMEI auto-registers the unit.
+      GATEWAY_AUTO_ENROLL: ${GATEWAY_AUTO_ENROLL:-true}
     ports:
       # Device-facing GPRS plane — 5023 is the platform default; 6180 is the
       # MD300 / Meitrack-tools default so a unit still A21'd to 6180 connects.

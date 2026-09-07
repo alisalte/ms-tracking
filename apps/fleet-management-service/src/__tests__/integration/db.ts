@@ -118,6 +118,38 @@ export async function seedTenant(
     region: 'us-east-1',
     status: opts.status ?? 'ACTIVE',
   });
+  await seedTenantLicense(knex, id);
+}
+
+/** Quota checks require a live license row (iam.tenant_licenses). */
+async function seedTenantLicense(knex: Knex, tenantId: string): Promise<void> {
+  const now = new Date();
+  const expires = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  try {
+    await knex('iam.tenant_licenses').insert({
+      tenant_id: tenantId,
+      license_key: `TEST-${tenantId.replace(/-/g, '').slice(0, 12).toUpperCase()}`,
+      plan_code: 'STANDARD',
+      starts_at: now,
+      expires_at: expires,
+      grace_days: 7,
+      max_users: 100,
+      max_vehicles: 1000,
+      max_devices: 1000,
+      max_drivers: 1000,
+      max_storage_bytes: 10 * 1024 * 1024 * 1024,
+      max_download_bytes_month: 50 * 1024 * 1024 * 1024,
+      max_concurrent_sessions: 20,
+      session_idle_minutes: 30,
+      session_absolute_hours: 12,
+      timezone: 'Asia/Tehran',
+      features: JSON.stringify({}),
+    });
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === '42P01') return;
+    throw err;
+  }
 }
 
 /** Truncate fleet tables between tests (order respects FKs). */

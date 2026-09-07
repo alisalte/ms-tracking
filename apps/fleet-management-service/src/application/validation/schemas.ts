@@ -169,6 +169,18 @@ export const createDeviceSchema = z.object({
 export type CreateDeviceInput = z.infer<typeof createDeviceSchema>;
 
 /**
+ * First-packet auto-provision (device-gateway, API-key only). Same IMEI/protocol
+ * rules as create — the owning tenant comes from the credential, never the body.
+ */
+export const enrollDeviceSchema = z.object({
+  imei: imeiField,
+  protocol: z.enum(PROTOCOLS),
+  manufacturer: z.string().trim().min(1).max(128).optional(),
+  model: z.string().trim().min(1).max(128).optional(),
+});
+export type EnrollDeviceInput = z.infer<typeof enrollDeviceSchema>;
+
+/**
  * One spreadsheet device row. Optional `vehicleCode` binds the new device
  * after create (TRACKER; primary when the vehicle has none).
  */

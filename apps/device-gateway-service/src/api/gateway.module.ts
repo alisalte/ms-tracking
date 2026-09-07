@@ -199,6 +199,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
               l1MaxEntries: config.GATEWAY_AUTH_L1_MAX_ENTRIES,
               l1TtlMs: config.GATEWAY_AUTH_L1_TTL_SECONDS * 1000,
               l2TtlSeconds: config.GATEWAY_AUTH_L2_TTL_SECONDS,
+              autoEnroll: config.GATEWAY_AUTO_ENROLL,
             }),
         },
         // Registry cache invalidation subscriber (push-based, Redis pub/sub — Sprint D §11).
