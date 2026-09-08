@@ -1,9 +1,9 @@
 /**
- * Command Center — type-scoped catalog (menu) and single-device mode.
+ * Command Center — protocol-scoped Parameter + history.
  *
- * Menu: no IMEI checklist; picking a model targets every ACTIVE unit of that
- * type and hides commands the class cannot run. Device deep-link locks the
- * page to that unit. History groups a bulk send as “sent to N devices”.
+ * Menu: pick a protocol; Parameter applies to every ACTIVE unit of that
+ * protocol (Meitrack Parameter UI only). Device deep-link locks to that unit.
+ * History groups a bulk send as “sent to N devices”.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -17,9 +17,9 @@ import { CommandDevicePicker } from '@/components/commands/CommandDevicePicker';
 import { CommandHistoryTable } from '@/components/commands/CommandHistoryTable';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
 import { i18n } from '@/i18n';
-import { mockCommandCatalog, mockCommandHistory } from '@/mock/command-data';
+import { mockCommandHistory } from '@/mock/command-data';
 import { CommandCenterPage } from '@/pages/CommandCenterPage';
-import type { Device } from '@/types/asset.types';
+import type { Device, DeviceProtocol } from '@/types/asset.types';
 import type { DeviceCommandRecord } from '@/types/command.types';
 
 function device(
@@ -27,15 +27,16 @@ function device(
   imei: string,
   status: Device['status'] = 'ACTIVE',
   model = 'MD522S',
+  protocol: DeviceProtocol = 'meitrack',
 ): Device {
   return {
     id,
     tenantId: 't1',
     imei,
     serialNumber: null,
-    manufacturer: 'Meitrack',
+    manufacturer: protocol === 'meitrack' ? 'Meitrack' : 'Other',
     model,
-    protocol: 'meitrack',
+    protocol,
     status,
     vehicleId: null,
     lastSeenAt: null,
@@ -47,17 +48,18 @@ function device(
   };
 }
 
-const MIXED_TYPE_DEVICES = [
-  device('11111111-1111-1111-1111-111111111111', '866854036516451', 'ACTIVE', 'MD522S'),
-  device('22222222-2222-2222-2222-222222222222', '866854036516452', 'ACTIVE', 'T622'),
-  device('33333333-3333-3333-3333-333333333333', '866854036516453', 'ACTIVE', 'T622'),
+const MIXED_DEVICES = [
+  device('11111111-1111-1111-1111-111111111111', '866854036516451', 'ACTIVE', 'MD522S', 'meitrack'),
+  device('22222222-2222-2222-2222-222222222222', '866854036516452', 'ACTIVE', 'T622', 'meitrack'),
+  device('33333333-3333-3333-3333-333333333333', '866854036516453', 'ACTIVE', 'T622', 'meitrack'),
+  device('44444444-4444-4444-4444-444444444444', '861234567890001', 'ACTIVE', 'JT808-A', 'jt808'),
 ];
 
 const issueMutate = vi.fn();
 
 vi.mock('@/api/asset.api', () => ({
   useDevices: () => ({
-    data: MIXED_TYPE_DEVICES,
+    data: MIXED_DEVICES,
     isLoading: false,
     isError: false,
     error: null,
@@ -66,13 +68,6 @@ vi.mock('@/api/asset.api', () => ({
 }));
 
 vi.mock('@/api/command.api', () => ({
-  useCommandCatalog: () => ({
-    data: mockCommandCatalog(),
-    isLoading: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
   useCommandHistory: (
     deviceId: string | null,
     _status?: string,
@@ -82,12 +77,21 @@ vi.mock('@/api/command.api', () => ({
     isLoading: false,
     isError: false,
     error: null,
-    refetch: vi.fn(),
+    refetch: vi.fn(async () => ({
+      data: mockCommandHistory(options?.tenant ? null : deviceId),
+    })),
   }),
   useIssueCommands: () => ({
     mutateAsync: issueMutate,
     isPending: false,
   }),
+  fetchDeviceCommand: vi.fn(async (id: string) => ({
+    id,
+    status: 'ACKED',
+    responseText: 'B99,2,0,19',
+    commandCode: 'B99',
+    params: {},
+  })),
 }));
 
 function wrapperFor(path: string) {
@@ -121,89 +125,70 @@ beforeEach(async () => {
 });
 
 describe('CommandDevicePicker', () => {
-  it('lists device types without an IMEI checklist', () => {
-    const onTypeChange = vi.fn();
+  it('lists protocols without an IMEI checklist', () => {
+    const onProtocolChange = vi.fn();
     render(
       <I18nextProvider i18n={i18n}>
         <CommandDevicePicker
-          devices={MIXED_TYPE_DEVICES}
-          typeFilter=""
-          onTypeChange={onTypeChange}
+          devices={MIXED_DEVICES}
+          protocolFilter=""
+          onProtocolChange={onProtocolChange}
         />
       </I18nextProvider>,
     );
 
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/device type/i), { target: { value: 'T622' } });
-    expect(onTypeChange).toHaveBeenCalledWith('T622');
+    fireEvent.change(screen.getByLabelText(/^protocol$/i), { target: { value: 'meitrack' } });
+    expect(onProtocolChange).toHaveBeenCalledWith('meitrack');
   });
 
-  it('locks to a single device without a type list', () => {
+  it('locks to a single device without a protocol list', () => {
     render(
       <I18nextProvider i18n={i18n}>
         <CommandDevicePicker
-          devices={MIXED_TYPE_DEVICES}
-          lockedDevice={MIXED_TYPE_DEVICES[1]}
-          typeFilter=""
-          onTypeChange={vi.fn()}
+          devices={MIXED_DEVICES}
+          lockedDevice={MIXED_DEVICES[1]}
+          protocolFilter=""
+          onProtocolChange={vi.fn()}
         />
       </I18nextProvider>,
     );
 
     expect(screen.getByText('866854036516452')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/device type/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^protocol$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/tracker settings/i)).toBeInTheDocument();
   });
 });
 
 describe('CommandCenterPage', () => {
-  it('keeps the catalog disabled until a device type is chosen', () => {
+  it('defaults to Parameter and waits for a protocol', () => {
     render(<CommandCenterPage />, { wrapper: wrapperFor('/commands') });
-    expect(screen.getByText(/choose a device type to enable/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /A10/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('commands-tab-parameter')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByTestId('commands-tab-catalog')).not.toBeInTheDocument();
+    expect(screen.getByText(/choose a protocol to enable/i)).toBeInTheDocument();
   });
 
-  it('enables tracker commands for T622 and hides MDVR media', () => {
-    render(<CommandCenterPage />, { wrapper: wrapperFor('/commands') });
-    fireEvent.change(screen.getByLabelText(/device type/i), { target: { value: 'T622' } });
+  it('shows Parameter for Meitrack protocol', () => {
+    render(<CommandCenterPage />, { wrapper: wrapperFor('/commands?protocol=meitrack') });
 
-    expect(screen.queryByText(/choose a device type to enable/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /A10/i })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: /AB2/i })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('command-category-media')).not.toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-alarm')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /event settings/i })).toBeInTheDocument();
   });
 
-  it('shows media commands for an MDVR type', () => {
-    render(<CommandCenterPage />, { wrapper: wrapperFor('/commands') });
-    fireEvent.change(screen.getByLabelText(/device type/i), { target: { value: 'MD522S' } });
-
-    fireEvent.click(screen.getByTestId('command-category-media'));
-    expect(screen.getByRole('button', { name: /AB2/i })).toBeEnabled();
+  it('shows Meitrack-only notice for other protocols', () => {
+    render(<CommandCenterPage />, { wrapper: wrapperFor('/commands?protocol=jt808') });
+    expect(screen.getByText(/available for meitrack/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('device-parameter-alarm')).not.toBeInTheDocument();
   });
 
-  it('opens a single device from the query string without a type picker', () => {
+  it('opens a single device from the query string without a protocol picker', () => {
     render(<CommandCenterPage />, {
       wrapper: wrapperFor('/commands?device=22222222-2222-2222-2222-222222222222'),
     });
 
     expect(screen.getByText('866854036516452')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/device type/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /A10/i })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: /AB2/i })).not.toBeInTheDocument();
-  });
-
-  it('shows one command category at a time', () => {
-    render(<CommandCenterPage />, { wrapper: wrapperFor('/commands?type=T622') });
-    expect(screen.getByTestId('command-category-tracking')).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    expect(screen.getByRole('button', { name: /A10/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /B05/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('command-category-geofence'));
-    expect(screen.getByRole('button', { name: /B05/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /A10/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^protocol$/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-alarm')).toBeInTheDocument();
   });
 
   it('groups bulk history as sent-to-N and expands replies on click', () => {
@@ -218,6 +203,82 @@ describe('CommandCenterPage', () => {
     expect(replies).toHaveLength(10);
     expect(screen.getAllByText('A12,OK').length).toBeGreaterThan(0);
     expect(screen.getByText('DEVICE_OFFLINE')).toBeInTheDocument();
+  });
+
+  it('opens Parameter alarm table for Meitrack protocol', () => {
+    render(<CommandCenterPage />, {
+      wrapper: wrapperFor('/commands?protocol=meitrack&tab=parameter'),
+    });
+
+    expect(screen.getByTestId('device-parameter-alarm')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /event settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('alarm-link-sett-19')).toBeInTheDocument();
+    expect(screen.getByTestId('alarm-link-sett-16')).toBeInTheDocument();
+    expect(screen.getByText(/input 8 inactive/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('alarm-link-sett-19'));
+    expect(screen.getByTestId('alarm-link-sett-apply')).toBeInTheDocument();
+    expect(screen.getByLabelText(/alarm head/i)).toBeInTheDocument();
+    expect(screen.getByTestId('alarm-link-unsupported-ftp').querySelector('input')).toBeDisabled();
+    expect(
+      screen.getByTestId('alarm-link-unsupported-out-3').querySelector('input'),
+    ).toBeDisabled();
+  });
+
+  it('opens Parameter Network section for Meitrack protocol', () => {
+    render(<CommandCenterPage />, {
+      wrapper: wrapperFor('/commands?protocol=meitrack&section=network'),
+    });
+
+    expect(screen.getByTestId('device-parameter-network')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /network settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-network-apply')).toBeInTheDocument();
+    expect(screen.getByLabelText(/primary ip/i)).toBeInTheDocument();
+  });
+
+  it('opens Parameter Tracking section for Meitrack protocol', () => {
+    render(<CommandCenterPage />, {
+      wrapper: wrapperFor('/commands?protocol=meitrack&section=tracking'),
+    });
+
+    expect(screen.getByTestId('device-parameter-tracking')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /tracking settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-tracking-apply')).toBeInTheDocument();
+    expect(screen.getByLabelText(/cornering angle/i)).toBeInTheDocument();
+  });
+
+  it('opens Parameter Alerts section for Meitrack protocol', () => {
+    render(<CommandCenterPage />, {
+      wrapper: wrapperFor('/commands?protocol=meitrack&section=alerts'),
+    });
+
+    expect(screen.getByTestId('device-parameter-alerts')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /alert settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-alerts-apply')).toBeInTheDocument();
+    expect(screen.getByLabelText(/speeding/i)).toBeInTheDocument();
+  });
+
+  it('opens Parameter Media section for Meitrack protocol', () => {
+    render(<CommandCenterPage />, {
+      wrapper: wrapperFor('/commands?protocol=meitrack&section=media'),
+    });
+
+    expect(screen.getByTestId('device-parameter-media')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /media settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-media-apply')).toBeInTheDocument();
+    expect(screen.getByLabelText(/speaker volume/i)).toBeInTheDocument();
+  });
+
+  it('opens Parameter AI / C90 section for Meitrack protocol', () => {
+    render(<CommandCenterPage />, {
+      wrapper: wrapperFor('/commands?protocol=meitrack&section=ai'),
+    });
+
+    expect(screen.getByTestId('device-parameter-ai')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /ai \/ dms settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-ai-apply')).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-ai-calibrate')).toBeInTheDocument();
+    expect(screen.getByLabelText(/alert volume/i)).toBeInTheDocument();
   });
 });
 

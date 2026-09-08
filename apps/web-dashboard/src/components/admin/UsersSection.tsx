@@ -24,12 +24,14 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { userRoleLabel } from '@/lib/admin-labels';
 import { relativeTime } from '@/lib/relative-time';
 import { emailSchema, passwordSchema, usernameSchema } from '@/lib/validation';
-import type { AdminUser, AdminUserStatus } from '@/types/admin.types';
+import type { AdminUser, AdminUserStatus, Role } from '@/types/admin.types';
 
 interface UsersSectionProps {
   users: AdminUser[];
+  roles: Role[];
   loading?: boolean;
   selectedId?: string | null;
   onSelect: (id: string) => void;
@@ -49,6 +51,7 @@ const STATUSES: Array<AdminUserStatus | 'all'> = [
 
 export function UsersSection({
   users,
+  roles,
   loading = false,
   selectedId,
   onSelect,
@@ -142,7 +145,9 @@ export function UsersSection({
       id: 'role',
       headerKey: 'admin.users.colRole',
       sortBy: (u) => u.roleName,
-      render: (u) => <span className="text-sm">{u.roleName}</span>,
+      render: (u) => (
+        <span className="text-sm">{userRoleLabel(t, u.roleIds, roles, u.roleName)}</span>
+      ),
     },
     {
       id: 'mfa',

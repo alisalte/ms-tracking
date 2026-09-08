@@ -202,7 +202,7 @@ export function GeofenceFormDialog({
             value={type}
             onChange={(v) => setType(v as GeofenceType)}
             disabled={editing}
-            wrapperClassName="sm:w-44"
+            wrapperClassName="w-full sm:w-44"
             options={[
               { value: 'CIRCLE', label: t('geofences.circle', { defaultValue: 'Circle' }) },
               { value: 'POLYGON', label: t('geofences.polygon', { defaultValue: 'Polygon' }) },
@@ -216,7 +216,7 @@ export function GeofenceFormDialog({
               type="number"
               min={10}
               aria-label={t('geofences.radius', { defaultValue: 'Radius (m)' })}
-              wrapperClassName="sm:w-40"
+              wrapperClassName="w-full sm:w-40"
             />
           )}
         </div>
@@ -253,7 +253,7 @@ export function GeofenceFormDialog({
               value={dwellSec}
               onChange={(e) => setDwellSec(e.target.value)}
               type="number"
-              wrapperClassName="sm:w-48"
+              wrapperClassName="w-full sm:w-48"
             />
           )}
         </div>

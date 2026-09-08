@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermissions, useUpdateRolePermissions } from '@/api/admin.api';
 import { Badge, Checkbox, Drawer, Spinner } from '@/components/tailwind-ui';
+import { permissionLabel, roleDisplayDescription, roleDisplayName } from '@/lib/admin-labels';
 import type { Role } from '@/types/admin.types';
 
 interface RoleDetailDrawerProps {
@@ -28,8 +29,8 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
     <Drawer
       open={open}
       onClose={onClose}
-      title={role?.name ?? ''}
-      subtitle={role?.description}
+      title={role ? roleDisplayName(t, role.name) : ''}
+      subtitle={role ? roleDisplayDescription(t, role.name, role.description) : undefined}
       size="md"
     >
       {loading ? (
@@ -40,7 +41,7 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
         <div className="flex flex-col gap-3">
           {role.mfaRequired && (
             <div className="mb-1">
-              <Badge color="danger">MFA</Badge>
+              <Badge color="danger">{t('admin.users.mfa')}</Badge>
             </div>
           )}
 
@@ -84,7 +85,9 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
                     </div>
                     <div className="mt-1 grid grid-cols-1 gap-0.5 sm:grid-cols-2">
                       {group.permissions.map((p) => {
-                        const granted = role.permissionKeys.includes(p) || role.permissionKeys.includes('*');
+                        const granted =
+                          role.permissionKeys.includes(p) || role.permissionKeys.includes('*');
+                        const label = permissionLabel(t, p);
                         return (
                           <Checkbox
                             key={p}
@@ -101,7 +104,19 @@ export function RoleDetailDrawer({ role, loading = false, onClose }: RoleDetailD
                                     updatePerms.mutate({ id: role.id, permissions: next });
                                   }
                             }
-                            label={<span className="font-mono text-[0.65rem]">{p}</span>}
+                            label={
+                              <span className="flex min-w-0 flex-col gap-0.5">
+                                <span>{label}</span>
+                                {label !== p && (
+                                  <span
+                                    className="font-mono text-[0.65rem] text-gray-400 dark:text-graydark-500"
+                                    dir="ltr"
+                                  >
+                                    {p}
+                                  </span>
+                                )}
+                              </span>
+                            }
                           />
                         );
                       })}

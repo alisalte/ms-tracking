@@ -132,6 +132,7 @@ export function AdminPage() {
                 <>
                   <UsersSection
                     users={users.data ?? []}
+                    roles={roles.data ?? []}
                     loading={users.isLoading}
                     selectedId={selectedUserId}
                     onSelect={setSelectedUserId}
@@ -142,6 +143,7 @@ export function AdminPage() {
                   />
                   <UserDetailDrawer
                     userId={selectedUserId}
+                    roles={roles.data ?? []}
                     onClose={() => setSelectedUserId(null)}
                   />
                 </>

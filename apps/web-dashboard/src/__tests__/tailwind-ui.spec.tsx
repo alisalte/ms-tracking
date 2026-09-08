@@ -8,7 +8,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
  * wiring + ref forwarding), and Table composition. Pure DOM-level — no router,
  * no i18n, no providers.
  */
-import { createRef } from 'react';
+import { createRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -141,6 +141,31 @@ describe('Modal', () => {
     fireEvent.mouseDown(backdrop);
     expect(onClose).toHaveBeenCalledOnce(); // only the ESC call
   });
+
+  it('keeps input focus when the parent re-renders with a new onClose', () => {
+    function Harness() {
+      const [value, setValue] = useState('');
+      const [open, setOpen] = useState(true);
+      return (
+        <Modal open={open} onClose={() => setOpen(false)} title="New user">
+          <input
+            aria-label="email"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </Modal>
+      );
+    }
+    render(<Harness />);
+    const input = screen.getByLabelText('email') as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: 'a' } });
+    expect(input.value).toBe('a');
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: 'ab' } });
+    expect(input.value).toBe('ab');
+    expect(document.activeElement).toBe(input);
+  });
 });
 
 describe('Dropdown', () => {
@@ -219,6 +244,19 @@ describe('Input / Select', () => {
     expect(select.querySelectorAll('option')).toHaveLength(2);
     expect(select.getAttribute('aria-invalid')).toBe('true');
     expect(ref.current).toBe(select);
+  });
+
+  it('Select wrapperClassName controls width without fighting w-full', () => {
+    const { container } = render(
+      <Select
+        aria-label="Type"
+        wrapperClassName="w-40"
+        options={[{ value: 'all', label: 'All' }]}
+      />,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain('w-40');
+    expect(wrapper.className).not.toMatch(/(?:^|\s)w-full(?:\s|$)/);
   });
 });
 

@@ -85,40 +85,51 @@ export function AlarmTimeline({
 
   // Render newest hour first (23 → 0).
   const hours = Array.from({ length: 24 }, (_, i) => 23 - i);
+  const rows = hours
+    .map((h) => {
+      const bucket = buckets.get(h) ?? [];
+      if (bucket.length === 0) return null;
+      return (
+        <div key={h} className="flex min-h-8 items-start gap-3">
+          <span className="w-11 shrink-0 pt-1 font-mono text-xs text-gray-400 dark:text-graydark-600">
+            {String(h).padStart(2, '0')}:00
+          </span>
+          <div className="flex flex-1 flex-wrap gap-1.5">
+            {bucket.map((a) => {
+              const isSel = a.id === selectedId;
+              return (
+                <Tooltip key={a.id} label={`${a.vehicleLabel} · ${localizeAlarmMessage(t, a)}`}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(a.id)}
+                    className={`h-6 max-w-50 cursor-pointer truncate rounded-full border px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+                      isSel ? PILL_TONES[a.severity].selected : PILL_TONES[a.severity].rest
+                    }`}
+                  >
+                    {localizeAlarmMessage(t, a)}
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </div>
+      );
+    })
+    .filter(Boolean);
+
+  // Alarms with invalid `raisedAt` never land in an hour bucket — show empty
+  // rather than a blank panel that looks like the tab is broken.
+  if (rows.length === 0) {
+    return (
+      <div className="flex justify-center py-10">
+        <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="fv-scroll max-h-[calc(100vh-220px)] overflow-y-auto p-4">
-      <div className="flex flex-col gap-2">
-        {hours.map((h) => {
-          const bucket = buckets.get(h) ?? [];
-          if (bucket.length === 0) return null;
-          return (
-            <div key={h} className="flex min-h-8 items-start gap-3">
-              <span className="w-11 shrink-0 pt-1 font-mono text-xs text-gray-400 dark:text-graydark-600">
-                {String(h).padStart(2, '0')}:00
-              </span>
-              <div className="flex flex-1 flex-wrap gap-1.5">
-                {bucket.map((a) => {
-                  const isSel = a.id === selectedId;
-                  return (
-                    <Tooltip key={a.id} label={`${a.vehicleLabel} · ${localizeAlarmMessage(t, a)}`}>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(a.id)}
-                        className={`h-6 max-w-50 cursor-pointer truncate rounded-full border px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
-                          isSel ? PILL_TONES[a.severity].selected : PILL_TONES[a.severity].rest
-                        }`}
-                      >
-                        {localizeAlarmMessage(t, a)}
-                      </button>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <div className="flex flex-col gap-2">{rows}</div>
     </div>
   );
 }

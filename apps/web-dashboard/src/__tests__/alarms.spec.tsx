@@ -29,6 +29,9 @@ vi.mock('maplibre-gl', () => {
       return true;
     }
     flyTo() {}
+    easeTo() {}
+    fitBounds() {}
+    resize() {}
     getZoom() {
       return 11;
     }
@@ -211,6 +214,22 @@ describe('AlarmCenterPage', () => {
     await waitFor(() => {
       expect(screen.queryByText('Severity')).not.toBeInTheDocument();
     });
+  });
+
+  it('switches to map even when an alarm drawer is open', async () => {
+    renderAlarms();
+    const first = mockAlarms[0];
+    await waitFor(() => expect(screen.getByText(first.vehicleLabel)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(first.vehicleLabel));
+    await screen.findByRole('dialog');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Map' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Severity')).not.toBeInTheDocument();
+    });
+    // Drawer closes (id cleared) so the map chrome stays usable; focus kept for fly-to.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('uses mock alarms covering all 8 catalog types', () => {

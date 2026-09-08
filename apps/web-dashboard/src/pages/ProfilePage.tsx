@@ -24,16 +24,13 @@ import {
 } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfileMedia } from '@/hooks/useProfileMedia';
+import { roleDisplayName } from '@/lib/admin-labels';
 import { isUuid } from '@/lib/ids';
 
 function headingFromEmail(email: string): string {
   const local = email.split('@')[0] ?? email;
   if (!local) return email;
   return local.charAt(0).toUpperCase() + local.slice(1);
-}
-
-function formatRoleLabel(role: string): string {
-  return role.replace(/[-_]/g, ' ');
 }
 
 /**
@@ -69,10 +66,10 @@ export function ProfilePage() {
       const named = catalog.find((r) => r.id === role)?.name ?? (isUuid(role) ? null : role);
       if (!named || seen.has(named)) continue;
       seen.add(named);
-      labels.push(named);
+      labels.push(roleDisplayName(t, named));
     }
     return labels;
-  }, [user, rolesCatalog.data]);
+  }, [user, rolesCatalog.data, t]);
 
   if (!user) {
     return (
@@ -186,7 +183,7 @@ export function ProfilePage() {
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {roleLabels.map((role) => (
                       <Badge key={role} color="brand">
-                        {formatRoleLabel(role)}
+                        {role}
                       </Badge>
                     ))}
                   </div>
@@ -305,7 +302,7 @@ export function ProfilePage() {
             {roleLabels.length > 0 ? (
               roleLabels.map((role) => (
                 <Badge key={role} color="brand">
-                  {formatRoleLabel(role)}
+                  {role}
                 </Badge>
               ))
             ) : (

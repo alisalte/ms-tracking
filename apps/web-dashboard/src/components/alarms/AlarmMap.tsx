@@ -1,5 +1,5 @@
 import { Map as MaplibreGL, Marker as MaplibreMarker } from 'maplibre-gl';
-import type { Map as MaplibreMap } from 'maplibre-gl';
+import type { LngLatBoundsLike, Map as MaplibreMap } from 'maplibre-gl';
 /**
  * AlarmMap — the spatial view of the Alarm Center.
  *
@@ -17,7 +17,6 @@ import { NO_OVERLAY_LAYERS, useFollowBasemap } from '@/hooks/useBasemap';
 import { localizeAlarmMessage } from '@/lib/alarm-copy';
 import { hasAlarmCoordinates } from '@/lib/alarm-evidence';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
-import { markerDataUrl, selectedMarkerDataUrl } from '@/lib/map-markers';
 import { runWhenStyleReady } from '@/lib/map-ready';
 import type { Alarm } from '@/types/alarm.types';
 
@@ -30,12 +29,25 @@ interface AlarmMapProps {
   onSelect: (id: string) => void;
 }
 
+/** Pin-style SVG — larger than the 20px fleet dots so alarms read on busy basemaps. */
+function alarmPinDataUrl(color: string, selected: boolean): string {
+  const size = selected ? 36 : 28;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
+      <path fill="${color}" stroke="#FFFFFF" stroke-width="1.5"
+        d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+      <circle cx="12" cy="9" r="2.5" fill="#FFFFFF"/>
+    </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.trim())}`;
+}
+
 export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
   const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const markersRef = useRef<MaplibreMarker[]>([]);
+  const fittedRef = useRef(false);
   const { basemap, setBasemap } = useFollowBasemap(mapRef, NO_OVERLAY_LAYERS, mapReady);
 
   const onSelectRef = useRef(onSelect);
@@ -55,13 +67,30 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
       attributionControl: { compact: true },
     });
     mapRef.current = map;
-    setMapReady(true);
+
+    const onLoad = () => {
+      map.resize();
+      setMapReady(true);
+    };
+    if (map.loaded()) onLoad();
+    else map.once('load', onLoad);
+
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(() => {
+        map.resize();
+      });
+      ro.observe(containerRef.current);
+    }
+
     return () => {
+      ro?.disconnect();
       for (const m of markersRef.current) m.remove();
       markersRef.current = [];
       map.remove();
       mapRef.current = null;
       setMapReady(false);
+      fittedRef.current = false;
     };
   }, []);
 
@@ -74,21 +103,59 @@ export function AlarmMap({ alarms, selectedId, onSelect }: AlarmMapProps) {
       for (const m of markersRef.current) m.remove();
       markersRef.current = [];
 
+      const withCoords: Alarm[] = [];
       for (const a of alarms) {
         if (!hasAlarmCoordinates(a)) continue;
+        withCoords.push(a);
         const color = severityColor(a.severity);
         const isSel = a.id === selectedId;
         const el = document.createElement('img');
-        el.src = isSel ? selectedMarkerDataUrl(color) : markerDataUrl(color);
+        el.src = alarmPinDataUrl(color, isSel);
+        el.width = isSel ? 36 : 28;
+        el.height = isSel ? 36 : 28;
+        el.alt = '';
         el.style.cursor = 'pointer';
         el.dataset.alarmId = a.id;
         el.title = `${a.vehicleLabel} · ${localizeAlarmMessage(t, a)}`;
-        const marker = new MaplibreMarker({ element: el }).setLngLat([a.lng, a.lat]).addTo(map);
+        const marker = new MaplibreMarker({
+          element: el,
+          anchor: 'bottom',
+        })
+          .setLngLat([a.lng, a.lat])
+          .addTo(map);
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
           onSelectRef.current(a.id);
         });
         markersRef.current.push(marker);
+      }
+
+      // First paint with pins: frame them so the map is not an empty Tehran tile.
+      if (!fittedRef.current && withCoords.length > 0 && !selectedId) {
+        fittedRef.current = true;
+        if (withCoords.length === 1) {
+          map.easeTo({
+            center: [withCoords[0].lng, withCoords[0].lat],
+            zoom: 14,
+            duration: 400,
+          });
+        } else {
+          let minLng = withCoords[0].lng;
+          let maxLng = withCoords[0].lng;
+          let minLat = withCoords[0].lat;
+          let maxLat = withCoords[0].lat;
+          for (const a of withCoords) {
+            minLng = Math.min(minLng, a.lng);
+            maxLng = Math.max(maxLng, a.lng);
+            minLat = Math.min(minLat, a.lat);
+            maxLat = Math.max(maxLat, a.lat);
+          }
+          const bounds: LngLatBoundsLike = [
+            [minLng, minLat],
+            [maxLng, maxLat],
+          ];
+          map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 400 });
+        }
       }
     };
 

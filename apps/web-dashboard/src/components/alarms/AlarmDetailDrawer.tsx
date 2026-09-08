@@ -75,6 +75,7 @@ export function AlarmDetailDrawer({ alarmId, onClose }: AlarmDetailDrawerProps) 
     <Drawer
       open={alarmId !== null}
       onClose={onClose}
+      backdrop="visual"
       size="md"
       title={
         alarm ? (

@@ -31,7 +31,7 @@ export function FleetsSection() {
       headerKey: 'admin.users.colStatus',
       render: (f) => (
         <Badge color={f.status === 'ACTIVE' ? 'success' : 'gray'} dot>
-          {f.status}
+          {t(`assets.fleet.status.${f.status}`, { defaultValue: f.status })}
         </Badge>
       ),
     },
@@ -50,7 +50,7 @@ export function FleetsSection() {
       headerKey: 'admin.users.colStatus',
       render: (v) => (
         <Badge color={v.status === 'ACTIVE' ? 'success' : 'gray'} dot>
-          {v.status}
+          {t(`assets.vehicle.status.${v.status}`, { defaultValue: v.status })}
         </Badge>
       ),
     },
@@ -107,13 +107,17 @@ export function DevicesSection() {
       sortBy: (d) => d.imei,
       render: (d) => <span className="font-mono text-xs">{d.imei}</span>,
     },
-    { id: 'protocol', headerKey: 'admin.devices.colProtocol', render: (d) => d.protocol },
+    {
+      id: 'protocol',
+      headerKey: 'admin.devices.colProtocol',
+      render: (d) => t(`assets.device.protocols.${d.protocol}`, { defaultValue: d.protocol }),
+    },
     {
       id: 'status',
       headerKey: 'admin.users.colStatus',
       render: (d) => (
         <Badge color={d.status === 'ACTIVE' ? 'success' : 'warning'} dot>
-          {d.status}
+          {t(`assets.device.statusValues.${d.status}`, { defaultValue: d.status })}
         </Badge>
       ),
     },
@@ -129,6 +133,7 @@ export function DevicesSection() {
         left={<h2 className="text-sm font-semibold">{t('admin.nav.devices')}</h2>}
         right={<AdminPageLink to="/assets" label={t('admin.openFullPage')} />}
       />
+      <p className="text-sm text-gray-500 dark:text-graydark-600">{t('admin.devices.intro')}</p>
       <DataTable
         rows={devices.data ?? []}
         columns={columns}
@@ -162,20 +167,31 @@ export function GeofencesSection() {
       sortBy: (g) => g.name,
       render: (g) => <span className="font-medium">{g.name}</span>,
     },
-    { id: 'type', headerKey: 'admin.geofences.colType', render: (g) => g.type },
+    {
+      id: 'type',
+      headerKey: 'admin.geofences.colType',
+      render: (g) =>
+        t(
+          `geofences.${g.type === 'CIRCLE' ? 'circle' : g.type === 'POLYGON' ? 'polygon' : 'type'}`,
+          { defaultValue: g.type },
+        ),
+    },
     {
       id: 'status',
       headerKey: 'admin.users.colStatus',
       render: (g) => (
         <Badge color={g.status === 'ACTIVE' ? 'success' : 'gray'} dot>
-          {g.status}
+          {t(`geofences.status.${g.status}`, { defaultValue: g.status })}
         </Badge>
       ),
     },
     {
       id: 'alerts',
       headerKey: 'admin.geofences.colAlerts',
-      render: (g) => g.alertOn.join(', ') || '—',
+      render: (g) =>
+        g.alertOn
+          .map((k) => t(`geofences.alertKinds.${k}`, { defaultValue: k }))
+          .join(t('common.listSeparator')) || '—',
     },
   ];
   return (

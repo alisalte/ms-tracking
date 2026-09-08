@@ -13,15 +13,17 @@ import { userStatusColor } from '@/components/admin/admin-meta';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Badge, Button, Drawer, Spinner } from '@/components/tailwind-ui';
+import { userRoleLabel } from '@/lib/admin-labels';
 import { formatDate, formatDateTime } from '@/lib/format-date';
-import type { AdminUserStatus } from '@/types/admin.types';
+import type { AdminUserStatus, Role } from '@/types/admin.types';
 
 interface UserDetailDrawerProps {
   userId: string | null;
+  roles: Role[];
   onClose: () => void;
 }
 
-export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
+export function UserDetailDrawer({ userId, roles, onClose }: UserDetailDrawerProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const { data: user, isLoading } = useUserDetail(userId);
@@ -83,7 +85,10 @@ export function UserDetailDrawer({ userId, onClose }: UserDetailDrawerProps) {
           {/* Profile meta */}
           <div>
             <MetaRow label={t('admin.users.username')} value={user.username} />
-            <MetaRow label={t('admin.users.role')} value={user.roleName} />
+            <MetaRow
+              label={t('admin.users.role')}
+              value={userRoleLabel(t, user.roleIds, roles, user.roleName)}
+            />
             <MetaRow
               label={t('admin.users.authProvider')}
               value={t(`admin.users.provider.${user.authProvider}`)}

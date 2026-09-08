@@ -51,16 +51,25 @@ describe('parseMeitrackReadback', () => {
     expect(lastStoredSettings('A21', history)?.host).toBe('178.131.31.231');
   });
 
-  it('falls back to last SET params when the ACK is only OK', () => {
-    expect(
-      lastStoredSettings('A21', [
-        {
-          commandCode: 'A21',
-          status: 'ACKED',
-          params: { mode: '1', host: '10.0.0.1', port: 6180 },
-          responseText: 'A21,OK',
-        },
-      ]),
-    ).toMatchObject({ host: '10.0.0.1', port: '6180' });
+  it('fills BB8 volume and B64 FTP from device ACK', () => {
+    expect(parseMeitrackReadback('BB8', 'BB8,42')).toEqual({ volume: '42' });
+    expect(parseMeitrackReadback('B64', 'B64,1,u,p,ftp.example,21,/cam')).toEqual({
+      mode: '1',
+      username: 'u',
+      password: 'p',
+      host: 'ftp.example',
+      port: '21',
+      path: '/cam',
+    });
+  });
+
+  it('fills C90 DMS volume and toggles from device ACK', () => {
+    expect(parseMeitrackReadback('C90', 'C90,2,1,0,1,0')).toEqual({
+      volume: '2',
+      absence: '1',
+      distraction: '0',
+      smoking: '1',
+      phoneCall: '0',
+    });
   });
 });

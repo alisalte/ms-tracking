@@ -1,7 +1,9 @@
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+
+import { useDialogChrome } from './use-dialog-chrome';
 
 /**
  * Drawer — TailAdmin slide-over panel (Tailwind).
@@ -24,7 +26,14 @@ export interface DrawerProps {
   /** Sub-heading under the title (e.g. entity id / updated-at). */
   subtitle?: ReactNode;
   size?: 'sm' | 'md' | 'lg';
-  /** Disable closing on backdrop click (e.g. dirty forms). */
+  /**
+   * Backdrop behavior:
+   * - `blocking` (default) — dims the page and captures clicks (forms/modals)
+   * - `visual` — dims for focus but lets chrome behind receive clicks (triage)
+   * - `none` — panel only; Esc / header close still work
+   */
+  backdrop?: 'blocking' | 'visual' | 'none';
+  /** Disable closing on backdrop click (e.g. dirty forms). Only for `blocking`. */
   closeOnBackdrop?: boolean;
   className?: string;
 }
@@ -43,46 +52,40 @@ export function Drawer({
   children,
   footer,
   size = 'md',
+  backdrop = 'blocking',
   closeOnBackdrop = true,
   className = '',
 }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, onClose]);
+  useDialogChrome(open, onClose, panelRef);
 
   if (!open) return null;
 
+  const blocking = backdrop === 'blocking';
+
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex justify-end">
-      {/* Backdrop */}
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-gray-900/50 backdrop-blur-[2px] transition-opacity"
-        onMouseDown={closeOnBackdrop ? onClose : undefined}
-      />
+    <div
+      className={`fixed inset-0 z-[100] flex justify-end ${blocking ? '' : 'pointer-events-none'}`}
+    >
+      {backdrop !== 'none' && (
+        <div
+          aria-hidden
+          className={`absolute inset-0 bg-gray-900/50 backdrop-blur-[2px] transition-opacity ${
+            blocking ? '' : 'pointer-events-none'
+          }`}
+          onMouseDown={blocking && closeOnBackdrop ? onClose : undefined}
+        />
+      )}
       {/* Panel — slides from the inline-end edge (flips with dir=rtl) */}
       <div
         ref={panelRef}
         // biome-ignore lint/a11y/useSemanticElements: no native non-modal slide-over element; ARIA dialog + portal is the standard pattern
         role="dialog"
-        aria-modal="true"
+        aria-modal={blocking}
         aria-labelledby={title !== undefined ? titleId : undefined}
         tabIndex={-1}
-        className={`fv-rise relative flex h-full w-full flex-col border-s border-gray-200 bg-white shadow-2xl outline-none dark:border-white/10 dark:bg-graydark-300 ${SIZES[size]} ${className}`}
+        className={`fv-rise relative flex h-full w-full flex-col border-s border-gray-200 bg-white shadow-2xl outline-none pointer-events-auto dark:border-white/10 dark:bg-graydark-300 ${SIZES[size]} ${className}`}
       >
         {title !== undefined && (
           <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-white/10">

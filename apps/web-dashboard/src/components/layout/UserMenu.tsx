@@ -23,7 +23,7 @@ export function UserMenu() {
   const media = useProfileMedia(user?.id);
   const tenantLabel = displayLabel(user?.tenantId, user?.tenantName ?? getTenantName());
   const displayName = headingFromEmail(user?.email || 'U');
-  const roleLabel = primaryRoleLabel(user?.roles, t('common.profile'));
+  const roleLabel = primaryRoleLabel(user?.roles, t('common.profile'), t);
 
   const handleLogout = async () => {
     await logout();

@@ -115,14 +115,17 @@ export function PoliciesSection() {
     {
       id: 'alerts',
       headerKey: 'admin.geofences.colAlerts',
-      render: (g) => g.alertOn.join(', ') || '—',
+      render: (g) =>
+        g.alertOn
+          .map((k) => t(`geofences.alertKinds.${k}`, { defaultValue: k }))
+          .join(t('common.listSeparator')) || '—',
     },
     {
       id: 'status',
       headerKey: 'admin.users.colStatus',
       render: (g) => (
         <Badge color={g.status === 'ACTIVE' ? 'success' : 'gray'} dot>
-          {g.status}
+          {t(`geofences.status.${g.status}`, { defaultValue: g.status })}
         </Badge>
       ),
     },
@@ -132,13 +135,20 @@ export function PoliciesSection() {
     {
       id: 'category',
       headerKey: 'admin.policies.colCategory',
-      render: (p) => p.category,
+      render: (p) => t(`notifications.category.${p.category}`, { defaultValue: p.category }),
     },
-    { id: 'severity', headerKey: 'admin.notifications.colSeverity', render: (p) => p.minSeverity },
+    {
+      id: 'severity',
+      headerKey: 'admin.notifications.colSeverity',
+      render: (p) => t(`notifications.severity.${p.minSeverity}`, { defaultValue: p.minSeverity }),
+    },
     {
       id: 'channels',
       headerKey: 'admin.policies.colChannels',
-      render: (p) => p.channels.join(', '),
+      render: (p) =>
+        p.channels
+          .map((c) => t(`notifications.channel.${c}`, { defaultValue: c }))
+          .join(t('common.listSeparator')),
     },
     {
       id: 'enabled',
@@ -153,6 +163,7 @@ export function PoliciesSection() {
 
   return (
     <div className="flex flex-col gap-6">
+      <p className="text-sm text-gray-500 dark:text-graydark-600">{t('admin.policies.intro')}</p>
       <section>
         <Toolbar
           left={<h2 className="text-sm font-semibold">{t('admin.policies.geofenceAlerts')}</h2>}
@@ -250,7 +261,9 @@ function ChannelHealthCards({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {channels.map((c) => (
         <Card key={c.channel}>
-          <p className="text-xs text-gray-500 dark:text-graydark-600">{c.channel}</p>
+          <p className="text-xs text-gray-500 dark:text-graydark-600">
+            {t(`notifications.channel.${c.channel}`, { defaultValue: c.channel })}
+          </p>
           <p className="mt-0.5 text-sm font-medium">{c.provider}</p>
           <Badge
             className="mt-2"
@@ -259,7 +272,7 @@ function ChannelHealthCards({
             }
             dot
           >
-            {c.status}
+            {t(`admin.integrations.channelStatus.${c.status}`, { defaultValue: c.status })}
           </Badge>
         </Card>
       ))}

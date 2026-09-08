@@ -53,8 +53,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   const hintId = hint ? `${selectId}-hint` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
 
+  // Width comes from `wrapperClassName` when provided (e.g. Toolbar `w-40`).
+  // Do not also apply `w-full` — in Tailwind v4 the utilities conflict and
+  // `w-full` often wins, stretching every filter select across the row.
   return (
-    <div className={`flex w-full flex-col gap-1.5 ${wrapperClassName}`}>
+    <div className={`flex flex-col gap-1.5 ${wrapperClassName || 'w-full'}`}>
       {label && (
         <label
           htmlFor={selectId}

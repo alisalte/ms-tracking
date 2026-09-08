@@ -1,7 +1,9 @@
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+
+import { useDialogChrome } from './use-dialog-chrome';
 
 /**
  * Modal — TailAdmin dialog primitive (Tailwind, dependency-free).
@@ -47,22 +49,7 @@ export function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-
-  // ESC closes; body scroll locks while open (restored on unmount/close).
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, onClose]);
+  useDialogChrome(open, onClose, panelRef);
 
   if (!open) return null;
 

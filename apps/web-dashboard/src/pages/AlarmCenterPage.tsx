@@ -40,14 +40,19 @@ export function AlarmCenterPage() {
   const selectedId = params.get('id');
   const focusId = params.get('focus') ?? selectedId;
   const setSelectedId = (id: string | null) => {
-    const next = new URLSearchParams(params);
-    if (id) {
-      next.set('id', id);
-      next.set('focus', id);
-    } else {
-      next.delete('id');
-    }
-    setParams(next, { replace: true });
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) {
+          next.set('id', id);
+          next.set('focus', id);
+        } else {
+          next.delete('id');
+        }
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   // Read filter state from the URL (shareable deep links).
@@ -92,22 +97,32 @@ export function AlarmCenterPage() {
 
   // Update one URL filter at a time.
   const setFilter = (key: keyof AlarmFilters, value: string) => {
-    const next = new URLSearchParams(params);
-    if (value === 'all' || value === '') next.delete(key === 'query' ? 'q' : key);
-    else next.set(key === 'query' ? 'q' : key, value);
-    setParams(next, { replace: true });
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value === 'all' || value === '') next.delete(key === 'query' ? 'q' : key);
+        else next.set(key === 'query' ? 'q' : key, value);
+        return next;
+      },
+      { replace: true },
+    );
   };
   const setView = (v: ViewMode) => {
-    const next = new URLSearchParams(params);
-    next.set('view', v);
-    if (v === 'map') {
-      const openId = next.get('id');
-      if (openId) {
-        next.set('focus', openId);
-        next.delete('id');
-      }
-    }
-    setParams(next, { replace: true });
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('view', v);
+        // Keep spatial focus when opening the map, but always close the drawer
+        // so the view chrome (filters / tabs) stays usable.
+        const openId = next.get('id');
+        if (openId) {
+          next.set('focus', openId);
+          next.delete('id');
+        }
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   if (isError) {
@@ -132,6 +147,22 @@ export function AlarmCenterPage() {
         searchPlaceholder={t('alarms.filters.search')}
         left={
           <>
+            {/* Inline-start (right in RTL) so the end-edge detail drawer does not cover the tabs. */}
+            <SegmentedControl
+              size="sm"
+              options={[
+                { value: 'list', label: t('alarms.views.list'), icon: <LayoutList size={15} /> },
+                {
+                  value: 'timeline',
+                  label: t('alarms.views.timeline'),
+                  icon: <Activity size={15} />,
+                },
+                { value: 'map', label: t('alarms.views.map'), icon: <MapIcon size={15} /> },
+              ]}
+              value={view}
+              onChange={setView}
+              aria-label={t('alarms.views.label')}
+            />
             <Select
               value={filters.type}
               onChange={(e) => setFilter('type', e.target.value)}
@@ -163,23 +194,6 @@ export function AlarmCenterPage() {
               }))}
             />
           </>
-        }
-        right={
-          <SegmentedControl
-            size="sm"
-            options={[
-              { value: 'list', label: t('alarms.views.list'), icon: <LayoutList size={15} /> },
-              {
-                value: 'timeline',
-                label: t('alarms.views.timeline'),
-                icon: <Activity size={15} />,
-              },
-              { value: 'map', label: t('alarms.views.map'), icon: <MapIcon size={15} /> },
-            ]}
-            value={view}
-            onChange={setView}
-            aria-label={t('alarms.views.label')}
-          />
         }
       />
 

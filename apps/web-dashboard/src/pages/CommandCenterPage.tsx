@@ -1,54 +1,50 @@
 /**
- * CommandCenterPage — device configuration over TCP (`/commands`).
+ * CommandCenterPage — on-device Parameter + command history (`/commands`).
  *
  * Two entry points:
- *   - Menu: pick a device *type* (T622, MD522S, …). The catalog is filtered
- *     to that class and the command goes to every ACTIVE unit of the type.
- *     No IMEI checklist.
- *   - Device: `/commands?device=<id>` from the unit itself. Catalog + history
- *     are only for that device.
+ *   - Menu: pick a *protocol* (meitrack, jt808, …). Parameter applies to every
+ *     ACTIVE unit of that protocol (Meitrack Parameter UI only).
+ *   - Device: `/commands?device=<id>` from the unit itself.
  *
- * History in menu mode groups a bulk send as “sent to N devices”; expanding
- * a row lists each IMEI and its reply.
+ * Raw command catalog is hidden — use Parameter sections instead.
  */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useDevices } from '@/api/asset.api';
-import { useCommandCatalog, useCommandHistory, useIssueCommands } from '@/api/command.api';
+import { useCommandHistory } from '@/api/command.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
-import { CommandCatalogPanel } from '@/components/commands/CommandCatalogPanel';
 import { CommandDevicePicker } from '@/components/commands/CommandDevicePicker';
 import { CommandHistoryTable } from '@/components/commands/CommandHistoryTable';
-import { CommandParamDialog } from '@/components/commands/CommandParamDialog';
+import {
+  DeviceParameterPanel,
+  type ParameterSection,
+  readParameterSection,
+} from '@/components/commands/DeviceParameterPanel';
 import { ErrorState } from '@/components/common/ErrorState';
-import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
-import { useToast } from '@/components/feedback/ToastProvider';
-import { Card, PageHeader, Select, Tabs } from '@/components/tailwind-ui';
-import { commandClassFromModel, filterCatalogForClass } from '@/lib/command-capability';
+import { Alert, Card, PageHeader, Select, Tabs } from '@/components/tailwind-ui';
 import type { Device } from '@/types/asset.types';
-import type { CommandDef, CommandStatus } from '@/types/command.types';
+import type { CommandStatus } from '@/types/command.types';
 
 const STATUS_FILTERS: CommandStatus[] = ['QUEUED', 'SENT', 'ACKED', 'FAILED', 'EXPIRED'];
-const PAGE_TABS = ['catalog', 'history'] as const;
+const PAGE_TABS = ['parameter', 'history'] as const;
 type PageTab = (typeof PAGE_TABS)[number];
 
 function readPageTab(value: string | null): PageTab {
-  return value === 'history' ? 'history' : 'catalog';
+  if (value === 'history') return 'history';
+  return 'parameter';
 }
 
 export function CommandCenterPage() {
   const { t } = useTranslation();
-  const toast = useToast();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const lockedId = searchParams.get('device');
-  const typeFilter = searchParams.get('type') ?? '';
+  const protocolFilter = searchParams.get('protocol') ?? '';
   const pageTab = readPageTab(searchParams.get('tab'));
+  const parameterSection = readParameterSection(searchParams.get('section'));
   const [statusFilter, setStatusFilter] = useState<CommandStatus | ''>('');
-  const [configuring, setConfiguring] = useState<CommandDef | null>(null);
-  const [confirming, setConfirming] = useState<CommandDef | null>(null);
 
   const {
     data: devices,
@@ -57,41 +53,23 @@ export function CommandCenterPage() {
     error: devicesError,
     refetch: refetchDevices,
   } = useDevices();
-  const {
-    data: catalog,
-    isLoading: catalogLoading,
-    isError: catalogIsError,
-    error: catalogError,
-    refetch: refetchCatalog,
-  } = useCommandCatalog();
 
-  const meitrackDevices = useMemo(
-    () => (devices ?? []).filter((d) => d.protocol === 'meitrack'),
-    [devices],
-  );
+  const allDevices = devices ?? [];
   const lockedDevice: Device | null = useMemo(
-    () => meitrackDevices.find((d) => d.id === lockedId) ?? null,
-    [meitrackDevices, lockedId],
+    () => allDevices.find((d) => d.id === lockedId) ?? null,
+    [allDevices, lockedId],
   );
 
   const selectedIds = useMemo(() => {
     if (lockedDevice) return [lockedDevice.id];
-    if (!typeFilter) return [];
-    return meitrackDevices
-      .filter((d) => d.model === typeFilter && d.status === 'ACTIVE')
+    if (!protocolFilter) return [];
+    return allDevices
+      .filter((d) => d.protocol === protocolFilter && d.status === 'ACTIVE')
       .map((d) => d.id);
-  }, [lockedDevice, typeFilter, meitrackDevices]);
+  }, [lockedDevice, protocolFilter, allDevices]);
 
-  const selectedDevices: Device[] = useMemo(
-    () => meitrackDevices.filter((d) => selectedIds.includes(d.id)),
-    [meitrackDevices, selectedIds],
-  );
   const selectedCount = selectedIds.length;
-  const deviceClass = commandClassFromModel(lockedDevice?.model ?? (typeFilter || null));
-  const visibleCatalog = useMemo(
-    () => filterCatalogForClass(catalog ?? [], lockedDevice || typeFilter ? deviceClass : null),
-    [catalog, lockedDevice, typeFilter, deviceClass],
-  );
+  const parameterSupported = lockedDevice?.protocol === 'meitrack' || protocolFilter === 'meitrack';
 
   const historyDeviceId = lockedDevice?.id ?? null;
   const {
@@ -103,67 +81,55 @@ export function CommandCenterPage() {
   } = useCommandHistory(historyDeviceId, statusFilter || undefined, {
     tenant: !lockedId,
   });
-  const sendMutation = useIssueCommands();
 
   const historyRows = useMemo(() => {
     const rows = history ?? [];
-    if (lockedDevice || !typeFilter) return rows;
-    const typeIds = new Set(meitrackDevices.filter((d) => d.model === typeFilter).map((d) => d.id));
-    return rows.filter((r) => typeIds.has(r.deviceId));
-  }, [history, lockedDevice, typeFilter, meitrackDevices]);
+    if (lockedDevice || !protocolFilter) return rows;
+    const ids = new Set(allDevices.filter((d) => d.protocol === protocolFilter).map((d) => d.id));
+    return rows.filter((r) => ids.has(r.deviceId));
+  }, [history, lockedDevice, protocolFilter, allDevices]);
 
   const deviceLabel = useMemo(() => {
-    const byId = new Map(meitrackDevices.map((d) => [d.id, d.imei] as const));
+    const byId = new Map(allDevices.map((d) => [d.id, d.imei] as const));
     return (id: string) => byId.get(id) ?? id;
-  }, [meitrackDevices]);
+  }, [allDevices]);
 
-  const setTypeFilter = (model: string) => {
+  const setProtocolFilter = (protocol: string) => {
     const params = new URLSearchParams(searchParams);
     params.delete('device');
-    if (model) params.set('type', model);
-    else params.delete('type');
+    params.delete('type');
+    if (protocol) params.set('protocol', protocol);
+    else params.delete('protocol');
+    if (!params.get('tab') || params.get('tab') === 'catalog') {
+      params.delete('tab');
+    }
     setSearchParams(params, { replace: true });
   };
 
   const clearLockedDevice = () => {
     const params = new URLSearchParams(searchParams);
     params.delete('device');
-    if (lockedDevice?.model) params.set('type', lockedDevice.model);
+    if (lockedDevice?.protocol) params.set('protocol', lockedDevice.protocol);
     setSearchParams(params, { replace: true });
   };
 
   const setPageTab = (next: PageTab) => {
     const params = new URLSearchParams(searchParams);
-    if (next === 'catalog') params.delete('tab');
-    else params.set('tab', next);
+    if (next === 'parameter') {
+      params.delete('tab');
+    } else {
+      params.set('tab', next);
+      params.delete('section');
+    }
     setSearchParams(params, { replace: true });
   };
 
-  const dispatch = async (
-    command: CommandDef,
-    params: Record<string, string | number>,
-    commandCode = command.code,
-  ) => {
-    const result = await sendMutation.mutateAsync({
-      deviceIds: selectedIds,
-      commandCode,
-      params,
-    });
-    if (result.failed.length > 0) {
-      toast.error(
-        t('commands.sentPartial', {
-          defaultValue: 'Command {{code}} queued on {{queued}} devices; {{failed}} failed',
-          code: command.code,
-          queued: result.queued.length,
-          failed: result.failed.length,
-        }),
-      );
-    }
-    if (result.queued.length === 0) {
-      throw new Error(
-        result.failed[0]?.error ?? t('commands.sentNone', { defaultValue: 'No devices queued.' }),
-      );
-    }
+  const setParameterSection = (next: ParameterSection) => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('tab');
+    if (next === 'alarm') params.delete('section');
+    else params.set('section', next);
+    setSearchParams(params, { replace: true });
   };
 
   return (
@@ -175,9 +141,9 @@ export function CommandCenterPage() {
             ? t('commands.subtitleDevice', {
                 defaultValue: 'Settings for this device only.',
               })
-            : t('commands.subtitleType', {
+            : t('commands.subtitleProtocol', {
                 defaultValue:
-                  'Pick a device type to apply the same setting to every unit of that type.',
+                  'Pick a protocol to apply Parameter settings to every active device on that protocol.',
               })
         }
       />
@@ -189,10 +155,10 @@ export function CommandCenterPage() {
       )}
 
       <CommandDevicePicker
-        devices={meitrackDevices}
+        devices={allDevices}
         lockedDevice={lockedDevice}
-        typeFilter={typeFilter}
-        onTypeChange={setTypeFilter}
+        protocolFilter={protocolFilter}
+        onProtocolChange={setProtocolFilter}
         onClearDevice={clearLockedDevice}
         loading={devicesLoading}
         disabled={devicesIsError}
@@ -204,9 +170,9 @@ export function CommandCenterPage() {
         onChange={setPageTab}
         tabs={[
           {
-            value: 'catalog',
-            label: t('commands.tabs.catalog', { defaultValue: 'Commands' }),
-            testid: 'commands-tab-catalog',
+            value: 'parameter',
+            label: t('commands.tabs.parameter', { defaultValue: 'Parameter' }),
+            testid: 'commands-tab-parameter',
           },
           {
             value: 'history',
@@ -216,10 +182,15 @@ export function CommandCenterPage() {
         ]}
       />
 
-      {pageTab === 'catalog' && (
-        <Card flush className="p-3" id="panel-catalog" role="tabpanel">
-          {catalogIsError ? (
-            <ErrorState error={catalogError} onRetry={() => void refetchCatalog()} />
+      {pageTab === 'parameter' && (
+        <Card flush className="p-3" id="panel-parameter" role="tabpanel">
+          {!parameterSupported && selectedCount > 0 ? (
+            <Alert variant="info">
+              {t('commands.parameter.meitrackOnly', {
+                defaultValue:
+                  'On-device Parameter is available for Meitrack devices. Choose the Meitrack protocol (or open a Meitrack unit).',
+              })}
+            </Alert>
           ) : (
             <PermissionGate
               requires={PERMISSIONS.commandSend}
@@ -231,15 +202,11 @@ export function CommandCenterPage() {
                 </p>
               }
             >
-              <CommandCatalogPanel
-                catalog={visibleCatalog}
-                loading={catalogLoading}
-                disabled={selectedCount === 0}
-                disabledHintKey={
-                  lockedId ? 'commands.selectDeviceFirst' : 'commands.selectTypeFirst'
-                }
-                onConfigure={(cmd) => setConfiguring(cmd)}
-                onDispatch={(cmd) => setConfirming(cmd)}
+              <DeviceParameterPanel
+                deviceIds={selectedIds}
+                disabled={selectedCount === 0 || !parameterSupported}
+                section={parameterSection}
+                onSectionChange={setParameterSection}
               />
             </PermissionGate>
           )}
@@ -285,70 +252,6 @@ export function CommandCenterPage() {
           </Card>
         </div>
       )}
-
-      <CommandParamDialog
-        command={configuring}
-        deviceCount={selectedCount}
-        onSubmit={(params) => {
-          if (!configuring) return Promise.resolve();
-          const isRead = Object.keys(params).length === 0 && configuring.readbackCommand;
-          return dispatch(
-            configuring,
-            params,
-            isRead ? configuring.readbackCommand : configuring.code,
-          );
-        }}
-        onClose={() => setConfiguring(null)}
-      />
-
-      <ConfirmDialog
-        open={Boolean(confirming)}
-        title={t('commands.confirm.title', {
-          defaultValue: 'Send {{code}}?',
-          code: confirming?.code ?? '',
-        })}
-        message={
-          selectedCount > 1
-            ? t('commands.confirm.messageBulk', {
-                defaultValue:
-                  'Send command {{code}} to {{count}} devices? This acts on each physical device immediately.',
-                code: confirming?.code ?? '',
-                count: selectedCount,
-              })
-            : t('commands.confirm.message', {
-                defaultValue:
-                  'Send command {{code}} to device {{imei}}? This acts on the physical device immediately.',
-                code: confirming?.code ?? '',
-                imei: selectedDevices[0]?.imei ?? '',
-              })
-        }
-        confirmLabelKey="commands.form.send"
-        loading={sendMutation.isPending}
-        onConfirm={async () => {
-          const cmd = confirming;
-          setConfirming(null);
-          if (!cmd) return;
-          try {
-            await dispatch(cmd, {});
-            if (selectedCount > 1) {
-              toast.success(
-                t('commands.sentBulk', {
-                  defaultValue: 'Command {{code}} queued on {{count}} devices',
-                  code: cmd.code,
-                  count: selectedCount,
-                }),
-              );
-            } else {
-              toast.success(
-                t('commands.sent', { defaultValue: 'Command {{code}} queued', code: cmd.code }),
-              );
-            }
-          } catch (err) {
-            toast.error((err as Error).message);
-          }
-        }}
-        onClose={() => setConfirming(null)}
-      />
     </div>
   );
 }

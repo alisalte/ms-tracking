@@ -41,6 +41,24 @@ export function parseMeitrackReadback(
       return body[0] ? { status: body[0] } : null;
     case 'A17':
       return body[0] ? { enabled: body[0] } : null;
+    case 'B07':
+      return body[0] !== undefined && !/^ok$/i.test(body[0]) ? { speed: body[0] } : null;
+    case 'B08':
+      return body[0] !== undefined && !/^ok$/i.test(body[0]) ? { seconds: body[0] } : null;
+    case 'B10':
+      if (body.length === 0 || (body.length === 1 && /^ok$/i.test(body[0] ?? ''))) return {};
+      return {
+        seconds: body[0] ?? '',
+        idleMinutes: body[1] ?? '',
+      };
+    case 'D79':
+      if (body.length === 0 || (body.length === 1 && /^ok$/i.test(body[0] ?? ''))) return {};
+      return {
+        acceleration: body[0] ?? '',
+        braking: body[1] ?? '',
+      };
+    case 'C03':
+      return body[0] !== undefined && !/^ok$/i.test(body[0]) ? { mode: body[0] } : null;
     case 'A21':
     case 'A25':
       return {
@@ -55,6 +73,27 @@ export function parseMeitrackReadback(
       return { host: body[0] ?? '', port: body[1] ?? '' };
     case 'ABB':
       return { enabled: body[0] ?? '', ssid: body[1] ?? '', password: body[2] ?? '' };
+    case 'BB8':
+      return body[0] !== undefined && !/^ok$/i.test(body[0]) ? { volume: body[0] } : null;
+    case 'B64':
+      if (body.length === 0) return null;
+      return {
+        mode: body[0] ?? '',
+        username: body[1] ?? '',
+        password: body[2] ?? '',
+        host: body[3] ?? '',
+        port: body[4] ?? '',
+        path: body[5] ?? '',
+      };
+    case 'C90':
+      if (body.length === 0) return null;
+      return {
+        volume: body[0] ?? '',
+        absence: body[1] ?? '',
+        distraction: body[2] ?? '',
+        smoking: body[3] ?? '',
+        phoneCall: body[4] ?? '',
+      };
     default:
       return null;
   }
@@ -152,6 +191,8 @@ function fieldsForCode(code: string, dump: SettingsDump): Record<string, string>
       return dump.distance ? { distance: dump.distance } : null;
     case 'A15':
       return dump.parkingInterval ? { interval: dump.parkingInterval } : null;
+    case 'B07':
+      return dump.overspeed ? { speed: dump.overspeed } : null;
     case 'A21':
       return {
         mode: dump.mode,

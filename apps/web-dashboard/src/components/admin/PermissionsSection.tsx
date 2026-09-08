@@ -7,6 +7,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
+import { permissionLabel } from '@/lib/admin-labels';
 import type { PermissionGroup } from '@/types/admin.types';
 
 interface PermissionsSectionProps {
@@ -41,11 +42,22 @@ export function PermissionsSection({ catalog, loading = false }: PermissionsSect
               className="mb-3"
             />
             <div className="flex flex-col gap-0.5">
-              {group.permissions.map((p) => (
-                <span key={p} className="font-mono text-xs text-gray-500 dark:text-graydark-600">
-                  {p}
-                </span>
-              ))}
+              {group.permissions.map((p) => {
+                const label = permissionLabel(t, p);
+                return (
+                  <span key={p} className="flex flex-col gap-0.5 py-0.5">
+                    <span className="text-sm text-gray-700 dark:text-graydark-700">{label}</span>
+                    {label !== p && (
+                      <span
+                        className="font-mono text-[0.65rem] text-gray-400 dark:text-graydark-500"
+                        dir="ltr"
+                      >
+                        {p}
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
             </div>
           </Card>
         ))}

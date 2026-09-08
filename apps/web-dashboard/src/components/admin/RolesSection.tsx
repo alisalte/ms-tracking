@@ -12,7 +12,18 @@ import { useTranslation } from 'react-i18next';
 
 import { useCreateRole } from '@/api/admin.api';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { Alert, Badge, Button, Card, EmptyState, Input, Modal, Skeleton, Textarea } from '@/components/tailwind-ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Modal,
+  Skeleton,
+  Textarea,
+} from '@/components/tailwind-ui';
+import { roleDisplayDescription, roleDisplayName } from '@/lib/admin-labels';
 import type { Role } from '@/types/admin.types';
 
 interface RolesSectionProps {
@@ -81,7 +92,7 @@ export function RolesSection({ roles, loading = false, selectedId, onSelect }: R
             {t('admin.roles.create')}
           </Button>
         </div>
-        <RoleGrid roles={custom} selectedId={selectedId} onSelect={onSelect} t={t} />
+        <RoleGrid roles={custom} selectedId={selectedId} onSelect={onSelect} />
       </section>
 
       {/* System roles (§6.2) */}
@@ -89,7 +100,7 @@ export function RolesSection({ roles, loading = false, selectedId, onSelect }: R
         <h2 className="mb-2 text-sm font-semibold text-gray-800 dark:text-white">
           {t('admin.roles.system')}
         </h2>
-        <RoleGrid roles={system} selectedId={selectedId} onSelect={onSelect} t={t} />
+        <RoleGrid roles={system} selectedId={selectedId} onSelect={onSelect} />
       </section>
 
       <Modal
@@ -148,13 +159,12 @@ function RoleGrid({
   roles,
   selectedId,
   onSelect,
-  t,
 }: {
   roles: Role[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
-  t: (k: string) => string;
 }) {
+  const { t } = useTranslation();
   if (roles.length === 0) {
     return <EmptyState title={t('admin.roles.empty')} />;
   }
@@ -174,12 +184,12 @@ function RoleGrid({
         >
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-semibold text-gray-800 dark:text-white">
-              {r.name}
+              {roleDisplayName(t, r.name)}
             </span>
-            {r.mfaRequired && <Badge color="danger">MFA</Badge>}
+            {r.mfaRequired && <Badge color="danger">{t('admin.users.mfa')}</Badge>}
           </div>
           <p className="mt-1 min-h-9 text-sm text-gray-500 dark:text-graydark-600">
-            {r.description}
+            {roleDisplayDescription(t, r.name, r.description)}
           </p>
           <div className="mt-2 flex gap-6">
             <div>
