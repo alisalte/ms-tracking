@@ -350,7 +350,10 @@
       "offlineDevices": "Offline devices",
       "onlineDevices": "Online",
       "staleDevices": "Stale",
-      "healthyShare": "Device mix"
+      "healthyShare": "Device mix",
+      "fleetScore": "Fleet health score",
+      "fleetScoreHint": "Rule-based: 60% device presence + 40% open-alarm headroom (higher is healthier).",
+      "attentionVehicles": "{{count}} vehicles need attention (≤70)"
     },
     "maintenance": {
       "inProgress": "In progress",
@@ -1107,6 +1110,21 @@
       "evidence": "Recordings",
       "evidenceWindow": "Saved photos and videos within ±{{minutes}} minutes of this alarm",
       "dmsEvidence": "Photos and videos the device captured for this DMS alarm",
+      "evidenceStatus": {
+        "PENDING": "Photo queued",
+        "FETCHING": "Fetching photo",
+        "PHOTO_READY": "Photo on platform",
+        "PHOTO_MISSING": "No photo name from device",
+        "PHOTO_FAILED": "Photo fetch failed",
+        "SKIPPED_COOLDOWN": "Skipped (cooldown)"
+      },
+      "videoStatus": {
+        "PENDING": "Video queued",
+        "FETCHING": "Priming video",
+        "READY": "Video window ready",
+        "FAILED": "Video prime failed",
+        "SKIPPED": "Video skipped"
+      },
       "loadNearby": "Show saved photos & videos (±{{minutes}} min)",
       "loadEvent": "Show event photos & videos",
       "loadingEventMedia": "Loading event photo and video…",
@@ -1297,6 +1315,38 @@
       "noDevice": "No tracker on this vehicle",
       "pickVehicle": "— Unassigned —",
       "unassign": "Unassign",
+      "assignmentHistory": "Assignment history",
+      "assignmentHistoryHint": "Last 90 days of vehicle assignments for this driver.",
+      "assignmentHistoryEmpty": "No assignment history in this period.",
+      "assignmentCurrent": "Current",
+      "assignmentOngoing": "now",
+      "behaviorScore": "Driver score",
+      "behaviorScoreHint": "Safety score for the last 30 days (higher is safer). Built from overspeed, idle, hard brake, and harsh acceleration alarms.",
+      "behaviorScoreUnavailable": "No score yet — assign this driver to a vehicle in the period.",
+      "behaviorEvents": "Recent behavior events",
+      "behaviorEventsEmpty": "No attributed behavior events in this period.",
+      "eventHarshBrake": "Hard brake",
+      "eventRapidAccel": "Harsh accel",
+      "eventOverspeed": "Overspeed",
+      "eventIdle": "Idle",
+      "needsAttention": "Needs attention",
+      "scoreDelta": "{{delta}} vs previous period (was {{previous}})",
+      "viewRegistry": "Registry",
+      "viewRanking": "Safety ranking",
+      "colRank": "Rank",
+      "colScore": "Score",
+      "colBehaviorEvents": "Events",
+      "rankingHint": "Lowest scores first (last 30 days). Scores ≤ 70 are flagged. Severe driving events already appear in Alarms / Notifications.",
+      "rankingEmpty": "No ranked drivers",
+      "rankingEmptyHint": "Assign drivers to vehicles and wait for behavior alarms in the period.",
+      "rankingError": "Could not load ranking.",
+      "rankingEventSummary": "Brake {{brake}} · Accel {{accel}} · Speed {{speed}} · Idle {{idle}}",
+      "eventType": {
+        "HARSH_BRAKE": "Hard brake",
+        "RAPID_ACCELERATION": "Harsh acceleration",
+        "SPEED_VIOLATION": "Overspeed",
+        "EXCESSIVE_IDLE": "Excessive idle"
+      },
       "colName": "Name",
       "colLicense": "License",
       "colVehicle": "Vehicle",
@@ -1390,7 +1440,9 @@
       "note": "Utilization = moving / observed telemetry time (see KPI definitions). “—” means no telemetry in range — not zero."
     },
     "geofence": {
-      "note": "Counts come from the geofence event pipeline; time inside is summed from EXIT occupancies."
+      "note": "Counts come from the geofence event pipeline; time inside is summed from EXIT occupancies. Avg dwell = time inside ÷ exits. Rows sort by time inside.",
+      "dwellOnly": "Dwell activity only",
+      "viewAlarms": "Alarms"
     },
     "range": {
       "today": "Today",
@@ -1417,7 +1469,47 @@
       "alarms": "Alarms",
       "geofences": "Geofences",
       "commands": "Commands",
-      "activity": "Activity"
+      "activity": "Activity",
+      "schedules": "Schedules"
+    },
+    "schedules": {
+      "note": "Schedule existing CSV exports (trips, utilization, alarms). Artifacts are stored for download — email delivery comes later.",
+      "denied": "You need report.schedule permission to manage scheduled reports.",
+      "create": "Create schedule",
+      "created": "Schedule created",
+      "createFailed": "Could not create schedule",
+      "updated": "Schedule updated",
+      "updateFailed": "Could not update schedule",
+      "deleted": "Schedule deleted",
+      "deleteFailed": "Could not delete schedule",
+      "runNow": "Run now",
+      "runStarted": "Report run started",
+      "runFailed": "Could not run schedule",
+      "download": "Download CSV",
+      "downloadFailed": "Download failed",
+      "enable": "Enable",
+      "disable": "Disable",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "empty": "No schedules yet.",
+      "jobsTitle": "Recent jobs",
+      "jobsEmpty": "No jobs for this schedule yet.",
+      "colName": "Name",
+      "colReport": "Report",
+      "colCadence": "Cadence",
+      "colPreset": "Window",
+      "colStatus": "Status",
+      "colNext": "Next run",
+      "colActions": "Actions",
+      "cadences": {
+        "daily": "Daily",
+        "weekly": "Weekly"
+      },
+      "reportTypes": {
+        "trips": "Trips",
+        "vehicle-utilization": "Vehicle utilization",
+        "alarms": "Alarms"
+      }
     },
     "catalog": {
       "title": "Report catalog",
@@ -1439,7 +1531,8 @@
         "alarms": "Alarm counts by type and severity, with CSV export.",
         "geofences": "ENTER / EXIT / DWELL counts and time inside each fence.",
         "commands": "Commands issued in the range, grouped by status.",
-        "activity": "Chronological mix of trips, stops, geofences, and alarms."
+        "activity": "Chronological mix of trips, stops, geofences, and alarms.",
+        "schedules": "Daily or weekly CSV exports of trips, utilization, or alarms."
       }
     },
     "daily": {
@@ -1566,6 +1659,8 @@
     "filters": {
       "vehicleId": "Vehicle",
       "allVehicles": "All vehicles",
+      "geofenceId": "Geofence",
+      "allGeofences": "All geofences",
       "severity": "Severity",
       "allSeverities": "All severities"
     },
@@ -1605,6 +1700,7 @@
       "exits": "EXIT",
       "dwells": "DWELL",
       "timeInside": "Time inside",
+      "avgDwell": "Avg dwell",
       "driver": "Driver",
       "employeeId": "Employee ID",
       "assignedVehicle": "Assigned vehicle",

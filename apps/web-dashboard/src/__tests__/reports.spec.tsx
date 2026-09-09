@@ -60,11 +60,11 @@ vi.mock('@/components/dashboard/ApexChart', () => ({
   ApexChart: () => createElement('div', { 'data-testid': 'apex-chart' }),
 }));
 
-function makeWrapper() {
+function makeWrapper(initialEntry = '/') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <I18nextProvider i18n={i18n}>
           <ToastProvider>{children}</ToastProvider>
         </I18nextProvider>
@@ -446,7 +446,33 @@ describe('expanded report sections', () => {
     expect(screen.getByTestId('report-section-drivers')).toBeInTheDocument();
     expect(screen.getByTestId('report-section-devices')).toBeInTheDocument();
     expect(screen.getByTestId('report-section-commands')).toBeInTheDocument();
+    expect(screen.getByTestId('report-section-schedules')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('report-catalog')).toBeInTheDocument());
+  });
+
+  it('shows the schedules panel when the operator has report.schedule', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u1',
+        email: 'op@fleet.test',
+        tenantId: 't1',
+        roles: ['fleet-admin'],
+        permissions: ['report.read', 'report.export', 'report.schedule'],
+      },
+    });
+    apiGetRaw.mockResolvedValue({ items: [] });
+    render(<ReportsPage />, {
+      wrapper: makeWrapper('/reports?section=schedules'),
+    });
+    await waitFor(() => expect(screen.getByTestId('report-schedules')).toBeInTheDocument());
+    expect(screen.getByTestId('report-schedule-create')).toBeInTheDocument();
+  });
+
+  it('hides schedule management without report.schedule', async () => {
+    render(<ReportsPage />, {
+      wrapper: makeWrapper('/reports?section=schedules'),
+    });
+    await waitFor(() => expect(screen.getByTestId('report-schedules-denied')).toBeInTheDocument());
   });
 
   it('keeps ISO timestamps inside a custom UTC window', () => {
@@ -658,24 +684,38 @@ describe('expanded report sections', () => {
   });
 
   it('renders geofence KPIs from pipeline aggregates', async () => {
-    apiGetRaw.mockResolvedValue({
-      items: [
-        {
-          geofenceId: 'g-1',
-          geofenceName: 'Depot',
-          vehicleId: 'v-36',
-          label: 'وانت نیسان 36',
-          enters: 4,
-          exits: 3,
-          dwells: 1,
-          timeInsideSec: 3600,
-        },
-      ],
-      total: 1,
+    apiGetRaw.mockImplementation(async (url: unknown) => {
+      const path = String(url);
+      if (path.includes('/reports/geofences')) {
+        return {
+          items: [
+            {
+              geofenceId: 'g-1',
+              geofenceName: 'Depot',
+              vehicleId: 'v-36',
+              label: 'وانت نیسان 36',
+              enters: 4,
+              exits: 3,
+              dwells: 1,
+              timeInsideSec: 3600,
+            },
+          ],
+          total: 1,
+        };
+      }
+      if (path.includes('/location/geofences')) {
+        return [{ id: 'g-1', name: 'Depot', type: 'CIRCLE', status: 'ACTIVE' }];
+      }
+      if (path.includes('/vehicles')) {
+        return { data: [{ id: 'v-36', name: 'وانت نیسان 36', plate: '12A', status: 'ACTIVE' }], nextCursor: null };
+      }
+      return { data: [], items: [], nextCursor: null };
     });
     render(<GeofencesSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
-    await waitFor(() => expect(screen.getByText('Depot')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Depot').length).toBeGreaterThanOrEqual(1));
     expect(screen.getByTestId('report-geofences')).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('reports.filters.vehicleId'))).toBeInTheDocument();
     expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(i18n.t('reports.geofence.viewAlarms'))).toBeInTheDocument();
   });
 });

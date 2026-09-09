@@ -10,9 +10,11 @@ import { AuthModule } from '@fleetvision/auth';
 import { KNEX_TOKEN, PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import type { Knex } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
+import { DriverBehaviorService } from '../application/driver-behavior.service.js';
 import type { FleetConfig } from '../config/fleet.config.js';
-import { BusinessTripRepository } from '../infrastructure/persistence/business-trip.repository.js';
 import { DriverRepository } from '../infrastructure/persistence/driver.repository.js';
+import { DrivingBehaviorRepository } from '../infrastructure/persistence/driving-behavior.repository.js';
+import { BusinessTripRepository } from '../infrastructure/persistence/business-trip.repository.js';
 import { BusinessTripsController } from './business-trips.controller.js';
 import { DriversController } from './drivers.controller.js';
 
@@ -35,6 +37,17 @@ export class FleetModule {
           provide: DriverRepository,
           inject: [KNEX_TOKEN, PLATFORM_KNEX_TOKEN],
           useFactory: (knex: Knex, platformKnex: Knex) => new DriverRepository(knex, platformKnex),
+        },
+        {
+          provide: DrivingBehaviorRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: Knex) => new DrivingBehaviorRepository(knex),
+        },
+        {
+          provide: DriverBehaviorService,
+          inject: [DriverRepository, DrivingBehaviorRepository],
+          useFactory: (drivers: DriverRepository, behavior: DrivingBehaviorRepository) =>
+            new DriverBehaviorService(drivers, behavior),
         },
         {
           provide: BusinessTripRepository,

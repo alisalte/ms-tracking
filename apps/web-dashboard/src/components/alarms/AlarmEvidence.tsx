@@ -9,10 +9,11 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { useAlarmPlatformEvidence } from '@/api/alarm.api';
 import { fromMdvrBcdTime } from '@/api/video.api';
 import { AlarmEventVideo } from '@/components/alarms/AlarmEventVideo';
 import { AlarmPhotoCapture } from '@/components/alarms/AlarmPhotoCapture';
-import { Button, Spinner } from '@/components/tailwind-ui';
+import { Badge, Button, Spinner } from '@/components/tailwind-ui';
 import type { AlarmMdvrClip } from '@/components/video/useMdvrResources';
 import { useAlarmEvidence } from '@/hooks/useAlarmEvidence';
 import { formatTime } from '@/lib/format-date';
@@ -27,9 +28,20 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const evidence = useAlarmEvidence(alarm);
+  const platform = useAlarmPlatformEvidence(alarm.id, evidence.dms);
 
   if (evidence.channelsLoading && !evidence.dms) return null;
   if (!evidence.dms && !evidence.hasCamera) return null;
+
+  const platformStatus = platform.data?.status;
+  const statusColor =
+    platformStatus === 'PHOTO_READY'
+      ? 'success'
+      : platformStatus === 'PHOTO_FAILED' || platformStatus === 'PHOTO_MISSING'
+        ? 'danger'
+        : platformStatus === 'PENDING' || platformStatus === 'FETCHING'
+          ? 'warning'
+          : 'gray';
 
   const openClip = (clip: AlarmMdvrClip) => {
     const fromMs = fromMdvrBcdTime(clip.resource.startTime);
@@ -70,6 +82,40 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
   return (
     <div>
       <SectionLabel>{t('alarms.detail.evidence')}</SectionLabel>
+      {evidence.dms && (platformStatus || platform.data?.videoStatus) && (
+        <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="alarm-evidence-status">
+          {platformStatus && (
+            <Badge color={statusColor}>
+              {t(`alarms.detail.evidenceStatus.${platformStatus}`, {
+                defaultValue: platformStatus,
+              })}
+            </Badge>
+          )}
+          {platform.data?.videoStatus && (
+            <Badge
+              color={
+                platform.data.videoStatus === 'READY'
+                  ? 'success'
+                  : platform.data.videoStatus === 'FAILED'
+                    ? 'danger'
+                    : platform.data.videoStatus === 'PENDING' ||
+                        platform.data.videoStatus === 'FETCHING'
+                      ? 'warning'
+                      : 'gray'
+              }
+            >
+              {t(`alarms.detail.videoStatus.${platform.data.videoStatus}`, {
+                defaultValue: platform.data.videoStatus,
+              })}
+            </Badge>
+          )}
+          {platform.data?.error && (
+            <span className="text-xs text-gray-500 dark:text-graydark-600">
+              {platform.data.error}
+            </span>
+          )}
+        </div>
+      )}
       <p className="mt-1 text-xs text-gray-400 dark:text-graydark-600">
         {t(
           evidence.dms && !evidence.includeNearby

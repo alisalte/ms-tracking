@@ -44,6 +44,18 @@ vi.mock('@/hooks/useAlarmEvidence', () => ({
   useAlarmEvidence: () => evidence.current,
 }));
 
+vi.mock('@/api/alarm.api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/alarm.api')>();
+  return {
+    ...actual,
+    useAlarmPlatformEvidence: () => ({
+      data: null,
+      isLoading: false,
+      isError: false,
+    }),
+  };
+});
+
 vi.mock('@/components/alarms/AlarmEventVideo', () => ({
   AlarmEventVideo: () => createElement('div', { 'data-testid': 'event-video' }),
 }));

@@ -84,6 +84,7 @@ export const Permissions = {
   // --- Reporting & analytics (reporting-service) — Sprint J ---
   REPORT_READ: 'report.read', // all report queries (aggregated, tenant-scoped)
   REPORT_EXPORT: 'report.export', // CSV export endpoints
+  REPORT_SCHEDULE: 'report.schedule', // create/manage scheduled report jobs
   // --- Notification Center (notification-service) — Sprint H ---
   NOTIFICATION_READ: 'notification.read', // own notification bell/center reads + mark read
   NOTIFICATION_READ_ALL: 'notification.read.all', // tenant-wide notification history
@@ -178,6 +179,7 @@ export const SYSTEM_ROLES: readonly SystemRoleSeed[] = [
       // Sprint J — reporting: fleet-admins read + export.
       Permissions.REPORT_READ,
       Permissions.REPORT_EXPORT,
+      Permissions.REPORT_SCHEDULE,
     ],
     mfaRequired: false,
   },

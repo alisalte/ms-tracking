@@ -5,6 +5,7 @@
 import {
   Activity,
   AlertTriangle,
+  CalendarClock,
   Clock,
   Fence,
   Gauge,
@@ -43,6 +44,7 @@ const ICONS: Record<Exclude<ReportSection, 'overview'>, LucideIcon> = {
   geofences: Fence,
   commands: Terminal,
   activity: Activity,
+  schedules: CalendarClock,
 };
 
 export function ReportCatalog() {

@@ -41,6 +41,17 @@ export const reportingConfigSchema = baseConfigSchema.merge(authConfigSchema).me
 
     /** Expose GET /metrics (Prometheus) — report counters/histograms. */
     REPORT_METRICS_ENABLED: z.coerce.boolean().default(true),
+
+    /**
+     * Privileged URL for DDL migrations (reporting schema). Optional — when
+     * omitted, migrations run on DBURL (dev only).
+     */
+    DBURL_PLATFORM: z.string().min(1).optional(),
+
+    /** Schedule worker poll interval (ms). 0 disables the worker. */
+    REPORT_SCHEDULE_WORKER_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
+    /** Max due schedules claimed per worker tick. */
+    REPORT_SCHEDULE_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).default(10),
   }),
 );
 

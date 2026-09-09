@@ -30,6 +30,7 @@ import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
 import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
 import { AssetImportDialog } from '@/components/assets/AssetImportDialog';
 import { DevicesTab } from '@/components/assets/DevicesTab';
+import { DriverRankingPanel } from '@/components/assets/DriverRankingPanel';
 import { DriversTab } from '@/components/assets/DriversTab';
 import { FleetsTab } from '@/components/assets/FleetsTab';
 import { VehiclesTab } from '@/components/assets/VehiclesTab';
@@ -108,6 +109,7 @@ export function AssetManagementPage() {
   const [params, setParams] = useSearchParams();
 
   const tab = readTab(params.get('tab'));
+  const driversView = params.get('view') === 'ranking' ? 'ranking' : 'registry';
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Per-tab filter state (kept here so switching tabs preserves filters).
@@ -164,9 +166,18 @@ export function AssetManagementPage() {
   const setTab = (next: AssetTab) => {
     const p = new URLSearchParams(params);
     p.set('tab', next);
+    p.delete('view');
     setParams(p, { replace: true });
     setSelectedId(null);
     setImportOpen(false);
+  };
+
+  const setDriversView = (next: 'registry' | 'ranking') => {
+    const p = new URLSearchParams(params);
+    p.set('tab', 'drivers');
+    if (next === 'ranking') p.set('view', 'ranking');
+    else p.delete('view');
+    setParams(p, { replace: true });
   };
 
   const openCreate = () => {
@@ -329,20 +340,49 @@ export function AssetManagementPage() {
               />
             )}
             {tab === 'drivers' && (
-              <DriversTab
-                drivers={drivers}
-                vehicles={vehicles}
-                devices={devices}
-                loading={driversQuery.isLoading}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                filterStatus={drvStatus}
-                query={drvQuery}
-                onFilterStatus={setDrvStatus}
-                onQuery={setDrvQuery}
-                onEdit={openEdit}
-                onDelete={(id, name) => setDeleteTarget({ id, name })}
-              />
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={driversView === 'registry' ? 'primary' : 'outline'}
+                    onClick={() => setDriversView('registry')}
+                    type="button"
+                  >
+                    {t('assets.driver.viewRegistry')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={driversView === 'ranking' ? 'primary' : 'outline'}
+                    onClick={() => setDriversView('ranking')}
+                    type="button"
+                  >
+                    {t('assets.driver.viewRanking')}
+                  </Button>
+                </div>
+                {driversView === 'ranking' ? (
+                  <DriverRankingPanel
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    query={drvQuery}
+                    onQuery={setDrvQuery}
+                  />
+                ) : (
+                  <DriversTab
+                    drivers={drivers}
+                    vehicles={vehicles}
+                    devices={devices}
+                    loading={driversQuery.isLoading}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    filterStatus={drvStatus}
+                    query={drvQuery}
+                    onFilterStatus={setDrvStatus}
+                    onQuery={setDrvQuery}
+                    onEdit={openEdit}
+                    onDelete={(id, name) => setDeleteTarget({ id, name })}
+                  />
+                )}
+              </div>
             )}
           </>
         )}

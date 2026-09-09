@@ -18,6 +18,7 @@ import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from 
 import { type Consumer, type EachMessagePayload, Kafka } from 'kafkajs';
 import type { FleetManagementConfig } from '../../config/fleet-management.config.js';
 import type { DeviceCommandRepository } from '../persistence/device-command.repository.js';
+import type { EvidenceCaptureRepository } from '../persistence/evidence-capture.repository.js';
 
 /** One of the three event envelopes that share the command topic. */
 interface CommandEventEnvelope {
@@ -77,6 +78,7 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
   constructor(
     private readonly config: FleetManagementConfig,
     private readonly commands: DeviceCommandRepository,
+    private readonly evidence: EvidenceCaptureRepository | null = null,
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
@@ -157,6 +159,10 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
   private async handleRejected(env: CommandEventEnvelope): Promise<void> {
     if (!env.tenantId || !env.commandId) return;
     await this.commands.markFailed(env.tenantId, env.commandId, env.reason ?? 'REJECTED');
+    await this.evidence?.markFailedByCommandId(
+      env.commandId,
+      env.reason ?? 'REJECTED',
+    );
   }
 
   private async handleDeviceAck(env: CommandEventEnvelope): Promise<void> {
@@ -229,11 +235,15 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
           byteLength: env.telemetry?.byteLength ?? 0,
         }),
       );
+      await this.completeEvidencePhoto(pending.id, photoBase64, env.telemetry?.filename);
       return;
     }
 
     if (/^ok/i.test(payload.trim()) || !isDeviceErrorResponse(payload)) {
       await this.commands.markAcked(tenantId, pending.id, `${code},${payload}`);
+      if (code === 'AB4') {
+        await this.completeEvidenceVideo(pending.id);
+      }
     } else {
       await this.commands.markFailed(
         tenantId,
@@ -241,6 +251,42 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
         `DEVICE_ERROR:${payload}`,
         `${code},${payload}`,
       );
+      if (code === 'D00' || code === 'AB4') {
+        await this.evidence?.markFailedByCommandId(pending.id, `DEVICE_ERROR:${payload}`);
+      }
+    }
+  }
+
+  private async completeEvidencePhoto(
+    commandId: string,
+    photoBase64: string,
+    filename: unknown,
+  ): Promise<void> {
+    if (!this.evidence) return;
+    try {
+      const job = await this.evidence.findByCommandId(commandId);
+      if (!job) return;
+      const bytes = Buffer.from(photoBase64, 'base64');
+      await this.evidence.markPhotoReady(
+        job.tenantId,
+        job.id,
+        bytes,
+        'image/jpeg',
+        typeof filename === 'string' && filename ? filename : job.photoName,
+      );
+    } catch (err) {
+      this.logger.warn(`Evidence photo store failed: ${(err as Error).message}`);
+    }
+  }
+
+  private async completeEvidenceVideo(commandId: string): Promise<void> {
+    if (!this.evidence) return;
+    try {
+      const job = await this.evidence.findByVideoCommandId(commandId);
+      if (!job) return;
+      await this.evidence.markVideoReady(job.tenantId, job.id);
+    } catch (err) {
+      this.logger.warn(`Evidence video mark failed: ${(err as Error).message}`);
     }
   }
 }

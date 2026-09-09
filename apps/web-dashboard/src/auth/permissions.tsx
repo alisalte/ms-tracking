@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   // Sprint J — reporting & analytics (reporting-service).
   reportRead: 'report.read',
   reportExport: 'report.export',
+  reportSchedule: 'report.schedule',
   // Sprint G — alarm/event engine (notification-service).
   alertRead: 'notification.alert.read',
   alertAck: 'notification.alert.ack',

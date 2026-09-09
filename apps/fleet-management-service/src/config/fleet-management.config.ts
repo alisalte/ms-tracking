@@ -68,6 +68,11 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     MDVR_RTMP_PORT: z.coerce.number().int().min(1).max(65535).default(1935),
     /** RTMP/HLS path advertised to the MDVR — md300-main uses `live/md300`. */
     MDVR_RTMP_PATH: z.string().min(1).default('live/md300'),
+
+    /** Evidence capture worker poll interval (ms). 0 disables. */
+    FLEET_EVIDENCE_WORKER_INTERVAL_MS: z.coerce.number().int().min(0).default(15_000),
+    /** Max PENDING evidence jobs claimed per tick. */
+    FLEET_EVIDENCE_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).default(5),
   }),
 );
 

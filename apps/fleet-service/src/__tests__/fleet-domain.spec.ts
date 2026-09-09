@@ -1,5 +1,15 @@
 import { describe, expect, it } from '@jest/globals';
 import { BusinessTrip } from '../domain/business-trip.js';
+import {
+  shouldCloseOpenAssignment,
+  shouldOpenAssignmentInterval,
+} from '../domain/driver-assignment.js';
+import {
+  computeDriverScore,
+  emptyCounts,
+  LOW_SCORE_ATTENTION_THRESHOLD,
+  mapAlarmToDrivingEventType,
+} from '../domain/driving-behavior.js';
 import { Driver } from '../domain/driver.js';
 import {
   type DriverStatus,
@@ -75,6 +85,74 @@ describe('Driver', () => {
     d.transitionTo('INACTIVE');
     d.unassignVehicle();
     expect(d.assignedVehicleId).toBeNull();
+  });
+});
+
+describe('assignment history transitions', () => {
+  it('opens on first assign', () => {
+    expect(shouldOpenAssignmentInterval(null, 'v1')).toBe(true);
+    expect(shouldCloseOpenAssignment(null, 'v1')).toBe(false);
+  });
+
+  it('closes on unassign', () => {
+    expect(shouldOpenAssignmentInterval('v1', null)).toBe(false);
+    expect(shouldCloseOpenAssignment('v1', null)).toBe(true);
+  });
+
+  it('closes previous and opens next on vehicle change', () => {
+    expect(shouldCloseOpenAssignment('v1', 'v2')).toBe(true);
+    expect(shouldOpenAssignmentInterval('v1', 'v2')).toBe(true);
+  });
+
+  it('no-ops when re-assigning the same vehicle', () => {
+    expect(shouldCloseOpenAssignment('v1', 'v1')).toBe(false);
+    expect(shouldOpenAssignmentInterval('v1', 'v1')).toBe(false);
+  });
+});
+
+describe('driver behavior score', () => {
+  it('maps alarm types to driving events', () => {
+    expect(mapAlarmToDrivingEventType('overspeed', {})).toBe('SPEED_VIOLATION');
+    expect(mapAlarmToDrivingEventType('prolonged_idle', {})).toBe('EXCESSIVE_IDLE');
+    expect(mapAlarmToDrivingEventType('collision', { alarmCode: 'BRAKING' })).toBe('HARSH_BRAKE');
+    expect(mapAlarmToDrivingEventType('collision', { alarmCode: 'ACCELERATION' })).toBe(
+      'RAPID_ACCELERATION',
+    );
+    expect(mapAlarmToDrivingEventType('geofence_enter', {})).toBeNull();
+  });
+
+  it('starts at 100 with no events', () => {
+    expect(computeDriverScore(emptyCounts()).score).toBe(100);
+  });
+
+  it('deducts with caps', () => {
+    const result = computeDriverScore({
+      harshBrake: 10, // 50 → cap 40
+      rapidAccel: 10, // 30 → cap 20
+      speedViolation: 20, // 80 → cap 40
+      excessiveIdle: 20, // 40 → cap 20
+    });
+    expect(result.deductions.harshBrake).toBe(40);
+    expect(result.deductions.rapidAccel).toBe(20);
+    expect(result.deductions.speedViolation).toBe(40);
+    expect(result.deductions.excessiveIdle).toBe(20);
+    expect(result.score).toBe(0);
+  });
+
+  it('applies per-event deductions under caps', () => {
+    const result = computeDriverScore({
+      harshBrake: 2,
+      rapidAccel: 1,
+      speedViolation: 1,
+      excessiveIdle: 1,
+    });
+    // 100 - 10 - 3 - 4 - 2 = 81
+    expect(result.score).toBe(81);
+  });
+
+  it('flags attention at or below threshold', () => {
+    expect(LOW_SCORE_ATTENTION_THRESHOLD).toBe(70);
+    expect(computeDriverScore({ harshBrake: 6, rapidAccel: 0, speedViolation: 0, excessiveIdle: 0 }).score).toBe(70);
   });
 });
 

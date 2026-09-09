@@ -1,11 +1,10 @@
 /**
  * AppModule — composition root for reporting-service.
  *
- * The analytical read layer over the shared PostgreSQL (tracking +
- * notification + fleet schemas, read-only) with Redis caching/export rate
- * limiting. No migrations of its own (schema is owned by the domain services;
- * Sprint J only added indexes THROUGH those services).
+ * Analytical read layer over shared PostgreSQL (tracking + notification +
+ * fleet) plus the reporting schema for schedule/job metadata (Phase 1 / F-05).
  */
+import { join } from 'node:path';
 import { AuthModule } from '@fleetvision/auth';
 import { RedisModule } from '@fleetvision/cache-redis';
 import { type BaseConfig, ConfigModule } from '@fleetvision/config';
@@ -28,11 +27,14 @@ export class AppModule {
           env: process.env,
         }),
         LoggerModule.forRootFromConfig(config as BaseConfig),
-        // Read-only analytical access via the app role (the house pattern:
-        // repository-level tenant WHERE is the enforcing boundary; the
-        // reporting layer adds READ ONLY transactions + statement timeouts).
         PersistenceModule.forRoot({
           client: { url: config.DBURL },
+          migrationsClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
+          platformClient: config.DBURL_PLATFORM ? { url: config.DBURL_PLATFORM } : undefined,
+          migrations: {
+            directory: join(import.meta.dirname, 'infrastructure/database/migrations'),
+            tableName: 'reporting_schema_migrations',
+          },
         }),
         RedisModule.forRoot({ url: config.REDISURL }),
         AuthModule.forRoot({

@@ -13,6 +13,7 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { BindingService } from '../application/binding.service.js';
 import { DeviceCommandService } from '../application/device-command.service.js';
 import { DeviceService } from '../application/device.service.js';
+import { EvidenceCaptureWorker } from '../application/evidence-capture.worker.js';
 import { FleetService } from '../application/fleet.service.js';
 import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
@@ -26,6 +27,7 @@ import { AuditRepository } from '../infrastructure/persistence/audit.repository.
 import { BindingRepository } from '../infrastructure/persistence/binding.repository.js';
 import { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
 import { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
+import { EvidenceCaptureRepository } from '../infrastructure/persistence/evidence-capture.repository.js';
 import { FleetRepository } from '../infrastructure/persistence/fleet.repository.js';
 import { VehicleRepository } from '../infrastructure/persistence/vehicle.repository.js';
 import {
@@ -43,6 +45,8 @@ import {
   DEVICE_COMMAND_SERVICE,
   DEVICE_REPOSITORY,
   DEVICE_SERVICE,
+  EVIDENCE_CAPTURE_REPOSITORY,
+  EVIDENCE_CAPTURE_WORKER,
   FLEET_MANAGEMENT_CONFIG,
   FLEET_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
@@ -241,12 +245,35 @@ export class FleetManagementModule {
             commands: DeviceCommandService,
           ) => new SessionLifecycleConsumer(cfg, devices, commands),
         },
-        // Command-ack consumer (non-fatal at boot).
+        // Command-ack consumer (non-fatal at boot) + F-07 evidence photo attach.
+        {
+          provide: EVIDENCE_CAPTURE_REPOSITORY,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new EvidenceCaptureRepository(knex as never),
+        },
         {
           provide: COMMAND_ACK_CONSUMER,
-          inject: [FLEET_MANAGEMENT_CONFIG, DEVICE_COMMAND_REPOSITORY],
-          useFactory: (cfg: FleetManagementConfig, commands: DeviceCommandRepository) =>
-            new CommandAckConsumer(cfg, commands),
+          inject: [FLEET_MANAGEMENT_CONFIG, DEVICE_COMMAND_REPOSITORY, EVIDENCE_CAPTURE_REPOSITORY],
+          useFactory: (
+            cfg: FleetManagementConfig,
+            commands: DeviceCommandRepository,
+            evidence: EvidenceCaptureRepository,
+          ) => new CommandAckConsumer(cfg, commands, evidence),
+        },
+        {
+          provide: EVIDENCE_CAPTURE_WORKER,
+          inject: [EVIDENCE_CAPTURE_REPOSITORY, DEVICE_COMMAND_SERVICE, FLEET_MANAGEMENT_CONFIG],
+          useFactory: (
+            evidence: EvidenceCaptureRepository,
+            commands: DeviceCommandService,
+            cfg: FleetManagementConfig,
+          ) =>
+            new EvidenceCaptureWorker({
+              evidence,
+              commands,
+              intervalMs: cfg.FLEET_EVIDENCE_WORKER_INTERVAL_MS,
+              batchSize: cfg.FLEET_EVIDENCE_WORKER_BATCH_SIZE,
+            }),
         },
       ],
       controllers: [

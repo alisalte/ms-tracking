@@ -42,6 +42,9 @@ import {
 import {
   driverFullName,
   useAssignDriverVehicle,
+  useDriverAssignments,
+  useDriverBehaviorEvents,
+  useDriverBehaviorScore,
   useDriverDetail,
   useUnassignDriverVehicle,
 } from '@/api/driver.api';
@@ -780,6 +783,9 @@ function DriverDetailDrawer({
   const { t } = useTranslation();
   const toast = useToast();
   const { data: driver, isLoading } = useDriverDetail(driverId);
+  const { data: assignments = [], isLoading: assignmentsLoading } = useDriverAssignments(driverId);
+  const { data: behaviorScore, isLoading: scoreLoading } = useDriverBehaviorScore(driverId);
+  const { data: behaviorEvents = [], isLoading: eventsLoading } = useDriverBehaviorEvents(driverId);
   const assign = useAssignDriverVehicle();
   const unassign = useUnassignDriverVehicle();
   const open = Boolean(driverId);
@@ -792,6 +798,7 @@ function DriverDetailDrawer({
         : undefined,
     [vehicles, driver?.assignedVehicleId],
   );
+  const vehicleById = useMemo(() => new Map(vehicles.map((v) => [v.id, v])), [vehicles]);
   const boundDevices = useMemo(
     () => devicesOnVehicle(devices, driver?.assignedVehicleId ?? null),
     [devices, driver?.assignedVehicleId],
@@ -934,6 +941,143 @@ function DriverDetailDrawer({
                   )}
                 </div>
               </PermissionGate>
+            </Section>
+
+            <Divider />
+            <Section label={t('assets.driver.behaviorScore')}>
+              <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                {t('assets.driver.behaviorScoreHint')}
+              </p>
+              {scoreLoading ? (
+                <div className="flex justify-center py-4">
+                  <Spinner size="sm" />
+                </div>
+              ) : behaviorScore?.score == null ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('assets.driver.behaviorScoreUnavailable')}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-3xl font-semibold tabular-nums text-gray-900 dark:text-white">
+                      {Math.round(behaviorScore.score)}
+                    </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">/ 100</span>
+                    {behaviorScore.needsAttention && (
+                      <Badge color="warning">{t('assets.driver.needsAttention')}</Badge>
+                    )}
+                  </div>
+                  {behaviorScore.delta != null && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('assets.driver.scoreDelta', {
+                        delta:
+                          behaviorScore.delta > 0
+                            ? `+${Math.round(behaviorScore.delta)}`
+                            : String(Math.round(behaviorScore.delta)),
+                        previous: behaviorScore.previousScore ?? '—',
+                      })}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    <span>
+                      {t('assets.driver.eventHarshBrake')}: {behaviorScore.harshBrakeCount}
+                    </span>
+                    <span>
+                      {t('assets.driver.eventRapidAccel')}: {behaviorScore.rapidAccelCount}
+                    </span>
+                    <span>
+                      {t('assets.driver.eventOverspeed')}: {behaviorScore.speedViolationCount}
+                    </span>
+                    <span>
+                      {t('assets.driver.eventIdle')}: {behaviorScore.excessiveIdleCount}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="mt-3">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {t('assets.driver.behaviorEvents')}
+                </p>
+                {eventsLoading ? (
+                  <div className="flex justify-center py-3">
+                    <Spinner size="sm" />
+                  </div>
+                ) : behaviorEvents.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('assets.driver.behaviorEventsEmpty')}
+                  </p>
+                ) : (
+                  <ul className="flex max-h-48 flex-col gap-1.5 overflow-y-auto">
+                    {behaviorEvents.slice(0, 20).map((ev) => (
+                      <li
+                        key={ev.id}
+                        className="flex items-center justify-between gap-2 rounded border border-gray-200 px-2 py-1.5 text-xs dark:border-gray-700"
+                      >
+                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                          {t(`assets.driver.eventType.${ev.type}`, { defaultValue: ev.type })}
+                        </span>
+                        <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                          {ev.raisedAt ? formatDateTime(ev.raisedAt) : '—'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </Section>
+
+            <Divider />
+            <Section label={t('assets.driver.assignmentHistory')}>
+              <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                {t('assets.driver.assignmentHistoryHint')}
+              </p>
+              {assignmentsLoading ? (
+                <div className="flex justify-center py-4">
+                  <Spinner size="sm" />
+                </div>
+              ) : assignments.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('assets.driver.assignmentHistoryEmpty')}
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {assignments.map((row) => {
+                    const v = vehicleById.get(row.vehicleId);
+                    const label = v
+                      ? v.plate
+                        ? `${v.name} · ${v.plate}`
+                        : v.name
+                      : row.vehicleId.slice(0, 8);
+                    return (
+                      <li
+                        key={row.id}
+                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-700"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-gray-800 dark:text-gray-100">
+                            {label}
+                          </span>
+                          {row.isCurrent && (
+                            <Badge color="success">
+                              {t('assets.driver.assignmentCurrent')}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          <Clock size={12} />
+                          <span>
+                            {formatDateTime(row.startedAt)}
+                            {' → '}
+                            {row.endedAt
+                              ? formatDateTime(row.endedAt)
+                              : t('assets.driver.assignmentOngoing')}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </Section>
           </div>
         )}

@@ -146,6 +146,11 @@ function tileCardText(labelEl: HTMLElement): string {
 
 vi.mock('@/api/fleet.api', () => fleetApi);
 
+const alarmApi = vi.hoisted(() => ({
+  fetchAlarms: vi.fn(async () => []),
+}));
+vi.mock('@/api/alarm.api', () => alarmApi);
+
 // ── Reporting fixtures (reporting-service wire shapes, Sprint J) ────────────
 const overviewFixture = {
   totalVehicles: 4,
@@ -420,6 +425,7 @@ function renderDashboard() {
 beforeEach(() => {
   vi.clearAllMocks();
   setQueryResults();
+  alarmApi.fetchAlarms.mockResolvedValue([]);
   useAuthStore.setState({
     user: {
       id: 'u1',
@@ -486,7 +492,7 @@ describe('FleetDashboard — rendering + KPIs', () => {
 });
 
 describe('FleetDashboard — activity + fleet health', () => {
-  it('renders the activity donut and health meters from the map join', () => {
+  it('renders the activity donut and health meters from the map join', async () => {
     renderDashboard();
     // Two ECharts panels (activity donut + alert-type rose).
     expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(2);
@@ -497,6 +503,7 @@ describe('FleetDashboard — activity + fleet health', () => {
     expect(staleBox?.querySelector('p')?.textContent).toBe('23');
     const offlineBox = screen.getByText('Offline devices').parentElement?.parentElement;
     expect(offlineBox?.querySelector('p')?.textContent).toBe('1');
+    await waitFor(() => expect(screen.getByText('Fleet health score')).toBeTruthy());
   });
 
   it('renders honest error states when the map join fails (activity, health, map)', () => {

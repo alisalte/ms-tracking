@@ -10,4 +10,4 @@ export * from './notification-types.js';
 export * from './notification.js';
 export * from './notification-preference.js';
 export * from './notification-delivery.js';
-export * from './notification-template.js';
+export * from './alarm-evidence.js';

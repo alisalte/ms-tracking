@@ -2,13 +2,14 @@
 
 **Canonical product phases:** `docs/specs/00_Project_Vision.md` §7.
 
-## In progress / requested (not approved for implementation)
+## In progress / requested
 
-- **Fleet Intelligence portfolio** (Driver Behavior, Fleet Health Score, Fuel, Geofence Intel, Report Builder, Predictive+CMMS, AI Video, Digital Twin, AI Assistant, ETA, Optimization) — inventory shows **none fully shipped**; closest: geofence dwell/reports, fixed reports+CSV, DMS decode+opt-in evidence, OSRM plan duration, connectivity health panel. Analysis + re-phasing Q0–Q4: `docs/analysis/fleet-intelligence-roadmap/`. Status: **waiting on product questions**.
-- **Driver Behavior & Safety Score** — Sprint 1: hard brake / overspeed / idle + Driver Score; Sprint 2: ranking, driver dashboard, notifications; Sprint 3: video evidence, AI coaching, ML risk. Requirements: `docs/requirements/driver-behavior-safety/`. Status: **draft SRS**; waiting on critical questions + approval.
-- **MD300 DMS alarm media capture** — all DMS + ADAS: driver photo + 15 s cabin video (5+10, with audio), auto platform ingest (sync if offline), 1 min/type cooldown, 30-day retention, click-to-load UI. Requirements: `docs/requirements/md300-dms-alarm-media-capture/`. Status: SRS complete; waiting for approval before analysis.
-- **Driver work / device / alarms** — which device a driver uses(d), how much they worked, which alarms they got. Analysis: `docs/analysis/driver-work-device-alarms/`. Status: analysis drafted; waiting on product questions.
-- **MDVR device-app Parameter config in FleetVision** — Alarm (incl. Input I/O events) | Network | Tracking | Alerts | Media | AI/C90 shipped. Next candidate: Network+ (A25/ABB). Requirements: `docs/requirements/mdvr-device-app-parameter-config/` (**Approved**). Analysis: `docs/analysis/mdvr-device-app-parameter-config/`.
+- **Fleet Intelligence portfolio Phase 1 (Q0+Q1)** — **Complete** (assignment history, Behavior S1–2, Geofence polish, Health Score v1, Report schedule v1, AI video evidence Slice 1–2). MinIO durable video + schedule email deferred.
+- **Phase 2 (Q2)** — Active: **Fuel Analytics v1** — Requirements Approved; analysis `docs/analysis/fuel-analytics-v1/` (waiting implement). CMMS skipped. Then: Geofence corridor → ETA → Behavior Sprint 3.
+- **Driver Behavior & Safety Score** — Sprint 1–2 **implemented**. Sprint 3 deferred to Q2.
+- **MD300 DMS alarm media capture** — Slice 1–2 implemented; MinIO archive optional follow-up. Requirements: `docs/requirements/md300-dms-alarm-media-capture/`.
+- **Driver work / device / alarms** — Analysis: `docs/analysis/driver-work-device-alarms/`. Assignment history shipped; work aggregation still pending.
+- **MDVR device-app Parameter config in FleetVision** — Alarm | Network | Tracking | Alerts | Media | AI/C90 shipped. Next candidate: Network+ (A25/ABB). Requirements: `docs/requirements/mdvr-device-app-parameter-config/` (**Approved**). Analysis: `docs/analysis/mdvr-device-app-parameter-config/`.
 
 ## Related already in product
 
@@ -16,11 +17,18 @@
 - Opt-in alarm evidence UI (D00 photo, AB4 clip, nearby AB8 listing).
 - Manual D03 photo from alarm drawer.
 - Geofence enter/exit/dwell + geofence analytics report; fixed operational reports + CSV.
-- Fleet Dashboard connectivity “health” panel (not composite health score).
+- Fleet Dashboard “health” panel now includes a **rule-based Fleet Health Score** (connectivity + open alarms). No snapshot persistence / maintenance-backed score yet.
 - Map Route Planner OSRM distance/duration (not live ETA).
 
 ## Changelog
 
+- 2026-09-09: CMMS skipped by stakeholder; Phase 2 active item → Fuel Analytics v1 SRS draft.
+- 2026-09-09: Phase 2 kickoff — CMMS core SRS draft (`docs/requirements/vehicle-maintenance-cmms-core/`); later deferred.
+- 2026-09-09: Phase 1 (Q0+Q1) marked complete; Phase 2 (Q2) ready — CMMS first candidate.
+- 2026-09-09: Fleet Health Score v1 (60% presence + 40% open-alarm headroom) on FleetHealthPanel.
+- 2026-09-09: Geofence report polish (vehicle/geofence filters, avg dwell, dwell-only, map/alarms links).
+- 2026-09-09: Driver Behavior Sprint 2 (ranking API/UI, score delta, needsAttention ≤70).
+- 2026-09-09: Phase 1 (Q0+Q1) approved; Q0 assignment history + Driver Behavior Sprint 1 implemented.
 - 2026-09-08: Fleet Intelligence portfolio analysis + recommended Q0–Q4 re-phasing recorded (`docs/analysis/fleet-intelligence-roadmap/`).
 - 2026-09-08: Driver Behavior & Safety Score draft SRS recorded (3-sprint backlog).
 - 2026-09-08: Recorded MDVR device-app Parameter config request (SRS draft).

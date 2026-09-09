@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { fetchAlarmEvidencePhoto, useAlarmPlatformEvidence } from '@/api/alarm.api';
 import { useChannels } from '@/api/video.api';
 import {
   type AlarmMdvrClip,
@@ -33,6 +34,7 @@ const EMPTY_CHANNELS: CameraChannel[] = [];
 export function useAlarmEvidence(alarm: Alarm) {
   const { data, isLoading: channelsLoading, isFetched } = useChannels();
   const channels = data ?? EMPTY_CHANNELS;
+  const platform = useAlarmPlatformEvidence(alarm.id, isDmsAlarm(alarm));
   const [status, setStatus] = useState<MdvrResourceStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [listedVideos, setListedVideos] = useState<AlarmMdvrClip[]>([]);
@@ -55,19 +57,32 @@ export function useAlarmEvidence(alarm: Alarm) {
   const eventMedia = dms || Boolean(eventPhotoName);
   const eventPhoto = useMemo(() => parseMdvrEventPhotoName(eventPhotoName), [eventPhotoName]);
   const window = useMemo(() => alarmEvidenceWindow(alarm.raisedAt), [alarm.raisedAt]);
-  const videoWindow = useMemo(
-    () => alarmEventVideoWindow(eventPhoto, alarm.raisedAt),
-    [eventPhoto, alarm.raisedAt],
-  );
   const raisedAtMs = useMemo(() => new Date(alarm.raisedAt).getTime(), [alarm.raisedAt]);
   const mdvrChannels = useMemo(
     () => sortEvidenceChannels(mdvrChannelsForVehicle(channels, alarm.vehicleId)),
     [channels, alarm.vehicleId],
   );
-  const videoChannel = useMemo(
-    () => evidenceChannelForPhoto(mdvrChannels, eventPhoto) ?? null,
-    [mdvrChannels, eventPhoto],
-  );
+  const videoWindow = useMemo(() => {
+    const fromIso = platform.data?.videoWindowFrom;
+    const toIso = platform.data?.videoWindowTo;
+    if (fromIso && toIso) {
+      const fromMs = new Date(fromIso).getTime();
+      const toMs = new Date(toIso).getTime();
+      if (Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs > fromMs) {
+        return { fromMs, toMs };
+      }
+    }
+    return alarmEventVideoWindow(eventPhoto, alarm.raisedAt);
+  }, [platform.data?.videoWindowFrom, platform.data?.videoWindowTo, eventPhoto, alarm.raisedAt]);
+
+  const videoChannel = useMemo(() => {
+    const preferred = platform.data?.videoChannel;
+    if (preferred != null) {
+      const match = mdvrChannels.find((c) => (c.logicalChannel ?? 1) === preferred);
+      if (match) return match;
+    }
+    return evidenceChannelForPhoto(mdvrChannels, eventPhoto) ?? null;
+  }, [mdvrChannels, eventPhoto, platform.data?.videoChannel]);
   const hasCamera = mdvrChannels.length > 0;
   const loadRequested = session.alarmId === alarm.id && session.loadRequested;
   const includeNearby = session.alarmId === alarm.id && session.includeNearby;
@@ -119,7 +134,17 @@ export function useAlarmEvidence(alarm: Alarm) {
       const errors: string[] = [];
       let gotPhoto = false;
       let listed = 0;
-      if (eventMode && eventPhotoName && deviceId) {
+      if (eventMode) {
+        try {
+          const platform = await fetchAlarmEvidencePhoto(alarm.id);
+          if (cancelled()) return;
+          setPhotoBlob(platform);
+          gotPhoto = true;
+        } catch {
+          /* fall through to device D00 */
+        }
+      }
+      if (!gotPhoto && eventMode && eventPhotoName && deviceId) {
         try {
           const photo = await fetchMdvrPhoto(deviceId, eventPhotoName, cancelled);
           if (cancelled()) return;

@@ -1,24 +1,42 @@
 /**
- * GeofencesSection — ENTER/EXIT/DWELL aggregates with KPIs and a chart.
+ * GeofencesSection — ENTER/EXIT/DWELL aggregates with KPIs, filters, and dwell polish (F-04 v1).
  */
 import type { ApexOptions } from 'apexcharts';
-import { Fence, LogIn, LogOut, Timer } from 'lucide-react';
-import { useMemo } from 'react';
+import { Bell, Fence, LogIn, LogOut, Map as MapIcon, Timer } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
+import { useVehicles } from '@/api/asset.api';
+import { useGeofences } from '@/api/geofence.api';
 import { type GeofenceReportRowWire, type ReportRange, useGeofenceReport } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
-import { Card, CardHeader } from '@/components/tailwind-ui';
+import { Card, CardHeader, Checkbox } from '@/components/tailwind-ui';
 import { formatDurationSec, hours1, shortLabel } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
 
 export function GeofencesSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
-  const q = useGeofenceReport(range);
-  const rows = q.data?.items ?? [];
+  const [vehicleId, setVehicleId] = useState('');
+  const [geofenceId, setGeofenceId] = useState('');
+  const [dwellOnly, setDwellOnly] = useState(false);
+
+  const vehiclesQ = useVehicles();
+  const geofencesQ = useGeofences();
+  const filters = {
+    ...(vehicleId ? { vehicleId } : {}),
+    ...(geofenceId ? { geofenceId } : {}),
+  };
+  const q = useGeofenceReport(range, filters);
+  const rawRows = q.data?.items ?? [];
+
+  const rows = useMemo(() => {
+    const list = dwellOnly ? rawRows.filter((r) => r.dwells > 0 || r.timeInsideSec > 0) : rawRows;
+    return [...list].sort((a, b) => b.timeInsideSec - a.timeInsideSec);
+  }, [rawRows, dwellOnly]);
 
   const totals = useMemo(
     () =>
@@ -74,10 +92,79 @@ export function GeofencesSection({ range }: { range: ReportRange }) {
       headerKey: 'reports.cols.timeInside',
       render: (r) => formatDurationSec(r.timeInsideSec),
     },
+    {
+      id: 'avgDwell',
+      headerKey: 'reports.cols.avgDwell',
+      render: (r) => {
+        if (r.exits <= 0) return '—';
+        return formatDurationSec(Math.round(r.timeInsideSec / r.exits));
+      },
+    },
+    {
+      id: 'actions',
+      header: '',
+      render: (r) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {r.vehicleId && (
+            <Link
+              to={`/map?vehicle=${encodeURIComponent(r.vehicleId)}`}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-300 px-2 text-xs font-medium text-gray-700 no-underline hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5"
+            >
+              <MapIcon size={13} aria-hidden />
+              {t('reports.viewOnMap')}
+            </Link>
+          )}
+          <Link
+            to={`/alarms?type=geofence${r.geofenceName ? `&q=${encodeURIComponent(r.geofenceName)}` : ''}`}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-300 px-2 text-xs font-medium text-gray-700 no-underline hover:bg-gray-50 dark:border-white/10 dark:text-graydark-700 dark:hover:bg-white/5"
+          >
+            <Bell size={13} aria-hidden />
+            {t('reports.geofence.viewAlarms')}
+          </Link>
+        </div>
+      ),
+    },
   ];
+
+  const vehicleOptions = vehiclesQ.data ?? [];
+  const geofenceOptions = geofencesQ.data ?? [];
 
   return (
     <div className="flex flex-col gap-4" data-testid="report-geofences">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={vehicleId}
+          onChange={(e) => setVehicleId(e.target.value)}
+          aria-label={t('reports.filters.vehicleId')}
+          className="h-9 min-w-48 cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+        >
+          <option value="">{t('reports.filters.allVehicles')}</option>
+          {vehicleOptions.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.plate ? `${v.name} · ${v.plate}` : v.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={geofenceId}
+          onChange={(e) => setGeofenceId(e.target.value)}
+          aria-label={t('reports.filters.geofenceId')}
+          className="h-9 min-w-48 cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+        >
+          <option value="">{t('reports.filters.allGeofences')}</option>
+          {geofenceOptions.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+        <Checkbox
+          label={t('reports.geofence.dwellOnly')}
+          checked={dwellOnly}
+          onChange={(e) => setDwellOnly(e.target.checked)}
+        />
+      </div>
+
       {q.isLoading ? (
         <div className="py-2 text-sm text-gray-500 dark:text-graydark-600">
           {t('common.loading')}

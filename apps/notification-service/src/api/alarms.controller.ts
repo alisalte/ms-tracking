@@ -18,6 +18,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Inject,
   Optional,
@@ -25,10 +26,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { AlarmNotFoundError } from '../domain/index.js';
 import type { AlarmListFilters } from '../infrastructure/persistence/alarm-occurrence.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
+import { AlarmEvidenceService } from '../application/alarm-evidence.service.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
@@ -39,6 +43,7 @@ import { ALARM_REALTIME_GATEWAY } from './notification.tokens.js';
 export class AlarmsController {
   constructor(
     private readonly alarms: AlarmOccurrenceRepository,
+    private readonly evidence: AlarmEvidenceService,
     @Optional()
     @Inject(ALARM_REALTIME_GATEWAY)
     private readonly gateway: AlarmRealtimeGateway | null,
@@ -70,6 +75,38 @@ export class AlarmsController {
     if (from) filters.from = new Date(from);
     if (to) filters.to = new Date(to);
     return this.alarms.listPage(p.tenantId, page.limit, filters, cursor);
+  }
+
+  @Get(':id/evidence')
+  @RequirePermissions('notification.alert.read')
+  public async getEvidence(
+    @Param(new ZodValidationPipe(uuidParamSchema)) params: UuidParamDto,
+    @Req() req: Request,
+  ) {
+    const p = getPrincipal(req);
+    const alarm = await this.alarms.findById(p.tenantId, params.id);
+    if (!alarm) throw new AlarmNotFoundError();
+    const row = await this.evidence.getForAlert(p.tenantId, params.id);
+    return { data: row };
+  }
+
+  @Get(':id/evidence/photo')
+  @RequirePermissions('notification.alert.read')
+  public async getEvidencePhoto(
+    @Param(new ZodValidationPipe(uuidParamSchema)) params: UuidParamDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const p = getPrincipal(req);
+    const alarm = await this.alarms.findById(p.tenantId, params.id);
+    if (!alarm) throw new AlarmNotFoundError();
+    const photo = await this.evidence.getPhoto(p.tenantId, params.id);
+    if (!photo) {
+      throw new HttpException('Evidence photo not available', HttpStatus.NOT_FOUND);
+    }
+    res.setHeader('Content-Type', photo.contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${photo.filename}"`);
+    res.send(photo.bytes);
   }
 
   @Get(':id')

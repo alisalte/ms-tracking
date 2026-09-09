@@ -1,6 +1,8 @@
 /**
  * Driver repository — CRUD for fleet.drivers. Tenant-scoped (RLS enforced).
+ * Assignment history is written in the same transaction as the denormalized pointer.
  */
+import { randomUUID } from 'node:crypto';
 import type { Knex } from '@fleetvision/persistence-knex';
 import {
   TenantQuotaDeniedError,
@@ -12,8 +14,11 @@ import { type Page, toCursor } from '@fleetvision/shared-kernel';
 import {
   type Driver,
   Driver as DriverClass,
+  DriverAssignment,
   type DriverStatus,
   TenantQuotaExceededError,
+  shouldCloseOpenAssignment,
+  shouldOpenAssignmentInterval,
 } from '../../domain/index.js';
 
 export interface DriverRow {
@@ -36,6 +41,16 @@ export interface DriverRow {
   version: number;
   created_at: Date;
   updated_at: Date;
+}
+
+interface DriverAssignmentRow {
+  id: string;
+  tenant_id: string;
+  driver_id: string;
+  vehicle_id: string;
+  started_at: Date;
+  ended_at: Date | null;
+  changed_by: string | null;
 }
 
 export class DriverRepository {
@@ -117,26 +132,126 @@ export class DriverRepository {
 
   public async update(driver: Driver): Promise<void> {
     await withTenantContext(this.knex, driver.tenantId, async (trx) => {
-      const updated = await trx('fleet.drivers')
-        .where({ id: driver.id, tenant_id: driver.tenantId, version: driver.version })
-        .update({
-          employee_id: driver.employeeId,
-          first_name: driver.firstName,
-          last_name: driver.lastName,
-          email: driver.email,
-          phone: driver.phone,
-          license_number: driver.licenseNumber,
-          license_class: driver.licenseClass,
-          license_issued: driver.licenseIssued,
-          license_expires: driver.licenseExpires,
-          license_country: driver.licenseCountry,
-          status: driver.status,
-          assigned_vehicle_id: driver.assignedVehicleId,
-          assigned_at: driver.assignedAt,
-          version: this.knex.raw('version + 1'),
-          updated_at: this.knex.fn.now(),
+      await this.updateDriverRow(trx, driver);
+    });
+  }
+
+  /**
+   * Persist driver row and sync assignment history in one tenant transaction.
+   * `previousVehicleId` is the pointer before the in-memory domain mutation.
+   */
+  public async updateAndRecordAssignment(
+    driver: Driver,
+    opts: {
+      previousVehicleId: string | null;
+      nextVehicleId: string | null;
+      changedBy: string | null;
+      at?: Date;
+    },
+  ): Promise<void> {
+    const at = opts.at ?? new Date();
+    await withTenantContext(this.knex, driver.tenantId, async (trx) => {
+      if (shouldCloseOpenAssignment(opts.previousVehicleId, opts.nextVehicleId)) {
+        await trx('fleet.driver_assignments')
+          .where({
+            tenant_id: driver.tenantId,
+            driver_id: driver.id,
+          })
+          .whereNull('ended_at')
+          .update({ ended_at: at });
+      }
+
+      if (shouldOpenAssignmentInterval(opts.previousVehicleId, opts.nextVehicleId)) {
+        // Safety: close any stray open interval on the target vehicle.
+        await trx('fleet.driver_assignments')
+          .where({
+            tenant_id: driver.tenantId,
+            vehicle_id: opts.nextVehicleId as string,
+          })
+          .whereNull('ended_at')
+          .update({ ended_at: at });
+
+        await trx('fleet.driver_assignments').insert({
+          id: randomUUID(),
+          tenant_id: driver.tenantId,
+          driver_id: driver.id,
+          vehicle_id: opts.nextVehicleId,
+          started_at: at,
+          ended_at: null,
+          changed_by: opts.changedBy,
         });
-      if (updated === 0) throw new Error('Optimistic concurrency conflict on driver update.');
+      }
+
+      await this.updateDriverRow(trx, driver);
+    });
+  }
+
+  public async listAssignments(
+    tenantId: string,
+    driverId: string,
+    range?: { from?: Date; to?: Date },
+  ): Promise<DriverAssignment[]> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      let query = trx<DriverAssignmentRow>('fleet.driver_assignments').where({
+        tenant_id: tenantId,
+        driver_id: driverId,
+      });
+      if (range?.from) {
+        query = query.andWhere((q) =>
+          q.whereNull('ended_at').orWhere('ended_at', '>=', range.from as Date),
+        );
+      }
+      if (range?.to) {
+        query = query.andWhere('started_at', '<=', range.to);
+      }
+      const rows = (await query.orderBy('started_at', 'desc')) as DriverAssignmentRow[];
+      return rows.map((r) => this.toAssignment(r));
+    });
+  }
+
+  /** Active assignment for vehicle at timestamp (Slice D / behavior attribution). */
+  public async findDriverForVehicleAt(
+    tenantId: string,
+    vehicleId: string,
+    at: Date,
+  ): Promise<string | null> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx<DriverAssignmentRow>('fleet.driver_assignments')
+        .where({ tenant_id: tenantId, vehicle_id: vehicleId })
+        .andWhere('started_at', '<=', at)
+        .andWhere((q) => q.whereNull('ended_at').orWhere('ended_at', '>', at))
+        .orderBy('started_at', 'desc')
+        .first();
+      return row?.driver_id ?? null;
+    });
+  }
+
+  /** True when the driver has any assignment overlapping [from, to]. */
+  public async hasAssignmentOverlap(
+    tenantId: string,
+    driverId: string,
+    from: Date,
+    to: Date,
+  ): Promise<boolean> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx('fleet.driver_assignments')
+        .where({ tenant_id: tenantId, driver_id: driverId })
+        .andWhere('started_at', '<=', to)
+        .andWhere((q) => q.whereNull('ended_at').orWhere('ended_at', '>=', from))
+        .first('id');
+      return Boolean(row);
+    });
+  }
+
+  /** Active driver ids for tenant ranking (bounded). */
+  public async listActiveIds(tenantId: string, limit = 2000): Promise<string[]> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = (await trx('fleet.drivers')
+        .where({ tenant_id: tenantId, status: 'ACTIVE' })
+        .orderBy('created_at', 'desc')
+        .limit(limit)
+        .select('id')) as Array<{ id: string }>;
+      return rows.map((r) => r.id);
     });
   }
 
@@ -151,6 +266,29 @@ export class DriverRepository {
         .first();
       return row ? this.toDomain(row) : null;
     });
+  }
+
+  private async updateDriverRow(trx: Knex.Transaction, driver: Driver): Promise<void> {
+    const updated = await trx('fleet.drivers')
+      .where({ id: driver.id, tenant_id: driver.tenantId, version: driver.version })
+      .update({
+        employee_id: driver.employeeId,
+        first_name: driver.firstName,
+        last_name: driver.lastName,
+        email: driver.email,
+        phone: driver.phone,
+        license_number: driver.licenseNumber,
+        license_class: driver.licenseClass,
+        license_issued: driver.licenseIssued,
+        license_expires: driver.licenseExpires,
+        license_country: driver.licenseCountry,
+        status: driver.status,
+        assigned_vehicle_id: driver.assignedVehicleId,
+        assigned_at: driver.assignedAt,
+        version: this.knex.raw('version + 1'),
+        updated_at: this.knex.fn.now(),
+      });
+    if (updated === 0) throw new Error('Optimistic concurrency conflict on driver update.');
   }
 
   private toDomain(row: DriverRow): Driver {
@@ -170,6 +308,17 @@ export class DriverRepository {
       assignedVehicleId: row.assigned_vehicle_id,
       assignedAt: row.assigned_at,
       metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
+    });
+  }
+
+  private toAssignment(row: DriverAssignmentRow): DriverAssignment {
+    return DriverAssignment.rehydrate(row.id, {
+      tenantId: row.tenant_id,
+      driverId: row.driver_id,
+      vehicleId: row.vehicle_id,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      changedBy: row.changed_by,
     });
   }
 }

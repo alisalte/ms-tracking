@@ -20,6 +20,7 @@ export const REPORT_SECTIONS = [
   'geofences',
   'commands',
   'activity',
+  'schedules',
 ] as const;
 
 export type ReportSection = (typeof REPORT_SECTIONS)[number];
@@ -44,6 +45,7 @@ export const REPORT_CATALOG: ReadonlyArray<{
   { id: 'devices', group: 'assets' },
   { id: 'commands', group: 'assets' },
   { id: 'activity', group: 'activity' },
+  { id: 'schedules', group: 'activity' },
 ];
 
 export const REPORT_CATALOG_GROUPS: readonly ReportCatalogGroup[] = [

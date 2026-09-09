@@ -5,7 +5,7 @@
 - Native A9A dialback live video is not reliable on MD300; live path is AB2 + MediaMTX + HLS (`docs/implementation/MDVR_LIVE_VIDEO.md`).
 - AB4 playback publishes to `<camera key>/pb`, not the live key. Using the live key shows live video instead of the clip.
 - HEVC on some cameras is transcoded to H.264 in MediaMTX (~5–10 s before HLS is ready).
-- Alarm evidence (DMS JPEG + clip) is loaded only after the operator asks; it is not auto-fetched when the alarm is raised.
+- Alarm evidence (DMS JPEG + clip): Slice 1 stores JPEG on platform via auto D00. Slice 2 auto-issues AB4 for the **5s before + 10s after** cabin window and marks `video_status=READY` when primed — **durable MinIO object store is not enabled** (MinIO still commented in compose); playback still goes through device→MediaMTX HLS.
 - Manual photo capture from the alarm drawer (`D03`) happens after the event, not at the DMS trigger instant.
 - C90 configures DMS alert volume and which behaviors fire; it does not define photo/video capture duration.
 - Event 126 packets may include a `photoName`. If the device did not store that file, D00 fails.
@@ -57,12 +57,29 @@ Whether MD300 actually writes a snapshot and a short event clip at DMS time depe
 
 ## Drivers
 
-- Assignment is **current vehicle only** (`assigned_vehicle_id`); there is no durable assignment history in fleet-service yet. `driver-management-service` from the module doc is not an app in this repo.
-- Driver report meters are a rollup of the **currently** assigned vehicle’s meters — incorrect if the driver changed vehicles in the period (Phase 8 deferred true driver-activity).
-- Alerts table has no `driver_id`; UI may show an optional `driver` string only. Reliable “alarms for this driver” needs assignment-at-event-time or a stamped id.
+- Assignment history table `fleet.driver_assignments` is live (Phase 1 / Q0): assign/unassign/deactivate write intervals; `GET /fleet/drivers/:id/assignments` + driver drawer timeline.
+- Driver Behavior Sprint 1–2: `fleet.driving_events` + `fleet.driver_scores`; ranking at `GET /fleet/drivers/behavior-ranking`; drawer score + delta; attention when score ≤70. Severe events still use existing alarm → Notification Center (no dedicated score-drop push yet). Sprint 3 (video/coaching/ML) not shipped.
+- Driver report meters remain a rollup of the **currently** assigned vehicle’s meters until Slice C work aggregation lands.
+- Alerts table has no `driver_id` yet; behavior events carry attributed `driver_id` separately.
+
+## Reporting
+
+- Report schedule v1 stores CSV artifacts in `reporting.report_jobs` (download only). Email delivery, PDF/XLSX, and visual report builder are not shipped.
+- Schedulable types are limited to existing CSV exports: trips, vehicle-utilization, alarms.
+
+## Fleet Intelligence Phase 2
+
+- **CMMS / Maintenance board**: still stub (`MaintenancePage` + partner links); SRS drafted then **skipped** by stakeholder (2026-09-09).
+- **Fuel Analytics**: not implemented; only alarm labels/`FUEL_*` → `fuel-theft`. Active SRS: `docs/requirements/fuel-analytics-v1/` (awaiting data-source lock).
 
 ## Changelog
 
+- 2026-09-09: Phase 2 — CMMS skipped; Fuel Analytics v1 SRS drafted (no code yet).
+- 2026-09-09: F-07 Slice 2 — video window + auto AB4 prime + video_status; retention sweeper; MinIO durable clip still deferred.
+- 2026-09-09: F-07 Slice 1 — auto photo evidence (`alarm_evidence` + D00 worker + platform JPEG API/UI status).
+- 2026-09-09: Report schedule v1 (reporting.report_schedules + jobs; `/reports?section=schedules`; permission `report.schedule`).
+- 2026-09-09: Driver Behavior Sprint 1 (driving_events + driver_scores from existing alarms; drawer score UI).
+- 2026-09-09: Driver assignment history (Phase 1 Q0 Slice B) started — `driver_assignments` + API + drawer timeline; work/alarm attribution still pending.
 - 2026-09-08: Parameter Alarm event list expanded with MDVR Input 2–8 Active / 1–8 Inactive (codes 2–16).
 - 2026-09-08: Device Parameter Alerts+ (B07/B10/D79/C03; limited live readback; A73 not included).
 - 2026-09-08: Device Parameter Tracking+ (A13/A14/A16; A12/A15 stay under Network).

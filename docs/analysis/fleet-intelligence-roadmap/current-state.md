@@ -24,9 +24,9 @@ Evidence from apps, modules, and project-memory (2026-09-08).
 | F-02 | Fleet Health Score | **PARTIAL** | `FleetHealthPanel` = ONLINE/STALE/OFFLINE + reporting meters — **not** a scored health index |
 | F-03 | Fuel Analytics | **MISSING** | Device codes + alarm type labels (`fuel-theft`, …); no fuel domain/service/tables (`FULL_PROJECT_FEATURE_MATRIX`: NOT STARTED) |
 | F-04 | Geofence Intelligence | **PARTIAL** | Enter/exit/dwell + analytics report; **no** route/corridor compliance |
-| F-05 | Report Builder | **PARTIAL** | Fixed KPI sections + CSV; **no** visual builder, schedule, PDF/XLSX job factory |
+| F-05 | Report Builder | **PARTIAL** | Fixed KPI sections + CSV; **schedule v1** (daily/weekly jobs + download). No visual builder, email, PDF/XLSX |
 | F-06 | Predictive + CMMS | **MISSING** | UI stub; module docs only; no `vehicle-maintenance-service` / CMMS app |
-| F-07 | AI Video Events | **PARTIAL** | DMS/ADAS decode + Alarm Center + manual evidence; auto capture SRS not approved; no cloud `video-ai-engine` |
+| F-07 | AI Video Events | **PARTIAL** | Auto photo + AB4 5+10s prime + status UI. Durable MinIO archive / cloud AI not shipped |
 | F-08 | Digital Twin | **MISSING** | No product/docs; live map/status is operational state only |
 | F-09 | AI Fleet Assistant | **MISSING** | No requirements or code |
 | F-10 | ETA Prediction | **PARTIAL** | Static OSRM duration in Route Planner; no live ETA events |

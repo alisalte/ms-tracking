@@ -48,6 +48,7 @@ import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-rea
 import { buildEvaluatorRegistry } from './evaluators/evaluators.js';
 import type { InputSignal } from './evaluators/rule-evaluator.js';
 import type { NotificationDispatcherService } from './notification-dispatcher.service.js';
+import type { AlarmEvidenceService } from './alarm-evidence.service.js';
 
 export interface AlarmEvaluatorDeps {
   readonly rules: AlarmRuleRepository;
@@ -57,6 +58,8 @@ export interface AlarmEvaluatorDeps {
   readonly dispatcher: NotificationDispatcherService | null;
   /** Sprint G observability (optional — unit tests construct without). */
   readonly metrics?: TelemetryMetrics | null;
+  /** F-07 Slice 1 — auto evidence enqueue (optional in unit tests). */
+  readonly evidence?: AlarmEvidenceService | null;
 }
 
 @Injectable()
@@ -163,6 +166,22 @@ export class AlarmEvaluatorService {
       });
       await this.deps.alarms.create(occurrence);
       this.metrics?.alarmsOpened.inc({ type });
+
+      if (this.deps.evidence) {
+        try {
+          await this.deps.evidence.enqueueForDeviceAlarm({
+            tenantId: alarm.tenantId,
+            alertId: id,
+            deviceId: alarm.deviceId,
+            vehicleId: alarm.vehicleId,
+            alarmCode: alarm.code,
+            detail: alarm.detail,
+            raisedAt: alarm.detectedAt,
+          });
+        } catch (err) {
+          this.logger.warn(`Evidence enqueue failed: ${(err as Error).message}`);
+        }
+      }
 
       this.deps.gateway?.emitAlarmCreated(alarm.tenantId, occurrence);
       if (this.deps.dispatcher) {

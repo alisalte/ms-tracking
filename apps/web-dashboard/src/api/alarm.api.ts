@@ -22,7 +22,7 @@ import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { wireIso, wireNum, wireStr, wireValue } from '@/lib/wire-value';
 import { mockAlarmDetail, mockAlarms } from '@/mock/alarm-data';
 import type { Alarm, AlarmSourceEvent, AlarmStatus } from '@/types/alarm.types';
-import { apiGetRaw, apiPost } from './client';
+import { apiGetBlob, apiGetRaw, apiPost } from './client';
 import { queryKeys } from './query-keys';
 
 // ── Wire types (snake_case → camelCase mapping) ─────────────────────────────
@@ -227,6 +227,59 @@ export function useAlarms(params: AlarmListParams = {}) {
   return useQuery({
     queryKey: queryKeys.alarms.list(),
     queryFn: () => fetchAlarms(params),
+  });
+}
+
+/** GET /notification/alerts/:id/evidence — platform auto-capture status (F-07). */
+export interface AlarmPlatformEvidence {
+  id: string;
+  alertId: string;
+  status:
+    | 'PENDING'
+    | 'FETCHING'
+    | 'PHOTO_READY'
+    | 'PHOTO_MISSING'
+    | 'PHOTO_FAILED'
+    | 'SKIPPED_COOLDOWN';
+  photoName: string | null;
+  photoAvailable: boolean;
+  error: string | null;
+  videoStatus: 'PENDING' | 'FETCHING' | 'READY' | 'FAILED' | 'SKIPPED' | null;
+  videoChannel: number | null;
+  videoAvailable: boolean;
+  videoWindowFrom: string | null;
+  videoWindowTo: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchAlarmPlatformEvidence(
+  alarmId: string,
+): Promise<AlarmPlatformEvidence | null> {
+  if (shouldUseMock()) return null;
+  const res = await apiGetRaw<{ data: AlarmPlatformEvidence | null }>(
+    `/notification/alerts/${alarmId}/evidence`,
+  );
+  return res.data ?? null;
+}
+
+export async function fetchAlarmEvidencePhoto(alarmId: string): Promise<Blob> {
+  return apiGetBlob(`/notification/alerts/${alarmId}/evidence/photo`);
+}
+
+export function useAlarmPlatformEvidence(alarmId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['alarms', 'evidence', alarmId],
+    queryFn: () => fetchAlarmPlatformEvidence(alarmId as string),
+    enabled: Boolean(alarmId) && enabled && !shouldUseMock(),
+    refetchInterval: (q) => {
+      const s = q.state.data?.status;
+      const v = q.state.data?.videoStatus;
+      if (s === 'PENDING' || s === 'FETCHING') return 5_000;
+      if (v === 'PENDING' || v === 'FETCHING') return 5_000;
+      return false;
+    },
   });
 }
 

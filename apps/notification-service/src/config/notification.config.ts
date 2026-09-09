@@ -89,6 +89,8 @@ export const notificationConfigSchema = baseConfigSchema.merge(
     NOTIF_RETRY_WORKER_INTERVAL_MS: z.coerce.number().int().min(0).default(5000),
     /** Retry worker claim batch size per sweep. */
     NOTIF_RETRY_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).default(50),
+    /** Purge expired alarm_evidence (0 disables). Default 1 hour. */
+    NOTIF_EVIDENCE_RETENTION_INTERVAL_MS: z.coerce.number().int().min(0).default(3_600_000),
     /**
      * Rate limit per tenant+user+channel per 60s window (storm protection,
      * Sprint H §33). 0 disables limiting.

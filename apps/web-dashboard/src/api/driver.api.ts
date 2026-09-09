@@ -8,6 +8,7 @@
  *   POST   /fleet/drivers/:id/deactivate          204
  *   POST   /fleet/drivers/:id/assign-vehicle      { vehicle_id }
  *   POST   /fleet/drivers/:id/unassign-vehicle    204
+ *   GET    /fleet/drivers/:id/assignments         (?from&to ISO) → assignment history
  *
  * The wire from Nest (class JSON) is camelCase; writes use the Zod DTO's
  * snake_case. Cursor pagination is followed to exhaustion like the other
@@ -73,6 +74,30 @@ export function mapDriver(raw: Record<string, unknown>): Driver {
 
 export function driverFullName(d: Pick<Driver, 'firstName' | 'lastName'>): string {
   return `${d.firstName} ${d.lastName}`.trim();
+}
+
+/** One driver↔vehicle assignment interval from fleet-service. */
+export interface DriverAssignmentInterval {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  startedAt: string;
+  endedAt: string | null;
+  changedBy: string | null;
+  isCurrent: boolean;
+}
+
+export function mapDriverAssignment(raw: Record<string, unknown>): DriverAssignmentInterval {
+  const endedAt = asStr(raw.endedAt ?? raw.ended_at);
+  return {
+    id: String(raw.id ?? ''),
+    driverId: String(raw.driverId ?? raw.driver_id ?? ''),
+    vehicleId: String(raw.vehicleId ?? raw.vehicle_id ?? ''),
+    startedAt: asStr(raw.startedAt ?? raw.started_at) ?? '',
+    endedAt,
+    changedBy: asStr(raw.changedBy ?? raw.changed_by),
+    isCurrent: endedAt == null || Boolean(raw.isCurrent ?? raw.is_current),
+  };
 }
 
 /** HTML date (YYYY-MM-DD) → ISO datetime the backend Zod `.datetime()` accepts. */
@@ -159,6 +184,171 @@ export function useDriverDetail(id: string | null) {
   });
 }
 
+async function fetchDriverAssignments(id: string): Promise<DriverAssignmentInterval[]> {
+  if (shouldUseMock()) return resolveMock([]);
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<Record<string, unknown>[]>(`/fleet/drivers/${id}/assignments`);
+      return (rows ?? []).map(mapDriverAssignment);
+    },
+    async () => [],
+  );
+}
+
+export function useDriverAssignments(id: string | null) {
+  return useQuery({
+    queryKey: id ? queryKeys.assets.driverAssignments(id) : ['assets', 'driver', 'assignments', 'none'],
+    queryFn: () => fetchDriverAssignments(id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export interface DriverBehaviorScore {
+  score: number | null;
+  periodStart: string;
+  periodEnd: string;
+  harshBrakeCount: number;
+  rapidAccelCount: number;
+  speedViolationCount: number;
+  excessiveIdleCount: number;
+  calculatedAt: string | null;
+  previousScore: number | null;
+  delta: number | null;
+  needsAttention: boolean;
+  deductions: {
+    harshBrake: number;
+    rapidAccel: number;
+    speedViolation: number;
+    excessiveIdle: number;
+  } | null;
+}
+
+export interface DriverBehaviorEvent {
+  id: string;
+  type: string;
+  severity: string;
+  vehicleId: string;
+  raisedAt: string;
+  sourceAlarmId: string | null;
+}
+
+function mapBehaviorScore(raw: Record<string, unknown> | null | undefined): DriverBehaviorScore | null {
+  if (!raw) return null;
+  return {
+    score: raw.score == null ? null : Number(raw.score),
+    periodStart: asStr(raw.periodStart ?? raw.period_start) ?? '',
+    periodEnd: asStr(raw.periodEnd ?? raw.period_end) ?? '',
+    harshBrakeCount: Number(raw.harshBrakeCount ?? raw.harsh_brake_count ?? 0),
+    rapidAccelCount: Number(raw.rapidAccelCount ?? raw.rapid_accel_count ?? 0),
+    speedViolationCount: Number(raw.speedViolationCount ?? raw.speed_violation_count ?? 0),
+    excessiveIdleCount: Number(raw.excessiveIdleCount ?? raw.excessive_idle_count ?? 0),
+    calculatedAt: asStr(raw.calculatedAt ?? raw.calculated_at),
+    previousScore: raw.previousScore == null && raw.previous_score == null
+      ? null
+      : Number(raw.previousScore ?? raw.previous_score),
+    delta: raw.delta == null ? null : Number(raw.delta),
+    needsAttention: Boolean(raw.needsAttention ?? raw.needs_attention),
+    deductions: (raw.deductions as DriverBehaviorScore['deductions']) ?? null,
+  };
+}
+
+function mapBehaviorEvent(raw: Record<string, unknown>): DriverBehaviorEvent {
+  return {
+    id: String(raw.id ?? ''),
+    type: String(raw.type ?? ''),
+    severity: String(raw.severity ?? ''),
+    vehicleId: String(raw.vehicleId ?? raw.vehicle_id ?? ''),
+    raisedAt: asStr(raw.raisedAt ?? raw.raised_at) ?? '',
+    sourceAlarmId: asStr(raw.sourceAlarmId ?? raw.source_alarm_id),
+  };
+}
+
+async function fetchDriverBehaviorScore(id: string): Promise<DriverBehaviorScore | null> {
+  if (shouldUseMock()) return resolveMock(null);
+  return withMockFallback(
+    async () => mapBehaviorScore(await apiGet<Record<string, unknown> | null>(`/fleet/drivers/${id}/behavior-score`)),
+    async () => null,
+  );
+}
+
+async function fetchDriverBehaviorEvents(id: string): Promise<DriverBehaviorEvent[]> {
+  if (shouldUseMock()) return resolveMock([]);
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<Record<string, unknown>[]>(`/fleet/drivers/${id}/behavior-events`);
+      return (rows ?? []).map(mapBehaviorEvent);
+    },
+    async () => [],
+  );
+}
+
+export function useDriverBehaviorScore(id: string | null) {
+  return useQuery({
+    queryKey: id ? queryKeys.assets.driverBehaviorScore(id) : ['assets', 'driver', 'behavior-score', 'none'],
+    queryFn: () => fetchDriverBehaviorScore(id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useDriverBehaviorEvents(id: string | null) {
+  return useQuery({
+    queryKey: id ? queryKeys.assets.driverBehaviorEvents(id) : ['assets', 'driver', 'behavior-events', 'none'],
+    queryFn: () => fetchDriverBehaviorEvents(id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export interface DriverBehaviorRankingRow {
+  rank: number;
+  driverId: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  score: number;
+  harshBrakeCount: number;
+  rapidAccelCount: number;
+  speedViolationCount: number;
+  excessiveIdleCount: number;
+  needsAttention: boolean;
+}
+
+function mapRankingRow(raw: Record<string, unknown>): DriverBehaviorRankingRow {
+  return {
+    rank: Number(raw.rank ?? 0),
+    driverId: String(raw.driverId ?? raw.driver_id ?? ''),
+    firstName: String(raw.firstName ?? raw.first_name ?? ''),
+    lastName: String(raw.lastName ?? raw.last_name ?? ''),
+    status: String(raw.status ?? 'ACTIVE'),
+    score: Number(raw.score ?? 0),
+    harshBrakeCount: Number(raw.harshBrakeCount ?? raw.harsh_brake_count ?? 0),
+    rapidAccelCount: Number(raw.rapidAccelCount ?? raw.rapid_accel_count ?? 0),
+    speedViolationCount: Number(raw.speedViolationCount ?? raw.speed_violation_count ?? 0),
+    excessiveIdleCount: Number(raw.excessiveIdleCount ?? raw.excessive_idle_count ?? 0),
+    needsAttention: Boolean(raw.needsAttention ?? raw.needs_attention),
+  };
+}
+
+async function fetchDriverBehaviorRanking(): Promise<DriverBehaviorRankingRow[]> {
+  if (shouldUseMock()) return resolveMock([]);
+  return withMockFallback(
+    async () => {
+      const body = await apiGetRaw<{ data: Record<string, unknown>[] }>(
+        '/fleet/drivers/behavior-ranking',
+      );
+      return (body.data ?? []).map(mapRankingRow);
+    },
+    async () => [],
+  );
+}
+
+export function useDriverBehaviorRanking(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.assets.driverBehaviorRanking(),
+    queryFn: fetchDriverBehaviorRanking,
+    enabled: options?.enabled ?? true,
+  });
+}
+
 async function syncAssignment(id: string, vehicleId: string | null | undefined): Promise<void> {
   if (vehicleId === undefined) return;
   if (vehicleId) {
@@ -220,6 +410,7 @@ export function useAssignDriverVehicle() {
     mutationFn: ({ driverId, vehicleId }) => syncAssignment(driverId, vehicleId),
     onSuccess: (_d, { driverId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(driverId) });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.driverAssignments(driverId) });
       qc.invalidateQueries({ queryKey: queryKeys.assets.all });
     },
   });
@@ -229,7 +420,11 @@ export function useUnassignDriverVehicle() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
     mutationFn: (driverId) => syncAssignment(driverId, null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
+    onSuccess: (_d, driverId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(driverId) });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.driverAssignments(driverId) });
+      qc.invalidateQueries({ queryKey: queryKeys.assets.all });
+    },
   });
 }
 

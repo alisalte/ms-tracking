@@ -194,6 +194,14 @@ export async function apiDeleteNoContent(url: string): Promise<void> {
 }
 
 /**
+ * Typed PATCH for endpoints that return a RAW body (no { data } envelope).
+ */
+export async function apiPatchRaw<TRes>(url: string, body?: unknown): Promise<TRes> {
+  const response = await apiClient.patch<TRes>(url, body);
+  return response.data;
+}
+
+/**
  * Typed PUT request that unwraps the { data: T } envelope.
  */
 export async function apiPut<TReq, TRes>(url: string, body?: TReq): Promise<TRes> {

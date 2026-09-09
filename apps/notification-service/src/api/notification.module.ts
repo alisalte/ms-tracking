@@ -17,6 +17,8 @@ import type { Knex } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AlarmEvaluatorService } from '../application/alarm-evaluator.service.js';
+import { AlarmEvidenceService } from '../application/alarm-evidence.service.js';
+import { EvidenceRetentionWorker } from '../application/evidence-retention.worker.js';
 import {
   InAppChannel,
   PushChannel,
@@ -33,6 +35,7 @@ import { AlarmStateCache } from '../infrastructure/cache/alarm-state-cache.js';
 import { NotificationRateLimiter } from '../infrastructure/cache/notification-rate-limiter.js';
 import { AlarmDlqProducer } from '../infrastructure/kafka/alarm-dlq-producer.js';
 import { AlarmKafkaConsumer } from '../infrastructure/kafka/alarm-kafka-consumer.js';
+import { AlarmEvidenceRepository } from '../infrastructure/persistence/alarm-evidence.repository.js';
 import { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
 import { FleetEventRepository } from '../infrastructure/persistence/fleet-event.repository.js';
@@ -49,6 +52,7 @@ import { RulesController } from './rules.controller.js';
 
 export const NOTIF_CONFIG = 'NOTIF_CONFIG';
 export const ALARM_KAFKA_CONSUMER = 'ALARM_KAFKA_CONSUMER';
+export const ALARM_EVIDENCE_SERVICE = 'ALARM_EVIDENCE_SERVICE';
 export { ALARM_REALTIME_GATEWAY, NOTIFICATION_PROVIDER_REGISTRY };
 
 @Module({})
@@ -260,7 +264,28 @@ export class NotificationModule {
               batchSize: cfg.NOTIF_RETRY_WORKER_BATCH_SIZE,
             }),
         },
-        // Alarm evaluator (injects the dispatcher + Sprint G metrics).
+        // Alarm evidence (F-07 Slice 1) + evaluator.
+        {
+          provide: AlarmEvidenceRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new AlarmEvidenceRepository(knex as never),
+        },
+        {
+          provide: ALARM_EVIDENCE_SERVICE,
+          inject: [AlarmEvidenceRepository],
+          useFactory: (repo: AlarmEvidenceRepository) => new AlarmEvidenceService(repo),
+        },
+        {
+          provide: AlarmEvidenceService,
+          useExisting: ALARM_EVIDENCE_SERVICE,
+        },
+        {
+          provide: EvidenceRetentionWorker,
+          inject: [AlarmEvidenceRepository, NOTIF_CONFIG],
+          useFactory: (repo: AlarmEvidenceRepository, cfg: NotificationConfig) =>
+            new EvidenceRetentionWorker(repo, cfg.NOTIF_EVIDENCE_RETENTION_INTERVAL_MS),
+        },
+        // Alarm evaluator (injects the dispatcher + Sprint G metrics + evidence).
         {
           provide: AlarmEvaluatorService,
           inject: [
@@ -270,6 +295,7 @@ export class NotificationModule {
             ALARM_REALTIME_GATEWAY,
             NotificationDispatcherService,
             METRICS_TOKEN,
+            ALARM_EVIDENCE_SERVICE,
           ],
           useFactory: (
             rules: AlarmRuleRepository,
@@ -278,6 +304,7 @@ export class NotificationModule {
             gateway: AlarmRealtimeGateway,
             dispatcher: NotificationDispatcherService,
             metrics: TelemetryMetrics,
+            evidence: AlarmEvidenceService,
           ) =>
             new AlarmEvaluatorService({
               rules,
@@ -286,6 +313,7 @@ export class NotificationModule {
               gateway,
               dispatcher,
               metrics,
+              evidence,
             }),
         },
         // Sprint G Part 22 — DLQ producer (non-fatal at boot, lazy connect).

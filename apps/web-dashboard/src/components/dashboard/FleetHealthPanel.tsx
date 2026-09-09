@@ -1,10 +1,17 @@
 import type { ApexOptions } from 'apexcharts';
+import { useQuery } from '@tanstack/react-query';
 import { Activity, HeartPulse } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { fetchAlarms } from '@/api/alarm.api';
 import { useDeviceStatuses, useFleetStats } from '@/api/fleet.api';
 import { Meter } from '@/components/tailwind-ui';
+import {
+  computeFleetHealthScore,
+  healthScoreTone,
+  type HealthAlarmSeverity,
+} from '@/lib/fleet-health-score';
 import { formatNumber } from '@/lib/format-number';
 import { chart } from '@/theme/palette';
 import type { MapVehicle } from '@/types/fleet.types';
@@ -19,12 +26,9 @@ export interface FleetHealthPanelProps {
 }
 
 /**
- * FleetHealthPanel — device-health visualization + connectivity/GPS meters.
+ * FleetHealthPanel — connectivity meters + rule-based Fleet Health Score v1.
  *
- * All real sources: device connection states (`/tracking/devices/status`),
- * position coverage (the map join's `updatedAt`), and the fleet summary's
- * stale count. A failure of ANY of the three sources surfaces as the card's
- * error state — never as fabricated 0/0 meters.
+ * Score = mean of per-vehicle scores (60% presence + 40% open-alarm headroom).
  */
 export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHealthPanelProps) {
   const { t, i18n } = useTranslation();
@@ -35,6 +39,10 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
     refetch: refetchStatuses,
   } = useDeviceStatuses();
   const { data: stats, refetch: refetchStats } = useFleetStats();
+  const openAlarmsQ = useQuery({
+    queryKey: ['fleet', 'health', 'open-alarms'],
+    queryFn: () => fetchAlarms({ status: 'OPEN', limit: 100 }),
+  });
 
   const metrics = useMemo(() => {
     const list = statuses ?? [];
@@ -44,6 +52,27 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
     const reporting = vehicles.filter((v) => v.updatedAt).length;
     return { total: list.length, online, offline, stale, reporting };
   }, [statuses, vehicles]);
+
+  const health = useMemo(() => {
+    const openAlarms = (openAlarmsQ.data ?? []).map((a) => ({
+      vehicleId: a.vehicleId,
+      severity: a.severity as HealthAlarmSeverity,
+    }));
+    return computeFleetHealthScore(
+      vehicles.map((v) => ({ vehicleId: v.id, presence: v.presence })),
+      openAlarms,
+    );
+  }, [vehicles, openAlarmsQ.data]);
+
+  const scoreTone = healthScoreTone(health.score);
+  const scoreToneClass =
+    scoreTone === 'success'
+      ? 'text-success-600 dark:text-success-400'
+      : scoreTone === 'warning'
+        ? 'text-warning-600 dark:text-warning-400'
+        : scoreTone === 'danger'
+          ? 'text-danger-600 dark:text-danger-400'
+          : 'text-gray-500 dark:text-gray-400';
 
   const slices = useMemo(
     () =>
@@ -89,6 +118,7 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
     onRetry?.();
     void refetchStatuses();
     void refetchStats();
+    void openAlarmsQ.refetch();
   };
 
   return (
@@ -102,6 +132,30 @@ export function FleetHealthPanel({ vehicles, loading, error, onRetry }: FleetHea
       flush
     >
       <div className="flex flex-col gap-3 px-4 pb-4 sm:px-5">
+        <div className="rounded-xl border border-gray-200 p-3 dark:border-white/5">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            {t('dashboard.health.fleetScore')}
+          </p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-2">
+            <span className={`text-3xl font-bold tabular-nums ${scoreToneClass}`}>
+              {openAlarmsQ.isLoading || health.score == null
+                ? '—'
+                : formatNumber(health.score, i18n.language)}
+            </span>
+            {health.score != null && !openAlarmsQ.isLoading && (
+              <span className="text-sm text-gray-500 dark:text-gray-400">/ 100</span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t('dashboard.health.fleetScoreHint')}
+          </p>
+          {!openAlarmsQ.isLoading && health.attentionCount > 0 && (
+            <p className="mt-1 text-xs font-medium text-warning-600 dark:text-warning-400">
+              {t('dashboard.health.attentionVehicles', { count: health.attentionCount })}
+            </p>
+          )}
+        </div>
+
         {slices.length > 0 && (
           <ApexChart
             type="donut"
