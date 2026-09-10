@@ -74,6 +74,8 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
   private readonly logger = new Logger('CommandAckConsumer');
   private consumer: Consumer | null = null;
   private started = false;
+  private shutDown = false;
+  private startAttempts = 0;
 
   constructor(
     private readonly config: FleetManagementConfig,
@@ -82,14 +84,36 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
   ) {}
 
   public async onApplicationBootstrap(): Promise<void> {
-    try {
-      await this.start();
-    } catch (err) {
-      this.logger.warn(`Command-ack consumer not started: ${(err as Error).message}`);
-    }
+    // Non-fatal with retry: Kafka may briefly refuse connections while the
+    // broker binds its advertised listener (boot-time race — fleet-management
+    // starts before Kafka's listener is up). Without a retry here, a single
+    // ECONNREFUSED at boot leaves this consumer dead for the container's whole
+    // lifetime: every AB2/AB3 command then sits QUEUED until its TTL sweep
+    // expires it, since nothing ever projects the gateway's SENT/ACKED
+    // feedback onto `fleet.device_commands` (mirrors SessionLifecycleConsumer).
+    this.scheduleStart();
+  }
+
+  private scheduleStart(): void {
+    void this.start()
+      .then(() => {
+        if (this.started) this.startAttempts = 0;
+      })
+      .catch((err: Error) => {
+        if (this.shutDown) return;
+        this.startAttempts += 1;
+        const backoffMs = Math.min(5_000 * 2 ** Math.min(this.startAttempts - 1, 4), 60_000);
+        this.logger.warn(
+          `Command-ack consumer not started (attempt ${this.startAttempts}) — retrying in ${backoffMs}ms: ${err.message}`,
+        );
+        setTimeout(() => {
+          if (!this.shutDown) this.scheduleStart();
+        }, backoffMs).unref?.();
+      });
   }
 
   public async onApplicationShutdown(): Promise<void> {
+    this.shutDown = true;
     if (!this.started) return;
     await this.consumer?.disconnect().catch(() => {
       /* best-effort */
@@ -159,10 +183,7 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
   private async handleRejected(env: CommandEventEnvelope): Promise<void> {
     if (!env.tenantId || !env.commandId) return;
     await this.commands.markFailed(env.tenantId, env.commandId, env.reason ?? 'REJECTED');
-    await this.evidence?.markFailedByCommandId(
-      env.commandId,
-      env.reason ?? 'REJECTED',
-    );
+    await this.evidence?.markFailedByCommandId(env.commandId, env.reason ?? 'REJECTED');
   }
 
   private async handleDeviceAck(env: CommandEventEnvelope): Promise<void> {
