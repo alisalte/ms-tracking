@@ -55,7 +55,12 @@ export type CommandDispatchResult =
   /** No live socket yet — queued until the device authenticates (md300 live.js). */
   | { readonly outcome: 'HELD' };
 
-/** Media commands that must wait for the GPRS socket, like md300 `sendStartStream`. */
+/**
+ * Commands held for the GPRS socket instead of being rejected while the unit is
+ * mid-reconnect. An MD300 on cellular re-authenticates constantly, so a few
+ * seconds of downtime must not fail an operator's action — the dashboard opens
+ * live video, and asks for a DMS calibration, before the unit has dialled back in.
+ */
 const HOLD_WHEN_OFFLINE = new Set([
   'AB2',
   'AB3',
@@ -83,6 +88,7 @@ const HOLD_WHEN_OFFLINE = new Set([
   'D00',
   'D01',
   'E91',
+  'CD1',
 ]);
 /** Match fleet-management max command TTL (600s) so A10 locate survives until GPRS. */
 const HOLD_TTL_MS = 600_000;
