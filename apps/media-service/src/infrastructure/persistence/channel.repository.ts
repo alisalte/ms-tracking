@@ -57,8 +57,28 @@ export class ChannelRepository {
         ptz: input.ptz ?? false,
         capabilities: JSON.stringify(input.capabilities ?? {}),
       })
+      .onConflict(
+        this.knex.raw(
+          "(tenant_id, device_id, logical_channel) WHERE status <> 'DECOMMISSIONED' " +
+            'AND device_id IS NOT NULL AND logical_channel IS NOT NULL',
+        ),
+      )
+      .ignore()
       .returning('*');
-    return toChannel(row as ChannelRow);
+    if (row) return toChannel(row as ChannelRow);
+
+    // This camera is already registered — re-binding a device re-sends its
+    // default cameras. Hand back the live row (keeping a renamed label) so the
+    // caller sees a registration that succeeded, not a duplicate tile.
+    const existing = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [input.tenantId])
+      .whereRaw('device_id = ?::uuid', [input.deviceId])
+      .where('logical_channel', input.logicalChannel ?? null)
+      .whereNot('status', 'DECOMMISSIONED')
+      .first();
+    return toChannel(existing as ChannelRow);
   }
 
   public async findById(channelId: string, tenantId: string): Promise<VideoChannel | null> {
