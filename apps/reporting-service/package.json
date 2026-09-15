@@ -6,7 +6,7 @@
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
-    "build": "tsc -b tsconfig.json",
+    "build": "tsc -b tsconfig.json && node -e \"require('node:fs').cpSync('src/infrastructure/database/migrations','dist/infrastructure/database/migrations',{recursive:true})\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dev": "node --env-file=../../infra/docker/.env --watch --import tsx src/main.ts",
     "start": "node dist/main.js",
