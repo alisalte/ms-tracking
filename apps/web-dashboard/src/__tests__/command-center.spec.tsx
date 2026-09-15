@@ -202,7 +202,9 @@ describe('CommandCenterPage', () => {
     const replies = screen.getAllByTestId('command-history-reply');
     expect(replies).toHaveLength(10);
     expect(screen.getAllByText('A12,OK').length).toBeGreaterThan(0);
-    expect(screen.getByText('DEVICE_OFFLINE')).toBeInTheDocument();
+    // A failed row reads as prose now; the raw verdict moves to the tooltip.
+    expect(screen.getByText(/device is offline/i)).toBeInTheDocument();
+    expect(screen.queryByText('DEVICE_OFFLINE')).not.toBeInTheDocument();
   });
 
   it('opens Parameter alarm table for Meitrack protocol', () => {

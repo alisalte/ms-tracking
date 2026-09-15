@@ -779,6 +779,7 @@
       "ackedBody": "Keep the driver still and looking forward until the unit finishes. You will not see the phone app's green box here.",
       "failedTitle": "Calibration command failed",
       "failedBody": "The device did not accept CD1. It must be online on GPRS (the same link as live video).",
+      "rejectedHint": "Calibration on this unit is done through Meitrack's MT Manager+ app over the device's local Wi-Fi. CD1 over GPRS is not accepted by this firmware.",
       "empty": "No MDVR camera devices",
       "emptyHelp": "Register an MD300 (or similar) with live cameras. Calibration uses the driver-facing channel and GPRS command CD1.",
       "noPreview": "Live preview is waiting for this camera. You can still send Start if the unit is on GPRS."
@@ -2652,5 +2653,19 @@
     "title": "404 — Page not found",
     "description": "The page you're looking for doesn't exist or has been moved.",
     "backToDashboard": "Back to dashboard"
+  },
+  "deviceError": {
+    "noReply": "The device never answered. It must be online on GPRS — the same link live video uses.",
+    "offline": "The device is offline. Wait for it to dial back in, then send the command again.",
+    "notAuthenticated": "The device is reconnecting and has not authenticated yet. Try again in a moment.",
+    "encodeFailed": "The command could not be encoded for this device's protocol. This is a server-side fault — report it.",
+    "adapterMissing": "No protocol adapter is loaded for this device's session. This is a server-side fault — report it.",
+    "noFile": "The device has no recording for the requested window.",
+    "rejected": "The device received the command and refused it. This firmware most likely does not support it over GPRS.",
+    "unsupported": "The device reports this command as unsupported.",
+    "deviceError": "The device received the command and reported an error.",
+    "unknownDevice": "The device refused the command with a code we do not recognise.",
+    "unknown": "The command failed.",
+    "code": "Device code: {{code}}"
   }
 }

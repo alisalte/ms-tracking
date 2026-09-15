@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from '@/components/tailwind-ui';
 import { groupCommandHistory } from '@/lib/command-history-groups';
+import { commandReply } from '@/lib/device-error';
 import { formatDateTime } from '@/lib/format-date';
 import type { CommandStatus, DeviceCommandRecord } from '@/types/command.types';
 
@@ -45,17 +46,21 @@ function StatusBadge({ status }: { status: CommandStatus }) {
 }
 
 function ReplyCell({ row }: { row: DeviceCommandRecord }) {
-  const text = row.responseText ?? row.error ?? '—';
+  const { t } = useTranslation();
+  // A failure is named in prose (`CD1,FFFE` tells an operator nothing); the raw
+  // protocol string moves into the tooltip so support can still read it.
+  const reply = commandReply(t, row);
+  const tooltip = reply.raw ? `${reply.text} (${reply.raw})` : reply.text;
   return (
-    <Tooltip label={text}>
+    <Tooltip label={tooltip}>
       <span
-        className={`block max-w-[240px] truncate font-mono text-xs ${
-          row.error
+        className={`block max-w-[240px] truncate text-xs ${
+          reply.isError
             ? 'text-danger-600 dark:text-danger-400'
-            : 'text-gray-800 dark:text-graydark-800'
+            : 'font-mono text-gray-800 dark:text-graydark-800'
         }`}
       >
-        {text}
+        {reply.text}
       </span>
     </Tooltip>
   );

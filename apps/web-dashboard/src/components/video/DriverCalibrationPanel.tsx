@@ -17,6 +17,7 @@ import { queryKeys } from '@/api/query-keys';
 import { Alert, Badge, Button, Spinner } from '@/components/tailwind-ui';
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { isMdvrChannel, useStreamSession } from '@/components/video/useStreamSession';
+import { describeDeviceError } from '@/lib/device-error';
 import { mdvrDevicesFromChannels, pickDmsChannel } from '@/lib/dms-channel';
 import type { CommandStatus, DeviceCommandRecord } from '@/types/command.types';
 import type { CameraChannel } from '@/types/video.types';
@@ -80,6 +81,10 @@ export function DriverCalibrationPanel({ channels, initialDeviceId }: DriverCali
   const latestCd1 =
     history.data?.find((r) => r.commandCode === 'CD1') ??
     (issued?.deviceId === deviceId ? issued : null);
+
+  // `CD1,FFFE` and friends mean nothing to an operator — name the failure and
+  // keep the raw protocol code beside it for support.
+  const failure = describeDeviceError(latestCd1?.error);
 
   const startCalibration = async () => {
     if (!deviceId || sending) return;
@@ -185,7 +190,17 @@ export function DriverCalibrationPanel({ channels, initialDeviceId }: DriverCali
       )}
       {latestCd1?.status === 'FAILED' && (
         <Alert variant="danger" title={t('video.calibrate.failedTitle')}>
-          {latestCd1.error ?? t('video.calibrate.failedBody')}
+          <p data-testid="calibrate-error-message">
+            {failure ? t(`deviceError.${failure.key}`) : t('video.calibrate.failedBody')}
+          </p>
+          {failure?.key === 'rejected' && (
+            <p className="mt-1">{t('video.calibrate.rejectedHint')}</p>
+          )}
+          {failure && (
+            <p className="mt-1 text-xs opacity-80" data-testid="calibrate-error-code">
+              {t('deviceError.code', { code: failure.code })}
+            </p>
+          )}
         </Alert>
       )}
 

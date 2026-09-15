@@ -14,6 +14,7 @@ import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
+import { commandReply } from '@/lib/device-error';
 import { formatDateTime } from '@/lib/format-date';
 import { isInReportRange } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
@@ -111,8 +112,13 @@ export function CommandsReportSection({ range }: { range: ReportRange }) {
     },
     {
       id: 'reply',
+      // Plain string on purpose — ReportsTable sorts on the rendered value, and
+      // an exported report has to carry the raw code alongside the sentence.
       headerKey: 'reports.cols.reply',
-      render: (r) => r.responseText ?? r.error ?? '—',
+      render: (r) => {
+        const reply = commandReply(t, r);
+        return reply.raw ? `${reply.text} (${reply.raw})` : reply.text;
+      },
     },
   ];
 
