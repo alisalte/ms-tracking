@@ -227,6 +227,17 @@ describe('MeitrackAdapter.decode', () => {
     expect(unkMsg.alarms?.[0]?.severity).toBe('INFO');
   });
 
+  it('does not raise periodic track events 33/35 as alarms', () => {
+    const mkTypes = (event: number) => {
+      const r = new ByteReader();
+      r.append(meitrackFrame(trackingBody(event)));
+      return adapter.decode(unwrap(adapter.frame(r, NOW))).map((m) => m.type);
+    };
+    expect(mkTypes(35)).toEqual(['POSITION']);
+    expect(mkTypes(33)).toEqual(['POSITION']);
+    expect(mkTypes(35)).not.toContain('ALARM');
+  });
+
   it('decodes a command response (D82) as COMMAND_ACK', () => {
     const frame = meitrackFrame(`${IMEI},D82,A11,OK`);
     const r = new ByteReader();

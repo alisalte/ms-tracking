@@ -1069,7 +1069,8 @@
       "POWER_OFF": "Power off",
       "STOP_MOVING": "Stopped moving",
       "START_MOVING": "Started moving",
-      "unknown": "Device event {{code}}"
+      "FACE_ID_ALARM": "Face ID alarm",
+      "unknown": "Unknown device event — code {{code}}"
     },
     "messages": {
       "overspeed": "Speed {{speed}} km/h (limit {{limit}} km/h)",

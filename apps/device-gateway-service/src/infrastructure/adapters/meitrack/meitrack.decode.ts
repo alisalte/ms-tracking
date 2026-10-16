@@ -131,8 +131,15 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
 /** 3-char command-family code (letter + 2 alphanumerics), excluding AAA. */
 const MEITRACK_RESPONSE_CODE = /^(?!AAA)[A-F][0-9A-Z]{2}$/;
 
-/** Periodic / keepalive / A10-reply event codes — not alarms (GPRS V2.0 §3.1–§3.2). */
-const MEITRACK_TRACK_EVENTS = new Set([0, 31, 34]);
+/**
+ * Periodic / keepalive / A10-reply event codes — not operator alarms
+ * (GPRS V2.0 §1.3 / §3.1–§3.2).
+ *
+ * 33 = Track By Distance, 35 = Track By Time Interval — devices emit these
+ * constantly as location reports; raising them as alarms floods the center
+ * with "Device event 33/35" noise.
+ */
+const MEITRACK_TRACK_EVENTS = new Set([0, 31, 33, 34, 35]);
 /** Live CCE/A10: if the GPS clock is this far off, stamp the packet with receive time. */
 const GPS_CLOCK_SKEW_MS = 5 * 60_000;
 
@@ -763,7 +770,7 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
       }),
     );
   }
-  if (event !== 0 && event !== 31 && event !== 34) {
+  if (!MEITRACK_TRACK_EVENTS.has(event)) {
     let alarm = mapMeitrackEvent(event);
     let detail: Record<string, unknown> | undefined;
     // 0xFE31 is the documented DMS/ADAS detail; some firmware also uses 0xFE2D.

@@ -92,6 +92,11 @@ export const MEITRACK_EVENTS: Readonly<Record<number, Pick<Alarm, 'code' | 'seve
   611: { code: 'VIDEO_RECOVERY_CH2', severity: 'INFO' },
   612: { code: 'VIDEO_RECOVERY_CH3', severity: 'INFO' },
   613: { code: 'VIDEO_RECOVERY_CH4', severity: 'INFO' },
+  614: { code: 'VIDEO_RECOVERY_CH5', severity: 'INFO' },
+  615: { code: 'VIDEO_RECOVERY_CH6', severity: 'INFO' },
+  616: { code: 'VIDEO_RECOVERY_CH7', severity: 'INFO' },
+  617: { code: 'VIDEO_RECOVERY_CH8', severity: 'INFO' },
+  647: { code: 'FACE_ID_ALARM', severity: 'WARNING' },
 };
 
 /** Map an event code to a canonical Alarm; unknown codes get a generic label. */

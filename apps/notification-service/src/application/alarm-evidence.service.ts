@@ -6,7 +6,7 @@ import {
   computeVideoWindow,
   extractCabinChannel,
   extractPhotoName,
-  isDmsOrAdasAlarmCode,
+  needsAlarmEvidence,
 } from '../domain/alarm-evidence.js';
 import type { AlarmEvidenceRepository } from '../infrastructure/persistence/alarm-evidence.repository.js';
 
@@ -26,7 +26,7 @@ export class AlarmEvidenceService {
   constructor(private readonly evidence: AlarmEvidenceRepository) {}
 
   public async enqueueForDeviceAlarm(input: EnqueueEvidenceInput): Promise<void> {
-    if (!isDmsOrAdasAlarmCode(input.alarmCode)) return;
+    if (!needsAlarmEvidence(input.alarmCode)) return;
 
     const existing = await this.evidence.findByAlert(input.tenantId, input.alertId);
     if (existing) return;
@@ -55,9 +55,7 @@ export class AlarmEvidenceService {
         videoChannel: channel,
         error: 'Media cooldown — another capture for this type within 1 minute',
       });
-      this.logger.log(
-        `Evidence SKIPPED_COOLDOWN alert=${input.alertId} type=${input.alarmCode}`,
-      );
+      this.logger.log(`Evidence SKIPPED_COOLDOWN alert=${input.alertId} type=${input.alarmCode}`);
       return;
     }
 

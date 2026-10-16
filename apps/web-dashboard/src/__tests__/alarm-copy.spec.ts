@@ -76,6 +76,17 @@ describe('localizeAlarmMessage', () => {
     ).toContain('توقف');
   });
 
+  it('labels device.alarm.EVENT_35.v1 source events without dumping the raw type', async () => {
+    await i18n.changeLanguage('fa');
+    const { localizeSourceEventType } = await import('@/lib/alarm-copy');
+    expect(localizeSourceEventType(i18n.t.bind(i18n), 'device.alarm.EVENT_35.v1')).toMatch(
+      /دوره‌ای|فاصله زمانی/,
+    );
+    expect(localizeSourceEventType(i18n.t.bind(i18n), 'device.alarm.EVENT_35.v1')).not.toMatch(
+      /device\.alarm/i,
+    );
+  });
+
   it('translates overspeed evaluator copy', async () => {
     await i18n.changeLanguage('fa');
     const text = localizeAlarmMessage(i18n.t.bind(i18n), {

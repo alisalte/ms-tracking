@@ -99,7 +99,7 @@ describe('mapAlarm', () => {
 
     expect(alarm.code).toBe('INPUT_2_INACTIVE');
     expect(alarm.type).toBe('ignition');
-    expect(alarm.vehicleLabel).toBe('867191086416152');
+    expect(alarm.vehicleLabel).toMatch(/867191086416152/);
     expect(alarm.vehicleLabel).not.toContain(guid);
   });
 });

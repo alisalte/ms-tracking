@@ -94,6 +94,12 @@ export class AlarmEvaluatorService {
     detectedAt: Date;
   }): Promise<void> {
     try {
+      // Defense in depth: periodic track / heartbeat codes are position reports,
+      // not operator alarms (even if an older gateway still classifies them as ALARM).
+      if (isNonAlarmDeviceCode(alarm.code)) {
+        this.logger.debug(`Skipping non-alarm device event ${alarm.code} device=${alarm.deviceId}`);
+        return;
+      }
       const ruleId = deviceAlarmRuleId(alarm.code);
       // Catalog type is what we PERSIST (`dms`, `sos`, …). The open-gate MUST
       // look up the same type — looking up `DMS_PHONE_CALL` never matched a
@@ -659,6 +665,20 @@ function deviceAlarmRuleId(code: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
+/** Periodic track / heartbeat — never raise an AlarmOccurrence. */
+function isNonAlarmDeviceCode(code: string): boolean {
+  const u = code.toUpperCase();
+  if (
+    u === 'TRACK_BY_INTERVAL' ||
+    u === 'TRACK_BY_DISTANCE' ||
+    u === 'REPLY_CURRENT' ||
+    u === 'HEARTBEAT'
+  ) {
+    return true;
+  }
+  return /^EVENT_(0|31|33|34|35)$/.test(u);
+}
+
 /** Device alarm code → dashboard alarm catalog type. */
 function deviceAlarmCatalogType(code: string): string {
   if (code.startsWith('DMS_') || code.startsWith('ADAS_') || code.startsWith('FATIGUE')) {
@@ -705,6 +725,8 @@ function deviceAlarmCatalogType(code: string): string {
     case 'ENTER_SLEEP':
     case 'EXIT_SLEEP':
       return 'offline';
+    case 'FACE_ID_ALARM':
+      return 'dms';
     default:
       if (code.startsWith('INPUT_')) return 'ignition';
       return 'other';

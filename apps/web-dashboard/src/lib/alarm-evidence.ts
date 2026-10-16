@@ -60,6 +60,29 @@ export function isDmsAlarm(
   );
 }
 
+/** Crash / SOS / harsh events — auto-load camera evidence when a MDVR is present. */
+export function needsPhotoEvidence(
+  alarm: Pick<Alarm, 'type' | 'code' | 'rawType' | 'severity'> &
+    Partial<Pick<Alarm, 'message' | 'detail' | 'sourceEvents'>>,
+): boolean {
+  if (isDmsAlarm(alarm)) return true;
+  if (alarm.type === 'sos' || alarm.type === 'collision') return true;
+  const code = (alarm.code ?? '').toUpperCase();
+  return (
+    code === 'SOS' ||
+    code === 'ACCIDENT' ||
+    code === 'BRAKING' ||
+    code === 'ACCELERATION' ||
+    code === 'CORNERING' ||
+    code === 'DRIVING_BEHAVIOR' ||
+    code === 'TOW' ||
+    code === 'POWER_CUT' ||
+    code === 'JAMMING' ||
+    code === 'FACE_ID_ALARM' ||
+    code === 'COLLISION'
+  );
+}
+
 export function parseAlarmDetailJson(detail: string): Record<string, unknown> | null {
   const raw = detail?.trim() ?? '';
   if (!raw.startsWith('{')) return null;

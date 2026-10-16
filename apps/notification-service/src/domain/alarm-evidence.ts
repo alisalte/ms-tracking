@@ -51,6 +51,28 @@ export function isDmsOrAdasAlarmCode(code: string): boolean {
   return c.startsWith('DMS_') || c.startsWith('ADAS_') || c.startsWith('FATIGUE');
 }
 
+/**
+ * Alarms that must surface photo/video evidence for the operator — DMS/ADAS
+ * plus life-safety / crash / harsh-driving codes (accident, SOS, …).
+ */
+export function needsAlarmEvidence(code: string): boolean {
+  const c = code.toUpperCase();
+  if (isDmsOrAdasAlarmCode(c)) return true;
+  return (
+    c === 'SOS' ||
+    c === 'ACCIDENT' ||
+    c === 'BRAKING' ||
+    c === 'ACCELERATION' ||
+    c === 'CORNERING' ||
+    c === 'DRIVING_BEHAVIOR' ||
+    c === 'TOW' ||
+    c === 'POWER_CUT' ||
+    c === 'JAMMING' ||
+    c === 'FACE_ID_ALARM' ||
+    c === 'COLLISION'
+  );
+}
+
 export function computeEvidenceExpiry(from: Date = new Date()): Date {
   return new Date(from.getTime() + EVIDENCE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 }

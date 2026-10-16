@@ -137,7 +137,7 @@ function deviceCaptionFromParts(
     }
   }
   const imei = candidates.find((c) => /^\d{10,20}$/.test(c));
-  if (imei) return imei;
+  if (imei) return `IMEI ${imei}`;
   return candidates[0] ?? '';
 }
 
@@ -201,19 +201,47 @@ function mapStatus(status: string): AlarmStatus {
 async function applyVehicleCaptions(alarms: Alarm[]): Promise<Alarm[]> {
   if (alarms.length === 0) return alarms;
   try {
-    const { fetchAllVehiclesAsMap } = await import('./asset.api');
-    const { vehicles } = await fetchAllVehiclesAsMap();
+    const [{ fetchAllVehiclesAsMap }, { fetchDrivers, driverFullName }] = await Promise.all([
+      import('./asset.api'),
+      import('./driver.api'),
+    ]);
+    const [{ vehicles }, drivers] = await Promise.all([
+      fetchAllVehiclesAsMap(),
+      fetchDrivers().catch(() => []),
+    ]);
     const labels = new Map(vehicles.map((v) => [v.id, formatVehicleLabel(v)] as const));
+    const driverByVehicle = new Map<string, string>();
+    for (const d of drivers) {
+      if (!d.assignedVehicleId) continue;
+      const name = driverFullName(d);
+      if (name) driverByVehicle.set(d.assignedVehicleId, name);
+    }
     return alarms.map((a) => {
+      const driver = a.driver || (a.vehicleId ? driverByVehicle.get(a.vehicleId) : undefined);
       const fromRegistry = a.vehicleId ? labels.get(a.vehicleId) : undefined;
       if (fromRegistry && !isUuid(fromRegistry)) {
-        return fromRegistry !== a.vehicleLabel ? { ...a, vehicleLabel: fromRegistry } : a;
+        return {
+          ...a,
+          vehicleLabel: fromRegistry !== a.vehicleLabel ? fromRegistry : a.vehicleLabel,
+          driver: driver || a.driver,
+        };
       }
-      // Never leave a raw GUID in the vehicle column.
-      if (a.vehicleLabel && !isUuid(a.vehicleLabel)) return a;
+      if (a.vehicleLabel && !isUuid(a.vehicleLabel)) {
+        return driver && driver !== a.driver ? { ...a, driver } : a;
+      }
       const detailObj = wireDetailObject(a.detail);
       const fallback = deviceCaptionFromParts(detailObj, a.sourceEvents);
-      return fallback ? { ...a, vehicleLabel: fallback } : { ...a, vehicleLabel: '' };
+      // Prefer bare IMEI — never a "Device <guid>" style placeholder.
+      const vehicleLabel = fallback
+        ? /^\d{10,20}$/.test(fallback)
+          ? `IMEI ${fallback}`
+          : fallback
+        : '';
+      return {
+        ...a,
+        vehicleLabel,
+        driver: driver || a.driver,
+      };
     });
   } catch {
     return alarms.map((a) =>

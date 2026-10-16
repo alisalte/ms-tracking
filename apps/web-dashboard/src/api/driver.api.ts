@@ -152,7 +152,8 @@ async function fetchAllDrivers(status?: DriverStatus): Promise<Driver[]> {
   return out;
 }
 
-function fetchDrivers(): Promise<Driver[]> {
+/** Active drivers for captions / assignment joins (alarms, notifications). */
+export function fetchDrivers(): Promise<Driver[]> {
   if (shouldUseMock()) return resolveMock(mockDrivers());
   return withMockFallback(
     () => fetchAllDrivers(),
@@ -197,7 +198,9 @@ async function fetchDriverAssignments(id: string): Promise<DriverAssignmentInter
 
 export function useDriverAssignments(id: string | null) {
   return useQuery({
-    queryKey: id ? queryKeys.assets.driverAssignments(id) : ['assets', 'driver', 'assignments', 'none'],
+    queryKey: id
+      ? queryKeys.assets.driverAssignments(id)
+      : ['assets', 'driver', 'assignments', 'none'],
     queryFn: () => fetchDriverAssignments(id as string),
     enabled: Boolean(id),
   });
@@ -232,7 +235,9 @@ export interface DriverBehaviorEvent {
   sourceAlarmId: string | null;
 }
 
-function mapBehaviorScore(raw: Record<string, unknown> | null | undefined): DriverBehaviorScore | null {
+function mapBehaviorScore(
+  raw: Record<string, unknown> | null | undefined,
+): DriverBehaviorScore | null {
   if (!raw) return null;
   return {
     score: raw.score == null ? null : Number(raw.score),
@@ -243,9 +248,10 @@ function mapBehaviorScore(raw: Record<string, unknown> | null | undefined): Driv
     speedViolationCount: Number(raw.speedViolationCount ?? raw.speed_violation_count ?? 0),
     excessiveIdleCount: Number(raw.excessiveIdleCount ?? raw.excessive_idle_count ?? 0),
     calculatedAt: asStr(raw.calculatedAt ?? raw.calculated_at),
-    previousScore: raw.previousScore == null && raw.previous_score == null
-      ? null
-      : Number(raw.previousScore ?? raw.previous_score),
+    previousScore:
+      raw.previousScore == null && raw.previous_score == null
+        ? null
+        : Number(raw.previousScore ?? raw.previous_score),
     delta: raw.delta == null ? null : Number(raw.delta),
     needsAttention: Boolean(raw.needsAttention ?? raw.needs_attention),
     deductions: (raw.deductions as DriverBehaviorScore['deductions']) ?? null,
@@ -266,7 +272,10 @@ function mapBehaviorEvent(raw: Record<string, unknown>): DriverBehaviorEvent {
 async function fetchDriverBehaviorScore(id: string): Promise<DriverBehaviorScore | null> {
   if (shouldUseMock()) return resolveMock(null);
   return withMockFallback(
-    async () => mapBehaviorScore(await apiGet<Record<string, unknown> | null>(`/fleet/drivers/${id}/behavior-score`)),
+    async () =>
+      mapBehaviorScore(
+        await apiGet<Record<string, unknown> | null>(`/fleet/drivers/${id}/behavior-score`),
+      ),
     async () => null,
   );
 }
@@ -284,7 +293,9 @@ async function fetchDriverBehaviorEvents(id: string): Promise<DriverBehaviorEven
 
 export function useDriverBehaviorScore(id: string | null) {
   return useQuery({
-    queryKey: id ? queryKeys.assets.driverBehaviorScore(id) : ['assets', 'driver', 'behavior-score', 'none'],
+    queryKey: id
+      ? queryKeys.assets.driverBehaviorScore(id)
+      : ['assets', 'driver', 'behavior-score', 'none'],
     queryFn: () => fetchDriverBehaviorScore(id as string),
     enabled: Boolean(id),
   });
@@ -292,7 +303,9 @@ export function useDriverBehaviorScore(id: string | null) {
 
 export function useDriverBehaviorEvents(id: string | null) {
   return useQuery({
-    queryKey: id ? queryKeys.assets.driverBehaviorEvents(id) : ['assets', 'driver', 'behavior-events', 'none'],
+    queryKey: id
+      ? queryKeys.assets.driverBehaviorEvents(id)
+      : ['assets', 'driver', 'behavior-events', 'none'],
     queryFn: () => fetchDriverBehaviorEvents(id as string),
     enabled: Boolean(id),
   });

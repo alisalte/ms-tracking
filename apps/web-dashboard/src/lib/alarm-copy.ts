@@ -89,6 +89,7 @@ export const MEITRACK_EVENT_NUM_TO_CODE: Readonly<Record<number, string>> = {
   130: 'ACCELERATION',
   135: 'FATIGUE_DRIVING',
   136: 'FATIGUE_TIME',
+  647: 'FACE_ID_ALARM',
 };
 
 /** Resolve `EVENT_35` → `TRACK_BY_INTERVAL`; named codes pass through. */
@@ -215,13 +216,39 @@ export function localizeAlarmType(t: TFunction, type: AlarmType | string): strin
   return t(`alarms.type.${type}`, { defaultValue: humanizeCode(String(type)) });
 }
 
+/** Built-in FA/EN labels so EVENT_n stays readable even before i18n bundles refresh. */
+const ALARM_CODE_DEFAULTS: Readonly<Record<string, { en: string; fa: string }>> = {
+  TRACK_BY_INTERVAL: { en: 'Periodic track (interval)', fa: 'ردیابی دوره‌ای (فاصله زمانی)' },
+  TRACK_BY_DISTANCE: { en: 'Track by distance', fa: 'ردیابی بر اساس مسافت' },
+  REPLY_CURRENT: { en: 'Location reply', fa: 'پاسخ موقعیت' },
+  STOP_MOVING: { en: 'Stopped moving', fa: 'توقف حرکت' },
+  START_MOVING: { en: 'Started moving', fa: 'شروع حرکت' },
+  INPUT_2_INACTIVE: { en: 'Input 2 inactive', fa: 'ورودی ۲ غیرفعال' },
+  INPUT_2_ACTIVE: { en: 'Input 2 active', fa: 'ورودی ۲ فعال' },
+  ACCIDENT: { en: 'Accident / collision', fa: 'تصادف' },
+  SOS: { en: 'SOS / panic', fa: 'SOS / اضطراری' },
+  FACE_ID_ALARM: { en: 'Face ID alarm', fa: 'هشدار تشخیص چهره' },
+  OVERSPEED: { en: 'Overspeed', fa: 'سرعت غیرمجاز' },
+  BRAKING: { en: 'Harsh braking', fa: 'ترمز شدید' },
+  ACCELERATION: { en: 'Harsh acceleration', fa: 'شتاب شدید' },
+  TOW: { en: 'Tow / unauthorized movement', fa: 'یدک‌کشی / حرکت غیرمجاز' },
+};
+
 export function localizeAlarmCode(t: TFunction, code: string): string {
   const resolved = resolveMeitrackAlarmCode(code);
   const labeled = t(`alarms.codes.${resolved}`, { defaultValue: '' });
   if (labeled && labeled !== `alarms.codes.${resolved}`) return labeled;
-  const event = /^EVENT_(\d+)$/i.exec(code);
+  const fallback = ALARM_CODE_DEFAULTS[resolved];
+  if (fallback) {
+    const sos = t('alarms.codes.SOS', { defaultValue: 'SOS' });
+    return /[\u0600-\u06FF]/.test(sos) ? fallback.fa : fallback.en;
+  }
+  const event = /^EVENT_(\d+)$/i.exec(resolved) ?? /^EVENT_(\d+)$/i.exec(code);
   if (event) {
-    return t('alarms.codes.unknown', { code: event[1], defaultValue: `Event ${event[1]}` });
+    return t('alarms.codes.unknown', {
+      code: event[1],
+      defaultValue: `Unknown device event (code ${event[1]})`,
+    });
   }
   return t(`alarms.codes.${resolved}`, { defaultValue: humanizeCode(resolved) });
 }
@@ -301,10 +328,15 @@ export function localizeAlarmDetail(
   return localizePhrase(t, raw);
 }
 
-/** `device.alarm.DMS_SMOKING.v1` → `DMS_SMOKING`. */
+/** `device.alarm.DMS_SMOKING.v1` / `device.alarm.EVENT_35.v1` → canonical code. */
 export function sourceEventAlarmCode(eventType: string): string | undefined {
   const tagged = /(?:^|\.)((?:DMS|ADAS|FATIGUE)_[A-Z0-9_]+)(?:\.|$)/i.exec(eventType);
-  return tagged?.[1]?.toUpperCase();
+  if (tagged?.[1]) return tagged[1].toUpperCase();
+  const event = /(?:^|\.)EVENT[_\s-]?(\d+)(?:\.|$)/i.exec(eventType);
+  if (event?.[1]) return resolveMeitrackAlarmCode(`EVENT_${event[1]}`);
+  const device = /device\.alarm\.([A-Za-z][A-Za-z0-9_]*)\.v\d+/i.exec(eventType);
+  if (device?.[1]) return resolveMeitrackAlarmCode(device[1].toUpperCase());
+  return undefined;
 }
 
 export function localizeSourceEventType(t: TFunction, eventType: string): string {

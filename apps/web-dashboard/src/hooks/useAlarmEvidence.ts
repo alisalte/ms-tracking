@@ -21,6 +21,7 @@ import {
   evidenceChannelForPhoto,
   isDmsAlarm,
   mdvrChannelsForVehicle,
+  needsPhotoEvidence,
   parseMdvrEventPhotoName,
   selectAlarmEventClips,
   sortEvidenceChannels,
@@ -34,7 +35,7 @@ const EMPTY_CHANNELS: CameraChannel[] = [];
 export function useAlarmEvidence(alarm: Alarm) {
   const { data, isLoading: channelsLoading, isFetched } = useChannels();
   const channels = data ?? EMPTY_CHANNELS;
-  const platform = useAlarmPlatformEvidence(alarm.id, isDmsAlarm(alarm));
+  const platform = useAlarmPlatformEvidence(alarm.id, needsPhotoEvidence(alarm));
   const [status, setStatus] = useState<MdvrResourceStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [listedVideos, setListedVideos] = useState<AlarmMdvrClip[]>([]);
@@ -52,6 +53,7 @@ export function useAlarmEvidence(alarm: Alarm) {
   const genRef = useRef(0);
 
   const dms = isDmsAlarm(alarm);
+  const criticalEvidence = needsPhotoEvidence(alarm);
   const mediaHint = useMemo(() => alarmEventMediaHint(alarm), [alarm]);
   const eventPhotoName = mediaHint.photoName;
   const eventMedia = dms || Boolean(eventPhotoName);
@@ -189,6 +191,7 @@ export function useAlarmEvidence(alarm: Alarm) {
       genRef.current += 1;
     };
   }, [
+    alarm.id,
     channelsLoading,
     eventMedia,
     eventPhotoName,
@@ -229,8 +232,25 @@ export function useAlarmEvidence(alarm: Alarm) {
     setSession({ alarmId: alarm.id, loadRequested: true, includeNearby: true });
   }, [alarm.id]);
 
+  // Accident / SOS / DMS: pull evidence as soon as an MDVR camera is known —
+  // operators should not hunt for a "Load" button on life-safety alarms.
+  useEffect(() => {
+    if (!criticalEvidence || !hasCamera || loadRequested || channelsLoading || !isFetched) return;
+    if (eventMedia) requestLoad();
+    else requestNearby();
+  }, [
+    criticalEvidence,
+    hasCamera,
+    loadRequested,
+    channelsLoading,
+    isFetched,
+    eventMedia,
+    requestLoad,
+    requestNearby,
+  ]);
+
   return {
-    dms: eventMedia,
+    dms: eventMedia || criticalEvidence,
     eventPhotoName,
     eventPhoto,
     photoUrl,

@@ -30,7 +30,8 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
   const evidence = useAlarmEvidence(alarm);
   const platform = useAlarmPlatformEvidence(alarm.id, evidence.dms);
 
-  if (evidence.channelsLoading && !evidence.dms) return null;
+  // Hide only when there is neither platform evidence nor an MDVR to capture from.
+  if (evidence.channelsLoading && !evidence.dms && !evidence.hasCamera) return null;
   if (!evidence.dms && !evidence.hasCamera) return null;
 
   const platformStatus = platform.data?.status;

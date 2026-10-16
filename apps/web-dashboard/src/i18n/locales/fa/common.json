@@ -1069,7 +1069,8 @@
       "POWER_OFF": "خاموش شدن دستگاه",
       "STOP_MOVING": "توقف حرکت",
       "START_MOVING": "شروع حرکت",
-      "unknown": "رویداد دستگاه {{code}}"
+      "FACE_ID_ALARM": "هشدار تشخیص چهره",
+      "unknown": "رویداد ناشناخته دستگاه — کد {{code}}"
     },
     "messages": {
       "overspeed": "سرعت {{speed}} کیلومتر بر ساعت (حد مجاز {{limit}})",
