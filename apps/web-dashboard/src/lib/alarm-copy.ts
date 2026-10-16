@@ -178,16 +178,16 @@ export function mapAlarmType(raw: string | undefined): AlarmType {
   if (u === 'IGNITION_ON' || u === 'IGNITION_OFF' || u === 'IGNITION' || u.startsWith('INPUT_')) {
     return 'ignition';
   }
+  if (u === 'PROLONGED_IDLE' || u === 'PARKING' || u === 'IDLE') return 'idle';
   if (
-    u === 'PROLONGED_IDLE' ||
-    u === 'PARKING' ||
-    u === 'IDLE' ||
+    u === 'DEVICE_REBOOT' ||
+    u === 'ENTER_SLEEP' ||
+    u === 'EXIT_SLEEP' ||
     u === 'STOP_MOVING' ||
     u === 'START_MOVING'
   ) {
-    return 'idle';
+    return 'other';
   }
-  if (u === 'DEVICE_REBOOT' || u === 'ENTER_SLEEP' || u === 'EXIT_SLEEP') return 'offline';
   if (u === 'GPS_SIGNAL_LOST' || u === 'GPS_RECOVERED' || u === 'GPS_ANTENNA_CUT') return 'other';
   if (u.startsWith('EVENT_')) {
     const resolved = resolveMeitrackAlarmCode(u);
@@ -221,10 +221,14 @@ const ALARM_CODE_DEFAULTS: Readonly<Record<string, { en: string; fa: string }>> 
   TRACK_BY_INTERVAL: { en: 'Periodic track (interval)', fa: 'ردیابی دوره‌ای (فاصله زمانی)' },
   TRACK_BY_DISTANCE: { en: 'Track by distance', fa: 'ردیابی بر اساس مسافت' },
   REPLY_CURRENT: { en: 'Location reply', fa: 'پاسخ موقعیت' },
-  STOP_MOVING: { en: 'Stopped moving', fa: 'توقف حرکت' },
-  START_MOVING: { en: 'Started moving', fa: 'شروع حرکت' },
-  INPUT_2_INACTIVE: { en: 'Input 2 inactive', fa: 'ورودی ۲ غیرفعال' },
-  INPUT_2_ACTIVE: { en: 'Input 2 active', fa: 'ورودی ۲ فعال' },
+  STOP_MOVING: { en: 'Vehicle stopped', fa: 'توقف حرکت' },
+  START_MOVING: { en: 'Vehicle started moving', fa: 'شروع حرکت' },
+  // Meitrack ACC/ignition is commonly wired to digital input 2.
+  INPUT_2_INACTIVE: { en: 'Ignition off', fa: 'احتراق خاموش شد' },
+  INPUT_2_ACTIVE: { en: 'Ignition on', fa: 'احتراق روشن شد' },
+  ENTER_SLEEP: { en: 'Device entered sleep', fa: 'دستگاه وارد حالت خواب شد' },
+  EXIT_SLEEP: { en: 'Device left sleep', fa: 'دستگاه از حالت خواب خارج شد' },
+  DEVICE_REBOOT: { en: 'Device rebooted', fa: 'دستگاه راه‌اندازی مجدد شد' },
   ACCIDENT: { en: 'Accident / collision', fa: 'تصادف' },
   SOS: { en: 'SOS / panic', fa: 'SOS / اضطراری' },
   FACE_ID_ALARM: { en: 'Face ID alarm', fa: 'هشدار تشخیص چهره' },
@@ -232,6 +236,10 @@ const ALARM_CODE_DEFAULTS: Readonly<Record<string, { en: string; fa: string }>> 
   BRAKING: { en: 'Harsh braking', fa: 'ترمز شدید' },
   ACCELERATION: { en: 'Harsh acceleration', fa: 'شتاب شدید' },
   TOW: { en: 'Tow / unauthorized movement', fa: 'یدک‌کشی / حرکت غیرمجاز' },
+  VIDEO_LOSS_CH1: { en: 'Video loss · camera 1', fa: 'قطع تصویر دوربین ۱' },
+  VIDEO_LOSS_CH2: { en: 'Video loss · camera 2', fa: 'قطع تصویر دوربین ۲' },
+  DEVICE_OFFLINE: { en: 'Tracker connection lost', fa: 'ارتباط با دستگاه قطع شد' },
+  DEVICE_ONLINE: { en: 'Tracker connection restored', fa: 'ارتباط با دستگاه برقرار شد' },
 };
 
 export function localizeAlarmCode(t: TFunction, code: string): string {
@@ -548,6 +556,10 @@ function localizeEnglishPattern(t: TFunction, msg: string): string | undefined {
     const state = m[1].toUpperCase();
     if (state === 'OFFLINE') return t('alarms.messages.deviceOffline');
     if (state === 'ONLINE') return t('alarms.messages.deviceOnline');
+  }
+  if (/^Tracking device went offline\.?$/i.test(s)) return t('alarms.messages.deviceOffline');
+  if (/^Tracking device (came back |is back )?online\.?$/i.test(s)) {
+    return t('alarms.messages.deviceOnline');
   }
   if (/^Trip started$/i.test(s)) return t('alarms.messages.tripStarted');
   m = /^Trip ended\s*\(([\d.]+)\s*km,\s*(\d+)s\)$/i.exec(s);

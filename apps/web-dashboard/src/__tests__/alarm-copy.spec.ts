@@ -30,8 +30,9 @@ describe('mapAlarmType', () => {
     expect(mapAlarmType('device.alarm.DMS_SMOKING.v1')).toBe('dms');
     expect(mapAlarmType('EVENT_10')).toBe('ignition');
     expect(mapAlarmType('EVENT_35')).toBe('other');
-    expect(mapAlarmType('EVENT_41')).toBe('idle');
-    expect(mapAlarmType('STOP_MOVING')).toBe('idle');
+    expect(mapAlarmType('EVENT_41')).toBe('other');
+    expect(mapAlarmType('STOP_MOVING')).toBe('other');
+    expect(mapAlarmType('ENTER_SLEEP')).toBe('other');
     expect(mapAlarmType('INPUT_2_INACTIVE')).toBe('ignition');
   });
 });
@@ -52,12 +53,12 @@ describe('localizeAlarmMessage', () => {
     const t = i18n.t.bind(i18n);
     expect(
       localizeAlarmMessage(t, {
-        type: 'other',
+        type: 'ignition',
         message: 'Device alarm EVENT_10',
         detail: '',
         code: 'EVENT_10',
       }),
-    ).toContain('ورودی ۲');
+    ).toMatch(/احتراق|خاموش/);
     expect(
       localizeAlarmMessage(t, {
         type: 'other',
@@ -74,6 +75,35 @@ describe('localizeAlarmMessage', () => {
         code: 'EVENT_41',
       }),
     ).toContain('توقف');
+  });
+
+  it('labels sleep and ignition without technical jargon', async () => {
+    await i18n.changeLanguage('fa');
+    const t = i18n.t.bind(i18n);
+    expect(
+      localizeAlarmMessage(t, {
+        type: 'other',
+        message: 'Device alarm ENTER_SLEEP',
+        detail: '',
+        code: 'ENTER_SLEEP',
+      }),
+    ).toMatch(/خواب/);
+    expect(
+      localizeAlarmMessage(t, {
+        type: 'ignition',
+        message: 'Device alarm INPUT_2_ACTIVE',
+        detail: '',
+        code: 'INPUT_2_ACTIVE',
+      }),
+    ).toMatch(/احتراق|روشن/);
+    expect(
+      localizeAlarmMessage(t, {
+        type: 'offline',
+        message: 'Tracking device went offline',
+        detail: '',
+        code: 'DEVICE_OFFLINE',
+      }),
+    ).toMatch(/ارتباط|قطع/);
   });
 
   it('labels device.alarm.EVENT_35.v1 source events without dumping the raw type', async () => {
@@ -215,7 +245,7 @@ describe('localizeNotificationTitle', () => {
       },
     };
     const title = localizeNotificationTitle(t, n);
-    expect(title).toContain('ورودی ۲');
+    expect(title).toMatch(/احتراق|خاموش/);
     expect(title).toContain('867191086416152');
     expect(title).not.toContain(guid);
     // Body stays empty when it would only repeat the title reason.

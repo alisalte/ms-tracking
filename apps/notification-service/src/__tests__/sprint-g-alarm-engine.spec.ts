@@ -550,4 +550,26 @@ describe('Sprint G — device-alarm DMS persistence', () => {
     expect(alarms.created.at(0)?.type).toBe('dms');
     expect(alarms.created.at(0)?.vehicleId).toBeNull();
   });
+
+  it('skips VIDEO_LOSS on unused MDVR channels CH3–CH8', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'VIDEO_LOSS_CH3', severity: 'WARNING' }));
+    await service.processDeviceAlarm(dmsAlarm({ code: 'VIDEO_LOSS_CH4', severity: 'WARNING' }));
+    await service.processDeviceAlarm(dmsAlarm({ code: 'VIDEO_RECOVERY_CH5', severity: 'INFO' }));
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('still raises VIDEO_LOSS on wired cameras CH1–CH2', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'VIDEO_LOSS_CH1', severity: 'WARNING' }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.type).toBe('camera');
+  });
+
+  it('classifies sleep as other (not offline connectivity)', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'ENTER_SLEEP', severity: 'INFO' }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.type).toBe('other');
+  });
 });

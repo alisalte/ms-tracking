@@ -665,7 +665,11 @@ function deviceAlarmRuleId(code: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-/** Periodic track / heartbeat — never raise an AlarmOccurrence. */
+/**
+ * Periodic track / heartbeat / unused MDVR channel noise — never raise an
+ * AlarmOccurrence. Meitrack MD300 units commonly report VIDEO_LOSS on CH3–CH8
+ * even when only cameras 1–2 are wired; those slots are not operator-actionable.
+ */
 function isNonAlarmDeviceCode(code: string): boolean {
   const u = code.toUpperCase();
   if (
@@ -676,7 +680,10 @@ function isNonAlarmDeviceCode(code: string): boolean {
   ) {
     return true;
   }
-  return /^EVENT_(0|31|33|34|35)$/.test(u);
+  if (/^EVENT_(0|31|33|34|35)$/.test(u)) return true;
+  // Unused camera slots (CH3–CH8) on 2-camera MDVR fleets.
+  if (/^VIDEO_(LOSS|RECOVERY)_CH([3-8])$/.test(u)) return true;
+  return false;
 }
 
 /** Device alarm code → dashboard alarm catalog type. */
@@ -720,11 +727,13 @@ function deviceAlarmCatalogType(code: string): string {
       return 'battery';
     case 'STOP_MOVING':
     case 'START_MOVING':
-      return 'idle';
+      // Motion start/stop is not the same as prolonged idle — keep it generic.
+      return 'other';
     case 'DEVICE_REBOOT':
     case 'ENTER_SLEEP':
     case 'EXIT_SLEEP':
-      return 'offline';
+      // Sleep/reboot are device-state notices, not "went offline" connectivity.
+      return 'other';
     case 'FACE_ID_ALARM':
       return 'dms';
     default:

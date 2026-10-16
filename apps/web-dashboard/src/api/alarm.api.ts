@@ -205,11 +205,24 @@ async function applyVehicleCaptions(alarms: Alarm[]): Promise<Alarm[]> {
       import('./asset.api'),
       import('./driver.api'),
     ]);
-    const [{ vehicles }, drivers] = await Promise.all([
+    const [{ vehicles, devices }, drivers] = await Promise.all([
       fetchAllVehiclesAsMap(),
       fetchDrivers().catch(() => []),
     ]);
     const labels = new Map(vehicles.map((v) => [v.id, formatVehicleLabel(v)] as const));
+    // Offline/session alarms often key vehicleId with the device UUID — join
+    // device → bound vehicle, and IMEI → vehicle, so the list never says
+    // "خودرو نامشخص" when we know the tracker.
+    const deviceToVehicle = new Map<string, string>();
+    const deviceImei = new Map<string, string>();
+    const imeiToVehicle = new Map<string, string>();
+    for (const d of devices ?? []) {
+      if (d.imei?.trim()) deviceImei.set(d.id, d.imei.trim());
+      if (d.vehicleId) {
+        deviceToVehicle.set(d.id, d.vehicleId);
+        if (d.imei?.trim()) imeiToVehicle.set(d.imei.trim(), d.vehicleId);
+      }
+    }
     const driverByVehicle = new Map<string, string>();
     for (const d of drivers) {
       if (!d.assignedVehicleId) continue;
@@ -217,28 +230,40 @@ async function applyVehicleCaptions(alarms: Alarm[]): Promise<Alarm[]> {
       if (name) driverByVehicle.set(d.assignedVehicleId, name);
     }
     return alarms.map((a) => {
-      const driver = a.driver || (a.vehicleId ? driverByVehicle.get(a.vehicleId) : undefined);
-      const fromRegistry = a.vehicleId ? labels.get(a.vehicleId) : undefined;
+      const detailObj = wireDetailObject(a.detail);
+      const imeiHint = deviceCaptionFromParts(detailObj, a.sourceEvents);
+      const imeiDigits = imeiHint.replace(/^IMEI\s+/i, '').trim();
+      let vehicleId = a.vehicleId;
+      if (vehicleId && !labels.has(vehicleId) && deviceToVehicle.has(vehicleId)) {
+        vehicleId = deviceToVehicle.get(vehicleId) as string;
+      }
+      if ((!vehicleId || !labels.has(vehicleId)) && /^\d{10,20}$/.test(imeiDigits)) {
+        vehicleId = imeiToVehicle.get(imeiDigits) ?? vehicleId;
+      }
+      const driver = a.driver || (vehicleId ? driverByVehicle.get(vehicleId) : undefined);
+      const fromRegistry = vehicleId ? labels.get(vehicleId) : undefined;
       if (fromRegistry && !isUuid(fromRegistry)) {
         return {
           ...a,
-          vehicleLabel: fromRegistry !== a.vehicleLabel ? fromRegistry : a.vehicleLabel,
+          vehicleId: vehicleId || a.vehicleId,
+          vehicleLabel: fromRegistry,
           driver: driver || a.driver,
         };
       }
-      if (a.vehicleLabel && !isUuid(a.vehicleLabel)) {
+      if (a.vehicleLabel && !isUuid(a.vehicleLabel) && !/^device\s+/i.test(a.vehicleLabel)) {
         return driver && driver !== a.driver ? { ...a, driver } : a;
       }
-      const detailObj = wireDetailObject(a.detail);
-      const fallback = deviceCaptionFromParts(detailObj, a.sourceEvents);
-      // Prefer bare IMEI — never a "Device <guid>" style placeholder.
-      const vehicleLabel = fallback
-        ? /^\d{10,20}$/.test(fallback)
-          ? `IMEI ${fallback}`
-          : fallback
-        : '';
+      const fromDevice = a.vehicleId ? deviceImei.get(a.vehicleId) : undefined;
+      const rawCaption = imeiHint || (fromDevice ? `IMEI ${fromDevice}` : '');
+      const digits = rawCaption.replace(/^(IMEI|Device)\s+/i, '').trim();
+      const vehicleLabel = /^\d{10,20}$/.test(digits)
+        ? `IMEI ${digits}`
+        : rawCaption && !isUuid(rawCaption)
+          ? rawCaption.replace(/^Device\s+/i, 'IMEI ')
+          : '';
       return {
         ...a,
+        vehicleId: vehicleId || a.vehicleId,
         vehicleLabel,
         driver: driver || a.driver,
       };

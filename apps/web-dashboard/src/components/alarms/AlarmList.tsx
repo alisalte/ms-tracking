@@ -14,9 +14,31 @@ import {
   severityColor,
 } from '@/components/alarms/AlarmTypeIcon';
 import { Badge, Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
-import { localizeAlarmMessage } from '@/lib/alarm-copy';
+import { localizeAlarmCode, localizeAlarmMessage } from '@/lib/alarm-copy';
 import { formatDate } from '@/lib/format-date';
 import type { Alarm } from '@/types/alarm.types';
+
+/** Second-line category — prefer a clear code family over a vague catalog type. */
+function alarmCategoryLabel(
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+  a: Alarm,
+): string {
+  const code = (a.code ?? '').toUpperCase();
+  if (code === 'ENTER_SLEEP' || code === 'EXIT_SLEEP') {
+    return t('alarms.type.sleep', { defaultValue: 'خواب دستگاه' });
+  }
+  if (code === 'DEVICE_REBOOT') {
+    return t('alarms.type.device', { defaultValue: 'وضعیت دستگاه' });
+  }
+  if (code === 'STOP_MOVING' || code === 'START_MOVING') {
+    return t('alarms.type.motion', { defaultValue: 'حرکت' });
+  }
+  if (code.startsWith('INPUT_2')) return t('alarms.type.ignition');
+  if (code.startsWith('VIDEO_') || code.startsWith('STORAGE_')) return t('alarms.type.camera');
+  // Avoid repeating the same phrase as the title when type is a vague "other".
+  if (a.type === 'other' && code) return localizeAlarmCode(t as never, code);
+  return t(`alarms.type.${a.type}`);
+}
 
 interface AlarmListProps {
   /** The (already-filtered) alarms to render. */
@@ -101,7 +123,7 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
                         {localizeAlarmMessage(t, a)}
                       </p>
                       <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
-                        {t(`alarms.type.${a.type}`)}
+                        {alarmCategoryLabel(t, a)}
                       </p>
                     </div>
                   </div>
