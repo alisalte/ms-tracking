@@ -57,6 +57,8 @@ export function MapSettingsPanel({
 
   const pickBasemap = (id: BasemapId) => {
     onBasemapChange(id);
+    // Close so the new tiles are visible immediately under the popover.
+    setOpen(false);
   };
 
   return (

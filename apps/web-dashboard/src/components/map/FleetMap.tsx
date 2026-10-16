@@ -14,6 +14,7 @@ import { circleToPolygonRing } from '@/components/geofences/GeofenceDrawMap';
 import { useFollowBasemap } from '@/hooks/useBasemap';
 import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
 import { type BasemapId, loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
+import { loadPersistedMapCamera, persistMapCamera } from '@/lib/map-camera';
 import { cluster, expandZoom } from '@/lib/map-cluster';
 import type { MapMarkerStyle } from '@/lib/map-marker-style';
 import {
@@ -163,15 +164,18 @@ export function FleetMap({
   });
 
   // Initialize the map once. Later basemap changes flow through useFollowBasemap.
+  // Camera (zoom/center) is restored from localStorage so a basemap click or
+  // page reload keeps the operator's last view.
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const camera = loadPersistedMapCamera();
     const map = new MaplibreMap({
       container: containerRef.current,
-      style: rasterMapStyle(loadPersistedBasemap(), i18n.language),
-      center: [51.338, 35.719],
-      zoom: 11,
+      style: rasterMapStyle(basemapProp ?? loadPersistedBasemap(), i18n.language),
+      center: [camera.lng, camera.lat],
+      zoom: camera.zoom,
       attributionControl: { compact: true },
     });
     // Zoom + compass on the free map edge (opposite the vehicle roster).
@@ -184,6 +188,11 @@ export function FleetMap({
     const markReady = () => setMapReady(true);
     if (map.loaded() || map.isStyleLoaded()) markReady();
     else map.once('load', markReady);
+    const persistView = () => {
+      const c = map.getCenter();
+      persistMapCamera({ lng: c.lng, lat: c.lat, zoom: map.getZoom() });
+    };
+    map.on('moveend', persistView);
     // Clicking empty map clears the selection (§2.5 Esc/backdrop closes).
     map.on('click', (e) => {
       // If the click originated on a marker element, ignore (markers stop propagation).
@@ -197,6 +206,7 @@ export function FleetMap({
     });
 
     return () => {
+      map.off('moveend', persistView);
       for (const m of vehicleMarkersRef.current.values()) m.marker.remove();
       vehicleMarkersRef.current.clear();
       for (const m of clusterMarkersRef.current) m.remove();

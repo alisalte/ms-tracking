@@ -183,12 +183,9 @@ export function rasterMapStyle(id: BasemapId, lang?: string) {
 }
 
 /**
- * Swap the live `basemap` raster source by rebuilding it in place.
- *
- * `RasterTileSource.setTiles` plus mutating `maxzoom`/`attribution` left the
- * map blank until a full page reload — MapLibre does not apply those fields
- * that way. Remove + re-add keeps tile URLs, maxzoom, and attribution in sync
- * and inserts the layer beneath the first existing overlay id.
+ * Swap the live `basemap` raster tiles in place — keep camera, markers, and
+ * overlay layers. Prefer `RasterTileSource.setTiles` (MapLibre 6 reloads the
+ * cache); fall back to remove + re-add when the source is missing or stale.
  */
 export function applyRasterBasemap(
   map: MaplibreMap,
@@ -197,12 +194,50 @@ export function applyRasterBasemap(
   beforeLayerIds: readonly string[] = [],
 ): void {
   const bm = basemapById(id);
-  const source = rasterSource(bm, lang);
-  if (map.getLayer('basemap')) map.removeLayer('basemap');
-  if (map.getSource('basemap')) map.removeSource('basemap');
-  map.addSource('basemap', source);
-  const before = beforeLayerIds.find((layerId) => map.getLayer(layerId));
-  map.addLayer({ id: 'basemap', type: 'raster', source: 'basemap' }, before);
+  const next = rasterSource(bm, lang);
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  const bearing = map.getBearing();
+  const pitch = map.getPitch();
+
+  const existing = map.getSource('basemap') as
+    | {
+        setTiles?: (tiles: string[]) => unknown;
+        setSourceProperty?: (cb: () => void) => void;
+        maxzoom?: number;
+        tiles?: string[];
+        _options?: { maxzoom?: number; attribution?: string; tiles?: string[] };
+      }
+    | undefined;
+
+  const sameTiles =
+    Array.isArray(existing?.tiles) &&
+    existing.tiles.length === next.tiles.length &&
+    existing.tiles.every((tile, i) => tile === next.tiles[i]);
+
+  if (existing && typeof existing.setTiles === 'function' && map.getLayer('basemap')) {
+    if (!sameTiles) existing.setTiles(next.tiles);
+    const syncMeta = () => {
+      if (existing._options) {
+        existing._options.maxzoom = next.maxzoom;
+        existing._options.attribution = next.attribution;
+        existing._options.tiles = next.tiles;
+      }
+      existing.maxzoom = next.maxzoom;
+    };
+    if (typeof existing.setSourceProperty === 'function') existing.setSourceProperty(syncMeta);
+    else syncMeta();
+  } else {
+    if (map.getLayer('basemap')) map.removeLayer('basemap');
+    if (map.getSource('basemap')) map.removeSource('basemap');
+    map.addSource('basemap', next);
+    const before = beforeLayerIds.find((layerId) => map.getLayer(layerId));
+    map.addLayer({ id: 'basemap', type: 'raster', source: 'basemap' }, before);
+  }
+
+  // Keep the operator's viewport when tiles reload (also after a full remount
+  // the parent restores from localStorage — this covers in-place swaps).
+  map.jumpTo({ center, zoom, bearing, pitch });
   map.triggerRepaint();
 }
 

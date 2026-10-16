@@ -216,6 +216,7 @@ describe('MapPage (Live Tracking)', () => {
     await i18n.changeLanguage('en');
     localStorage.removeItem('fv:map-basemap');
     localStorage.removeItem('fv:map-marker-style');
+    localStorage.removeItem('fv:map-camera');
     document.cookie = 'fv-map-marker-style=; Path=/; Max-Age=0';
     mockUseMapVehicles.mockReturnValue({
       data: vehiclesFixture,
@@ -271,20 +272,25 @@ describe('MapPage (Live Tracking)', () => {
     );
 
     fireEvent.click(within(popover).getByRole('radio', { name: /Google Satellite/ }));
-    expect(within(popover).getByRole('radio', { name: /Google Satellite/ })).toHaveAttribute(
+    // Popover closes on pick so the new tiles are visible; reopen to assert.
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    const afterSatellite = screen.getByTestId('map-settings-popover');
+    expect(within(afterSatellite).getByRole('radio', { name: /Google Satellite/ })).toHaveAttribute(
       'aria-checked',
       'true',
     );
-    expect(within(popover).getByRole('radio', { name: /Google Streets/ })).toHaveAttribute(
+    expect(within(afterSatellite).getByRole('radio', { name: /Google Streets/ })).toHaveAttribute(
       'aria-checked',
       'false',
     );
 
-    fireEvent.click(within(popover).getByRole('radio', { name: /OpenStreetMap/ }));
-    expect(within(popover).getByRole('radio', { name: /OpenStreetMap/ })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+    fireEvent.click(within(afterSatellite).getByRole('radio', { name: /OpenStreetMap/ }));
+    fireEvent.click(screen.getByTestId('map-settings-button'));
+    expect(
+      within(screen.getByTestId('map-settings-popover')).getByRole('radio', {
+        name: /OpenStreetMap/,
+      }),
+    ).toHaveAttribute('aria-checked', 'true');
   });
 
   it('switches map markers between vehicle bodies and direction arrows', async () => {

@@ -60,17 +60,75 @@ describe('basemaps', () => {
     expect(rasterMapStyle('streets').sources.basemap.maxzoom).toBe(19);
   });
 
-  it('rebuilds the basemap source so tile URL + maxzoom swap without a page reload', () => {
-    const removed: string[] = [];
-    const added: Array<{ id: string; tiles?: string[]; maxzoom?: number }> = [];
+  it('swaps raster tiles via setTiles without tearing down overlay layers', () => {
+    const calls: string[] = [];
+    let tiles = ['https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}'];
+    const source = {
+      tiles,
+      maxzoom: 21,
+      _options: { maxzoom: 21, attribution: '© Google', tiles },
+      setTiles(next: string[]) {
+        tiles = next;
+        this.tiles = next;
+        calls.push(`setTiles:${next[0]}`);
+      },
+      setSourceProperty(cb: () => void) {
+        cb();
+        calls.push('setSourceProperty');
+      },
+    };
     const layers = new Map<string, true>([
       ['basemap', true],
       ['geofence-fill', true],
     ]);
-    const sources = new Map<string, true>([['basemap', true]]);
+    const map = {
+      getLayer: (id: string) => (layers.has(id) ? { id } : undefined),
+      getSource: (id: string) => (id === 'basemap' ? source : undefined),
+      getCenter: () => ({ lng: 51.3, lat: 35.7 }),
+      getZoom: () => 14,
+      getBearing: () => 0,
+      getPitch: () => 0,
+      jumpTo: (v: { zoom: number }) => {
+        calls.push(`jumpTo:${v.zoom}`);
+      },
+      removeLayer: () => {
+        calls.push('removeLayer');
+      },
+      removeSource: () => {
+        calls.push('removeSource');
+      },
+      addSource: () => {
+        calls.push('addSource');
+      },
+      addLayer: () => {
+        calls.push('addLayer');
+      },
+      triggerRepaint: () => {
+        calls.push('repaint');
+      },
+    };
+    applyRasterBasemap(map as never, 'streets', 'en', ['geofence-fill']);
+    expect(calls.some((c) => c.startsWith('setTiles:') && c.includes('openstreetmap'))).toBe(true);
+    expect(calls).toContain('setSourceProperty');
+    expect(calls).toContain('jumpTo:14');
+    expect(calls).toContain('repaint');
+    expect(calls).not.toContain('removeLayer');
+    expect(source.maxzoom).toBe(19);
+  });
+
+  it('falls back to remove+re-add when the basemap source is missing', () => {
+    const removed: string[] = [];
+    const added: Array<{ id: string; tiles?: string[]; maxzoom?: number }> = [];
+    const layers = new Map<string, true>([['geofence-fill', true]]);
+    const sources = new Map<string, true>();
     const map = {
       getLayer: (id: string) => (layers.has(id) ? { id } : undefined),
       getSource: (id: string) => (sources.has(id) ? { id } : undefined),
+      getCenter: () => ({ lng: 51.3, lat: 35.7 }),
+      getZoom: () => 12,
+      getBearing: () => 0,
+      getPitch: () => 0,
+      jumpTo: () => undefined,
       removeLayer: (id: string) => {
         removed.push(`layer:${id}`);
         layers.delete(id);
@@ -92,10 +150,9 @@ describe('basemaps', () => {
       },
     };
     applyRasterBasemap(map as never, 'streets', 'en', ['geofence-fill']);
-    expect(removed).toEqual(['layer:basemap', 'source:basemap']);
+    expect(removed).toEqual([]);
     expect(added[0]?.tiles?.[0]).toContain('tile.openstreetmap.org');
     expect(added[0]?.maxzoom).toBe(19);
     expect(added.some((a) => a.id === 'layer:basemap:geofence-fill')).toBe(true);
-    expect(added.some((a) => a.id === 'repaint')).toBe(true);
   });
 });

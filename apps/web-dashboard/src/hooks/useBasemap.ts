@@ -14,7 +14,6 @@ import {
   loadPersistedBasemap,
   persistBasemap,
 } from '@/lib/basemaps';
-import { runWhenStyleReady } from '@/lib/map-ready';
 
 /** Stable empty overlay list — do not pass `[]` inline (new array every render). */
 export const NO_OVERLAY_LAYERS: readonly string[] = [];
@@ -76,20 +75,45 @@ export function useFollowBasemap(
     if (!map) return;
     const key = `${active}|${i18n.language}`;
     if (appliedRef.current === key) return;
+
     let cancelled = false;
-    const swap = () => {
-      if (cancelled || mapRef.current !== map) return;
+    const tryApply = (): boolean => {
+      if (cancelled || mapRef.current !== map) return false;
       try {
+        // Style must accept source mutations; idle/styledata retries cover the gap.
+        if (!(map.isStyleLoaded() || map.loaded())) return false;
         applyRasterBasemap(map, active, i18n.language, beforeLayerIds);
         appliedRef.current = key;
+        return true;
       } catch {
-        // Style mid-reload — retry on the next styledata tick.
         appliedRef.current = '';
+        return false;
       }
     };
-    runWhenStyleReady(map, swap);
+
+    if (tryApply()) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const onRetry = () => {
+      if (appliedRef.current === key || cancelled) return;
+      tryApply();
+    };
+    map.on('idle', onRetry);
+    map.on('styledata', onRetry);
+    const t0 = window.setTimeout(onRetry, 0);
+    const t1 = window.setTimeout(onRetry, 50);
+    const t2 = window.setTimeout(onRetry, 200);
+
     return () => {
       cancelled = true;
+      map.off('idle', onRetry);
+      map.off('styledata', onRetry);
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
     };
   }, [active, beforeLayerIds, i18n.language, mapReady, mapRef]);
 
