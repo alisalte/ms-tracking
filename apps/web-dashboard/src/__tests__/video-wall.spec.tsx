@@ -347,11 +347,12 @@ const resourcesOverride = vi.hoisted(() => ({
 
 const mdvrMockChannel = vi.hoisted(() => ({
   id: 'ch-mdvr-1',
-  label: 'MD300 Sim · CH1',
+  label: 'CH1',
   facing: 'site',
   sourceType: 'site',
   sourceId: 'src-1',
-  sourceLabel: 'MD300 Sim · CH1',
+  // Device caption only — channel number is separate (tile shows CH badge).
+  sourceLabel: 'IMEI 867191086416152',
   codec: 'H264',
   online: true,
   recordingActive: false,
@@ -370,8 +371,7 @@ const mdvrMockChannel = vi.hoisted(() => ({
 const mdvrMockChannel2 = vi.hoisted(() => ({
   ...mdvrMockChannel,
   id: 'ch-mdvr-2',
-  label: 'MD300 Sim · CH2',
-  sourceLabel: 'MD300 Sim · CH2',
+  label: 'CH2',
   logicalChannel: 2,
 }));
 
@@ -423,7 +423,7 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     renderWall();
     await screen.findByText('Video Wall');
     await waitFor(() => {
-      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+      expect(document.querySelector('[data-tile="IMEI 867191086416152 · CH1"]')).not.toBeNull();
     });
   });
 
@@ -437,8 +437,8 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     renderWall('/video?device=device-1');
     await screen.findByText('Video Wall');
     await waitFor(() => {
-      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
-      expect(document.querySelector('[data-tile="MD300 Sim · CH2"]')).not.toBeNull();
+      expect(document.querySelector('[data-tile="IMEI 867191086416152 · CH1"]')).not.toBeNull();
+      expect(document.querySelector('[data-tile="IMEI 867191086416152 · CH2"]')).not.toBeNull();
     });
     await waitFor(() => {
       const channels = vi
@@ -477,7 +477,7 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     renderWall('/video?device=device-1');
     await screen.findByText('Video Wall');
     await waitFor(() => {
-      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+      expect(document.querySelector('[data-tile="IMEI 867191086416152 · CH1"]')).not.toBeNull();
     });
     vi.mocked(apiPost).mockClear();
     fireEvent.click(screen.getByTestId('dock-channel-ch-mdvr-1'));
@@ -495,7 +495,7 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
     renderWall('/video?device=device-1');
     await screen.findByText('Video Wall');
     await waitFor(() => {
-      expect(document.querySelector('[data-tile="MD300 Sim · CH1"]')).not.toBeNull();
+      expect(document.querySelector('[data-tile="IMEI 867191086416152 · CH1"]')).not.toBeNull();
     });
   });
 
@@ -616,8 +616,8 @@ describe('WallGrid with a real MEITRACK_MDVR channel', () => {
     const mdvrChannel = {
       ...mockChannels[0],
       id: 'ch-mdvr-1',
-      label: 'MD300 Sim · CH1',
-      sourceLabel: 'MD300 Sim · CH1',
+      label: 'CH1',
+      sourceLabel: 'IMEI 867191086416152',
       online: true,
       consentGiven: true,
       protocol: 'MEITRACK_MDVR',
@@ -652,8 +652,11 @@ describe('WallGrid with a real MEITRACK_MDVR channel', () => {
         ),
       ),
     );
-    const labeled = grid.container.querySelector('[data-tile="MD300 Sim · CH1"]');
+    const labeled = grid.container.querySelector('[data-tile="IMEI 867191086416152 · CH1"]');
     expect(labeled).not.toBeNull();
+    const deviceLabel = grid.container.querySelector('[data-testid="tile-device-label"]');
+    expect(deviceLabel?.textContent).toContain('IMEI 867191086416152');
+    expect(deviceLabel?.textContent).toContain('CH1');
   });
 });
 
@@ -683,7 +686,7 @@ describe('mapMediaChannel wire shape', () => {
     expect(ch.online).toBe(true);
     expect(ch.protocol).toBe('MEITRACK_MDVR');
     expect(ch.sourceId).toBe('dev-1');
-    expect(ch.sourceLabel).toBe('MDVR 867191086416152');
+    expect(ch.sourceLabel).toBe('IMEI 867191086416152');
   });
 
   it('gives every camera its own RTMP/HLS key so two cameras can be live at once', async () => {

@@ -33,8 +33,9 @@ import { useToast } from '@/components/feedback/ToastProvider';
 import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
 import { localizeAlarmMessage, localizeAlarmType } from '@/lib/alarm-copy';
 import { lastSeenLabel } from '@/lib/relative-time';
+import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 import { status } from '@/theme/palette';
-import type { MapVehicle } from '@/types/fleet.types';
+import type { MapVehicle, VehicleDetail, VehicleEvent } from '@/types/fleet.types';
 
 const DRAWER_WIDTH = 360;
 
@@ -84,24 +85,11 @@ export function DevicePopup({
   const toast = useToast();
   const qc = useQueryClient();
   const { can } = usePermissions();
-  const { data: detail, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
-  // Prefer WS-merged live fields from the roster so list + drawer never diverge.
-  const data =
-    detail && liveVehicle && liveVehicle.id === vehicleId
-      ? {
-          ...detail,
-          state: liveVehicle.state,
-          presence: liveVehicle.presence ?? detail.presence,
-          speed: liveVehicle.speed,
-          heading: liveVehicle.heading,
-          lat: liveVehicle.lat || detail.lat,
-          lng: liveVehicle.lng || detail.lng,
-          ignitionOn: liveVehicle.ignitionOn ?? detail.ignitionOn,
-          lastSeenAt: liveVehicle.lastSeenAt ?? detail.lastSeenAt,
-          updatedAt: liveVehicle.updatedAt ?? detail.updatedAt,
-          deviceId: liveVehicle.deviceId ?? detail.deviceId,
-        }
-      : detail;
+  const { data: detail, isError, error, refetch } = useVehicleDetail(vehicleId);
+  // Roster (WS-merged) wins for presence/motion so the drawer never says
+  // "آفلاین" while the list card still shows "در حرکت" from the same vehicle.
+  const roster = liveVehicle?.id === vehicleId ? liveVehicle : null;
+  const data = mergePopupVehicle(detail, roster);
   const sendCommand = useSendDeviceCommand(data?.deviceId ?? null);
   const [locating, setLocating] = useState(false);
   const { data: drivers } = useDrivers({
@@ -180,7 +168,7 @@ export function DevicePopup({
         {/* ── Header ── */}
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2.5 dark:border-white/5">
           <div className="flex min-w-0 items-center gap-2">
-            {isLoading || !data ? (
+            {!data ? (
               <Skeleton className="h-6 w-28" />
             ) : (
               <>
@@ -204,10 +192,10 @@ export function DevicePopup({
           </IconButton>
         </div>
 
-        {isError ? (
+        {isError && !data ? (
           // §22: the real backend is unreachable — honest error, never fake data.
           <ErrorState error={error} onRetry={() => void refetch()} />
-        ) : isLoading || !data ? (
+        ) : !data ? (
           <div className="flex flex-col gap-3 p-4">
             <Skeleton className="h-28 w-full" />
             <Skeleton className="h-4 w-3/4" />
@@ -471,4 +459,62 @@ function ActionButton({
 function fmtKm(km: number): string {
   if (!km) return '—';
   return `${km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+/**
+ * Merge REST detail + live roster so presence/motion never diverge from the
+ * list card. Roster wins for live fields; motion is re-derived so we never
+ * paint "در حرکت" next to "آفلاین".
+ */
+function mergePopupVehicle(
+  detail: VehicleDetail | undefined,
+  roster: MapVehicle | null,
+): VehicleDetail | undefined {
+  if (!detail && !roster) return undefined;
+
+  const base: VehicleDetail = detail
+    ? detail
+    : {
+        ...(roster as MapVehicle),
+        odometer: 0,
+        address: '',
+        ignitionOn: roster?.ignitionOn ?? false,
+        updatedAt: roster?.updatedAt ?? '',
+        events: [] as VehicleEvent[],
+      };
+
+  if (!roster) {
+    const motion = deriveVehicleMotion({
+      presence: base.presence,
+      speedKph: base.speed,
+      ignitionOn: base.ignitionOn,
+      capturedAt: base.updatedAt,
+    });
+    return { ...base, state: motion.state, speed: motion.speed, presence: motion.presence };
+  }
+
+  const presence = roster.presence ?? detail?.presence ?? 'UNKNOWN';
+  const updatedAt = roster.updatedAt ?? detail?.updatedAt ?? '';
+  const speedKph = roster.speed;
+  const ignitionOn = roster.ignitionOn ?? detail?.ignitionOn ?? false;
+  const motion = deriveVehicleMotion({
+    presence,
+    speedKph,
+    ignitionOn,
+    capturedAt: updatedAt,
+  });
+
+  return {
+    ...base,
+    state: motion.state,
+    presence: motion.presence,
+    speed: motion.speed,
+    heading: roster.heading,
+    lat: roster.lat || base.lat,
+    lng: roster.lng || base.lng,
+    ignitionOn,
+    lastSeenAt: roster.lastSeenAt ?? detail?.lastSeenAt,
+    updatedAt,
+    deviceId: roster.deviceId ?? detail?.deviceId,
+  };
 }

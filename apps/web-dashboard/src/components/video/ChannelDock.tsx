@@ -53,31 +53,44 @@ export function ChannelDock({
     });
   }, [channels, query, onlineOnly]);
 
-  // Group by vehicle/device so both MDVR cameras sit under one header.
+  // Group by device (prefer deviceId) so all cameras of one MDVR share a header.
   const grouped = useMemo(() => {
     const m = new Map<string, CameraChannel[]>();
     for (const c of filtered) {
-      const key = c.sourceId || c.deviceId || c.sourceLabel;
+      const key = c.deviceId || c.sourceId || c.imei || c.sourceLabel || c.id;
       const arr = m.get(key) ?? [];
       arr.push(c);
       m.set(key, arr);
     }
-    return Array.from(m.entries()).map(([key, cams]) => {
-      const sorted = [...cams].sort(
+    return Array.from(m.entries())
+      .map(([key, cams]) => {
+        const sorted = [...cams].sort(
+          (a, b) =>
+            (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
+        );
+        const onlineCount = sorted.filter((c) => c.online && c.consentGiven).length;
+        const onWallCount = sorted.filter((c) => onWall.has(c.id)).length;
+        const head = sorted[0];
+        const label = head?.sourceLabel || head?.imei || key;
+        const imeiHint =
+          head?.imei && label && !label.includes(head.imei) ? head.imei : undefined;
+        return {
+          key,
+          label,
+          imeiHint,
+          cams: sorted,
+          onlineCount,
+          onWallCount,
+          anyOnline: onlineCount > 0,
+        };
+      })
+      // Active devices first, then those already on the wall.
+      .sort(
         (a, b) =>
-          (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
+          Number(b.anyOnline) - Number(a.anyOnline) ||
+          b.onWallCount - a.onWallCount ||
+          a.label.localeCompare(b.label),
       );
-      const onlineCount = sorted.filter((c) => c.online && c.consentGiven).length;
-      const onWallCount = sorted.filter((c) => onWall.has(c.id)).length;
-      return {
-        key,
-        label: sorted[0]?.sourceLabel || key,
-        cams: sorted,
-        onlineCount,
-        onWallCount,
-        anyOnline: onlineCount > 0,
-      };
-    });
   }, [filtered, onWall]);
 
   const toggleGroup = (key: string) => {
@@ -167,106 +180,125 @@ export function ChannelDock({
             {t('video.dock.noResults')}
           </p>
         ) : (
-          grouped.map(({ key, label: sourceLabel, cams, onlineCount, onWallCount, anyOnline }) => {
-            const isCollapsed = collapsed.has(key);
-            return (
-              <div key={key} data-testid={`dock-group-${key}`}>
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(key)}
-                  aria-expanded={!isCollapsed}
-                  className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
-                >
-                  {cams[0]?.sourceType === 'site' ? (
-                    <Building2
-                      size={15}
-                      aria-hidden
-                      className="shrink-0 text-gray-500 dark:text-graydark-600"
-                    />
-                  ) : (
-                    <Camera
-                      size={15}
-                      aria-hidden
-                      className="shrink-0 text-gray-500 dark:text-graydark-600"
-                    />
-                  )}
-                  <span
-                    aria-hidden
-                    className="size-2 shrink-0 rounded-full"
-                    style={{ background: anyOnline ? '#22d3ee' : '#64748b' }}
-                    title={anyOnline ? t('video.dock.deviceOnline') : t('video.dock.deviceOffline')}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-graydark-800">
-                    {sourceLabel}
-                  </span>
-                  {onWallCount > 0 && (
-                    <span
-                      className="inline-flex h-4 items-center rounded-full bg-brand-500/15 px-1.5 text-[0.6rem] font-semibold text-brand-600 dark:text-brand-300"
-                      title={t('video.dock.onWallCount', { count: onWallCount })}
-                    >
-                      {t('video.dock.onWall', { count: onWallCount })}
-                    </span>
-                  )}
-                  <span
-                    className="inline-flex h-4 items-center rounded-full bg-gray-100 px-1.5 text-[0.6rem] font-semibold text-gray-500 dark:bg-white/5 dark:text-graydark-600"
-                    title={t('video.dock.onlineCount', {
-                      online: onlineCount,
-                      total: cams.length,
-                    })}
+          grouped.map(
+            ({ key, label: sourceLabel, imeiHint, cams, onlineCount, onWallCount, anyOnline }) => {
+              const isCollapsed = collapsed.has(key);
+              return (
+                <div key={key} data-testid={`dock-group-${key}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(key)}
+                    aria-expanded={!isCollapsed}
+                    className={`flex w-full cursor-pointer items-center gap-2 border-none px-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                      anyOnline ? 'bg-success-500/5' : 'bg-transparent'
+                    }`}
                   >
-                    {onlineCount}/{cams.length}
-                  </span>
-                  <ChevronRight
-                    size={14}
-                    aria-hidden
-                    className={`shrink-0 text-gray-400 transition-transform rtl:rotate-180 ${isCollapsed ? '' : 'rotate-90'}`}
-                  />
-                </button>
-                {!isCollapsed &&
-                  cams.map((c) => {
-                    const assigned = onWall.has(c.id);
-                    const live = c.online && c.consentGiven;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        data-testid={`dock-channel-${c.id}`}
-                        data-assigned={assigned ? '1' : '0'}
-                        onClick={() => onPick(c)}
-                        className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
-                          live ? 'opacity-100' : 'opacity-50'
-                        } ${assigned ? 'bg-brand-500/8 dark:bg-brand-500/10' : ''}`}
-                      >
-                        <span
-                          aria-hidden
-                          className="me-1 size-1.5 shrink-0 rounded-full"
-                          style={{ background: live ? '#22d3ee' : '#64748b' }}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-graydark-700">
-                          {c.logicalChannel != null && !/^ch\s*\d+/i.test(c.label)
-                            ? `CH${c.logicalChannel} · ${c.label}`
-                            : c.label}
+                    {cams[0]?.sourceType === 'site' ? (
+                      <Building2
+                        size={15}
+                        aria-hidden
+                        className="shrink-0 text-gray-500 dark:text-graydark-600"
+                      />
+                    ) : (
+                      <Camera
+                        size={15}
+                        aria-hidden
+                        className="shrink-0 text-gray-500 dark:text-graydark-600"
+                      />
+                    )}
+                    <span
+                      aria-hidden
+                      className="size-2.5 shrink-0 rounded-full ring-2 ring-white dark:ring-graydark-300"
+                      style={{ background: anyOnline ? '#12b76a' : '#64748b' }}
+                      title={anyOnline ? t('video.dock.deviceOnline') : t('video.dock.deviceOffline')}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">
+                        {sourceLabel}
+                      </span>
+                      {imeiHint && (
+                        <span className="block truncate text-[0.65rem] text-gray-500 dark:text-graydark-600">
+                          IMEI {imeiHint}
                         </span>
-                        {assigned && (
+                      )}
+                    </span>
+                    {anyOnline && (
+                      <span className="inline-flex h-4 items-center rounded-full bg-success-500/15 px-1.5 text-[0.6rem] font-semibold text-success-700 dark:text-success-400">
+                        {t('video.dock.online')}
+                      </span>
+                    )}
+                    {onWallCount > 0 && (
+                      <span
+                        className="inline-flex h-4 items-center rounded-full bg-brand-500/15 px-1.5 text-[0.6rem] font-semibold text-brand-600 dark:text-brand-300"
+                        title={t('video.dock.onWallCount', { count: onWallCount })}
+                      >
+                        {t('video.dock.onWall', { count: onWallCount })}
+                      </span>
+                    )}
+                    <span
+                      className="inline-flex h-4 items-center rounded-full bg-gray-100 px-1.5 text-[0.6rem] font-semibold text-gray-500 dark:bg-white/5 dark:text-graydark-600"
+                      title={t('video.dock.onlineCount', {
+                        online: onlineCount,
+                        total: cams.length,
+                      })}
+                    >
+                      {onlineCount}/{cams.length}
+                    </span>
+                    <ChevronRight
+                      size={14}
+                      aria-hidden
+                      className={`shrink-0 text-gray-400 transition-transform rtl:rotate-180 ${isCollapsed ? '' : 'rotate-90'}`}
+                    />
+                  </button>
+                  {!isCollapsed &&
+                    cams.map((c) => {
+                      const assigned = onWall.has(c.id);
+                      const live = c.online && c.consentGiven;
+                      const camLabel =
+                        c.logicalChannel != null ? `CH${c.logicalChannel}` : c.label;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          data-testid={`dock-channel-${c.id}`}
+                          data-assigned={assigned ? '1' : '0'}
+                          onClick={() => onPick(c)}
+                          className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                            live ? 'opacity-100' : 'opacity-50'
+                          } ${assigned ? 'bg-brand-500/8 dark:bg-brand-500/10' : ''}`}
+                        >
                           <span
-                            className="inline-flex items-center gap-0.5 text-[0.6rem] font-semibold text-brand-600 dark:text-brand-300"
-                            title={t('video.dock.alreadyOnWall')}
-                          >
-                            <Check size={12} aria-hidden />
-                            {t('video.dock.onWallShort')}
+                            aria-hidden
+                            className="me-1 size-1.5 shrink-0 rounded-full"
+                            style={{ background: live ? '#12b76a' : '#64748b' }}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-graydark-800">
+                            {camLabel}
+                            {c.label && !/^ch\s*\d+/i.test(c.label) && c.label !== camLabel ? (
+                              <span className="ms-1 font-normal text-gray-500">· {c.label}</span>
+                            ) : null}
                           </span>
-                        )}
-                        {c.cabinCam && (
-                          <span className="inline-flex h-3.5 items-center rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
-                            {t('video.tile.cabinCam')}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-              </div>
-            );
-          })
+                          {assigned && (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-[0.6rem] font-semibold text-brand-600 dark:text-brand-300"
+                              title={t('video.dock.alreadyOnWall')}
+                            >
+                              <Check size={12} aria-hidden />
+                              {t('video.dock.onWallShort')}
+                            </span>
+                          )}
+                          {c.cabinCam && (
+                            <span className="inline-flex h-3.5 items-center rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
+                              {t('video.tile.cabinCam')}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+              );
+            },
+          )
         )}
       </div>
     </div>

@@ -19,6 +19,11 @@ import { useEffect, useRef, useState } from 'react';
 
 import { type ConnectionState, useRealtimeSocket } from '@/hooks/useRealtimeSocket';
 import { resolveRealtimeTarget } from '@/lib/realtime-url';
+import {
+  MOTION_FRESH_MS,
+  deriveVehicleMotion,
+  presenceFromLiveFix,
+} from '@/lib/vehicle-motion';
 import type { MapVehicle } from '@/types/fleet.types';
 
 /** A live position update from the gps-engine (wire format). */
@@ -160,34 +165,30 @@ export function mergeLivePositions(
     if (!pos && !status) return v;
     // A WS status delta wins; without one the bootstrapped presence stands
     // (never fabricate UNKNOWN — absence of a delta is not absence of a record).
-    const presence = status?.state ?? v.presence;
-    let state: MapVehicle['state'];
-    if (presence === 'OFFLINE' || presence === 'UNKNOWN') {
-      state = 'offline';
-    } else if (presence === 'STALE') {
-      state = 'stopped';
-    } else if (pos) {
-      // The live wire carries no ignition flag — moving is provable, at rest
-      // is reported as idle (the same default the bootstrap uses for unknown).
-      state = pos.speedKph > 100 ? 'overspeed' : pos.speedKph > 2 ? 'driving' : 'idle';
-    } else {
-      state = v.state; // no position delta — keep the bootstrapped movement state
-    }
-    const nextSpeed = pos?.speedKph ?? v.speed;
-    // Clear live speed when we KNOW the device is not online — never leave a
-    // stale 64 km/h on an OFFLINE/STALE card. Missing presence keeps speed
-    // (legacy rows without a status record).
-    const speed =
-      presence === 'OFFLINE' || presence === 'STALE' || presence === 'UNKNOWN' ? 0 : nextSpeed;
+    const statusPresence = status?.state ?? v.presence;
+    const capturedAt = pos?.capturedAt ?? v.updatedAt;
+    const liveFresh =
+      Boolean(pos) &&
+      Boolean(capturedAt) &&
+      Date.now() - Date.parse(capturedAt as string) <= MOTION_FRESH_MS;
+    // Fresh live GPS is proof of life — don't keep an OFFLINE drawer while the
+    // roster still paints motion from the same packet.
+    const presence = presenceFromLiveFix(statusPresence, liveFresh);
+    const motion = deriveVehicleMotion({
+      presence,
+      speedKph: pos?.speedKph ?? v.speed,
+      ignitionOn: v.ignitionOn,
+      capturedAt,
+    });
     return {
       ...v,
-      state,
+      state: motion.state,
       lat: pos?.latitude ?? v.lat,
       lng: pos?.longitude ?? v.lng,
-      speed,
+      speed: motion.speed,
       heading: pos?.headingDeg ?? v.heading,
-      updatedAt: pos?.capturedAt ?? v.updatedAt,
-      presence,
+      updatedAt: capturedAt,
+      presence: motion.presence,
       lastSeenAt: status?.lastSeenAt ?? v.lastSeenAt,
     };
   });

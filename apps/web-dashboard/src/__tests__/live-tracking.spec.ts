@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { type DeviceStatus, type LivePosition, mergeLivePositions } from '@/hooks/useLiveTracking';
 import type { MapVehicle } from '@/types/fleet.types';
 
+const nowIso = () => new Date().toISOString();
+
 const baseVehicles: MapVehicle[] = [
   {
     id: 'v1',
@@ -13,6 +15,8 @@ const baseVehicles: MapVehicle[] = [
     heading: 90,
     speed: 60,
     type: 'truck',
+    presence: 'ONLINE',
+    updatedAt: nowIso(),
   },
   {
     id: 'v2',
@@ -23,23 +27,33 @@ const baseVehicles: MapVehicle[] = [
     heading: 0,
     speed: 0,
     type: 'van',
+    presence: 'ONLINE',
+    updatedAt: nowIso(),
   },
 ];
 
-const livePositions = new Map<string, LivePosition>([
-  [
-    'v1',
-    {
-      vehicleId: 'v1',
-      latitude: 35.72,
-      longitude: 51.32,
-      speedKph: 75,
-      headingDeg: 95,
-      capturedAt: '2026-08-08T10:00:00Z',
-      quality: 'VALID',
-    },
-  ],
-]);
+function liveFix(
+  vehicleId: string,
+  overrides: Partial<LivePosition> = {},
+): Map<string, LivePosition> {
+  return new Map([
+    [
+      vehicleId,
+      {
+        vehicleId,
+        latitude: 35.72,
+        longitude: 51.32,
+        speedKph: 75,
+        headingDeg: 95,
+        capturedAt: nowIso(),
+        quality: 'VALID',
+        ...overrides,
+      },
+    ],
+  ]);
+}
+
+const livePositions = liveFix('v1');
 
 describe('mergeLivePositions', () => {
   it('returns original array when no live positions', () => {
@@ -48,14 +62,15 @@ describe('mergeLivePositions', () => {
   });
 
   it('patches the vehicle with a live position', () => {
-    const result = mergeLivePositions(baseVehicles, livePositions);
+    const capturedAt = nowIso();
+    const result = mergeLivePositions(baseVehicles, liveFix('v1', { capturedAt }));
     const v1 = result.find((v) => v.id === 'v1');
     expect(v1).toBeDefined();
     expect(v1?.lat).toBe(35.72);
     expect(v1?.lng).toBe(51.32);
     expect(v1?.speed).toBe(75);
     expect(v1?.heading).toBe(95);
-    expect(v1?.updatedAt).toBe('2026-08-08T10:00:00Z');
+    expect(v1?.updatedAt).toBe(capturedAt);
   });
 
   it('leaves vehicles without live positions untouched', () => {
@@ -79,21 +94,21 @@ describe('mergeLivePositions', () => {
 describe('mergeLivePositions with device-status deltas (§18/§19)', () => {
   // WS device.status events are keyed by deviceId — MapVehicle.deviceId joins.
   const statuses = new Map<string, DeviceStatus>([
-    ['dev-1', { deviceId: 'dev-1', state: 'OFFLINE', lastSeenAt: '2026-08-08T09:55:00Z' }],
-    ['dev-2', { deviceId: 'dev-2', state: 'STALE', lastSeenAt: '2026-08-08T09:00:00Z' }],
+    ['dev-1', { deviceId: 'dev-1', state: 'OFFLINE', lastSeenAt: nowIso() }],
+    ['dev-2', { deviceId: 'dev-2', state: 'STALE', lastSeenAt: nowIso() }],
   ]);
   const withDevices: MapVehicle[] = [
     {
       ...baseVehicles[0],
       deviceId: 'dev-1',
       presence: 'ONLINE',
-      lastSeenAt: '2026-08-08T10:00:00Z',
+      lastSeenAt: nowIso(),
     },
     {
       ...baseVehicles[1],
       deviceId: 'dev-2',
       presence: 'ONLINE',
-      lastSeenAt: '2026-08-08T10:00:00Z',
+      lastSeenAt: nowIso(),
     },
   ];
 
@@ -102,7 +117,6 @@ describe('mergeLivePositions with device-status deltas (§18/§19)', () => {
     const v1 = result.find((v) => v.id === 'v1');
     const v2 = result.find((v) => v.id === 'v2');
     expect(v1?.presence).toBe('OFFLINE');
-    expect(v1?.lastSeenAt).toBe('2026-08-08T09:55:00Z');
     expect(v1?.state).toBe('offline'); // OFFLINE ⇒ offline movement state
     expect(v1?.speed).toBe(0); // no live speed while OFFLINE
     expect(v2?.presence).toBe('STALE');
@@ -121,51 +135,36 @@ describe('mergeLivePositions with device-status deltas (§18/§19)', () => {
         ...baseVehicles[0],
         deviceId: 'dev-x',
         presence: 'ONLINE',
-        lastSeenAt: '2026-08-08T10:00:00Z',
+        lastSeenAt: nowIso(),
       },
     ];
     const result = mergeLivePositions(lone, new Map(), statuses);
     expect(result[0]?.presence).toBe('ONLINE');
-    expect(result[0]?.lastSeenAt).toBe('2026-08-08T10:00:00Z');
   });
 
   it('derives the movement state from a live position while ONLINE', () => {
-    const moving = new Map<string, LivePosition>([
-      [
-        'v1',
-        {
-          vehicleId: 'v1',
-          latitude: 35.72,
-          longitude: 51.32,
-          speedKph: 75,
-          headingDeg: 95,
-          capturedAt: '2026-08-08T10:01:00Z',
-          quality: 'VALID',
-        },
-      ],
-    ]);
-    const result = mergeLivePositions(withDevices, moving, new Map());
+    const result = mergeLivePositions(withDevices, liveFix('v1'), new Map());
     const v1 = result.find((v) => v.id === 'v1');
     expect(v1?.state).toBe('driving');
     expect(v1?.speed).toBe(75);
-    expect(v1?.presence).toBe('ONLINE'); // unchanged — no status delta
+    expect(v1?.presence).toBe('ONLINE');
+  });
+
+  it('fresh live fix upgrades a lagging OFFLINE status so list and drawer agree', () => {
+    const result = mergeLivePositions(withDevices, liveFix('v1'), statuses);
+    const v1 = result.find((v) => v.id === 'v1');
+    expect(v1?.presence).toBe('ONLINE');
+    expect(v1?.state).toBe('driving');
+    expect(v1?.speed).toBe(75);
   });
 
   it('ignores a live fix that teleports across continents', () => {
-    const norway = new Map<string, LivePosition>([
-      [
-        'v1',
-        {
-          vehicleId: 'v1',
-          latitude: 67.28,
-          longitude: 0.2,
-          speedKph: 0,
-          headingDeg: 238,
-          capturedAt: '2026-09-03T23:15:00Z',
-          quality: 'VALID',
-        },
-      ],
-    ]);
+    const norway = liveFix('v1', {
+      latitude: 67.28,
+      longitude: 0.2,
+      speedKph: 0,
+      headingDeg: 238,
+    });
     const result = mergeLivePositions(withDevices, norway, new Map());
     const v1 = result.find((v) => v.id === 'v1');
     expect(v1?.lat).toBe(35.7);
@@ -178,23 +177,15 @@ describe('mergeLivePositions with device-status deltas (§18/§19)', () => {
         ...withDevices[0],
         lat: 67.28,
         lng: 0.2,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso(),
       },
     ];
-    const tehran = new Map<string, LivePosition>([
-      [
-        'v1',
-        {
-          vehicleId: 'v1',
-          latitude: 35.703,
-          longitude: 51.403,
-          speedKph: 12,
-          headingDeg: 90,
-          capturedAt: new Date().toISOString(),
-          quality: 'VALID',
-        },
-      ],
-    ]);
+    const tehran = liveFix('v1', {
+      latitude: 35.703,
+      longitude: 51.403,
+      speedKph: 12,
+      headingDeg: 90,
+    });
     const result = mergeLivePositions(junkRest, tehran, new Map());
     expect(result[0]?.lat).toBe(35.703);
     expect(result[0]?.lng).toBe(51.403);

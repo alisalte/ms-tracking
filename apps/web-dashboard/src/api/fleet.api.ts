@@ -24,7 +24,8 @@ import { useQuery } from '@tanstack/react-query';
 import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
-import { TRIP_SPEED_LIMIT_KMH, decorateTripEvents } from '@/lib/trip-events';
+import { decorateTripEvents } from '@/lib/trip-events';
+import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
 import type { Alarm } from '@/types/alarm.types';
@@ -46,19 +47,6 @@ import { queryKeys } from './query-keys';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Derive the UI movement state from a position + connection state (§18). */
-function movementState(
-  pos: LatestPosition | undefined,
-  presence: VehiclePresence,
-): MapVehicle['state'] {
-  if (presence === 'OFFLINE' || presence === 'UNKNOWN') return 'offline';
-  if (presence === 'STALE') return 'stopped';
-  if (!pos) return 'stopped';
-  if (pos.speedKph > TRIP_SPEED_LIMIT_KMH) return 'overspeed';
-  if (pos.speedKph > 2) return 'driving';
-  return pos.ignitionOn === false ? 'stopped' : 'idle';
-}
-
 /** Build a map vehicle row from the real backend triple (registry + status + position). */
 function toMapVehicle(
   vehicle: { id: string; name: string; code: string; plate: string | null },
@@ -68,24 +56,30 @@ function toMapVehicle(
   lastSeenAt: string | undefined,
 ): MapVehicle {
   const label = formatVehicleLabel(vehicle);
-  const online = presence === 'ONLINE';
+  const motion = deriveVehicleMotion({
+    presence,
+    speedKph: pos?.speedKph ?? 0,
+    ignitionOn: pos?.ignitionOn,
+    capturedAt: pos?.capturedAt,
+  });
+  const online = motion.presence === 'ONLINE';
   return {
     id: vehicle.id,
     name: vehicle.name,
     plate: vehicle.plate,
     label,
-    state: movementState(pos, presence),
+    state: motion.state,
     lat: pos?.latitude ?? 0,
     lng: pos?.longitude ?? 0,
     heading: pos?.headingDeg ?? 0,
-    // Live speed only while ONLINE — last-known km/h must not look like motion.
-    speed: online ? (pos?.speedKph ?? 0) : 0,
+    // Live speed only while ONLINE + fresh — last-known km/h must not look like motion.
+    speed: motion.speed,
     // Body type for map silhouettes — inferred from registry name/plate until API exposes it.
     type: getVehicleIcon({ name: vehicle.name, label, plate: vehicle.plate }),
     ignitionOn: online ? (pos?.ignitionOn ?? undefined) : undefined,
     updatedAt: pos?.capturedAt,
     deviceId,
-    presence,
+    presence: motion.presence,
     lastSeenAt,
   };
 }
@@ -223,21 +217,27 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         position = undefined;
       }
       const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
-      const online = presence === 'ONLINE';
+      const motion = deriveVehicleMotion({
+        presence,
+        speedKph: position?.speedKph ?? 0,
+        ignitionOn: position?.ignitionOn,
+        capturedAt: position?.capturedAt,
+      });
+      const online = motion.presence === 'ONLINE';
       return {
         id: vehicleWire.id,
         name: vehicleWire.name,
         plate: vehicleWire.plate,
         label: formatVehicleLabel(vehicleWire),
-        state: movementState(position, presence),
+        state: motion.state,
         lat: position?.latitude ?? 0,
         lng: position?.longitude ?? 0,
         heading: position?.headingDeg ?? 0,
-        speed: online ? (position?.speedKph ?? 0) : 0,
+        speed: motion.speed,
         ignitionOn: online ? (position?.ignitionOn ?? false) : false,
         updatedAt: position?.capturedAt ?? '',
         lastSeenAt: status?.lastSeenAt ?? position?.capturedAt ?? undefined,
-        presence,
+        presence: motion.presence,
         deviceId: primary?.deviceId,
         odometer: vehicleWire.odometerKm ?? 0,
         address: '', // Reverse geocoding is a map-engine concern (out of scope).
