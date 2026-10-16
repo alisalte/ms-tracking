@@ -24,6 +24,7 @@ import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
 import { useBasemap } from '@/hooks/useBasemap';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
+import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
@@ -127,10 +128,11 @@ export function MapPage() {
   // unreachable (dev), so the REST bootstrap below stays the source of truth.
   const { positions, statuses, connectionState } = useLiveTracking(tenantId);
 
-  // Merge live deltas into the REST-fetched vehicles (live overrides REST).
+  // Merge live deltas into the REST-fetched vehicles (live overrides REST),
+  // then re-derive motion so an aged high speed never stays "در حرکت".
   const vehicles = useMemo(() => {
     const rest = data ?? [];
-    const live =
+    const merged =
       positions.size > 0 || statuses.size > 0
         ? mergeLivePositions(rest, positions, statuses)
         : rest;
@@ -138,8 +140,21 @@ export function MapPage() {
     for (const d of drivers ?? []) {
       if (d.assignedVehicleId) byVehicle.set(d.assignedVehicleId, driverFullName(d));
     }
-    if (byVehicle.size === 0) return live;
-    return live.map((v) => ({ ...v, driver: byVehicle.get(v.id) ?? v.driver }));
+    return merged.map((v) => {
+      const motion = deriveVehicleMotion({
+        presence: v.presence,
+        speedKph: v.speed,
+        ignitionOn: v.ignitionOn,
+        capturedAt: v.updatedAt,
+      });
+      return {
+        ...v,
+        state: motion.state,
+        speed: motion.speed,
+        presence: motion.presence,
+        driver: byVehicle.get(v.id) ?? v.driver,
+      };
+    });
   }, [data, positions, statuses, drivers]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);

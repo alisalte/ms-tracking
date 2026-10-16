@@ -204,9 +204,9 @@ export function VideoTile({
           </div>
         )}
 
-        {/* Top-left overlays: latency + stream-kind + REC + signal */}
+        {/* Top-end status chips — keep top-start free for the device/CH label. */}
         {!compact && (
-          <div className="absolute top-1.5 start-1.5 flex items-center gap-1.5">
+          <div className="absolute top-1.5 end-1.5 z-[5] flex items-center gap-1.5">
             {session?.state === 'active' && (
               <span className="inline-flex h-[18px] items-center rounded-full bg-black/60 px-1.5 text-[0.6rem] tabular-nums text-gray-200">
                 {session.latencyMs}ms
@@ -338,44 +338,51 @@ function TileFrame({
   );
 }
 
-/** Device + channel overlay (bottom-end) + cabin-cam badge. */
+/**
+ * Device + channel overlay — top-start so it never hides under the control bar.
+ * Primary line = vehicle / IMEI; secondary = camera channel (CH1…).
+ */
 function TileLabel({ channel, compact }: { channel: CameraChannel; compact: boolean }) {
   const { t } = useTranslation();
   const cabin =
     channel.cabinCam ||
     channel.facing === 'driver' ||
     channel.label.toLowerCase().includes('driver');
-  const primary = channel.sourceLabel?.trim() || channel.label;
-  const secondary =
+  const device =
+    channel.sourceLabel?.trim() && channel.sourceLabel.trim() !== channel.label.trim()
+      ? channel.sourceLabel.trim()
+      : channel.imei
+        ? `IMEI ${channel.imei}`
+        : channel.label;
+  const cam =
     channel.logicalChannel != null
       ? `CH${channel.logicalChannel}`
-      : channel.sourceLabel && channel.sourceLabel !== channel.label
+      : /^ch\s*\d+/i.test(channel.label)
         ? channel.label
         : null;
   return (
     <div
-      className="pointer-events-none absolute end-1.5 flex max-w-[85%] flex-col items-end gap-0.5"
-      style={{ bottom: compact ? 4 : 28 }}
+      className="pointer-events-none absolute start-1.5 top-1.5 z-10 flex max-w-[90%] flex-col items-start gap-0.5"
       data-testid="tile-device-label"
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex max-w-full items-center gap-1">
         {cabin && (
-          <span className="inline-flex h-4 items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
+          <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full bg-black/70 px-1.5 text-[0.55rem] font-semibold text-warning-400">
             <Sparkles size={10} aria-hidden />
             {t('video.tile.cabinCam')}
           </span>
         )}
         <span
-          className="inline-flex h-[18px] max-w-[200px] items-center truncate rounded-full bg-black/70 px-1.5 text-[0.65rem] font-semibold text-white"
-          style={{ maxWidth: compact ? 100 : 200, fontSize: compact ? '0.55rem' : '0.65rem' }}
+          className="inline-flex h-[20px] max-w-full items-center truncate rounded-md bg-black/75 px-1.5 text-[0.7rem] font-semibold text-white shadow-sm"
+          style={{ maxWidth: compact ? 110 : 220, fontSize: compact ? '0.6rem' : '0.7rem' }}
           title={tileDeviceCaption(channel)}
         >
-          {primary}
+          {device}
         </span>
       </div>
-      {secondary && !compact && (
-        <span className="inline-flex h-[16px] max-w-[160px] items-center truncate rounded-full bg-black/55 px-1.5 text-[0.55rem] text-gray-300">
-          {secondary}
+      {cam && (
+        <span className="inline-flex h-[16px] items-center rounded-md bg-brand-500/90 px-1.5 text-[0.6rem] font-bold text-white">
+          {cam}
         </span>
       )}
     </div>

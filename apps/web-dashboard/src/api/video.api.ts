@@ -37,24 +37,47 @@ async function fetchChannels(): Promise<CameraChannel[]> {
   return withMockFallback(
     // apiGetRaw: media-service returns a RAW array (no { data } envelope).
     async () => {
-      const [{ fetchAllVehiclesAsMap }, { formatVehicleLabel }] = await Promise.all([
+      const [{ fetchAllVehiclesAsMap }, { formatVehicleLabel }, { isUuid }] = await Promise.all([
         import('./asset.api'),
         import('@/lib/vehicle-label'),
+        import('@/lib/ids'),
       ]);
       const [wires, registry] = await Promise.all([
         apiGetRaw<MediaChannelWire[]>('/media/channels'),
         fetchAllVehiclesAsMap().catch(() => ({
           vehicles: [] as Array<{ id: string; name: string; code: string; plate: string | null }>,
+          devices: [] as Array<{ id: string; vehicleId: string | null; imei?: string }>,
         })),
       ]);
       const vehicleLabel = new Map(
         registry.vehicles.map((v) => [v.id, formatVehicleLabel(v) || v.name || v.code] as const),
       );
+      // deviceId → IMEI / bound vehicle (media wire sometimes omits endpoint).
+      const deviceImei = new Map<string, string>();
+      const deviceVehicle = new Map<string, string>();
+      for (const d of registry.devices ?? []) {
+        if (d.imei?.trim()) deviceImei.set(d.id, d.imei.trim());
+        if (d.vehicleId) deviceVehicle.set(d.id, d.vehicleId);
+      }
       const rows = wires.map((w) => {
         const ch = mapMediaChannel(w);
-        const named = w.vehicleId ? vehicleLabel.get(w.vehicleId) : undefined;
-        if (named) return { ...ch, sourceLabel: named };
-        return ch;
+        const imei = (w.endpoint?.trim() || (w.deviceId ? deviceImei.get(w.deviceId) : undefined) || ch.imei)?.trim();
+        const vehicleId = w.vehicleId || (w.deviceId ? deviceVehicle.get(w.deviceId) : undefined) || null;
+        const named = vehicleId ? vehicleLabel.get(vehicleId) : undefined;
+        const sourceLabel = formatChannelSourceLabel({
+          vehicleName: named,
+          imei,
+          deviceId: w.deviceId,
+          channelLabel: ch.label,
+          isUuid,
+        });
+        return {
+          ...ch,
+          sourceId: vehicleId || w.deviceId || w.siteId || ch.sourceId,
+          sourceLabel,
+          imei: imei || ch.imei,
+          deviceId: w.deviceId ?? ch.deviceId,
+        };
       });
       rows.sort(
         (a, b) =>
@@ -66,6 +89,29 @@ async function fetchChannels(): Promise<CameraChannel[]> {
     },
     () => resolveMock(mockChannels),
   );
+}
+
+/** Operator-facing device caption — never a bare "CH1" / channel label. */
+export function formatChannelSourceLabel(opts: {
+  vehicleName?: string | null;
+  imei?: string | null;
+  deviceId?: string | null;
+  channelLabel: string;
+  isUuid: (v: string | null | undefined) => boolean;
+}): string {
+  const vehicle = opts.vehicleName?.trim();
+  const imei = opts.imei?.trim();
+  if (vehicle) {
+    if (imei && imei.length >= 6) return `${vehicle} · …${imei.slice(-6)}`;
+    return vehicle;
+  }
+  if (imei) {
+    return /^\d{10,20}$/.test(imei) ? `IMEI ${imei}` : imei;
+  }
+  const deviceId = opts.deviceId?.trim();
+  if (deviceId && !opts.isUuid(deviceId)) return deviceId;
+  if (deviceId) return `Device ${deviceId.slice(0, 8)}`;
+  return opts.channelLabel;
 }
 
 /**
@@ -95,10 +141,18 @@ function mapMediaChannel(w: MediaChannelWire): CameraChannel {
   const chNum = w.logicalChannel ?? null;
   const label = w.label?.trim() || (chNum != null ? `CH${chNum}` : 'Camera');
   const lowered = label.toLowerCase();
-  const sourceId = w.vehicleId ?? w.siteId ?? w.deviceId ?? '';
-  // Prefer IMEI as the device caption until the vehicle registry join fills
-  // `sourceLabel` — tiles and the dock both show this so operators know whose cam it is.
-  const sourceLabel = w.endpoint ? w.endpoint : w.deviceId ? w.deviceId.slice(0, 8) : label;
+  const sourceId = w.deviceId || w.vehicleId || w.siteId || '';
+  // Prefer IMEI / device until the vehicle registry join fills `sourceLabel`.
+  const imei = w.endpoint?.trim() || undefined;
+  const sourceLabel = formatChannelSourceLabel({
+    vehicleName: null,
+    imei,
+    deviceId: w.deviceId,
+    channelLabel: label,
+    isUuid: (v) =>
+      typeof v === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
+  });
   return {
     id: w.channelId,
     label,
@@ -121,7 +175,7 @@ function mapMediaChannel(w: MediaChannelWire): CameraChannel {
     protocol: w.protocol,
     deviceId: w.deviceId ?? undefined,
     logicalChannel: w.logicalChannel ?? undefined,
-    imei: w.endpoint ?? undefined,
+    imei,
   };
 }
 
