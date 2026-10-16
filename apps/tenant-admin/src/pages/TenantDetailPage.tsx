@@ -106,49 +106,61 @@ export function TenantDetailPage() {
   ];
 
   return (
-    <div className="flex min-h-full flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link to="/tenants" className="text-sm text-brand-600 no-underline">
-          ← {t('common.back')}
-        </Link>
-        {tenant && (
-          <p className="text-xs text-slate-500">
-            {tenant.region} · {tenant.status}
-          </p>
-        )}
+    <div className="flex min-h-full flex-1 flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            to="/tenants"
+            className="mb-1 inline-block text-sm font-medium text-brand-600 no-underline hover:underline"
+          >
+            ← {t('common.back')}
+          </Link>
+          <h1 className="truncate text-2xl font-bold tracking-tight text-ink-900">
+            {tenant?.name ?? t('detail.title')}
+          </h1>
+          {tenant && (
+            <p className="mt-0.5 text-sm text-slate-500">
+              {tenant.region} · {tenant.status}
+            </p>
+          )}
+        </div>
       </div>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {notice && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</p>
       )}
 
-      <div
-        role="tablist"
-        aria-label={t('detail.title')}
-        data-testid="tenant-detail-tabs"
-        className="flex gap-1 overflow-x-auto rounded-xl border border-stone-300 bg-white p-1 shadow-sm"
-      >
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => setTab(item.id)}
-            className={`cursor-pointer whitespace-nowrap rounded-lg border-none px-3 py-1.5 text-sm font-semibold transition-colors ${
-              tab === item.id
-                ? 'bg-ink-900 text-white shadow-sm'
-                : 'bg-transparent text-slate-600 hover:bg-stone-100 hover:text-ink-900'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+      {/* Full-width underline tabs — large hit targets, high contrast */}
+      <div className="sticky top-0 z-10 -mx-1 border-b-2 border-stone-300 bg-paper/95 px-1 backdrop-blur-sm">
+        <div
+          role="tablist"
+          aria-label={t('detail.title')}
+          data-testid="tenant-detail-tabs"
+          className="flex min-h-12 w-full gap-0 overflow-x-auto"
+        >
+          {tabs.map((item) => {
+            const active = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(item.id)}
+                className={`-mb-0.5 min-h-12 min-w-[7.5rem] flex-1 cursor-pointer whitespace-nowrap border-0 border-b-[3px] bg-transparent px-4 py-3 text-base font-bold transition-colors sm:flex-none sm:px-5 ${
+                  active
+                    ? 'border-brand-500 text-brand-600'
+                    : 'border-transparent text-slate-500 hover:border-stone-400 hover:text-ink-900'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {license && (
-        <LicenseHero name={tenant?.name ?? t('detail.title')} license={license} loc={loc} />
-      )}
+      {license && <LicenseHero name={tenant?.name ?? t('detail.title')} license={license} loc={loc} />}
 
       {tab === 'overview' && license && (
         <section className="rounded-xl border border-stone-200 bg-white p-4">
@@ -443,7 +455,7 @@ function LicenseHero({
             </span>
             <StatusPill status={license.license_status} />
           </div>
-          <h2 className="mt-2 truncate text-xl font-bold text-white">{name}</h2>
+          <p className="mt-2 truncate text-sm font-medium text-slate-300">{name}</p>
           <p className="mt-1 font-mono text-[11px] text-slate-400">{license.license_key}</p>
         </div>
         <div className="text-end">
