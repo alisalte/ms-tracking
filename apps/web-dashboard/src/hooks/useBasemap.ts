@@ -51,14 +51,20 @@ export function useBasemap(): [BasemapId, (id: BasemapId) => void] {
 /**
  * Keep a MapLibre instance on the shared basemap (and UI language for Google
  * labels). Call after the map is created with `rasterMapStyle(...)`.
+ *
+ * Pass `controlled` when the parent (e.g. MapPage settings) owns the choice —
+ * that forces an in-place tile swap on every click, not only via the storage
+ * event (which can miss same-tab updates if the map hook was late to subscribe).
  */
 export function useFollowBasemap(
   mapRef: RefObject<MaplibreMap | null>,
   beforeLayerIds: readonly string[] = NO_OVERLAY_LAYERS,
   mapReady = true,
+  controlled?: BasemapId | null,
 ): { basemap: BasemapId; setBasemap: (id: BasemapId) => void } {
   const { i18n } = useTranslation();
   const [basemap, setBasemap] = useBasemap();
+  const active = controlled ?? basemap;
   const appliedRef = useRef('');
 
   useEffect(() => {
@@ -68,13 +74,13 @@ export function useFollowBasemap(
     }
     const map = mapRef.current;
     if (!map) return;
-    const key = `${basemap}|${i18n.language}`;
+    const key = `${active}|${i18n.language}`;
     if (appliedRef.current === key) return;
     let cancelled = false;
     const swap = () => {
       if (cancelled || mapRef.current !== map) return;
       try {
-        applyRasterBasemap(map, basemap, i18n.language, beforeLayerIds);
+        applyRasterBasemap(map, active, i18n.language, beforeLayerIds);
         appliedRef.current = key;
       } catch {
         // Style mid-reload — retry on the next styledata tick.
@@ -85,7 +91,7 @@ export function useFollowBasemap(
     return () => {
       cancelled = true;
     };
-  }, [basemap, beforeLayerIds, i18n.language, mapReady, mapRef]);
+  }, [active, beforeLayerIds, i18n.language, mapReady, mapRef]);
 
-  return { basemap, setBasemap };
+  return { basemap: active, setBasemap };
 }

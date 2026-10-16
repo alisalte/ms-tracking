@@ -21,7 +21,8 @@ interface MapSettingsPanelProps {
 
 /**
  * MapSettingsPanel — basemap picker and vehicle/navigation marker chrome.
- * Choices persist and apply on every map in the app.
+ * Choices persist and apply on every map in the app. Each basemap is a large
+ * clickable preview tile so operators can switch the live map with one tap.
  */
 export function MapSettingsPanel({
   basemap,
@@ -54,6 +55,10 @@ export function MapSettingsPanel({
   const bottom =
     placement === 'beside-nav' ? (raised ? 'bottom-[5.75rem]' : 'bottom-[4.75rem]') : 'bottom-2';
 
+  const pickBasemap = (id: BasemapId) => {
+    onBasemapChange(id);
+  };
+
   return (
     <div
       ref={rootRef}
@@ -77,33 +82,35 @@ export function MapSettingsPanel({
           // biome-ignore lint/a11y/useSemanticElements: styled popover has no single semantic element.
           role="dialog"
           aria-label={t('map.settings.open')}
-          className="absolute bottom-full end-0 mb-2 w-72 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-graydark-300"
-          style={{ maxHeight: 'min(24rem, 70vh)' }}
+          className="absolute bottom-full end-0 mb-2 w-[20.5rem] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-white/10 dark:bg-graydark-300"
+          style={{ maxHeight: 'min(28rem, 75vh)' }}
+          onPointerDown={(e) => e.stopPropagation()}
         >
-          <p className="px-2 pt-1 pb-1.5 text-xs font-bold tracking-[0.08em] text-gray-500 uppercase dark:text-graydark-600">
+          <p className="px-1 pt-0.5 pb-2 text-xs font-bold tracking-[0.08em] text-gray-500 uppercase dark:text-graydark-600">
             {t('map.settings.basemap')}
           </p>
-          <BasemapRadios
+          <BasemapGrid
             group="google"
             heading={t('map.settings.providerGoogle', { defaultValue: 'Google' })}
             basemap={basemap}
-            onBasemapChange={onBasemapChange}
+            onPick={pickBasemap}
             t={t}
           />
-          <BasemapRadios
+          <BasemapGrid
             group="other"
             heading={t('map.settings.providerOther', { defaultValue: 'Other maps' })}
             basemap={basemap}
-            onBasemapChange={onBasemapChange}
+            onPick={pickBasemap}
             t={t}
           />
-          <p className="px-2 pt-2 pb-1.5 text-xs font-bold tracking-[0.08em] text-gray-500 uppercase dark:text-graydark-600">
+          <p className="px-1 pt-3 pb-2 text-xs font-bold tracking-[0.08em] text-gray-500 uppercase dark:text-graydark-600">
             {t('map.settings.markers')}
           </p>
           <div
             role="radiogroup"
             aria-label={t('map.settings.markers')}
             data-testid="map-settings-markers"
+            className="flex flex-col gap-1"
           >
             <MarkerStyleOption
               id="vehicle"
@@ -126,26 +133,31 @@ export function MapSettingsPanel({
   );
 }
 
-function BasemapRadios({
+function BasemapGrid({
   group,
   heading,
   basemap,
-  onBasemapChange,
+  onPick,
   t,
 }: {
   group: BasemapGroup;
   heading: string;
   basemap: BasemapId;
-  onBasemapChange: (id: BasemapId) => void;
+  onPick: (id: BasemapId) => void;
   t: (key: string) => string;
 }) {
   const items = BASEMAPS.filter((bm) => bm.group === group);
   return (
-    <div className="mb-1">
-      <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold tracking-[0.06em] text-gray-400 uppercase dark:text-graydark-500">
+    <div className="mb-2">
+      <p className="px-1 pb-1.5 text-[10px] font-semibold tracking-[0.06em] text-gray-400 uppercase dark:text-graydark-500">
         {heading}
       </p>
-      <div role="radiogroup" aria-label={heading} data-testid={`map-settings-basemaps-${group}`}>
+      <div
+        role="radiogroup"
+        aria-label={heading}
+        data-testid={`map-settings-basemaps-${group}`}
+        className="grid grid-cols-2 gap-2"
+      >
         {items.map((bm) => {
           const active = bm.id === basemap;
           return (
@@ -156,19 +168,34 @@ function BasemapRadios({
               role="radio"
               aria-checked={active}
               data-testid={`basemap-option-${bm.id}`}
-              onClick={() => onBasemapChange(bm.id)}
-              className={`flex w-full cursor-pointer items-center gap-2.5 rounded-xl p-1.5 text-start text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+              onClick={() => onPick(bm.id)}
+              className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border-2 text-start transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
                 active
-                  ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
-                  : 'text-gray-700 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5'
+                  ? 'border-brand-500 shadow-md ring-1 ring-brand-500/30'
+                  : 'border-gray-200 hover:border-brand-300 hover:shadow-sm dark:border-white/10 dark:hover:border-brand-400/40'
               }`}
             >
               <span
                 aria-hidden
-                className={`h-7 w-9 shrink-0 rounded-lg shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] bg-gradient-to-br ${bm.swatchClass}`}
-              />
-              <span className="min-w-0 flex-1 truncate font-medium">{t(bm.labelKey)}</span>
-              {active && <Check size={16} aria-hidden className="shrink-0 text-brand-500" />}
+                className={`relative block h-16 w-full bg-gradient-to-br ${bm.swatchClass}`}
+              >
+                {/* Fake map grid so the tile reads as a map preview */}
+                <span className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,0.35)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.35)_1px,transparent_1px)] [background-size:12px_12px]" />
+                {active && (
+                  <span className="absolute end-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-brand-500 text-white shadow">
+                    <Check size={12} aria-hidden strokeWidth={3} />
+                  </span>
+                )}
+              </span>
+              <span
+                className={`block truncate px-2 py-1.5 text-xs font-semibold ${
+                  active
+                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+                    : 'bg-white text-gray-700 group-hover:bg-gray-50 dark:bg-transparent dark:text-graydark-700'
+                }`}
+              >
+                {t(bm.labelKey)}
+              </span>
             </button>
           );
         })}

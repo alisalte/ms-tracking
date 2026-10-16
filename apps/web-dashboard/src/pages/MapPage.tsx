@@ -24,8 +24,8 @@ import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
 import { useBasemap } from '@/hooks/useBasemap';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
-import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
+import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
 function wsChip(connectionState: string): {
@@ -481,6 +481,7 @@ export function MapPage() {
           <FleetMap
             vehicles={filtered}
             selectedId={selectedId}
+            basemap={basemap}
             onSelect={(id) => {
               setSelectedId(id);
               setFollowing(false);

@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { circleToPolygonRing } from '@/components/geofences/GeofenceDrawMap';
 import { useFollowBasemap } from '@/hooks/useBasemap';
 import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
-import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
+import { type BasemapId, loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { cluster, expandZoom } from '@/lib/map-cluster';
 import type { MapMarkerStyle } from '@/lib/map-marker-style';
 import {
@@ -78,6 +78,11 @@ interface FleetMapProps {
    * converted to polygon rings.
    */
   geofences?: ReadonlyArray<Geofence>;
+  /**
+   * Basemap chosen in Map settings — drives an immediate tile swap on this
+   * instance (parent owns the picker state).
+   */
+  basemap?: BasemapId;
 }
 
 /** Freshness "age" of the last position fix, locale-aware. */
@@ -128,6 +133,7 @@ export function FleetMap({
   playbackHead = null,
   followId = null,
   geofences = [],
+  basemap: basemapProp,
 }: FleetMapProps) {
   const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -140,7 +146,7 @@ export function FleetMap({
   /** Cluster markers (churn by nature — rebuilt per sync). */
   const clusterMarkersRef = useRef<MaplibreMarker[]>([]);
 
-  useFollowBasemap(mapRef, FLEET_BASEMAP_BEFORE, mapReady);
+  useFollowBasemap(mapRef, FLEET_BASEMAP_BEFORE, mapReady, basemapProp);
   const [markerStyle] = useMapMarkerStyle();
 
   // The latest fleet for the focus effect (which must not re-run on data change).
@@ -173,7 +179,11 @@ export function FleetMap({
     const navCorner = i18n.dir() === 'rtl' ? 'bottom-left' : 'bottom-right';
     map.addControl(new NavigationControl({ visualizePitch: false }), navCorner);
     mapRef.current = map;
-    setMapReady(true);
+    // Wait for the style before advertising ready — otherwise the first
+    // basemap swap can no-op and later clicks look broken.
+    const markReady = () => setMapReady(true);
+    if (map.loaded() || map.isStyleLoaded()) markReady();
+    else map.once('load', markReady);
     // Clicking empty map clears the selection (§2.5 Esc/backdrop closes).
     map.on('click', (e) => {
       // If the click originated on a marker element, ignore (markers stop propagation).
