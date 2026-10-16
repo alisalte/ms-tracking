@@ -217,7 +217,6 @@ describe('MapPage (Live Tracking)', () => {
     localStorage.removeItem('fv:map-basemap');
     localStorage.removeItem('fv:map-marker-style');
     document.cookie = 'fv-map-marker-style=; Path=/; Max-Age=0';
-    localStorage.setItem('fv:map-demo-status', '0');
     mockUseMapVehicles.mockReturnValue({
       data: vehiclesFixture,
       isLoading: false,
@@ -324,16 +323,6 @@ describe('MapPage (Live Tracking)', () => {
     await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('map-settings-button'));
     expect(screen.getByTestId('marker-style-navigation')).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('can enable demo status colors from map settings', async () => {
-    renderMap();
-    await waitFor(() => expect(screen.getByText('TRK-100')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('map-settings-button'));
-    const toggle = screen.getByTestId('map-settings-demo-status');
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
   });
 
   it('renders the presence filter chips with counts (§18/§20)', async () => {

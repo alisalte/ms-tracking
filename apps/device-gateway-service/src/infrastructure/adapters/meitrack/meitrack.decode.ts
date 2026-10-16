@@ -503,19 +503,27 @@ interface CceParam {
  *   1-byte param group, 2-byte group, 4-byte group, n-byte group.
  *
  * Older unit tests (and some trackers) omit the envelope and 1-byte group.
- * Detect the envelope when bytes 1–3 of the cache uint32 are zero.
+ *
+ * Do NOT require cache-remaining < 256 (old check on bytes 1–3 == 0): MD300s
+ * with a backlog silently failed envelope detection, so event-126 DMS/ADAS
+ * never decoded and never reached Kafka.
  */
 function hasCceEnvelope(buf: Buffer): boolean {
   if (buf.length < 10) return false;
-  if ((buf[1] ?? 1) !== 0 || (buf[2] ?? 1) !== 0 || (buf[3] ?? 1) !== 0) return false;
   const nPkts = buf.readUInt16LE(4);
   if (nPkts < 1 || nPkts > 64) return false;
   const pktLen = buf.readUInt16LE(6);
-  return pktLen >= 8 && pktLen <= buf.length;
+  // Packet header starts at offset 6; the packet must fit in the remaining body.
+  return pktLen >= 8 && 6 + pktLen <= buf.length;
 }
 
 function parseCceParams(buf: Buffer): CceParam[] {
-  if (hasCceEnvelope(buf)) return parseEnvelopedCce(buf);
+  if (hasCceEnvelope(buf)) {
+    const enveloped = parseEnvelopedCce(buf);
+    // Trust the envelope only when it yields a real event code (0x40) — otherwise
+    // fall through to the legacy non-enveloped layout used by some trackers/tests.
+    if (enveloped.some((p) => p.id === 0x40)) return enveloped;
+  }
   return parseCceGroups(buf, 0, buf.length, false);
 }
 
@@ -758,7 +766,8 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
   if (event !== 0 && event !== 31 && event !== 34) {
     let alarm = mapMeitrackEvent(event);
     let detail: Record<string, unknown> | undefined;
-    const fe31 = byId.get(0xfe31);
+    // 0xFE31 is the documented DMS/ADAS detail; some firmware also uses 0xFE2D.
+    const fe31 = byId.get(0xfe31) ?? byId.get(0xfe2d);
     if (event === 126 && fe31) {
       const dms = parseDmsDetail(fe31.value);
       if (dms) {

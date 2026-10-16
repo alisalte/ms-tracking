@@ -2,12 +2,11 @@
  * ChannelDock — the TailAdmin collapsible left panel listing all assignable
  * channels (Phase 7 port).
  *
- * Groups channels by source (sites → site cameras, vehicles → 4 cameras each).
- * Clicking a channel assigns it to the next free wall slot. Includes a search
- * box, an online-only filter, and an auto-fill action that populates every
- * empty slot. Mirrors the channel-picker contract in `10_Live_Vide.md` §7.3.
+ * Groups channels by source (vehicle / device). Clicking a channel assigns it
+ * to the next free wall slot. Shows online status per device, which cameras
+ * are already on the wall, and Auto-fill / Clear-all actions.
  */
-import { Building2, Camera, ChevronRight, Search, Wand2, X } from 'lucide-react';
+import { Building2, Camera, Check, ChevronRight, Eraser, Search, Wand2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,17 +16,28 @@ import type { CameraChannel } from '@/types/video.types';
 interface ChannelDockProps {
   /** The full channel catalog. */
   channels: CameraChannel[];
+  /** Channel ids currently placed on the wall. */
+  assignedIds?: ReadonlySet<string>;
   /** Assign a channel to the next free slot. */
   onPick: (channel: CameraChannel) => void;
   /** Fill every empty slot with channels (deterministic order). */
   onAutoFill: () => void;
+  /** Remove every camera from the wall. */
+  onClearWall?: () => void;
 }
 
-export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) {
+export function ChannelDock({
+  channels,
+  assignedIds,
+  onPick,
+  onAutoFill,
+  onClearWall,
+}: ChannelDockProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const onWall = assignedIds ?? new Set<string>();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -37,6 +47,7 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
       return (
         c.label.toLowerCase().includes(q) ||
         c.sourceLabel.toLowerCase().includes(q) ||
+        (c.imei?.toLowerCase().includes(q) ?? false) ||
         c.id.toLowerCase().includes(q)
       );
     });
@@ -46,7 +57,7 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
   const grouped = useMemo(() => {
     const m = new Map<string, CameraChannel[]>();
     for (const c of filtered) {
-      const key = c.sourceId || c.sourceLabel;
+      const key = c.sourceId || c.deviceId || c.sourceLabel;
       const arr = m.get(key) ?? [];
       arr.push(c);
       m.set(key, arr);
@@ -56,9 +67,18 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
         (a, b) =>
           (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
       );
-      return { key, label: sorted[0]?.sourceLabel || key, cams: sorted };
+      const onlineCount = sorted.filter((c) => c.online && c.consentGiven).length;
+      const onWallCount = sorted.filter((c) => onWall.has(c.id)).length;
+      return {
+        key,
+        label: sorted[0]?.sourceLabel || key,
+        cams: sorted,
+        onlineCount,
+        onWallCount,
+        anyOnline: onlineCount > 0,
+      };
     });
-  }, [filtered]);
+  }, [filtered, onWall]);
 
   const toggleGroup = (key: string) => {
     setCollapsed((prev) => {
@@ -69,8 +89,10 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
     });
   };
 
+  const hasAssigned = onWall.size > 0;
+
   return (
-    <div className="flex h-full w-[260px] min-w-[260px] flex-col overflow-hidden border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
+    <div className="flex h-full w-[280px] min-w-[280px] flex-col overflow-hidden border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
       {/* Header: search + actions */}
       <div className="flex flex-col gap-2 border-b border-gray-200 p-2.5 dark:border-white/5">
         <div className="flex items-center gap-2">
@@ -111,9 +133,31 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
             </button>
           )}
         </div>
-        <Button size="sm" variant="outline" leftIcon={<Wand2 size={15} />} onClick={onAutoFill}>
-          {t('video.dock.autoFill')}
-        </Button>
+        <div className="flex gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className="min-w-0 flex-1"
+            leftIcon={<Wand2 size={15} />}
+            onClick={onAutoFill}
+          >
+            {t('video.dock.autoFill')}
+          </Button>
+          {onClearWall && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-w-0 flex-1"
+              leftIcon={<Eraser size={15} />}
+              onClick={onClearWall}
+              disabled={!hasAssigned}
+              data-testid="wall-clear-all"
+              title={t('video.dock.clearWallHint')}
+            >
+              {t('video.dock.clearWall')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Channel list grouped by source */}
@@ -123,10 +167,10 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
             {t('video.dock.noResults')}
           </p>
         ) : (
-          grouped.map(({ key, label: sourceLabel, cams }) => {
+          grouped.map(({ key, label: sourceLabel, cams, onlineCount, onWallCount, anyOnline }) => {
             const isCollapsed = collapsed.has(key);
             return (
-              <div key={key}>
+              <div key={key} data-testid={`dock-group-${key}`}>
                 <button
                   type="button"
                   onClick={() => toggleGroup(key)}
@@ -146,11 +190,31 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
                       className="shrink-0 text-gray-500 dark:text-graydark-600"
                     />
                   )}
+                  <span
+                    aria-hidden
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ background: anyOnline ? '#22d3ee' : '#64748b' }}
+                    title={anyOnline ? t('video.dock.deviceOnline') : t('video.dock.deviceOffline')}
+                  />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-graydark-800">
                     {sourceLabel}
                   </span>
-                  <span className="inline-flex h-4 items-center rounded-full bg-gray-100 px-1.5 text-[0.6rem] font-semibold text-gray-500 dark:bg-white/5 dark:text-graydark-600">
-                    {cams.length}
+                  {onWallCount > 0 && (
+                    <span
+                      className="inline-flex h-4 items-center rounded-full bg-brand-500/15 px-1.5 text-[0.6rem] font-semibold text-brand-600 dark:text-brand-300"
+                      title={t('video.dock.onWallCount', { count: onWallCount })}
+                    >
+                      {t('video.dock.onWall', { count: onWallCount })}
+                    </span>
+                  )}
+                  <span
+                    className="inline-flex h-4 items-center rounded-full bg-gray-100 px-1.5 text-[0.6rem] font-semibold text-gray-500 dark:bg-white/5 dark:text-graydark-600"
+                    title={t('video.dock.onlineCount', {
+                      online: onlineCount,
+                      total: cams.length,
+                    })}
+                  >
+                    {onlineCount}/{cams.length}
                   </span>
                   <ChevronRight
                     size={14}
@@ -159,31 +223,47 @@ export function ChannelDock({ channels, onPick, onAutoFill }: ChannelDockProps) 
                   />
                 </button>
                 {!isCollapsed &&
-                  cams.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      data-testid={`dock-channel-${c.id}`}
-                      onClick={() => onPick(c)}
-                      className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
-                        c.online && c.consentGiven ? 'opacity-100' : 'opacity-50'
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className="me-1 size-1.5 shrink-0 rounded-full"
-                        style={{ background: c.online && c.consentGiven ? '#22d3ee' : '#64748b' }}
-                      />
-                      <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-graydark-700">
-                        {c.label}
-                      </span>
-                      {c.cabinCam && (
-                        <span className="inline-flex h-3.5 items-center rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
-                          {t('video.tile.cabinCam')}
+                  cams.map((c) => {
+                    const assigned = onWall.has(c.id);
+                    const live = c.online && c.consentGiven;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        data-testid={`dock-channel-${c.id}`}
+                        data-assigned={assigned ? '1' : '0'}
+                        onClick={() => onPick(c)}
+                        className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                          live ? 'opacity-100' : 'opacity-50'
+                        } ${assigned ? 'bg-brand-500/8 dark:bg-brand-500/10' : ''}`}
+                      >
+                        <span
+                          aria-hidden
+                          className="me-1 size-1.5 shrink-0 rounded-full"
+                          style={{ background: live ? '#22d3ee' : '#64748b' }}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-graydark-700">
+                          {c.logicalChannel != null && !/^ch\s*\d+/i.test(c.label)
+                            ? `CH${c.logicalChannel} · ${c.label}`
+                            : c.label}
                         </span>
-                      )}
-                    </button>
-                  ))}
+                        {assigned && (
+                          <span
+                            className="inline-flex items-center gap-0.5 text-[0.6rem] font-semibold text-brand-600 dark:text-brand-300"
+                            title={t('video.dock.alreadyOnWall')}
+                          >
+                            <Check size={12} aria-hidden />
+                            {t('video.dock.onWallShort')}
+                          </span>
+                        )}
+                        {c.cabinCam && (
+                          <span className="inline-flex h-3.5 items-center rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
+                            {t('video.tile.cabinCam')}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             );
           })

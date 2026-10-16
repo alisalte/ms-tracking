@@ -240,6 +240,32 @@ describe('Sprint H — dispatcher recipient fan-out', () => {
     expect(row?.metadata).not.toHaveProperty('jwt');
   });
 
+  it('never puts a vehicle GUID in the title — uses IMEI for device alarms', async () => {
+    const guid = '140b552b-8c6a-411a-8ec1-d80ba2e7f1e1';
+    const { dispatcher, notifications } = makeDispatcher({});
+    await dispatcher.dispatchAlarm(
+      makeAlarm(TENANT, {
+        type: 'other',
+        vehicleId: guid,
+        message: 'Device alarm EVENT_10',
+        detail: { alarmCode: 'EVENT_10', deviceAlarm: true, deviceId: guid },
+        sourceEvents: [
+          {
+            type: 'device.alarm.EVENT_10.v1',
+            ts: '2026-08-15T10:00:00Z',
+            detail: JSON.stringify({ deviceId: guid, imei: '867191086416152', source: '10' }),
+          },
+        ],
+      }),
+    );
+
+    const row = [...notifications.rows.values()][0];
+    expect(row?.title).toContain('867191086416152');
+    expect(row?.title).not.toContain(guid);
+    expect(row?.body).toContain('EVENT_10');
+    expect(row?.metadata).toMatchObject({ alarmCode: 'EVENT_10', imei: '867191086416152' });
+  });
+
   it('duplicate alarm source does not duplicate notifications (idempotency)', async () => {
     const { dispatcher, notifications } = makeDispatcher({});
     await dispatcher.dispatchAlarm(makeAlarm());

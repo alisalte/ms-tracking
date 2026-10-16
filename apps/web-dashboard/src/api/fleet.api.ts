@@ -68,6 +68,7 @@ function toMapVehicle(
   lastSeenAt: string | undefined,
 ): MapVehicle {
   const label = formatVehicleLabel(vehicle);
+  const online = presence === 'ONLINE';
   return {
     id: vehicle.id,
     name: vehicle.name,
@@ -77,10 +78,11 @@ function toMapVehicle(
     lat: pos?.latitude ?? 0,
     lng: pos?.longitude ?? 0,
     heading: pos?.headingDeg ?? 0,
-    speed: pos?.speedKph ?? 0,
+    // Live speed only while ONLINE — last-known km/h must not look like motion.
+    speed: online ? (pos?.speedKph ?? 0) : 0,
     // Body type for map silhouettes — inferred from registry name/plate until API exposes it.
     type: getVehicleIcon({ name: vehicle.name, label, plate: vehicle.plate }),
-    ignitionOn: pos?.ignitionOn ?? undefined,
+    ignitionOn: online ? (pos?.ignitionOn ?? undefined) : undefined,
     updatedAt: pos?.capturedAt,
     deviceId,
     presence,
@@ -221,6 +223,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         position = undefined;
       }
       const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
+      const online = presence === 'ONLINE';
       return {
         id: vehicleWire.id,
         name: vehicleWire.name,
@@ -230,8 +233,8 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         lat: position?.latitude ?? 0,
         lng: position?.longitude ?? 0,
         heading: position?.headingDeg ?? 0,
-        speed: position?.speedKph ?? 0,
-        ignitionOn: position?.ignitionOn ?? false,
+        speed: online ? (position?.speedKph ?? 0) : 0,
+        ignitionOn: online ? (position?.ignitionOn ?? false) : false,
         updatedAt: position?.capturedAt ?? '',
         lastSeenAt: status?.lastSeenAt ?? position?.capturedAt ?? undefined,
         presence,

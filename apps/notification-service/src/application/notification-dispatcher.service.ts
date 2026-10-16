@@ -134,16 +134,30 @@ export class NotificationDispatcherService {
     if (allowedChannels.length === 0) return;
 
     // 3. Render localized content (fa/en templates; fallback = alarm message).
+    // Never interpolate a raw vehicle UUID into the title — operators cannot
+    // read GUIDs. Prefer a resolved name, then IMEI, then omit the vehicle.
     const locale = this.deps.defaultLocale;
-    const content = renderNotificationContent(
+    const vehicleName = humanVehicleCaption(templateData, alarm.vehicleId);
+    let content = renderNotificationContent(
       alarm.type,
       locale,
-      { ...templateData, vehicleName: templateData.vehicleName ?? alarm.vehicleId ?? '' },
+      { ...templateData, vehicleName },
       {
         title: `Alarm: ${alarm.type.replace(/_/g, ' ')}`,
         body: alarm.message,
       },
     );
+    // Device-alarm templates often use {{alarmDetail}} which is empty for
+    // non-DMS codes — fall back to the persisted English message so the UI
+    // always has something to localize (e.g. "Device alarm INPUT_2_INACTIVE").
+    if (!content.body.trim()) {
+      content = { title: content.title, body: alarm.message };
+    }
+    // Strip any GUID that still snuck into the rendered title/body.
+    content = {
+      title: stripUuidTokens(content.title),
+      body: stripUuidTokens(content.body),
+    };
 
     // 4. Create the per-user notification (idempotent — duplicate alarm
     //    sources, incl. Kafka redeliveries, do not duplicate rows, §17).
@@ -197,10 +211,65 @@ export class NotificationDispatcherService {
         (typeof value === 'string' || typeof value === 'number') &&
         (TEMPLATE_DATA_KEYS as readonly string[]).includes(key)
       ) {
+        // Never put a UUID into vehicleName — the template would show it raw.
+        if (key === 'vehicleName' && isUuidToken(String(value))) continue;
         data[key] = value;
       }
     }
     if (alarm.raisedAt) data.occurredAt = alarm.raisedAt.toISOString();
+
+    // IMEI lives on the source-event detail for device alarms.
+    if (!data.imei) {
+      for (const ev of alarm.sourceEvents ?? []) {
+        const detail =
+          ev && typeof ev === 'object' && 'detail' in ev
+            ? (ev as { detail?: unknown }).detail
+            : undefined;
+        const imei = imeiFromSourceDetail(typeof detail === 'string' ? detail : undefined);
+        if (imei) {
+          data.imei = imei;
+          break;
+        }
+      }
+    }
     return data as TemplateData;
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_TOKEN_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+function isUuidToken(value: string): boolean {
+  return UUID_RE.test(value.trim());
+}
+
+/** Prefer a human caption; never a vehicle UUID. */
+function humanVehicleCaption(data: TemplateData, vehicleId: string | null | undefined): string {
+  const named = data.vehicleName != null ? String(data.vehicleName).trim() : '';
+  if (named && !isUuidToken(named)) return named;
+  const imei = data.imei != null ? String(data.imei).trim() : '';
+  if (imei && !isUuidToken(imei)) return imei;
+  if (vehicleId && !isUuidToken(vehicleId)) return vehicleId;
+  return '';
+}
+
+function stripUuidTokens(text: string): string {
+  return text
+    .replace(UUID_TOKEN_RE, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s*[:·,;|/—–-]+\s*$/g, '')
+    .replace(/^\s*[:·,;|/—–-]+\s*/g, '')
+    .trim();
+}
+
+function imeiFromSourceDetail(detail: string | undefined): string | undefined {
+  if (!detail?.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(detail) as Record<string, unknown>;
+    const imei = parsed.imei ?? parsed.serialOrImei ?? parsed.endpoint;
+    if (typeof imei === 'string' && imei.trim() && !isUuidToken(imei)) return imei.trim();
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }

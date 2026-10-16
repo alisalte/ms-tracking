@@ -45,10 +45,10 @@ import type { AlarmStateCache } from '../infrastructure/cache/alarm-state-cache.
 import type { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRuleRepository } from '../infrastructure/persistence/alarm-rule.repository.js';
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
+import type { AlarmEvidenceService } from './alarm-evidence.service.js';
 import { buildEvaluatorRegistry } from './evaluators/evaluators.js';
 import type { InputSignal } from './evaluators/rule-evaluator.js';
 import type { NotificationDispatcherService } from './notification-dispatcher.service.js';
-import type { AlarmEvidenceService } from './alarm-evidence.service.js';
 
 export interface AlarmEvaluatorDeps {
   readonly rules: AlarmRuleRepository;
@@ -95,31 +95,27 @@ export class AlarmEvaluatorService {
   }): Promise<void> {
     try {
       const ruleId = deviceAlarmRuleId(alarm.code);
-      const vehicleKey = alarm.vehicleId ?? alarm.deviceId;
-      const suppress = await this.deps.stateCache.shouldSuppress(
-        alarm.tenantId,
-        ruleId,
-        vehicleKey,
-        DEVICE_ALARM_DEDUP_WINDOW_SEC,
-      );
-      if (suppress) {
-        await this.deps.stateCache.incrementOccurrenceCount(alarm.tenantId, ruleId, vehicleKey);
-        this.metrics?.duplicateEvents.inc({ source: 'device-alarm' });
-        return;
-      }
+      // Catalog type is what we PERSIST (`dms`, `sos`, …). The open-gate MUST
+      // look up the same type — looking up `DMS_PHONE_CALL` never matched a
+      // stored `dms` row, so coalescing was broken for every device alarm.
+      const type = deviceAlarmCatalogType(alarm.code);
+      // Persist + look up the same vehicle key (nullable). Redis dedup may use a
+      // device fallback string; never pass a non-UUID device id into vehicle_id.
+      const vehicleId = alarm.vehicleId;
+      const dedupKey = vehicleId ?? `device:${alarm.deviceId}`;
 
-      // One-open-alarm gate — bump occurrences while the same alarm is open.
+      // One-open-alarm gate FIRST — bump while the same catalog alarm is open.
       const open = await this.deps.alarms.findOpenByRuleAndVehicle(
         alarm.tenantId,
         ruleId,
-        vehicleKey,
-        alarm.code,
+        vehicleId,
+        type,
       );
       if (open) {
         const count = await this.deps.stateCache.incrementOccurrenceCount(
           alarm.tenantId,
           ruleId,
-          vehicleKey,
+          dedupKey,
         );
         await this.deps.alarms.updateDetail(open, {
           ...(open.detail ?? {}),
@@ -130,7 +126,18 @@ export class AlarmEvaluatorService {
         return;
       }
 
-      const type = deviceAlarmCatalogType(alarm.code);
+      const suppress = await this.deps.stateCache.shouldSuppress(
+        alarm.tenantId,
+        ruleId,
+        dedupKey,
+        DEVICE_ALARM_DEDUP_WINDOW_SEC,
+      );
+      if (suppress) {
+        await this.deps.stateCache.incrementOccurrenceCount(alarm.tenantId, ruleId, dedupKey);
+        this.metrics?.duplicateEvents.inc({ source: 'device-alarm' });
+        return;
+      }
+
       const severity = DEVICE_ALARM_SEVERITY[alarm.severity] ?? 'MEDIUM';
       const id = randomUUID();
       const dmsDetail = alarm.detail?.dmsDetail ? String(alarm.detail.dmsDetail) : '';
@@ -140,7 +147,7 @@ export class AlarmEvaluatorService {
         ruleId,
         type,
         severity,
-        vehicleId: alarm.vehicleId,
+        vehicleId,
         lat: alarm.lat,
         lng: alarm.lng,
         message,
@@ -148,6 +155,7 @@ export class AlarmEvaluatorService {
           deviceAlarm: true,
           alarmCode: alarm.code,
           alarmDetail: dmsDetail,
+          deviceId: alarm.deviceId,
           ...(alarm.detail ?? {}),
         },
         sourceEvents: [
@@ -164,7 +172,14 @@ export class AlarmEvaluatorService {
         ],
         raisedAt: alarm.detectedAt,
       });
-      await this.deps.alarms.create(occurrence);
+      try {
+        await this.deps.alarms.create(occurrence);
+      } catch (err) {
+        // Release the Redis claim so a transient DB blip does not black-hole
+        // DMS/SOS for the whole dedup window.
+        await this.deps.stateCache.clearDedup(alarm.tenantId, ruleId, dedupKey);
+        throw err;
+      }
       this.metrics?.alarmsOpened.inc({ type });
 
       if (this.deps.evidence) {
@@ -173,7 +188,7 @@ export class AlarmEvaluatorService {
             tenantId: alarm.tenantId,
             alertId: id,
             deviceId: alarm.deviceId,
-            vehicleId: alarm.vehicleId,
+            vehicleId,
             alarmCode: alarm.code,
             detail: alarm.detail,
             raisedAt: alarm.detectedAt,
@@ -192,7 +207,7 @@ export class AlarmEvaluatorService {
         }
       }
       this.logger.log(
-        `Raised device alarm ${alarm.code} alarmId=${id} vehicle=${alarm.vehicleId} tenant=${alarm.tenantId}`,
+        `Raised device alarm ${alarm.code} type=${type} alarmId=${id} vehicle=${vehicleId} tenant=${alarm.tenantId}`,
       );
     } catch (err) {
       // Device alarms are best-effort telemetry — never crash the consumer.
@@ -679,10 +694,19 @@ function deviceAlarmCatalogType(code: string): string {
     case 'POWER_CUT':
     case 'POWER_RESTORED':
     case 'LOW_POWER':
+    case 'POWER_OFF':
       return 'power';
     case 'LOW_BATTERY':
       return 'battery';
+    case 'STOP_MOVING':
+    case 'START_MOVING':
+      return 'idle';
+    case 'DEVICE_REBOOT':
+    case 'ENTER_SLEEP':
+    case 'EXIT_SLEEP':
+      return 'offline';
     default:
+      if (code.startsWith('INPUT_')) return 'ignition';
       return 'other';
   }
 }

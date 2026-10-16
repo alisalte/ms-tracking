@@ -116,17 +116,19 @@ export function VideoTile({
     );
   }
 
+  const tileCaption = tileDeviceCaption(channel);
+
   // Disabled channel (offline or no consent).
   if (!channel.online || !channel.consentGiven) {
     return (
-      <TileFrame label={channel.label} alert={false}>
+      <TileFrame label={tileCaption} alert={false}>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0b1220]">
           <Camera size={compact ? 16 : 28} color="#475569" aria-hidden />
           <p className="px-3 text-center text-xs text-gray-500">
             {t(channel.consentGiven ? 'video.tile.offline' : 'video.tile.noConsent')}
           </p>
         </div>
-        <TileLabel label={channel.label} compact={compact} />
+        <TileLabel channel={channel} compact={compact} />
       </TileFrame>
     );
   }
@@ -134,7 +136,7 @@ export function VideoTile({
   // Queued (overflow) tile — placeholder frame, click to promote.
   if (!live) {
     return (
-      <TileFrame label={channel.label} alert={false}>
+      <TileFrame label={tileCaption} alert={false}>
         <button
           type="button"
           onClick={onPromote}
@@ -147,7 +149,7 @@ export function VideoTile({
             <span className="text-xs text-gray-500">{t('video.tile.clickToPromote')}</span>
           )}
         </button>
-        <TileLabel label={channel.label} compact={compact} />
+        <TileLabel channel={channel} compact={compact} />
       </TileFrame>
     );
   }
@@ -156,7 +158,7 @@ export function VideoTile({
   // device's one RTMP stream (real hardware can't push two at once).
   if (blockedByChannel !== null) {
     return (
-      <TileFrame label={channel.label} alert={false}>
+      <TileFrame label={tileCaption} alert={false}>
         <button
           type="button"
           data-testid="mdvr-switch-channel"
@@ -173,7 +175,7 @@ export function VideoTile({
             </span>
           )}
         </button>
-        <TileLabel label={channel.label} compact={compact} />
+        <TileLabel channel={channel} compact={compact} />
       </TileFrame>
     );
   }
@@ -184,7 +186,7 @@ export function VideoTile({
       ? !hlsUrl || session?.state === 'connecting'
       : !stream || session?.state === 'connecting';
   return (
-    <TileFrame label={channel.label} alert={alert}>
+    <TileFrame label={tileCaption} alert={alert}>
       <div ref={containerRef} className="absolute inset-0 bg-black">
         {mode === 'mdvr' ? (
           <HLSLivePlayer ref={videoRef} hlsUrl={hlsUrl} muted={muted} onReady={onPlayerReady} />
@@ -286,7 +288,7 @@ export function VideoTile({
           </div>
         )}
       </div>
-      <TileLabel label={channel.label} compact={compact} />
+      <TileLabel channel={channel} compact={compact} />
     </TileFrame>
   );
 
@@ -299,6 +301,16 @@ export function VideoTile({
   async function handleFullscreen() {
     if (containerRef.current) await toggleFullscreen(containerRef.current);
   }
+}
+
+/** Device + channel caption so wall tiles are not anonymous "Camera 1" tiles. */
+function tileDeviceCaption(channel: CameraChannel): string {
+  const cam =
+    channel.logicalChannel != null && !/^ch\s*\d+/i.test(channel.label)
+      ? `CH${channel.logicalChannel}`
+      : channel.label;
+  if (!channel.sourceLabel || channel.sourceLabel === channel.label) return cam;
+  return `${channel.sourceLabel} · ${cam}`;
 }
 
 /** Shared tile frame: the bordered, rounded wrapper carrying the alert ring. */
@@ -326,27 +338,46 @@ function TileFrame({
   );
 }
 
-/** Channel label overlay (bottom-end) + cabin-cam badge. */
-function TileLabel({ label, compact }: { label: string; compact: boolean }) {
+/** Device + channel overlay (bottom-end) + cabin-cam badge. */
+function TileLabel({ channel, compact }: { channel: CameraChannel; compact: boolean }) {
   const { t } = useTranslation();
-  const cabin = label.toLowerCase().includes('driver');
+  const cabin =
+    channel.cabinCam ||
+    channel.facing === 'driver' ||
+    channel.label.toLowerCase().includes('driver');
+  const primary = channel.sourceLabel?.trim() || channel.label;
+  const secondary =
+    channel.logicalChannel != null
+      ? `CH${channel.logicalChannel}`
+      : channel.sourceLabel && channel.sourceLabel !== channel.label
+        ? channel.label
+        : null;
   return (
     <div
-      className="pointer-events-none absolute end-1.5 flex items-center gap-1.5"
+      className="pointer-events-none absolute end-1.5 flex max-w-[85%] flex-col items-end gap-0.5"
       style={{ bottom: compact ? 4 : 28 }}
+      data-testid="tile-device-label"
     >
-      {cabin && (
-        <span className="inline-flex h-4 items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
-          <Sparkles size={10} aria-hidden />
-          {t('video.tile.cabinCam')}
+      <div className="flex items-center gap-1.5">
+        {cabin && (
+          <span className="inline-flex h-4 items-center gap-1 rounded-full bg-black/60 px-1.5 text-[0.55rem] font-semibold text-warning-400">
+            <Sparkles size={10} aria-hidden />
+            {t('video.tile.cabinCam')}
+          </span>
+        )}
+        <span
+          className="inline-flex h-[18px] max-w-[200px] items-center truncate rounded-full bg-black/70 px-1.5 text-[0.65rem] font-semibold text-white"
+          style={{ maxWidth: compact ? 100 : 200, fontSize: compact ? '0.55rem' : '0.65rem' }}
+          title={tileDeviceCaption(channel)}
+        >
+          {primary}
+        </span>
+      </div>
+      {secondary && !compact && (
+        <span className="inline-flex h-[16px] max-w-[160px] items-center truncate rounded-full bg-black/55 px-1.5 text-[0.55rem] text-gray-300">
+          {secondary}
         </span>
       )}
-      <span
-        className="inline-flex h-[18px] max-w-[180px] items-center truncate rounded-full bg-black/60 px-1.5 text-[0.65rem] text-gray-200"
-        style={{ maxWidth: compact ? 90 : 180, fontSize: compact ? '0.55rem' : '0.65rem' }}
-      >
-        {label}
-      </span>
     </div>
   );
 }

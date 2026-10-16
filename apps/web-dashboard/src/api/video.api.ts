@@ -37,10 +37,30 @@ async function fetchChannels(): Promise<CameraChannel[]> {
   return withMockFallback(
     // apiGetRaw: media-service returns a RAW array (no { data } envelope).
     async () => {
-      const rows = (await apiGetRaw<MediaChannelWire[]>('/media/channels')).map(mapMediaChannel);
+      const [{ fetchAllVehiclesAsMap }, { formatVehicleLabel }] = await Promise.all([
+        import('./asset.api'),
+        import('@/lib/vehicle-label'),
+      ]);
+      const [wires, registry] = await Promise.all([
+        apiGetRaw<MediaChannelWire[]>('/media/channels'),
+        fetchAllVehiclesAsMap().catch(() => ({
+          vehicles: [] as Array<{ id: string; name: string; code: string; plate: string | null }>,
+        })),
+      ]);
+      const vehicleLabel = new Map(
+        registry.vehicles.map((v) => [v.id, formatVehicleLabel(v) || v.name || v.code] as const),
+      );
+      const rows = wires.map((w) => {
+        const ch = mapMediaChannel(w);
+        const named = w.vehicleId ? vehicleLabel.get(w.vehicleId) : undefined;
+        if (named) return { ...ch, sourceLabel: named };
+        return ch;
+      });
       rows.sort(
         (a, b) =>
-          (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
+          a.sourceLabel.localeCompare(b.sourceLabel) ||
+          (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) ||
+          a.label.localeCompare(b.label),
       );
       return rows;
     },
@@ -72,9 +92,13 @@ export function mapMediaChannelForTest(w: MediaChannelWire): CameraChannel {
 }
 
 function mapMediaChannel(w: MediaChannelWire): CameraChannel {
-  const label = w.label || `Camera ${w.logicalChannel ?? ''}`.trim();
+  const chNum = w.logicalChannel ?? null;
+  const label = w.label?.trim() || (chNum != null ? `CH${chNum}` : 'Camera');
   const lowered = label.toLowerCase();
   const sourceId = w.vehicleId ?? w.siteId ?? w.deviceId ?? '';
+  // Prefer IMEI as the device caption until the vehicle registry join fills
+  // `sourceLabel` — tiles and the dock both show this so operators know whose cam it is.
+  const sourceLabel = w.endpoint ? w.endpoint : w.deviceId ? w.deviceId.slice(0, 8) : label;
   return {
     id: w.channelId,
     label,
@@ -84,10 +108,10 @@ function mapMediaChannel(w: MediaChannelWire): CameraChannel {
         ? 'rear'
         : lowered.includes('cargo')
           ? 'cargo'
-          : 'site',
+          : 'forward',
     sourceType: w.vehicleId ? 'vehicle' : 'site',
     sourceId,
-    sourceLabel: w.endpoint ? `MDVR ${w.endpoint}` : label,
+    sourceLabel,
     codec: w.codec === 'H265' ? 'H265' : 'H264',
     online: w.status !== 'OFFLINE' && w.status !== 'DECOMMISSIONED',
     recordingActive: false,

@@ -444,9 +444,7 @@
       "markerVehicle": "Vehicle body",
       "markerVehicleHint": "Top-down car, truck, trailer",
       "markerNav": "Direction arrow",
-      "markerNavHint": "Colored circle; arrow shows heading",
-      "demoStatus": "Demo status colors",
-      "demoStatusHint": "Assign a different status to each vehicle"
+      "markerNavHint": "Colored circle; arrow shows heading"
     },
     "basemap": {
       "google": "Google Streets",
@@ -675,6 +673,7 @@
       "resumeRotation": "Resume rotation",
       "fullscreenWall": "Fullscreen wall",
       "simulateAlert": "Simulate alert",
+      "clearWall": "Clear all cameras",
       "loadWall": "Load wall…",
       "saveWall": "Save wall",
       "divisions": "Grid layout"
@@ -685,7 +684,16 @@
       "online": "Online",
       "onlineOnly": "Show online only",
       "autoFill": "Auto-fill",
-      "noResults": "No cameras match your filters."
+      "clearWall": "Clear all",
+      "clearWallHint": "Remove every camera from the wall",
+      "noResults": "No cameras match your filters.",
+      "deviceOnline": "Device online",
+      "deviceOffline": "Device offline",
+      "onWall": "{{count}} on wall",
+      "onWallCount": "{{count}} camera(s) already on the wall",
+      "onWallShort": "On wall",
+      "alreadyOnWall": "Already on the wall",
+      "onlineCount": "{{online}} of {{total}} cameras online"
     },
     "tile": {
       "empty": "Add camera",
@@ -1036,6 +1044,31 @@
       "ADAS_TTC2": "Time-to-collision 2",
       "ADAS_DISTANCE_DETECTION": "Distance detection",
       "ADAS_FRONT_VEHICLE_STARTED": "Lead vehicle moved",
+      "INPUT_2_ACTIVE": "Input 2 active",
+      "INPUT_3_ACTIVE": "Input 3 active",
+      "INPUT_4_ACTIVE": "Input 4 active",
+      "INPUT_5_ACTIVE": "Input 5 active",
+      "INPUT_6_ACTIVE": "Input 6 active",
+      "INPUT_7_ACTIVE": "Input 7 active",
+      "INPUT_8_ACTIVE": "Input 8 active",
+      "INPUT_1_INACTIVE": "Input 1 inactive",
+      "INPUT_2_INACTIVE": "Input 2 inactive",
+      "INPUT_3_INACTIVE": "Input 3 inactive",
+      "INPUT_4_INACTIVE": "Input 4 inactive",
+      "INPUT_5_INACTIVE": "Input 5 inactive",
+      "INPUT_6_INACTIVE": "Input 6 inactive",
+      "INPUT_7_INACTIVE": "Input 7 inactive",
+      "INPUT_8_INACTIVE": "Input 8 inactive",
+      "ENTER_SLEEP": "Entered sleep",
+      "EXIT_SLEEP": "Exited sleep",
+      "GPS_ANTENNA_CUT": "GPS antenna cut",
+      "DEVICE_REBOOT": "Device reboot",
+      "TRACK_BY_DISTANCE": "Track by distance",
+      "REPLY_CURRENT": "Location reply",
+      "TRACK_BY_INTERVAL": "Periodic track (interval)",
+      "POWER_OFF": "Power off",
+      "STOP_MOVING": "Stopped moving",
+      "START_MOVING": "Started moving",
       "unknown": "Device event {{code}}"
     },
     "messages": {
@@ -1087,7 +1120,8 @@
       "colVehicle": "Vehicle",
       "colSeverity": "Severity",
       "colStatus": "Status",
-      "colTime": "Time"
+      "colTime": "Time",
+      "unknownVehicle": "Unknown vehicle"
     },
     "detail": {
       "notFound": "Alarm not found.",

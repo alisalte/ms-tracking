@@ -153,7 +153,7 @@ function AlarmDetailContent({
         <DetailRow
           icon={<Truck size={16} />}
           label={t('alarms.detail.vehicle')}
-          value={alarm.vehicleLabel || '—'}
+          value={alarm.vehicleLabel || t('alarms.list.unknownVehicle')}
         />
         {alarm.driver && (
           <DetailRow

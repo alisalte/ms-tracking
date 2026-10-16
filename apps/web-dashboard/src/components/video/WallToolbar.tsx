@@ -6,7 +6,7 @@
  * live-cap indicator, the saved-wall loader, and a "simulate alert pop-in"
  * demo button (10 §9.3 alert-driven pop-in).
  */
-import { AlertTriangle, LayoutGrid, Maximize, Pause, Pin, Play, Save } from 'lucide-react';
+import { AlertTriangle, Eraser, LayoutGrid, Maximize, Pause, Pin, Play, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { IconButton, Tooltip } from '@/components/tailwind-ui';
@@ -44,6 +44,8 @@ interface WallToolbarProps {
   onSaveWall: () => void;
   /** Simulate an alert pop-in on a random tile (demo). */
   onSimulateAlert: () => void;
+  /** Remove every camera from the wall. */
+  onClearWall?: () => void;
 }
 
 export function WallToolbar({
@@ -62,6 +64,7 @@ export function WallToolbar({
   onLoadWall,
   onSaveWall,
   onSimulateAlert,
+  onClearWall,
 }: WallToolbarProps) {
   const { t } = useTranslation();
 
@@ -158,6 +161,22 @@ export function WallToolbar({
           <AlertTriangle size={17} />
         </IconButton>
       </Tooltip>
+
+      {/* Clear all cameras */}
+      {onClearWall && (
+        <Tooltip label={t('video.toolbar.clearWall')}>
+          <IconButton
+            size="sm"
+            aria-label={t('video.toolbar.clearWall')}
+            onClick={onClearWall}
+            disabled={assignedCount === 0}
+            data-testid="toolbar-clear-wall"
+            className="text-danger-600 hover:bg-danger-50 disabled:opacity-40 dark:text-danger-400 dark:hover:bg-danger-500/10"
+          >
+            <Eraser size={17} />
+          </IconButton>
+        </Tooltip>
+      )}
 
       <div className="min-w-0 flex-1" />
 

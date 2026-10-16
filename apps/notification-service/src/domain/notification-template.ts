@@ -29,6 +29,8 @@ export const TEMPLATE_DATA_KEYS = [
   'batteryLevel',
   'alarmCode',
   'alarmDetail',
+  /** Device IMEI — used when no human vehicle name is available. */
+  'imei',
 ] as const;
 
 export type TemplateDataKey = (typeof TEMPLATE_DATA_KEYS)[number];

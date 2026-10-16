@@ -393,7 +393,9 @@ services:
       NOTIF_KAFKA_BROKERS: kafka:29092
       NOTIF_KAFKA_CLIENT_ID: notification-service
       NOTIF_KAFKA_GROUP_ID: notification-service
-      NOTIF_KAFKA_ALARM_TOPIC: fleetvision.telemetry.alarm.raw
+      # Must match notification.config.ts NOTIF_KAFKA_DEVICE_ALARM_TOPIC
+      # (legacy NOTIF_KAFKA_ALARM_TOPIC was ignored by Zod and only the default worked).
+      NOTIF_KAFKA_DEVICE_ALARM_TOPIC: fleetvision.telemetry.alarm.raw
       NOTIF_KAFKA_GEOFENCE_TOPIC: fleetvision.tracking.geofence.event
       # SMTP (opt-in via mail profile; see mailpit).
       NOTIF_SMTP_HOST: ${NOTIF_SMTP_HOST:-}

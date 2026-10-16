@@ -133,6 +133,33 @@ describe('VideoWallPage', () => {
     });
   });
 
+  it('clears every camera from the wall so a new layout can be built', async () => {
+    renderWall();
+    await waitForChannels();
+    await waitFor(() => {
+      expect(screen.queryByText('No cameras on the wall yet')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('wall-clear-all'));
+
+    await waitFor(() => {
+      expect(screen.getByText('No cameras on the wall yet')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('wall-clear-all')).toBeDisabled();
+    expect(screen.getByTestId('toolbar-clear-wall')).toBeDisabled();
+  });
+
+  it('marks dock channels that are already on the wall', async () => {
+    renderWall();
+    await waitForChannels();
+    await waitFor(() => {
+      expect(screen.queryByText('No cameras on the wall yet')).not.toBeInTheDocument();
+    });
+
+    const onWall = await screen.findAllByText('On wall');
+    expect(onWall.length).toBeGreaterThan(0);
+  });
+
   it('switches to the 16-division layout and fills it', async () => {
     renderWall();
     await screen.findByText('Video Wall');

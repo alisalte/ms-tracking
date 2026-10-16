@@ -173,12 +173,18 @@ export function mergeLivePositions(
     } else {
       state = v.state; // no position delta — keep the bootstrapped movement state
     }
+    const nextSpeed = pos?.speedKph ?? v.speed;
+    // Clear live speed when we KNOW the device is not online — never leave a
+    // stale 64 km/h on an OFFLINE/STALE card. Missing presence keeps speed
+    // (legacy rows without a status record).
+    const speed =
+      presence === 'OFFLINE' || presence === 'STALE' || presence === 'UNKNOWN' ? 0 : nextSpeed;
     return {
       ...v,
       state,
       lat: pos?.latitude ?? v.lat,
       lng: pos?.longitude ?? v.lng,
-      speed: pos?.speedKph ?? v.speed,
+      speed,
       heading: pos?.headingDeg ?? v.heading,
       updatedAt: pos?.capturedAt ?? v.updatedAt,
       presence,

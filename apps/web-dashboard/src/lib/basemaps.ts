@@ -183,9 +183,12 @@ export function rasterMapStyle(id: BasemapId, lang?: string) {
 }
 
 /**
- * Swap the live `basemap` raster source. Prefers `setTiles` so overlay layers
- * (geofences, tracks, draw fill) keep their order; falls back to re-adding
- * the raster layer beneath the first existing overlay id.
+ * Swap the live `basemap` raster source by rebuilding it in place.
+ *
+ * `RasterTileSource.setTiles` plus mutating `maxzoom`/`attribution` left the
+ * map blank until a full page reload — MapLibre does not apply those fields
+ * that way. Remove + re-add keeps tile URLs, maxzoom, and attribution in sync
+ * and inserts the layer beneath the first existing overlay id.
  */
 export function applyRasterBasemap(
   map: MaplibreMap,
@@ -195,20 +198,12 @@ export function applyRasterBasemap(
 ): void {
   const bm = basemapById(id);
   const source = rasterSource(bm, lang);
-  const existing = map.getSource('basemap') as
-    | { setTiles?: (next: string[]) => void; attribution?: string; maxzoom?: number }
-    | undefined;
-  if (existing && typeof existing.setTiles === 'function') {
-    existing.setTiles(source.tiles);
-    existing.attribution = source.attribution;
-    existing.maxzoom = source.maxzoom;
-    return;
-  }
   if (map.getLayer('basemap')) map.removeLayer('basemap');
   if (map.getSource('basemap')) map.removeSource('basemap');
   map.addSource('basemap', source);
   const before = beforeLayerIds.find((layerId) => map.getLayer(layerId));
   map.addLayer({ id: 'basemap', type: 'raster', source: 'basemap' }, before);
+  map.triggerRepaint();
 }
 
 /** Restore the persisted basemap choice (invalid values fall back). */

@@ -28,6 +28,11 @@ describe('mapAlarmType', () => {
     expect(mapAlarmType('prolonged_idle')).toBe('idle');
     expect(mapAlarmType('POWER_CUT')).toBe('power');
     expect(mapAlarmType('device.alarm.DMS_SMOKING.v1')).toBe('dms');
+    expect(mapAlarmType('EVENT_10')).toBe('ignition');
+    expect(mapAlarmType('EVENT_35')).toBe('other');
+    expect(mapAlarmType('EVENT_41')).toBe('idle');
+    expect(mapAlarmType('STOP_MOVING')).toBe('idle');
+    expect(mapAlarmType('INPUT_2_INACTIVE')).toBe('ignition');
   });
 });
 
@@ -40,6 +45,35 @@ describe('localizeAlarmMessage', () => {
       detail: '',
     });
     expect(text).toMatch(/اضطراری|SOS/);
+  });
+
+  it('names historical EVENT_10 / EVENT_35 / EVENT_41 rows in Persian', async () => {
+    await i18n.changeLanguage('fa');
+    const t = i18n.t.bind(i18n);
+    expect(
+      localizeAlarmMessage(t, {
+        type: 'other',
+        message: 'Device alarm EVENT_10',
+        detail: '',
+        code: 'EVENT_10',
+      }),
+    ).toContain('ورودی ۲');
+    expect(
+      localizeAlarmMessage(t, {
+        type: 'other',
+        message: 'Device alarm EVENT_35',
+        detail: '',
+        code: 'EVENT_35',
+      }),
+    ).toMatch(/دوره‌ای|فاصله زمانی/);
+    expect(
+      localizeAlarmMessage(t, {
+        type: 'other',
+        message: 'Device alarm EVENT_41',
+        detail: '',
+        code: 'EVENT_41',
+      }),
+    ).toContain('توقف');
   });
 
   it('translates overspeed evaluator copy', async () => {
@@ -152,6 +186,29 @@ describe('localizeNotificationTitle', () => {
     });
     expect(body).toContain('92');
     expect(body).not.toContain(guid);
+  });
+
+  it('names device-alarm notifications from EVENT_n metadata without a GUID', async () => {
+    await i18n.changeLanguage('fa');
+    const guid = '140b552b-8c6a-411a-8ec1-d80ba2e7f1e1';
+    const t = i18n.t.bind(i18n);
+    const n = {
+      eventType: 'other',
+      title: `هشدار دستگاه: ${guid}`,
+      body: '',
+      vehicleId: guid,
+      metadata: {
+        alarmCode: 'EVENT_10',
+        vehicleName: guid,
+        imei: '867191086416152',
+      },
+    };
+    const title = localizeNotificationTitle(t, n);
+    expect(title).toContain('ورودی ۲');
+    expect(title).toContain('867191086416152');
+    expect(title).not.toContain(guid);
+    // Body stays empty when it would only repeat the title reason.
+    expect(localizeNotificationBody(t, n)).toBe('');
   });
 });
 

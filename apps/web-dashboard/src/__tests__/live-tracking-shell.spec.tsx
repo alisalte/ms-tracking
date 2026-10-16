@@ -155,7 +155,6 @@ function renderMapPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.setItem('fv:map-demo-status', '0');
   mockUseMapVehicles.mockReturnValue({
     data: vehiclesFixture,
     isLoading: false,

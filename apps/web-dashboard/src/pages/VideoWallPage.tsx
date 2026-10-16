@@ -182,6 +182,13 @@ export function VideoWallPage() {
     );
   }, []);
 
+  /** Clear every camera so operators can rebuild the wall from scratch. */
+  const clearWall = useCallback(() => {
+    setTiles((prev) => prev.map((t) => ({ ...t, channelId: null, pinned: false })));
+    setSpotlightSlot(null);
+    setAlertSlot(null);
+  }, []);
+
   const togglePin = useCallback(
     (slot: number) => {
       // In spotlight mode, clicking the big tile's pin clears spotlight.
@@ -260,6 +267,13 @@ export function VideoWallPage() {
 
   // Derived counts for the toolbar indicator.
   const assignedCount = useMemo(() => tiles.filter((t) => t.channelId !== null).length, [tiles]);
+  const assignedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of tiles) {
+      if (t.channelId) ids.add(t.channelId);
+    }
+    return ids;
+  }, [tiles]);
   const liveCount = useMemo(() => {
     const pinned = tiles.filter((t) => t.pinned && t.channelId !== null).length;
     const budget = Math.max(0, MAX_LIVE_TILES - pinned);
@@ -350,9 +364,16 @@ export function VideoWallPage() {
             onLoadWall={loadWall}
             onSaveWall={saveCurrentWall}
             onSimulateAlert={simulateAlert}
+            onClearWall={clearWall}
           />
           <div className="flex min-h-0 flex-1">
-            <ChannelDock channels={channels} onPick={pickChannel} onAutoFill={autoFill} />
+            <ChannelDock
+              channels={channels}
+              assignedIds={assignedIds}
+              onPick={pickChannel}
+              onAutoFill={autoFill}
+              onClearWall={clearWall}
+            />
             <div ref={viewportRef} className="min-h-0 min-w-0 flex-1 p-2">
               {empty ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2">

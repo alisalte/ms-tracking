@@ -34,6 +34,7 @@ import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
 import { localizeAlarmMessage, localizeAlarmType } from '@/lib/alarm-copy';
 import { lastSeenLabel } from '@/lib/relative-time';
 import { status } from '@/theme/palette';
+import type { MapVehicle } from '@/types/fleet.types';
 
 const DRAWER_WIDTH = 360;
 
@@ -47,6 +48,11 @@ interface DevicePopupProps {
   onToggleFollow?: () => void;
   /** Whether follow mode is currently active for this vehicle. */
   following?: boolean;
+  /**
+   * Live roster row (WS-merged). When set, overlays presence / motion / speed
+   * onto the REST detail so the drawer matches the list card in real time.
+   */
+  liveVehicle?: MapVehicle | null;
 }
 
 /**
@@ -71,13 +77,31 @@ export function DevicePopup({
   onShowHistory,
   onToggleFollow,
   following = false,
+  liveVehicle = null,
 }: DevicePopupProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toast = useToast();
   const qc = useQueryClient();
   const { can } = usePermissions();
-  const { data, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
+  const { data: detail, isLoading, isError, error, refetch } = useVehicleDetail(vehicleId);
+  // Prefer WS-merged live fields from the roster so list + drawer never diverge.
+  const data =
+    detail && liveVehicle && liveVehicle.id === vehicleId
+      ? {
+          ...detail,
+          state: liveVehicle.state,
+          presence: liveVehicle.presence ?? detail.presence,
+          speed: liveVehicle.speed,
+          heading: liveVehicle.heading,
+          lat: liveVehicle.lat || detail.lat,
+          lng: liveVehicle.lng || detail.lng,
+          ignitionOn: liveVehicle.ignitionOn ?? detail.ignitionOn,
+          lastSeenAt: liveVehicle.lastSeenAt ?? detail.lastSeenAt,
+          updatedAt: liveVehicle.updatedAt ?? detail.updatedAt,
+          deviceId: liveVehicle.deviceId ?? detail.deviceId,
+        }
+      : detail;
   const sendCommand = useSendDeviceCommand(data?.deviceId ?? null);
   const [locating, setLocating] = useState(false);
   const { data: drivers } = useDrivers({

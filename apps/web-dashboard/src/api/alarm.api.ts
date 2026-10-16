@@ -15,8 +15,8 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { extractDeviceCode, mapAlarmType } from '@/lib/alarm-copy';
-import { displayLabel } from '@/lib/ids';
+import { extractDeviceCode, mapAlarmType, resolveMeitrackAlarmCode } from '@/lib/alarm-copy';
+import { displayLabel, isUuid } from '@/lib/ids';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
 import { wireIso, wireNum, wireStr, wireValue } from '@/lib/wire-value';
@@ -110,6 +110,37 @@ function mapSourceEvents(raw: unknown): AlarmSourceEvent[] {
   });
 }
 
+/** Pull IMEI / short device id from alarm detail + sourceEvents — never a UUID. */
+function deviceCaptionFromParts(
+  detailObj: Record<string, unknown> | null,
+  sourceEvents: AlarmSourceEvent[],
+): string {
+  const candidates: string[] = [];
+  const push = (value: unknown) => {
+    if (value == null) return;
+    const text = String(value).trim();
+    if (text && !isUuid(text)) candidates.push(text);
+  };
+  if (detailObj) {
+    push(detailObj.imei);
+    push(detailObj.serialOrImei);
+    push(detailObj.endpoint);
+    push(detailObj.deviceId);
+  }
+  for (const ev of sourceEvents) {
+    const nested = wireDetailObject(ev.detail);
+    if (nested) {
+      push(nested.imei);
+      push(nested.serialOrImei);
+      push(nested.endpoint);
+      push(nested.deviceId);
+    }
+  }
+  const imei = candidates.find((c) => /^\d{10,20}$/.test(c));
+  if (imei) return imei;
+  return candidates[0] ?? '';
+}
+
 /** Nest serializes AlarmOccurrence as camelCase; older fixtures use snake_case. */
 export function mapAlarm(raw: Record<string, unknown>): Alarm {
   const message = wireStr(raw, 'message');
@@ -119,15 +150,23 @@ export function mapAlarm(raw: Record<string, unknown>): Alarm {
     typeof detailObj?.alarmCode === 'string'
       ? detailObj.alarmCode
       : wireStr(raw, 'code') || undefined;
+  const rawCode = codeFromDetail || extractDeviceCode(message);
+  const code = rawCode ? resolveMeitrackAlarmCode(rawCode) : undefined;
   const vehicleId = wireStr(raw, 'vehicleId', 'vehicle_id');
+  const sourceEvents = mapSourceEvents(wireValue(raw, 'sourceEvents', 'source_events'));
+  const wireLabel = wireStr(raw, 'vehicleLabel', 'vehicle_label');
   const vehicleLabel =
-    wireStr(raw, 'vehicleLabel', 'vehicle_label') || displayLabel(vehicleId) || vehicleId;
+    (wireLabel && !isUuid(wireLabel) ? wireLabel : '') ||
+    displayLabel(vehicleId) ||
+    deviceCaptionFromParts(detailObj, sourceEvents) ||
+    '';
   const lat = wireNum(raw, 'lat', 'latitude');
   const lng = wireNum(raw, 'lng', 'longitude');
   const address = wireStr(raw, 'address');
+  const rawType = wireStr(raw, 'type') || undefined;
   return {
     id: wireStr(raw, 'id'),
-    type: mapAlarmType(wireStr(raw, 'type') || undefined),
+    type: mapAlarmType(code || rawType),
     severity: mapSeverity(wireStr(raw, 'severity') || undefined),
     status: mapStatus(wireStr(raw, 'status')),
     vehicleId,
@@ -142,9 +181,9 @@ export function mapAlarm(raw: Record<string, unknown>): Alarm {
     escalationStep: wireNum(raw, 'escalationStep', 'escalation_step'),
     message,
     detail,
-    code: codeFromDetail || extractDeviceCode(message),
-    rawType: wireStr(raw, 'type') || undefined,
-    sourceEvents: mapSourceEvents(wireValue(raw, 'sourceEvents', 'source_events')),
+    code,
+    rawType,
+    sourceEvents,
     linkedClipId: wireStr(raw, 'linkedClipId', 'linked_clip_id') || undefined,
     linkedTripId: wireStr(raw, 'linkedTripId', 'linked_trip_id') || undefined,
   };
@@ -166,11 +205,20 @@ async function applyVehicleCaptions(alarms: Alarm[]): Promise<Alarm[]> {
     const { vehicles } = await fetchAllVehiclesAsMap();
     const labels = new Map(vehicles.map((v) => [v.id, formatVehicleLabel(v)] as const));
     return alarms.map((a) => {
-      const label = labels.get(a.vehicleId);
-      return label && label !== a.vehicleLabel ? { ...a, vehicleLabel: label } : a;
+      const fromRegistry = a.vehicleId ? labels.get(a.vehicleId) : undefined;
+      if (fromRegistry && !isUuid(fromRegistry)) {
+        return fromRegistry !== a.vehicleLabel ? { ...a, vehicleLabel: fromRegistry } : a;
+      }
+      // Never leave a raw GUID in the vehicle column.
+      if (a.vehicleLabel && !isUuid(a.vehicleLabel)) return a;
+      const detailObj = wireDetailObject(a.detail);
+      const fallback = deviceCaptionFromParts(detailObj, a.sourceEvents);
+      return fallback ? { ...a, vehicleLabel: fallback } : { ...a, vehicleLabel: '' };
     });
   } catch {
-    return alarms;
+    return alarms.map((a) =>
+      a.vehicleLabel && isUuid(a.vehicleLabel) ? { ...a, vehicleLabel: '' } : a,
+    );
   }
 }
 

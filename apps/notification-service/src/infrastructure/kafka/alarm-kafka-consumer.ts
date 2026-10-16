@@ -109,20 +109,32 @@ export class AlarmKafkaConsumer implements OnApplicationBootstrap, OnApplication
       topic: config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC,
       fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
     });
-    try {
-      await this.consumer.subscribe({
-        topic: config.NOTIF_KAFKA_DEVICE_ALARM_TOPIC,
-        fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
-      });
-    } catch (err) {
-      // The device-alarm topic may not exist yet on fresh clusters (leadership
-      // election storms on auto-create) — the alarm path is an ADDITIVE feed;
-      // never block the core consumer boot on it.
-      this.logger.warn(`Device-alarm topic subscribe deferred: ${(err as Error).message}`);
+    let deviceAlarmSubscribed = false;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await this.consumer.subscribe({
+          topic: config.NOTIF_KAFKA_DEVICE_ALARM_TOPIC,
+          fromBeginning: config.NOTIF_KAFKA_FROM_BEGINNING,
+        });
+        deviceAlarmSubscribed = true;
+        break;
+      } catch (err) {
+        // Topic may not exist yet on fresh clusters — retry briefly; DMS/SOS
+        // never arrive if this subscribe is skipped forever.
+        this.logger.warn(
+          `Device-alarm topic subscribe attempt ${attempt}/5 failed: ${(err as Error).message}`,
+        );
+        if (attempt < 5) await sleep(1000 * attempt);
+      }
+    }
+    if (!deviceAlarmSubscribed) {
+      this.logger.error(
+        `Device-alarm topic ${config.NOTIF_KAFKA_DEVICE_ALARM_TOPIC} NOT subscribed — DMS/SOS device alarms will not be raised until restart.`,
+      );
     }
     this.started = true;
     this.logger.log(
-      `Kafka consumer connected — topics: ${config.NOTIF_KAFKA_POSITION_TOPIC}, ${config.NOTIF_KAFKA_SESSION_TOPIC}, ${config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC}`,
+      `Kafka consumer connected — topics: ${config.NOTIF_KAFKA_POSITION_TOPIC}, ${config.NOTIF_KAFKA_SESSION_TOPIC}, ${config.NOTIF_KAFKA_TRACKING_EVENT_TOPIC}${deviceAlarmSubscribed ? `, ${config.NOTIF_KAFKA_DEVICE_ALARM_TOPIC}` : ''}`,
     );
     await this.consumer.run({
       eachMessage: (payload) =>

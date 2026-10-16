@@ -108,7 +108,7 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
                 </TD>
                 <TD>
                   <p className="truncate text-sm text-gray-800 dark:text-graydark-800">
-                    {a.vehicleLabel}
+                    {a.vehicleLabel || t('alarms.list.unknownVehicle')}
                   </p>
                   {a.driver && (
                     <p className="truncate text-xs text-gray-500 dark:text-graydark-600">

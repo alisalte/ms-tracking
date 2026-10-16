@@ -66,6 +66,42 @@ describe('mapAlarm', () => {
     expect(alarm.ackedAt).toBe('2026-09-01T08:05:00.000Z');
     expect(alarm.sourceEvents[0]?.detail).toBe('SOS');
   });
+
+  it('never puts a vehicle GUID in the label and resolves EVENT_n codes', () => {
+    const guid = '140b552b-8c6a-411a-8ec1-d80ba2e7f1e1';
+    const alarm = mapAlarm({
+      id: 'al-3',
+      type: 'other',
+      severity: 'INFO',
+      status: 'OPEN',
+      vehicleId: guid,
+      message: 'Device alarm EVENT_10',
+      detail: {
+        deviceAlarm: true,
+        alarmCode: 'EVENT_10',
+        deviceId: guid,
+      },
+      sourceEvents: [
+        {
+          type: 'device.alarm.EVENT_10.v1',
+          ts: '2026-09-15T10:00:00.000Z',
+          detail: JSON.stringify({
+            deviceId: guid,
+            imei: '867191086416152',
+            source: '10',
+          }),
+        },
+      ],
+      raisedAt: '2026-09-15T10:00:00.000Z',
+      lat: 0,
+      lng: 0,
+    });
+
+    expect(alarm.code).toBe('INPUT_2_INACTIVE');
+    expect(alarm.type).toBe('ignition');
+    expect(alarm.vehicleLabel).toBe('867191086416152');
+    expect(alarm.vehicleLabel).not.toContain(guid);
+  });
 });
 
 describe('mapNotification', () => {

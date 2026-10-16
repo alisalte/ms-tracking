@@ -82,24 +82,26 @@ export class AlarmOccurrenceRepository {
    * Sprint G Part 12 — the one-open-alarm gate: find the OPEN alarm for a
    * (rule, vehicle, type) triple, if any. Additional detections while this
    * row exists update its detail instead of creating new OPEN alarms.
+   *
+   * `vehicleId` may be null for unpaired device alarms — knex `{ vehicle_id: null }`
+   * would emit `= NULL` (never matches); use WHERE NULL instead.
    */
   public async findOpenByRuleAndVehicle(
     tenantId: string,
     ruleId: string,
-    vehicleId: string,
+    vehicleId: string | null,
     type: string,
   ): Promise<AlarmOccurrence | null> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
-      const row = await trx<AlarmOccurrenceRow>('notification.alerts')
-        .where({
-          tenant_id: tenantId,
-          rule_id: ruleId,
-          vehicle_id: vehicleId,
-          type,
-          status: 'OPEN',
-        })
-        .orderBy('raised_at', 'desc')
-        .first();
+      let query = trx<AlarmOccurrenceRow>('notification.alerts').where({
+        tenant_id: tenantId,
+        rule_id: ruleId,
+        type,
+        status: 'OPEN',
+      });
+      query =
+        vehicleId === null ? query.whereNull('vehicle_id') : query.where({ vehicle_id: vehicleId });
+      const row = await query.orderBy('raised_at', 'desc').first();
       return row ? this.toDomain(row) : null;
     });
   }

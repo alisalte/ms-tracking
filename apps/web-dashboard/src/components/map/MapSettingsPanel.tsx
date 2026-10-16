@@ -2,7 +2,6 @@ import { Check, Layers } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useMapDemoStatus } from '@/hooks/useMapDemoStatus';
 import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
 import { BASEMAPS, type BasemapGroup, type BasemapId } from '@/lib/basemaps';
 import type { MapMarkerStyle } from '@/lib/map-marker-style';
@@ -21,7 +20,7 @@ interface MapSettingsPanelProps {
 }
 
 /**
- * MapSettingsPanel — basemap picker plus vehicle/navigation marker chrome.
+ * MapSettingsPanel — basemap picker and vehicle/navigation marker chrome.
  * Choices persist and apply on every map in the app.
  */
 export function MapSettingsPanel({
@@ -34,7 +33,6 @@ export function MapSettingsPanel({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [markerStyle, setMarkerStyle] = useMapMarkerStyle();
-  const [demoStatus, setDemoStatus] = useMapDemoStatus();
 
   useEffect(() => {
     if (!open) return;
@@ -122,37 +120,6 @@ export function MapSettingsPanel({
               onSelect={setMarkerStyle}
             />
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={demoStatus}
-            data-testid="map-settings-demo-status"
-            onClick={() => setDemoStatus(!demoStatus)}
-            className={`mt-1 flex w-full cursor-pointer items-center justify-between rounded-xl p-2 text-start text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
-              demoStatus
-                ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
-                : 'text-gray-700 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5'
-            }`}
-          >
-            <span className="min-w-0">
-              <span className="block font-medium">{t('map.settings.demoStatus')}</span>
-              <span className="block text-[11px] font-normal text-gray-400 dark:text-graydark-500">
-                {t('map.settings.demoStatusHint')}
-              </span>
-            </span>
-            <span
-              aria-hidden
-              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                demoStatus ? 'bg-brand-500' : 'bg-gray-300 dark:bg-white/20'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
-                  demoStatus ? 'start-4' : 'start-0.5'
-                }`}
-              />
-            </span>
-          </button>
         </div>
       )}
     </div>

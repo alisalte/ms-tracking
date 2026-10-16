@@ -49,6 +49,10 @@ class FakeStateCache {
     return false;
   }
 
+  public async clearDedup(tenantId: string, ruleId: string, vehicleId: string): Promise<void> {
+    this.sets.delete(`tenant:${tenantId}:alarm_dedup:${ruleId}:${vehicleId}`);
+  }
+
   public async expireDedupWindow(): Promise<void> {
     this.sets.clear(); // simulate dedupWindowSec elapsing
   }
@@ -97,7 +101,7 @@ class FakeAlarmsRepo {
   public async findOpenByRuleAndVehicle(
     _t: string,
     ruleId: string,
-    vehicleId: string,
+    vehicleId: string | null,
     type: string,
   ): Promise<AlarmOccurrence | null> {
     const found = [...this.created]
@@ -488,5 +492,62 @@ describe('Sprint G — FleetEvent-driven rules (trip/idle/parking)', () => {
     });
     expect(alarms.created).toHaveLength(1);
     expect(alarms.created.at(0)?.type).toBe('parking');
+  });
+});
+
+// ── Device alarms (DMS / ADAS — rule-free path) ──────────────────────────────
+
+describe('Sprint G — device-alarm DMS persistence', () => {
+  const DEVICE = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+  function dmsAlarm(
+    overrides: Partial<Parameters<AlarmEvaluatorService['processDeviceAlarm']>[0]> = {},
+  ) {
+    return {
+      tenantId: TENANT,
+      vehicleId: VEHICLE,
+      deviceId: DEVICE,
+      serialOrImei: '867191086419164',
+      code: 'DMS_PHONE_CALL',
+      severity: 'WARNING' as const,
+      source: '126',
+      detail: { dmsDetail: 'Phone call', dmsProtocol: 2, dmsAlarmType: 7 },
+      lat: 35.7,
+      lng: 51.4,
+      detectedAt: new Date('2026-01-01T12:00:00Z'),
+      ...overrides,
+    };
+  }
+
+  it('persists a DMS alarm as catalog type dms (not the raw code)', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm());
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.type).toBe('dms');
+    expect(alarms.created.at(0)?.message).toContain('DMS_PHONE_CALL');
+    expect(alarms.created.at(0)?.detail).toMatchObject({
+      deviceAlarm: true,
+      alarmCode: 'DMS_PHONE_CALL',
+    });
+  });
+
+  it('coalesces a second DMS detection onto the OPEN dms row (open-gate uses catalog type)', async () => {
+    const { service, alarms, stateCache } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm());
+    await stateCache.expireDedupWindow();
+    await service.processDeviceAlarm(dmsAlarm({ detectedAt: new Date('2026-01-01T12:02:00Z') }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.detailUpdates).toHaveLength(1);
+    expect(alarms.detailUpdates.at(0)?.detail).toMatchObject({
+      occurrenceCount: expect.any(Number),
+    });
+  });
+
+  it('still raises when the device has no paired vehicleId', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ vehicleId: null }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.type).toBe('dms');
+    expect(alarms.created.at(0)?.vehicleId).toBeNull();
   });
 });

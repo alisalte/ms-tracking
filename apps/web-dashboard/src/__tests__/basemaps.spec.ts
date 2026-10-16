@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   BASEMAPS,
   DEFAULT_BASEMAP,
+  applyRasterBasemap,
   basemapTiles,
   isBasemapId,
   loadPersistedBasemap,
@@ -57,5 +58,44 @@ describe('basemaps', () => {
     expect(BASEMAPS.find((b) => b.id === 'google')?.maxzoom).toBe(21);
     expect(BASEMAPS.find((b) => b.id === 'streets')?.maxzoom).toBe(19);
     expect(rasterMapStyle('streets').sources.basemap.maxzoom).toBe(19);
+  });
+
+  it('rebuilds the basemap source so tile URL + maxzoom swap without a page reload', () => {
+    const removed: string[] = [];
+    const added: Array<{ id: string; tiles?: string[]; maxzoom?: number }> = [];
+    const layers = new Map<string, true>([
+      ['basemap', true],
+      ['geofence-fill', true],
+    ]);
+    const sources = new Map<string, true>([['basemap', true]]);
+    const map = {
+      getLayer: (id: string) => (layers.has(id) ? { id } : undefined),
+      getSource: (id: string) => (sources.has(id) ? { id } : undefined),
+      removeLayer: (id: string) => {
+        removed.push(`layer:${id}`);
+        layers.delete(id);
+      },
+      removeSource: (id: string) => {
+        removed.push(`source:${id}`);
+        sources.delete(id);
+      },
+      addSource: (id: string, src: { tiles: string[]; maxzoom: number }) => {
+        sources.set(id, true);
+        added.push({ id, tiles: src.tiles, maxzoom: src.maxzoom });
+      },
+      addLayer: (layer: { id: string }, before?: string) => {
+        layers.set(layer.id, true);
+        added.push({ id: `layer:${layer.id}${before ? `:${before}` : ''}` });
+      },
+      triggerRepaint: () => {
+        added.push({ id: 'repaint' });
+      },
+    };
+    applyRasterBasemap(map as never, 'streets', 'en', ['geofence-fill']);
+    expect(removed).toEqual(['layer:basemap', 'source:basemap']);
+    expect(added[0]?.tiles?.[0]).toContain('tile.openstreetmap.org');
+    expect(added[0]?.maxzoom).toBe(19);
+    expect(added.some((a) => a.id === 'layer:basemap:geofence-fill')).toBe(true);
+    expect(added.some((a) => a.id === 'repaint')).toBe(true);
   });
 });

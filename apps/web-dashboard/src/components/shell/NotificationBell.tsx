@@ -22,8 +22,8 @@ import { Button, Spinner } from '@/components/tailwind-ui';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
 import {
-  localizeEventType,
   localizeNotificationBody,
+  localizeNotificationKind,
   notificationVehicleName,
 } from '@/lib/alarm-copy';
 import { relativeTime } from '@/lib/relative-time';
@@ -108,7 +108,7 @@ export function NotificationBell() {
                 {items.slice(0, 10).map((n) => {
                   const vehicle = notificationVehicleName(n, vehicleCaptionOf(n.vehicleId));
                   const reason = localizeNotificationBody(t, n);
-                  const typeLabel = localizeEventType(t, n.eventType);
+                  const typeLabel = localizeNotificationKind(t, n);
                   return (
                     <li key={n.id}>
                       <button

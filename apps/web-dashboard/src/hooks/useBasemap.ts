@@ -73,8 +73,13 @@ export function useFollowBasemap(
     let cancelled = false;
     const swap = () => {
       if (cancelled || mapRef.current !== map) return;
-      applyRasterBasemap(map, basemap, i18n.language, beforeLayerIds);
-      appliedRef.current = key;
+      try {
+        applyRasterBasemap(map, basemap, i18n.language, beforeLayerIds);
+        appliedRef.current = key;
+      } catch {
+        // Style mid-reload — retry on the next styledata tick.
+        appliedRef.current = '';
+      }
     };
     runWhenStyleReady(map, swap);
     return () => {

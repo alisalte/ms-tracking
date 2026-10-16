@@ -474,11 +474,30 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(first(msgs).alarms?.[0]?.code).toBe('ADAS_DMS_ALARM');
   });
 
+  it('decodes DMS when MDVR cache-remaining is ≥256 (envelope must still be detected)', () => {
+    const fe31 = Buffer.from([3, 0x02, 0x07, 0x00]); // phone call
+    const groups = Buffer.concat([
+      Buffer.from([0]), // empty 1-byte group
+      cceParams([[0x40, 126]], [], [[0xfe31, fe31]]),
+    ]);
+    // 400 cached records → bytes 1–3 of the uint32 are non-zero (old bug dropped these).
+    const msgs = decodeFrame(cceFrame(enveloped(groups, 400)));
+    expect(msgs.map((m) => m.type)).toContain('ALARM');
+    expect(first(msgs).alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
+  });
+
+  it('accepts DMS detail on 0xFE2D as well as 0xFE31', () => {
+    const fe2d = Buffer.from([3, 0x02, 0x08, 0x00]); // smoking
+    const params = cceParams([[0x40, 126]], [], [[0xfe2d, fe2d]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('DMS_SMOKING');
+  });
+
   /** MDVR envelope: cache uint32 + packet-count uint16 + per-packet (len, id-count). */
-  function enveloped(groups: Buffer): Buffer {
+  function enveloped(groups: Buffer, cacheRemaining = 0): Buffer {
     const pktLen = 4 + groups.length;
     const env = Buffer.alloc(10);
-    env.writeUInt32LE(0, 0);
+    env.writeUInt32LE(cacheRemaining, 0);
     env.writeUInt16LE(1, 4);
     env.writeUInt16LE(pktLen, 6);
     env.writeUInt16LE(0, 8);

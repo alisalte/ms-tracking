@@ -96,6 +96,20 @@ function stateTone(state: MapVehicle['state']): { chip: string; icon: string; pi
   }
 }
 
+/** Presence → pill tone (connection status, distinct from motion). */
+function presenceTone(presence: ReturnType<typeof presenceOf>): string {
+  switch (presence) {
+    case 'ONLINE':
+      return 'bg-success-500/20 text-success-300 ring-1 ring-success-400/35';
+    case 'STALE':
+      return 'bg-warning-500/15 text-warning-200 ring-1 ring-warning-400/30';
+    case 'OFFLINE':
+      return 'bg-white/10 text-white/55 ring-1 ring-white/12';
+    default:
+      return 'bg-white/8 text-white/45 ring-1 ring-white/10';
+  }
+}
+
 /** Presence dot — the §18 color always paired with a text label elsewhere. */
 function PresenceDot({ presence }: { presence: ReturnType<typeof presenceOf> }) {
   return (
@@ -107,15 +121,21 @@ function PresenceDot({ presence }: { presence: ReturnType<typeof presenceOf> }) 
   );
 }
 
+/** Live speed only when the device is ONLINE — never show a stale km/h as live. */
+function liveSpeedLabel(v: MapVehicle, presence: ReturnType<typeof presenceOf>): string {
+  if (presence !== 'ONLINE') return '—';
+  return `${v.speed} km/h`;
+}
+
 /**
  * DeviceListPanel — Tailwind left fleet roster for the Live Tracking map
  * (ported off MUI; keeps the always-dark "ops room" glass identity).
  *
- * Search → fleet select → presence filter chips → rich vehicle cards:
- * vehicle-type icon in a state tonal chip, label + fleet/driver secondary
- * line, a motion-state pill, and a compact meta strip (speed · ignition ·
- * heading · last seen). Selection highlights the card and scrolls it into
- * view (§17 list ↔ map sync).
+ * Search → fleet select → presence filter chips → rich vehicle cards with
+ * live device status: presence pill (online/offline) + motion pill, and a
+ * meta strip (live speed · ignition · heading · last seen). Speed is only
+ * shown while ONLINE so a 2-day-old fix cannot look like the vehicle is
+ * moving. Selection highlights the card and scrolls it into view (§17).
  */
 export function DeviceListPanel({
   vehicles,
@@ -220,6 +240,7 @@ export function DeviceListPanel({
         ) : (
           cards.map(({ v, p }) => {
             const selected = v.id === selectedId;
+            const live = p === 'ONLINE';
             const tone = stateTone(v.state);
             return (
               <li key={v.id} data-vehicle-id={v.id} className="mb-1.5 last:mb-0">
@@ -239,15 +260,24 @@ export function DeviceListPanel({
                     <VehicleTypeIcon type={v.type} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex min-w-0 items-center gap-1.5">
                       <span className="min-w-0 truncate text-sm font-semibold text-white/95">
                         {v.name?.trim() || v.label}
                       </span>
-                      <PresenceDot presence={p} />
-                      <span
-                        className={`ms-auto inline-flex shrink-0 items-center rounded-full px-2 py-px text-[11px] leading-4.5 font-semibold ${tone.pill}`}
-                      >
-                        {t(`map.states.${v.state}`)}
+                      <span className="ms-auto flex shrink-0 items-center gap-1">
+                        <span
+                          data-testid="map-vehicle-presence"
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-px text-[11px] leading-4.5 font-semibold ${presenceTone(p)}`}
+                        >
+                          <PresenceDot presence={p} />
+                          {t(presenceLabelKey(p))}
+                        </span>
+                        <span
+                          data-testid="map-vehicle-state"
+                          className={`inline-flex items-center rounded-full px-2 py-px text-[11px] leading-4.5 font-semibold ${tone.pill}`}
+                        >
+                          {t(`map.states.${v.state}`)}
+                        </span>
                       </span>
                     </span>
                     <span className="truncate text-xs text-white/55">
@@ -261,12 +291,16 @@ export function DeviceListPanel({
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
-                    <span className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-white/55 [&_svg]:me-1 [&_svg]:size-3 [&_svg]:align-text-bottom">
-                      <span className="inline-flex items-center gap-1">
+                    <span
+                      className={`mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs [&_svg]:me-1 [&_svg]:size-3 [&_svg]:align-text-bottom ${
+                        live ? 'text-white/55' : 'text-white/35'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-1" title={t('map.popup.speed')}>
                         <Gauge aria-hidden />
-                        {v.speed} km/h
+                        {liveSpeedLabel(v, p)}
                       </span>
-                      {v.ignitionOn !== undefined && (
+                      {live && v.ignitionOn !== undefined && (
                         <span
                           className={`inline-flex items-center gap-1 ${
                             v.ignitionOn ? 'text-success-400' : 'text-white/35'
@@ -276,13 +310,15 @@ export function DeviceListPanel({
                           {t(v.ignitionOn ? 'map.popup.ignitionOn' : 'map.popup.ignitionOff')}
                         </span>
                       )}
-                      <span
-                        className="inline-flex items-center gap-1"
-                        title={t('map.popup.heading')}
-                      >
-                        <Compass aria-hidden />
-                        {v.heading}°
-                      </span>
+                      {live && (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title={t('map.popup.heading')}
+                        >
+                          <Compass aria-hidden />
+                          {v.heading}°
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1">
                         <Clock aria-hidden />
                         {lastSeenLabel(v.lastSeenAt, t)}

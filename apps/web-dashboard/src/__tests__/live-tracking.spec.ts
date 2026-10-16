@@ -104,8 +104,10 @@ describe('mergeLivePositions with device-status deltas (§18/§19)', () => {
     expect(v1?.presence).toBe('OFFLINE');
     expect(v1?.lastSeenAt).toBe('2026-08-08T09:55:00Z');
     expect(v1?.state).toBe('offline'); // OFFLINE ⇒ offline movement state
+    expect(v1?.speed).toBe(0); // no live speed while OFFLINE
     expect(v2?.presence).toBe('STALE');
     expect(v2?.state).toBe('stopped'); // STALE ⇒ stopped movement state
+    expect(v2?.speed).toBe(0); // no live speed while STALE
   });
 
   it('returns the original array when there are no live deltas at all', () => {

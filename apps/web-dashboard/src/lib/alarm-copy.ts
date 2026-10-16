@@ -30,6 +30,75 @@ export const ALARM_CATALOG_TYPES: readonly AlarmType[] = [
   'other',
 ];
 
+/**
+ * Meitrack AAA event number → canonical code (GPRS Protocol §1.3).
+ * Used so historical `EVENT_10` / `EVENT_35` / `EVENT_41` rows still get a
+ * readable title after the gateway starts emitting named codes.
+ */
+export const MEITRACK_EVENT_NUM_TO_CODE: Readonly<Record<number, string>> = {
+  1: 'SOS',
+  2: 'INPUT_2_ACTIVE',
+  3: 'INPUT_3_ACTIVE',
+  4: 'INPUT_4_ACTIVE',
+  5: 'INPUT_5_ACTIVE',
+  6: 'INPUT_6_ACTIVE',
+  7: 'INPUT_7_ACTIVE',
+  8: 'INPUT_8_ACTIVE',
+  9: 'INPUT_1_INACTIVE',
+  10: 'INPUT_2_INACTIVE',
+  11: 'INPUT_3_INACTIVE',
+  12: 'INPUT_4_INACTIVE',
+  13: 'INPUT_5_INACTIVE',
+  14: 'INPUT_6_INACTIVE',
+  15: 'INPUT_7_INACTIVE',
+  16: 'INPUT_8_INACTIVE',
+  17: 'LOW_BATTERY',
+  18: 'LOW_POWER',
+  19: 'OVERSPEED',
+  20: 'GEOFENCE_ENTER',
+  21: 'GEOFENCE_EXIT',
+  22: 'POWER_RESTORED',
+  23: 'POWER_CUT',
+  24: 'GPS_SIGNAL_LOST',
+  25: 'GPS_RECOVERED',
+  26: 'ENTER_SLEEP',
+  27: 'EXIT_SLEEP',
+  28: 'GPS_ANTENNA_CUT',
+  29: 'DEVICE_REBOOT',
+  32: 'CORNERING',
+  33: 'TRACK_BY_DISTANCE',
+  34: 'REPLY_CURRENT',
+  35: 'TRACK_BY_INTERVAL',
+  36: 'TOW',
+  40: 'POWER_OFF',
+  41: 'STOP_MOVING',
+  42: 'START_MOVING',
+  44: 'JAMMING',
+  50: 'TEMPERATURE_HIGH',
+  51: 'TEMPERATURE_LOW',
+  52: 'FUEL_FULL',
+  53: 'FUEL_LOW',
+  54: 'FUEL_THEFT',
+  78: 'ACCIDENT',
+  82: 'FUEL_FILLING',
+  90: 'CORNERING',
+  91: 'CORNERING',
+  114: 'DRIVING_BEHAVIOR',
+  126: 'ADAS_DMS_ALARM',
+  129: 'BRAKING',
+  130: 'ACCELERATION',
+  135: 'FATIGUE_DRIVING',
+  136: 'FATIGUE_TIME',
+};
+
+/** Resolve `EVENT_35` → `TRACK_BY_INTERVAL`; named codes pass through. */
+export function resolveMeitrackAlarmCode(code: string): string {
+  const event = /^EVENT_(\d+)$/i.exec(code.trim());
+  if (!event) return code.trim().toUpperCase();
+  const named = MEITRACK_EVENT_NUM_TO_CODE[Number(event[1])];
+  return named ?? code.trim().toUpperCase();
+}
+
 /** English DMS/ADAS detail → canonical code (Meitrack 0xFE31 tables). */
 const DMS_DETAIL_TO_CODE: Readonly<Record<string, string>> = {
   'eyes closed': 'DMS_EYES_CLOSED',
@@ -95,14 +164,38 @@ export function mapAlarmType(raw: string | undefined): AlarmType {
   }
   if (u === 'TOW') return 'tow';
   if (u === 'JAMMING') return 'jamming';
-  if (u === 'POWER_CUT' || u === 'POWER_RESTORED' || u === 'LOW_POWER' || u === 'POWER') {
+  if (
+    u === 'POWER_CUT' ||
+    u === 'POWER_RESTORED' ||
+    u === 'LOW_POWER' ||
+    u === 'POWER_OFF' ||
+    u === 'POWER'
+  ) {
     return 'power';
   }
   if (u === 'LOW_BATTERY' || u === 'BATTERY') return 'battery';
-  if (u === 'IGNITION_ON' || u === 'IGNITION_OFF' || u === 'IGNITION') return 'ignition';
-  if (u === 'PROLONGED_IDLE' || u === 'PARKING' || u === 'IDLE') return 'idle';
-  if (u === 'GPS_SIGNAL_LOST' || u === 'GPS_RECOVERED') return 'other';
-  if (u.startsWith('EVENT_')) return 'other';
+  if (u === 'IGNITION_ON' || u === 'IGNITION_OFF' || u === 'IGNITION' || u.startsWith('INPUT_')) {
+    return 'ignition';
+  }
+  if (
+    u === 'PROLONGED_IDLE' ||
+    u === 'PARKING' ||
+    u === 'IDLE' ||
+    u === 'STOP_MOVING' ||
+    u === 'START_MOVING'
+  ) {
+    return 'idle';
+  }
+  if (u === 'DEVICE_REBOOT' || u === 'ENTER_SLEEP' || u === 'EXIT_SLEEP') return 'offline';
+  if (u === 'GPS_SIGNAL_LOST' || u === 'GPS_RECOVERED' || u === 'GPS_ANTENNA_CUT') return 'other';
+  if (u.startsWith('EVENT_')) {
+    const resolved = resolveMeitrackAlarmCode(u);
+    if (resolved === u || resolved.startsWith('EVENT_')) return 'other';
+    return mapAlarmType(resolved);
+  }
+  if (u === 'TRACK_BY_INTERVAL' || u === 'TRACK_BY_DISTANCE' || u === 'REPLY_CURRENT') {
+    return 'other';
+  }
   if ((ALARM_CATALOG_TYPES as readonly string[]).includes(raw ?? '')) return raw as AlarmType;
   return 'other';
 }
@@ -123,10 +216,14 @@ export function localizeAlarmType(t: TFunction, type: AlarmType | string): strin
 }
 
 export function localizeAlarmCode(t: TFunction, code: string): string {
+  const resolved = resolveMeitrackAlarmCode(code);
+  const labeled = t(`alarms.codes.${resolved}`, { defaultValue: '' });
+  if (labeled && labeled !== `alarms.codes.${resolved}`) return labeled;
   const event = /^EVENT_(\d+)$/i.exec(code);
-  if (event)
+  if (event) {
     return t('alarms.codes.unknown', { code: event[1], defaultValue: `Event ${event[1]}` });
-  return t(`alarms.codes.${code}`, { defaultValue: humanizeCode(code) });
+  }
+  return t(`alarms.codes.${resolved}`, { defaultValue: humanizeCode(resolved) });
 }
 
 export function localizePhrase(t: TFunction, phrase: string): string {
@@ -274,12 +371,22 @@ export function notificationVehicleName(
   resolvedLabel?: string,
 ): string {
   if (resolvedLabel && !isUuid(resolvedLabel)) return resolvedLabel.trim();
-  const named = metaStr(n.metadata, 'vehicleName', 'vehicleLabel', 'plate');
+  const named = metaStr(n.metadata, 'vehicleName', 'vehicleLabel', 'plate', 'imei');
   if (named) return named;
   const colon = n.title.indexOf(':');
   const suffix = colon >= 0 ? n.title.slice(colon + 1).trim() : '';
   if (suffix && !isUuid(suffix) && !looksEnglishAlarmTitle(suffix)) return suffix;
   return '';
+}
+
+/** Headline kind: prefer Meitrack alarm code over generic catalog type. */
+export function localizeNotificationKind(
+  t: TFunction,
+  n: Pick<Notification, 'eventType' | 'metadata'>,
+): string {
+  const code = metaStr(n.metadata, 'alarmCode');
+  if (code) return localizeAlarmCode(t, code);
+  return localizeEventType(t, n.eventType);
 }
 
 function reasonFromMetadata(
@@ -312,10 +419,16 @@ function reasonFromMetadata(
   if (duration && n.eventType.toLowerCase().includes('idle')) {
     return t('alarms.messages.vehicleIdle', { duration });
   }
-  const alarmDetail = metaStr(meta, 'alarmDetail', 'dmsDetail');
-  if (alarmDetail) return localizePhrase(t, alarmDetail);
   const alarmCode = metaStr(meta, 'alarmCode');
   if (alarmCode) return localizeAlarmCode(t, alarmCode);
+  const alarmDetail = metaStr(meta, 'alarmDetail', 'dmsDetail');
+  if (alarmDetail) {
+    // Device rows sometimes store the Meitrack code as alarmDetail.
+    if (/^(EVENT_\d+|[A-Z][A-Z0-9_]+)$/i.test(alarmDetail)) {
+      return localizeAlarmCode(t, alarmDetail);
+    }
+    return localizePhrase(t, alarmDetail);
+  }
   return undefined;
 }
 
@@ -324,7 +437,7 @@ export function localizeNotificationTitle(
   n: Pick<Notification, 'title' | 'eventType' | 'vehicleId' | 'metadata'>,
   vehicleLabel?: string,
 ): string {
-  const typeLabel = localizeEventType(t, n.eventType);
+  const typeLabel = localizeNotificationKind(t, n);
   const vehicle = notificationVehicleName(n, vehicleLabel);
   if (vehicle) return `${typeLabel}: ${vehicle}`;
   const cleaned = stripUuids(n.title);
@@ -338,17 +451,25 @@ export function localizeNotificationBody(
   t: TFunction,
   n: Pick<Notification, 'body' | 'eventType' | 'title' | 'metadata'>,
 ): string {
+  const kind = localizeNotificationKind(t, n);
   const fromMeta = reasonFromMetadata(t, n);
-  if (fromMeta) return fromMeta;
+  // Skip when the only thing we have is the same code already shown in the title.
+  if (fromMeta && fromMeta !== kind) return fromMeta;
   const cleaned = stripUuids(n.body);
-  if (looksLocalized(cleaned)) return cleaned;
+  if (looksLocalized(cleaned) && cleaned !== kind) return cleaned;
   const fromPattern = localizeEnglishPattern(t, cleaned || n.body);
-  if (fromPattern) return fromPattern;
+  if (fromPattern && fromPattern !== kind) return fromPattern;
   const extra = extractDeviceExtra(cleaned) ?? extractDeviceExtra(n.title);
-  if (extra && !isUuid(extra)) return localizePhrase(t, extra);
+  if (extra && !isUuid(extra)) {
+    const labeled = localizePhrase(t, extra);
+    if (labeled && labeled !== kind) return labeled;
+  }
   const code = extractDeviceCode(cleaned) ?? extractDeviceCode(n.title);
-  if (code) return localizeAlarmCode(t, code);
-  if (cleaned && !isUuid(cleaned)) return cleaned;
+  if (code) {
+    const labeled = localizeAlarmCode(t, code);
+    if (labeled !== kind) return labeled;
+  }
+  if (cleaned && !isUuid(cleaned) && cleaned !== kind) return cleaned;
   return '';
 }
 

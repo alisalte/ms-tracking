@@ -31,6 +31,7 @@ import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
 import {
   localizeEventType,
   localizeNotificationBody,
+  localizeNotificationKind,
   localizeNotificationTitle,
   notificationVehicleName,
 } from '@/lib/alarm-copy';
@@ -291,7 +292,7 @@ export function NotificationCenterPage() {
                           {t(`notifications.severity.${n.severity}`, { defaultValue: n.severity })}
                         </span>
                         <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-gray-300 px-2 text-[0.7rem] font-medium text-gray-600 dark:border-white/10 dark:text-graydark-700">
-                          {localizeEventType(t, n.eventType)}
+                          {localizeNotificationKind(t, n)}
                         </span>
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-xs">
@@ -401,7 +402,7 @@ function NotificationDetailContent({
           })}
         </span>
         <span className="inline-flex h-6 items-center rounded-full border border-gray-300 px-2.5 text-xs font-medium text-gray-600 dark:border-white/10 dark:text-graydark-700">
-          {localizeEventType(t, notification.eventType)}
+          {localizeNotificationKind(t, notification)}
         </span>
         <span className="inline-flex h-6 items-center rounded-full border border-gray-300 px-2.5 text-xs font-medium text-gray-600 dark:border-white/10 dark:text-graydark-700">
           {notification.read ? t('notifications.status.READ') : t('notifications.status.UNREAD')}

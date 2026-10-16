@@ -444,9 +444,7 @@
       "markerVehicle": "آیکون خودرو",
       "markerVehicleHint": "نمای بالای سواری و سنگین",
       "markerNav": "فلش جهت‌دار",
-      "markerNavHint": "دایره رنگی؛ فلش جهت حرکت",
-      "demoStatus": "وضعیت آزمایشی",
-      "demoStatusHint": "به هر خودرو یک وضعیت متفاوت بده"
+      "markerNavHint": "دایره رنگی؛ فلش جهت حرکت"
     },
     "basemap": {
       "google": "گوگل — خیابان",
@@ -675,6 +673,7 @@
       "resumeRotation": "ادامه‌ی چرخش",
       "fullscreenWall": "تمام‌صفحه‌ی دیوار",
       "simulateAlert": "شبیه‌سازی هشدار",
+      "clearWall": "برداشتن همه دوربین‌ها",
       "loadWall": "بارگذاری دیوار…",
       "saveWall": "ذخیره‌ی دیوار",
       "divisions": "چیدمان شبکه"
@@ -685,7 +684,16 @@
       "online": "آنلاین",
       "onlineOnly": "فقط آنلاین‌ها",
       "autoFill": "پر کردن خودکار",
-      "noResults": "هیچ دوربینی با فیلترهای شما مطابقت ندارد."
+      "clearWall": "برداشتن همه",
+      "clearWallHint": "همه دوربین‌ها را از دیوار بردار",
+      "noResults": "هیچ دوربینی با فیلترهای شما مطابقت ندارد.",
+      "deviceOnline": "دستگاه آنلاین",
+      "deviceOffline": "دستگاه آفلاین",
+      "onWall": "{{count}} روی دیوار",
+      "onWallCount": "{{count}} دوربین روی دیوار است",
+      "onWallShort": "روی دیوار",
+      "alreadyOnWall": "الان روی دیوار است",
+      "onlineCount": "{{online}} از {{total}} دوربین آنلاین"
     },
     "tile": {
       "empty": "افزودن دوربین",
@@ -1036,6 +1044,31 @@
       "ADAS_TTC2": "زمان تا برخورد ۲",
       "ADAS_DISTANCE_DETECTION": "تشخیص فاصله",
       "ADAS_FRONT_VEHICLE_STARTED": "حرکت خودروی جلویی",
+      "INPUT_2_ACTIVE": "ورودی ۲ فعال",
+      "INPUT_3_ACTIVE": "ورودی ۳ فعال",
+      "INPUT_4_ACTIVE": "ورودی ۴ فعال",
+      "INPUT_5_ACTIVE": "ورودی ۵ فعال",
+      "INPUT_6_ACTIVE": "ورودی ۶ فعال",
+      "INPUT_7_ACTIVE": "ورودی ۷ فعال",
+      "INPUT_8_ACTIVE": "ورودی ۸ فعال",
+      "INPUT_1_INACTIVE": "ورودی ۱ غیرفعال",
+      "INPUT_2_INACTIVE": "ورودی ۲ غیرفعال",
+      "INPUT_3_INACTIVE": "ورودی ۳ غیرفعال",
+      "INPUT_4_INACTIVE": "ورودی ۴ غیرفعال",
+      "INPUT_5_INACTIVE": "ورودی ۵ غیرفعال",
+      "INPUT_6_INACTIVE": "ورودی ۶ غیرفعال",
+      "INPUT_7_INACTIVE": "ورودی ۷ غیرفعال",
+      "INPUT_8_INACTIVE": "ورودی ۸ غیرفعال",
+      "ENTER_SLEEP": "ورود به خواب",
+      "EXIT_SLEEP": "خروج از خواب",
+      "GPS_ANTENNA_CUT": "قطع آنتن GPS",
+      "DEVICE_REBOOT": "راه‌اندازی مجدد دستگاه",
+      "TRACK_BY_DISTANCE": "ردیابی بر اساس مسافت",
+      "REPLY_CURRENT": "پاسخ موقعیت",
+      "TRACK_BY_INTERVAL": "ردیابی دوره‌ای (فاصله زمانی)",
+      "POWER_OFF": "خاموش شدن دستگاه",
+      "STOP_MOVING": "توقف حرکت",
+      "START_MOVING": "شروع حرکت",
       "unknown": "رویداد دستگاه {{code}}"
     },
     "messages": {
@@ -1087,7 +1120,8 @@
       "colVehicle": "خودرو",
       "colSeverity": "شدت",
       "colStatus": "وضعیت",
-      "colTime": "زمان"
+      "colTime": "زمان",
+      "unknownVehicle": "خودرو نامشخص"
     },
     "detail": {
       "notFound": "هشدار یافت نشد.",

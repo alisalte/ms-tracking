@@ -24,8 +24,6 @@ import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
 import { useBasemap } from '@/hooks/useBasemap';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
-import { useMapDemoStatus } from '@/hooks/useMapDemoStatus';
-import { applyDemoStatuses } from '@/lib/map-demo-status';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
 
 /** WS connection chip copy per socket state (§2.2; 'error' = backoff retry). */
@@ -128,7 +126,6 @@ export function MapPage() {
   // device-status updates. The hook is a no-op when the WS server is
   // unreachable (dev), so the REST bootstrap below stays the source of truth.
   const { positions, statuses, connectionState } = useLiveTracking(tenantId);
-  const [demoStatus] = useMapDemoStatus();
 
   // Merge live deltas into the REST-fetched vehicles (live overrides REST).
   const vehicles = useMemo(() => {
@@ -141,12 +138,9 @@ export function MapPage() {
     for (const d of drivers ?? []) {
       if (d.assignedVehicleId) byVehicle.set(d.assignedVehicleId, driverFullName(d));
     }
-    const withDrivers =
-      byVehicle.size === 0
-        ? live
-        : live.map((v) => ({ ...v, driver: byVehicle.get(v.id) ?? v.driver }));
-    return demoStatus ? applyDemoStatuses(withDrivers) : withDrivers;
-  }, [data, positions, statuses, drivers, demoStatus]);
+    if (byVehicle.size === 0) return live;
+    return live.map((v) => ({ ...v, driver: byVehicle.get(v.id) ?? v.driver }));
+  }, [data, positions, statuses, drivers]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Sprint I §31: the device popup is a transient INSPECTOR — closing it must
@@ -562,6 +556,7 @@ export function MapPage() {
       {/* ── Right: device popup drawer ── */}
       <DevicePopup
         vehicleId={popupOpen ? selectedId : null}
+        liveVehicle={popupOpen ? selectedVehicle : null}
         onClose={() => setPopupOpen(false)}
         onShowHistory={() => setMode('history')}
         following={following}

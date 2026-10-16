@@ -41,6 +41,19 @@ export class AlarmStateCache {
     }
   }
 
+  /**
+   * Drop a previously claimed dedup key (e.g. after a failed DB insert) so the
+   * next device-alarm delivery is not black-holed for the whole window.
+   */
+  public async clearDedup(tenantId: string, ruleId: string, vehicleId: string): Promise<void> {
+    const key = `tenant:${tenantId}:alarm_dedup:${ruleId}:${vehicleId}`;
+    try {
+      await this.redis.del(key);
+    } catch {
+      // best-effort
+    }
+  }
+
   // ── FleetEvent idempotency (Sprint G Part 6) ──
 
   /**
