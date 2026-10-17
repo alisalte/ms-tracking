@@ -214,42 +214,10 @@ describe('AdminPage', () => {
     expect(screen.queryByText(active.email)).not.toBeInTheDocument();
   });
 
-  it('switches to the Roles section and renders system + custom roles', async () => {
+  it('sends role and permission management to tenant administration', async () => {
     renderAdmin('/admin?section=roles');
-    await waitFor(() => {
-      expect(screen.getByText(mockRoles[0].name)).toBeInTheDocument();
-    });
-  });
-
-  it('opens the create-role dialog from the custom roles header', async () => {
-    renderAdmin('/admin?section=roles');
-    await waitFor(() => {
-      expect(screen.getByTestId('admin-create-role')).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId('admin-create-role'));
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(screen.getByLabelText('Role name')).toBeInTheDocument();
-    });
-  });
-
-  it('opens the role detail drawer with the permission matrix', async () => {
-    renderAdmin('/admin?section=roles');
-    const role = mockRoles.find((r) => r.isSystem);
-    await waitFor(() => expect(role && screen.getByText(role.name)).toBeTruthy());
-    if (role) fireEvent.click(screen.getByText(role.name));
-
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(screen.getByText('Permission matrix')).toBeInTheDocument();
-    });
-  });
-
-  it('renders the permission catalog on the Permissions section', async () => {
-    renderAdmin('/admin?section=permissions');
-    await waitFor(() => {
-      expect(screen.getByText('Identity & Access')).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId('access-managed-elsewhere')).toBeInTheDocument();
+    expect(screen.queryByTestId('admin-create-role')).not.toBeInTheDocument();
   });
 
   it('renders the settings form on the Settings section', async () => {

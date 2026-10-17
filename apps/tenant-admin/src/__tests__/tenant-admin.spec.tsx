@@ -22,6 +22,27 @@ vi.mock('@/api/tenants', async (importOriginal) => {
       license: null,
     })),
     listTenantUsers: vi.fn(async () => []),
+    listTenantRoles: vi.fn(async () => [
+      {
+        id: 'role-viewer',
+        name: 'viewer',
+        description: '',
+        isSystem: true,
+        permissions: ['fleet.read'],
+        memberCount: 0,
+        mfaRequired: false,
+      },
+    ]),
+    listPermissionCatalog: vi.fn(async () => [
+      {
+        domain: 'fleet',
+        labelKey: 'access.domain.fleet',
+        permissions: ['fleet.read', 'fleet.write'],
+      },
+    ]),
+    createTenantRole: vi.fn(),
+    updateTenantRolePermissions: vi.fn(),
+    setTenantUserRole: vi.fn(),
   };
 });
 

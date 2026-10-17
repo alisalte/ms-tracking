@@ -6,6 +6,7 @@
  * paths is an operator target, not the caller's JWT tenant (INV-I02 still
  * holds for the caller's own session).
  */
+import { randomUUID } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -21,13 +22,14 @@ import {
 import type { Request } from 'express';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import {
+  AssignRoleUseCase,
   ChangeUserStatusUseCase,
   CreateTenantAccessUseCase,
   ProvisionTenantUseCase,
   TenantEntitlementUseCase,
   TenantLifecycleUseCase,
 } from '../../application/index.js';
-import type { Tenant } from '../../domain/index.js';
+import { Role, type Tenant } from '../../domain/index.js';
 import { tenantSettingsPatchSchema } from '../../domain/tenant-settings.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
@@ -44,6 +46,11 @@ import {
   putTenantLicenseSchema,
   putTenantUsageSchema,
 } from '../auth/auth.dto.js';
+import {
+  permissionCatalog,
+  roleView,
+  sanitizeCustomPermissions,
+} from '../iam/permission-catalog.js';
 import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { ZodValidationPipe } from '../shared/zod-validation.pipe.js';
@@ -60,6 +67,7 @@ export class TenantsController {
     private readonly tenants: TenantRepository,
     private readonly users: UserRepository,
     private readonly roles: RoleRepository,
+    private readonly assignRole: AssignRoleUseCase,
   ) {}
 
   /** Provision a new tenant + first admin (platform SaaS-Ops). */
@@ -175,6 +183,7 @@ export class TenantsController {
       password: body.password,
       displayName: body.display_name,
       roleName: body.role_name,
+      roleId: body.role_id,
     });
     return {
       data: {
@@ -193,14 +202,79 @@ export class TenantsController {
   @RequirePermissions('billing.tenant.manage')
   public async listRoles(@Param('id') id: string) {
     await this.requireTenant(id);
-    const roles = await this.roles.list(id);
-    return {
-      data: roles.map((r) => ({
-        id: r.id as string,
-        name: r.name,
-        is_system: r.isSystem,
-      })),
-    };
+    const listed = await this.roles.listWithMemberCounts(id);
+    return { data: listed.map((row) => roleView(row.role, row.memberCount)) };
+  }
+
+  @Get('tenants/:id/permissions')
+  @RequirePermissions('billing.tenant.manage')
+  public async listPermissions(@Param('id') id: string) {
+    await this.requireTenant(id);
+    return { data: permissionCatalog() };
+  }
+
+  @Post('tenants/:id/roles')
+  @RequirePermissions('billing.tenant.manage')
+  public async createRole(
+    @Param('id') id: string,
+    @Body() body: { name?: string; description?: string; permissions?: string[] },
+  ) {
+    await this.requireTenant(id);
+    const name = (body.name ?? '').trim();
+    if (name.length < 2 || name.length > 64) {
+      throw new HttpException('name must be 2–64 characters', HttpStatus.BAD_REQUEST);
+    }
+    const taken = await this.roles.findByName(id, name);
+    if (taken) throw new HttpException('A role with this name already exists', HttpStatus.CONFLICT);
+    const permissions = sanitizeCustomPermissions(body.permissions ?? []);
+    const role = Role.create(randomUUID(), {
+      tenantId: id,
+      name,
+      description: body.description,
+      permissions,
+    });
+    await this.roles.save(role);
+    return { data: roleView(role, 0) };
+  }
+
+  @Put('tenants/:id/roles/:roleId')
+  @RequirePermissions('billing.tenant.manage')
+  public async updateRole(
+    @Param('id') id: string,
+    @Param('roleId') roleId: string,
+    @Body() body: { permissions?: string[] },
+  ) {
+    await this.requireTenant(id);
+    const existing = await this.roles.findById(id, roleId);
+    if (!existing) throw new HttpException('Role not found', HttpStatus.NOT_FOUND);
+    if (existing.isSystem) {
+      throw new HttpException('System roles are immutable', HttpStatus.FORBIDDEN);
+    }
+    const permissions = sanitizeCustomPermissions(body.permissions ?? []);
+    const updated = await this.roles.replacePermissions(id, roleId, permissions);
+    const listed = await this.roles.listWithMemberCounts(id);
+    const memberCount = listed.find((row) => (row.role.id as string) === roleId)?.memberCount ?? 0;
+    return { data: roleView(updated, memberCount) };
+  }
+
+  @Put('tenants/:id/users/:userId/role')
+  @RequirePermissions('billing.tenant.manage')
+  public async setUserRole(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() body: { role_id?: string },
+  ) {
+    await this.requireTenant(id);
+    const roleId = body.role_id ?? '';
+    const role = await this.roles.findById(id, roleId);
+    if (!role) throw new HttpException('Role not found', HttpStatus.NOT_FOUND);
+    const user = await this.users.findById(id, userId);
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    for (const current of user.roles) {
+      if (current !== roleId) await this.users.revokeRole(id, userId, current);
+    }
+    await this.assignRole.execute({ tenantId: id, userId, roleId });
+    return { data: { id: userId, role_id: roleId, role_name: role.name } };
   }
 
   @Patch('tenants/:id/users/:userId/status')

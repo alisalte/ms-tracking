@@ -1841,6 +1841,7 @@
       }
     },
     "roles": {
+      "managedInTenantAdmin": "Roles and permissions are managed in tenant administration for each organisation.",
       "system": "System roles",
       "custom": "Custom roles",
       "permissions": "Permissions",

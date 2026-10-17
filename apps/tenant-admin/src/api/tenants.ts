@@ -163,10 +163,92 @@ export async function createTenantUser(
     username: string;
     password: string;
     display_name?: string;
-    role_name: 'tenant-admin' | 'fleet-admin' | 'viewer';
+    role_name?: 'tenant-admin' | 'fleet-admin' | 'viewer';
+    role_id?: string;
   },
 ): Promise<void> {
   await api.post(`/tenants/${tenantId}/users`, input);
+}
+
+export interface TenantRole {
+  id: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  permissions: string[];
+  memberCount: number;
+  mfaRequired: boolean;
+}
+
+export interface PermissionGroup {
+  domain: string;
+  labelKey: string;
+  permissions: string[];
+}
+
+interface RoleWire {
+  id: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  permission_keys?: string[];
+  member_count?: number;
+  mfa_required?: boolean;
+}
+
+function toRole(row: RoleWire): TenantRole {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? '',
+    isSystem: row.is_system,
+    permissions: row.permission_keys ?? [],
+    memberCount: row.member_count ?? 0,
+    mfaRequired: row.mfa_required ?? false,
+  };
+}
+
+export async function listTenantRoles(tenantId: string): Promise<TenantRole[]> {
+  const { data } = await api.get<{ data: RoleWire[] }>(`/tenants/${tenantId}/roles`);
+  return data.data.map(toRole);
+}
+
+export async function listPermissionCatalog(tenantId: string): Promise<PermissionGroup[]> {
+  const { data } = await api.get<{
+    data: Array<{ domain: string; label_key: string; permissions: string[] }>;
+  }>(`/tenants/${tenantId}/permissions`);
+  return data.data.map((group) => ({
+    domain: group.domain,
+    labelKey: group.label_key,
+    permissions: group.permissions,
+  }));
+}
+
+export async function createTenantRole(
+  tenantId: string,
+  input: { name: string; description?: string },
+): Promise<TenantRole> {
+  const { data } = await api.post<{ data: RoleWire }>(`/tenants/${tenantId}/roles`, input);
+  return toRole(data.data);
+}
+
+export async function updateTenantRolePermissions(
+  tenantId: string,
+  roleId: string,
+  permissions: string[],
+): Promise<TenantRole> {
+  const { data } = await api.put<{ data: RoleWire }>(`/tenants/${tenantId}/roles/${roleId}`, {
+    permissions,
+  });
+  return toRole(data.data);
+}
+
+export async function setTenantUserRole(
+  tenantId: string,
+  userId: string,
+  roleId: string,
+): Promise<void> {
+  await api.put(`/tenants/${tenantId}/users/${userId}/role`, { role_id: roleId });
 }
 
 export async function setTenantUserStatus(

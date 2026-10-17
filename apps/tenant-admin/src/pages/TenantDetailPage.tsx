@@ -1,5 +1,5 @@
 import { FileText } from 'lucide-react';
-import { type FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 
@@ -9,37 +9,24 @@ import {
   type LicensePlanCode,
   type TenantLicense,
   type TenantRow,
-  type TenantUser,
-  createTenantUser,
   getTenant,
-  listTenantUsers,
-  setTenantUserStatus,
   updateTenantLicense,
   updateTenantUsage,
 } from '@/api/tenants';
 import { EmptyState } from '@/components/EmptyState';
 import { QuotaMeterCard } from '@/components/QuotaMeter';
+import { TenantAccessPanel } from '@/components/TenantAccessPanel';
 import { TenantFleetsPanel } from '@/components/TenantFleetsPanel';
 import { PLAN_CODES, bytesToGib, gibToBytes, isoDateOnly } from '@/lib/license';
 import { formatMoney } from '@/lib/money';
-
-const ROLES = ['tenant-admin', 'fleet-admin', 'viewer'] as const;
 
 export function TenantDetailPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [tenant, setTenant] = useState<TenantRow | null>(null);
-  const [users, setUsers] = useState<TenantUser[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<(typeof ROLES)[number]>('viewer');
-  const [busy, setBusy] = useState(false);
   const [licenseBusy, setLicenseBusy] = useState(false);
   const [usageBusy, setUsageBusy] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
@@ -50,13 +37,8 @@ export function TenantDetailPage() {
     if (!id) return;
     setError(null);
     try {
-      const [tnt, list, inv] = await Promise.all([
-        getTenant(id),
-        listTenantUsers(id),
-        listInvoices(id),
-      ]);
+      const [tnt, inv] = await Promise.all([getTenant(id), listInvoices(id)]);
       setTenant(tnt);
-      setUsers(list);
       setInvoices(inv);
     } catch (err) {
       setError(apiMessage(err));
@@ -67,33 +49,6 @@ export function TenantDetailPage() {
   useEffect(() => {
     void reload();
   }, [id]);
-
-  const onCreate = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!id) return;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      await createTenantUser(id, {
-        email: email.trim(),
-        username: username.trim(),
-        password,
-        display_name: displayName.trim() || undefined,
-        role_name: role,
-      });
-      setEmail('');
-      setUsername('');
-      setPassword('');
-      setDisplayName('');
-      setNotice(t('detail.userCreated'));
-      await reload();
-    } catch (err) {
-      setError(apiMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const [tab, setTab] = useState<'overview' | 'rates' | 'invoices' | 'fleets' | 'access'>(
     'overview',
@@ -309,110 +264,7 @@ export function TenantDetailPage() {
 
       {tab === 'fleets' && <TenantFleetsPanel tenantId={id} />}
 
-      {tab === 'access' && (
-        <>
-          <section className="rounded-xl border border-stone-200 bg-white p-4">
-            <h2 className="text-sm font-semibold">{t('detail.addUser')}</h2>
-            <form onSubmit={onCreate} className="mt-4 grid gap-3 sm:grid-cols-2">
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder={t('detail.email')}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder={t('detail.username')}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                minLength={3}
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder={t('detail.password')}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={12}
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder={t('detail.displayName')}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={role}
-                onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {t(`roles.${r}`)}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {busy ? t('common.loading') : t('detail.submitUser')}
-              </button>
-            </form>
-          </section>
-
-          <section className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <h2 className="px-4 pt-4 font-semibold">{t('detail.users')}</h2>
-            <table className="mt-2 w-full text-sm">
-              <thead className="text-start text-slate-500">
-                <tr>
-                  <th className="px-4 py-2 font-medium">{t('detail.email')}</th>
-                  <th className="px-4 py-2 font-medium">{t('detail.username')}</th>
-                  <th className="px-4 py-2 font-medium">{t('detail.role')}</th>
-                  <th className="px-4 py-2 font-medium">{t('detail.status')}</th>
-                  <th className="px-4 py-2 font-medium">{t('tenants.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">{u.email}</td>
-                    <td className="px-4 py-2">{u.username}</td>
-                    <td className="px-4 py-2">{u.roles.join(', ') || '—'}</td>
-                    <td className="px-4 py-2">{u.status}</td>
-                    <td className="px-4 py-2">
-                      {u.status === 'ACTIVE' ? (
-                        <button
-                          type="button"
-                          className="text-amber-700"
-                          onClick={() =>
-                            void setTenantUserStatus(id, u.id, 'suspended').then(reload)
-                          }
-                        >
-                          {t('detail.suspendUser')}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-emerald-700"
-                          onClick={() => void setTenantUserStatus(id, u.id, 'active').then(reload)}
-                        >
-                          {t('detail.activateUser')}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </>
-      )}
+      {tab === 'access' && <TenantAccessPanel tenantId={id} />}
     </div>
   );
 }

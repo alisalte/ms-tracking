@@ -107,6 +107,7 @@ export type GenerateInvoiceDto = z.infer<typeof generateInvoiceSchema>;
 
 export const createTenantAccessSchema = createUserSchema.extend({
   role_name: z.enum(['tenant-admin', 'fleet-admin', 'viewer']).default('viewer'),
+  role_id: z.string().uuid().optional(),
 });
 export type CreateTenantAccessDto = z.infer<typeof createTenantAccessSchema>;
 
