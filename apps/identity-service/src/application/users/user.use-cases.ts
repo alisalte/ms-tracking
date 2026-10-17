@@ -9,6 +9,7 @@ import {
   NotFoundError,
   type User,
   UsernameTakenError,
+  normalizeEmail,
 } from '../../domain/index.js';
 import { User as UserClass } from '../../domain/index.js';
 import { assertPasswordPolicy } from '../../domain/password-policy.js';
@@ -62,8 +63,9 @@ export class CreateUserUseCase {
     assertPasswordPolicy(input.password, this.policy);
     await this.entitlements.assertCanCreate(input.tenantId, 'users');
 
+    const email = normalizeEmail(input.email);
     // INV-IAM-01 (email unique per tenant) + INV-IAM-02 (username unique platform).
-    const existingEmail = await this.users.findByEmail(input.tenantId, input.email);
+    const existingEmail = await this.users.findByEmail(input.tenantId, email);
     if (existingEmail) throw new EmailAlreadyUsedError();
     const existingUsername = await this.users.findByUsername(input.username);
     if (existingUsername) throw new UsernameTakenError();
@@ -74,7 +76,7 @@ export class CreateUserUseCase {
       randomUUID(),
       {
         tenantId: input.tenantId,
-        email: input.email,
+        email,
         username: input.username,
         passwordHash: hash,
         displayName: input.displayName ?? null,
@@ -95,9 +97,10 @@ export class UpdateUserUseCase {
     const user = await this.users.findById(input.tenantId, input.userId);
     if (!user) throw new NotFoundError('User');
     if (input.email) {
-      const clash = await this.users.findByEmail(input.tenantId, input.email);
+      const email = normalizeEmail(input.email);
+      const clash = await this.users.findByEmail(input.tenantId, email);
       if (clash && (clash.id as string) !== input.userId) throw new EmailAlreadyUsedError();
-      user.changeEmail(input.email);
+      user.changeEmail(email);
     }
     // Re-save: no domain events for a plain profile edit; use an empty context.
     await this.users.save(user, buildEventContext(input.tenantId, 'user'));

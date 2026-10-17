@@ -2,6 +2,7 @@
   "auth": {
     "login": "ورود",
     "email": "ایمیل",
+    "identifier": "ایمیل یا نام کاربری",
     "password": "رمز عبور",
     "tenantId": "سازمان",
     "loggingIn": "در حال ورود...",

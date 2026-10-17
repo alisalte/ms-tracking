@@ -16,7 +16,13 @@ import {
   updateTenantRolePermissions,
 } from '@/api/tenants';
 
-export function TenantAccessPanel({ tenantId }: { tenantId: string }) {
+export function TenantAccessPanel({
+  tenantId,
+  tenantName,
+}: {
+  tenantId: string;
+  tenantName: string;
+}) {
   const { t } = useTranslation();
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [roles, setRoles] = useState<TenantRole[]>([]);
@@ -76,9 +82,11 @@ export function TenantAccessPanel({ tenantId }: { tenantId: string }) {
     setError(null);
     setNotice(null);
     try {
+      const mailbox = email.trim().toLowerCase();
+      const handle = username.trim();
       await createTenantUser(tenantId, {
-        email: email.trim(),
-        username: username.trim(),
+        email: mailbox,
+        username: handle,
         password,
         display_name: displayName.trim() || undefined,
         role_id: roleId,
@@ -87,7 +95,13 @@ export function TenantAccessPanel({ tenantId }: { tenantId: string }) {
       setUsername('');
       setPassword('');
       setDisplayName('');
-      setNotice(t('detail.userCreated'));
+      setNotice(
+        t('detail.userCreated', {
+          tenant: tenantName,
+          email: mailbox,
+          username: handle,
+        }),
+      );
       await reload();
     } catch (err) {
       setError(apiMessage(err));
@@ -157,6 +171,11 @@ export function TenantAccessPanel({ tenantId }: { tenantId: string }) {
 
       <section className="rounded-xl border border-stone-200 bg-white p-4">
         <h2 className="text-sm font-semibold">{t('detail.addUser')}</h2>
+        {tenantName && (
+          <p className="mt-1 text-sm text-slate-600">
+            {t('access.loginHint', { tenant: tenantName })}
+          </p>
+        )}
         <form onSubmit={onCreateUser} className="mt-4 grid gap-3 sm:grid-cols-2">
           <input
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"

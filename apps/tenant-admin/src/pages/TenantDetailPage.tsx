@@ -264,7 +264,7 @@ export function TenantDetailPage() {
 
       {tab === 'fleets' && <TenantFleetsPanel tenantId={id} />}
 
-      {tab === 'access' && <TenantAccessPanel tenantId={id} />}
+      {tab === 'access' && <TenantAccessPanel tenantId={id} tenantName={tenant?.name ?? ''} />}
     </div>
   );
 }

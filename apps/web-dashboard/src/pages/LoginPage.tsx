@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { PasswordTextField } from '@/components/form/PasswordTextField';
 import { Alert, Button, Card, Checkbox, Input } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
-import { emailSchema } from '@/lib/validation';
 
 /**
  * LoginPage — TailAdmin sign-in (Phase 3).
@@ -21,7 +20,7 @@ import { emailSchema } from '@/lib/validation';
  */
 const loginSchema = z.object({
   tenantId: z.string().trim().min(1, { message: 'validation.tenantId.required' }),
-  email: emailSchema,
+  email: z.string().trim().min(1, { message: 'validation.email.required' }),
   password: z.string().min(1, { message: 'validation.password.required' }),
   rememberDevice: z.boolean(),
 });
@@ -113,9 +112,9 @@ export function LoginPage() {
               {...field}
               value={field.value ?? ''}
               id="email"
-              type="email"
-              label={t('auth.email')}
-              autoComplete="off"
+              type="text"
+              label={t('auth.identifier')}
+              autoComplete="username"
               disabled={isLoading}
               error={errors.email ? t(errors.email.message ?? '') : null}
             />
