@@ -107,8 +107,7 @@ export function VideoWallPage() {
   );
 
   // Assign a channel to the first empty slot (click-to-add from dock/table).
-  // If it's already on the wall (often blocked behind another MDVR camera),
-  // steal the device's one RTMP slot so this camera goes live.
+  // If it's already on the wall, nudge that camera to (re)send AB2.
   const pickChannel = useCallback((channel: CameraChannel) => {
     setTab('wall');
     if (channel.imei && channel.logicalChannel) {

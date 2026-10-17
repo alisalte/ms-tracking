@@ -83,7 +83,17 @@ PUBLIC_ORIGIN=http://203.0.113.10:8080
 PUBLIC_ORIGIN=https://fleet.example.com
 ```
 
-Open firewall: `8080/tcp` (UI), `5023/tcp` (trackers), `6182/tcp` (MDVR dialback). Put TLS in front (Caddy/nginx) if you have a domain; then set `PUBLIC_ORIGIN=https://…` and proxy to `127.0.0.1:8080`.
+Open firewall (device-facing ports must be reachable from the vehicle cellular network):
+
+| Port | Role |
+|---|---|
+| `8080/tcp` | Dashboard / API (or put TLS in front and proxy here) |
+| `5023/tcp` | Meitrack GPRS (platform default) |
+| `6180/tcp` | Meitrack GPRS (MD300 / Meitrack-tools default) |
+| `1935/tcp` | MediaMTX RTMP ingest after AB2 — **required for live video** |
+| `6182/tcp` | Legacy MDVR dialback (A9A); keep open only if you still use it |
+
+Without `1935/tcp`, AB2 reaches `SENT` but HLS playlists stay HTTP 204 forever (no publisher). Put TLS in front (Caddy/nginx) if you have a domain; then set `PUBLIC_ORIGIN=https://…` and proxy to `127.0.0.1:8080`.
 
 First deploy can be local on the server (no CD yet):
 
