@@ -10,6 +10,7 @@ import { AlertTriangle, Eraser, LayoutGrid, Maximize, Pause, Pin, Play, Save } f
 import { useTranslation } from 'react-i18next';
 
 import { IconButton, Tooltip } from '@/components/tailwind-ui';
+import { useMdvrLiveResolution } from '@/hooks/useMdvrLiveResolution';
 import type { VideoWall, WallDivision } from '@/types/video.types';
 import { WALL_DIVISIONS } from '@/types/video.types';
 
@@ -67,6 +68,7 @@ export function WallToolbar({
   onClearWall,
 }: WallToolbarProps) {
   const { t } = useTranslation();
+  const [resolution, setResolution] = useMdvrLiveResolution();
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-graydark-300">
@@ -106,6 +108,20 @@ export function WallToolbar({
           </span>
         </Tooltip>
       )}
+
+      <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-graydark-700">
+        <span>{t('video.resolution.label')}</span>
+        <select
+          value={resolution}
+          onChange={(e) => setResolution(e.target.value === 'high' ? 'high' : 'low')}
+          aria-label={t('video.resolution.label')}
+          data-testid="video-resolution"
+          className="h-8 cursor-pointer rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+        >
+          <option value="low">{t('video.resolution.low')}</option>
+          <option value="high">{t('video.resolution.high')}</option>
+        </select>
+      </label>
 
       <div className="mx-0.5 h-6 w-px bg-gray-200 dark:bg-white/10" />
 

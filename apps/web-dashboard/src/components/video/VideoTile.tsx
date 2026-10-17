@@ -39,11 +39,16 @@ import { Dropdown, DropdownItem, Spinner, Tooltip } from '@/components/tailwind-
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { LiveVideoPlayer } from '@/components/video/LiveVideoPlayer';
 import { useStreamSession } from '@/components/video/useStreamSession';
+import { useMdvrLiveResolution } from '@/hooks/useMdvrLiveResolution';
+import type { MdvrLiveResolution } from '@/lib/mdvr-live-resolution';
 import { toggleFullscreen } from '@/lib/video-stream';
 import type { CameraChannel, StreamQuality } from '@/types/video.types';
 
-/** Quality menu options (10 §2.3 table). */
+/** Quality menu options (10 §2.3 table) — mock / non-MDVR tiles. */
 const QUALITIES: StreamQuality[] = ['auto', 'high', 'medium', 'low', 'audio-only'];
+
+/** Real MDVR pushes: main stream vs sub stream. */
+const MDVR_RESOLUTIONS: MdvrLiveResolution[] = ['low', 'high'];
 
 /** Signal indicator dot color. */
 function signalColor(signal: 'good' | 'fair' | 'poor' | undefined): string {
@@ -89,6 +94,8 @@ export function VideoTile({
 
   const [muted, setMuted] = useState(true);
   const [quality, setQuality] = useState<StreamQuality>('auto');
+  const [resolution, setResolution] = useMdvrLiveResolution();
+  const mdvrTile = channel?.protocol === 'MEITRACK_MDVR';
 
   // The session hook stays mounted; for non-live/queued tiles we pass null so
   // it tears down and frees the canvas resource.
@@ -256,21 +263,28 @@ export function VideoTile({
             </TileControl>
             {/* Quality menu */}
             <Dropdown
-              aria-label={t('video.tile.quality')}
+              aria-label={mdvrTile ? t('video.resolution.label') : t('video.tile.quality')}
               trigger={<Settings2 size={15} aria-hidden />}
               triggerClassName="inline-flex size-[26px] items-center justify-center rounded-md bg-black/40 text-gray-200 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 cursor-pointer border-none"
             >
-              {QUALITIES.map((q) => (
-                <DropdownItem
-                  key={q}
-                  onClick={() => {
-                    setQuality(q);
-                    changeQuality(q);
-                  }}
-                >
-                  {t(`video.quality.${q}`)}
-                </DropdownItem>
-              ))}
+              {mdvrTile
+                ? MDVR_RESOLUTIONS.map((r) => (
+                    <DropdownItem key={r} onClick={() => setResolution(r)}>
+                      {t(`video.resolution.${r}`)}
+                      {resolution === r ? ' ✓' : ''}
+                    </DropdownItem>
+                  ))
+                : QUALITIES.map((q) => (
+                    <DropdownItem
+                      key={q}
+                      onClick={() => {
+                        setQuality(q);
+                        changeQuality(q);
+                      }}
+                    >
+                      {t(`video.quality.${q}`)}
+                    </DropdownItem>
+                  ))}
             </Dropdown>
             {onTogglePin && (
               <TileControl title={t('video.tile.spotlight')} onClick={onTogglePin} active={pinned}>

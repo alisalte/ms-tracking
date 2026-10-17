@@ -269,6 +269,7 @@ describe('CommandCenterPage', () => {
     expect(screen.getByRole('heading', { name: /media settings/i })).toBeInTheDocument();
     expect(screen.getByTestId('device-parameter-media-apply')).toBeInTheDocument();
     expect(screen.getByLabelText(/speaker volume/i)).toBeInTheDocument();
+    expect(screen.getByTestId('device-parameter-media-resolution')).toHaveValue('low');
   });
 
   it('opens Parameter AI / C90 section for Meitrack protocol', () => {
