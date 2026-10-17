@@ -47,3 +47,24 @@ export function saveMdvrLiveResolution(value: MdvrLiveResolution): void {
 export function mdvrStreamTypeForResolution(resolution: MdvrLiveResolution): '0' | '1' {
   return resolution === 'high' ? '0' : '1';
 }
+
+/**
+ * How long to wait for the sub-stream RTMP publisher before asking for the
+ * main stream. Some units have the sub stream disabled; they ACK AB2 and
+ * then never push, so the wall stays on HTTP 204 until this fallback.
+ */
+export const MDVR_SUBSTREAM_FALLBACK_MS = 25_000;
+
+/**
+ * `null` means keep waiting. `'0'` means the sub stream did not publish and
+ * the wall should send one main-stream AB2.
+ */
+export function mdvrSubStreamFallback(
+  requested: '0' | '1',
+  ingestLive: boolean,
+  elapsedMs: number,
+): '0' | null {
+  if (requested !== '1' || ingestLive) return null;
+  if (elapsedMs < MDVR_SUBSTREAM_FALLBACK_MS) return null;
+  return '0';
+}

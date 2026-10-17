@@ -99,6 +99,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
   private tcpServer: TcpServer | null = null;
   private udpServer: UdpServer | null = null;
   private sweepTimer: NodeJS.Timeout | null = null;
+  private heldTimer: NodeJS.Timeout | null = null;
 
   public static forRoot(config: DeviceGatewayConfig) {
     const instanceId = `pod-${randomUUID()}`;
@@ -296,6 +297,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
     @Inject('REGISTRY_INVALIDATION_SUBSCRIBER')
     private readonly invalidationSubscriber: RegistryInvalidationSubscriber,
     @Inject(METRICS_TOKEN) private readonly metrics: TelemetryMetrics,
+    @Inject(COMMAND_DISPATCHER) private readonly commands: CommandDispatcher,
   ) {}
 
   /** Open the configured TCP/UDP listeners once the DI graph is ready. */
@@ -395,6 +397,14 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
         })
         .catch((err) => this.logger.warn(`Sweep error: ${(err as Error).message}`));
     }, sweepMs);
+    // Held AB2/AB3 are otherwise flushed only when a packet arrives. A unit
+    // that is already authenticated but quiet would leave the command QUEUED.
+    this.heldTimer = setInterval(() => {
+      void this.commands.sweepHeld().catch((err) => {
+        this.logger.warn(`Held-command sweep error: ${(err as Error).message}`);
+      });
+    }, 5_000);
+    this.heldTimer.unref?.();
     // Don't keep the process alive on the sweeper alone (graceful exit).
     this.sweepTimer.unref?.();
   }
@@ -408,6 +418,10 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
     if (this.sweepTimer) {
       clearInterval(this.sweepTimer);
       this.sweepTimer = null;
+    }
+    if (this.heldTimer) {
+      clearInterval(this.heldTimer);
+      this.heldTimer = null;
     }
     await Promise.allSettled([this.tcpServer?.stopAll(), this.udpServer?.stopAll()]);
     await this.sessions.closeAll('SHUTDOWN').catch((err) => {

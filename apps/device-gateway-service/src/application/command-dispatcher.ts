@@ -93,6 +93,42 @@ const HOLD_WHEN_OFFLINE = new Set([
 /** Match fleet-management max command TTL (600s) so A10 locate survives until GPRS. */
 const HOLD_TTL_MS = 600_000;
 
+function isLiveStart(code: string): boolean {
+  return code === 'AB2' || code === 'A9A';
+}
+
+function isLiveControl(code: string): boolean {
+  return isLiveStart(code) || code === 'AB3' || code === 'A9B';
+}
+
+/**
+ * Camera number inside an AB2/AB3 (or A9A/A9B) body.
+ * AB2 is `AB2,` + url length + url + channel. AB3 is `AB3,` + channel.
+ * Unknown bodies share one bucket so the old single-stream behaviour holds.
+ */
+function mediaChannel(request: DeviceCommandRequest): string {
+  const hex = request.payloadHex;
+  if (!hex) return '*';
+  const buf = Buffer.from(hex, 'hex');
+  const comma = buf.indexOf(0x2c);
+  if (comma < 0) return '*';
+  const code = buf.subarray(0, comma).toString('ascii');
+  if (code === 'AB3' || code === 'A9B') {
+    const channel = buf[comma + 1];
+    return channel === undefined ? '*' : String(channel);
+  }
+  if (code === 'AB2' || code === 'A9A') {
+    const urlLen = buf[comma + 1];
+    const channel = urlLen === undefined ? undefined : buf[comma + 2 + urlLen];
+    // A body that is not the length-prefixed struct (tests, or a truncated
+    // frame) must not share a bucket with a different payload — that would
+    // drop one of the two cameras.
+    if (channel === undefined) return request.payloadHex ?? request.commandId;
+    return String(channel);
+  }
+  return '*';
+}
+
 interface HeldCommand {
   readonly request: DeviceCommandRequest;
   readonly heldAt: number;
@@ -181,34 +217,65 @@ export class CommandDispatcher {
       }
       return true;
     });
-    for (const held of this.commandsToFlush(live)) {
+    const { send, drop } = this.partitionHeld(live);
+    for (const dropped of drop) {
+      this.logger.log(
+        `Superseded held ${dropped.request.commandCode} (${dropped.request.commandId}) for device ${deviceId}.`,
+      );
+      await this.reject(dropped.request, 'SUPERSEDED');
+    }
+    for (const held of send) {
       await this.dispatch(held.request);
     }
   }
 
   /**
-   * Opening the video wall holds AB2; leaving it holds AB3. Flushing both would
-   * start the stream and immediately stop it. Keep the latest intent: if the
-   * newest held command is AB3, only stops go out; otherwise only starts.
+   * Write held commands whose device already has an authenticated socket.
+   *
+   * flushHeld used to run only on the packet that performed login. A command
+   * that arrived a moment later (or was held because the session index was not
+   * ready yet) stayed queued until the unit dialled in again — the dashboard
+   * then reported "GPRS socket is not AUTHENTICATED" for the whole wait.
    */
-  private commandsToFlush(held: HeldCommand[]): HeldCommand[] {
-    if (held.length === 0) return held;
-    const latest = held.reduce((best, cur) => (cur.heldAt >= best.heldAt ? cur : best));
-    const starts = held.filter((h) => h.request.commandCode === 'AB2');
-    const stops = held.filter((h) => h.request.commandCode === 'AB3');
-    if (starts.length > 0 && stops.length > 0) {
-      if (latest.request.commandCode === 'AB3') {
-        this.logger.log(
-          `Skipping ${starts.length} held AB2 — latest command is AB3 (${latest.request.commandId}).`,
-        );
-        return stops;
-      }
-      this.logger.log(
-        `Skipping ${stops.length} held AB3 — latest command is AB2 (${latest.request.commandId}).`,
-      );
-      return starts;
+  public async sweepHeld(): Promise<void> {
+    for (const deviceId of [...this.held.keys()]) {
+      const session = this.sessions.byDeviceId(deviceId);
+      if (!session?.canDispatchCommand()) continue;
+      await this.flushHeld(deviceId);
     }
-    return held;
+  }
+
+  /**
+   * Opening the video wall holds AB2; leaving it holds AB3. Flushing both for
+   * the SAME camera would start the stream and immediately stop it. Intent is
+   * per camera: a stop for channel 1 must not drop a start for channel 2, or
+   * that camera's AB2 stays QUEUED forever and never reaches the unit.
+   */
+  private partitionHeld(held: HeldCommand[]): { send: HeldCommand[]; drop: HeldCommand[] } {
+    const send: HeldCommand[] = [];
+    const drop: HeldCommand[] = [];
+    const byChannel = new Map<string, HeldCommand[]>();
+    for (const item of held) {
+      if (!isLiveControl(item.request.commandCode)) {
+        send.push(item);
+        continue;
+      }
+      const key = mediaChannel(item.request);
+      const group = byChannel.get(key);
+      if (group) group.push(item);
+      else byChannel.set(key, [item]);
+    }
+    for (const group of byChannel.values()) {
+      const latest = group.reduce((best, cur) => (cur.heldAt >= best.heldAt ? cur : best));
+      const keepStart = isLiveStart(latest.request.commandCode);
+      const matching = group.filter((item) => isLiveStart(item.request.commandCode) === keepStart);
+      const newest = matching.reduce((best, cur) => (cur.heldAt >= best.heldAt ? cur : best));
+      send.push(newest);
+      for (const item of group) {
+        if (item !== newest) drop.push(item);
+      }
+    }
+    return { send, drop };
   }
 
   private encode(

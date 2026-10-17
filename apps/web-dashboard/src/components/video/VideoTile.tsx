@@ -107,6 +107,7 @@ export function VideoTile({
     mode,
     streamKind,
     blockedByChannel,
+    commandHeld,
     setQuality: changeQuality,
     switchToThis,
     onPlayerReady,
@@ -206,7 +207,13 @@ export function VideoTile({
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <Spinner
               size={compact ? 'sm' : 'lg'}
-              label={mode === 'mdvr' ? t('video.tile.waitingDevice') : t('common.loading')}
+              label={
+                mode === 'mdvr'
+                  ? commandHeld
+                    ? t('video.tile.commandHeld')
+                    : t('video.tile.waitingDevice')
+                  : t('common.loading')
+              }
             />
           </div>
         )}

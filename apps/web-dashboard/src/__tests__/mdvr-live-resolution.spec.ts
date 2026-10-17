@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_MDVR_LIVE_RESOLUTION,
   MDVR_LIVE_RESOLUTION_EVENT,
+  MDVR_SUBSTREAM_FALLBACK_MS,
   loadMdvrLiveResolution,
   mdvrStreamTypeForResolution,
+  mdvrSubStreamFallback,
   saveMdvrLiveResolution,
 } from '@/lib/mdvr-live-resolution';
 
@@ -29,5 +31,12 @@ describe('mdvr live resolution', () => {
     expect(loadMdvrLiveResolution()).toBe('high');
     expect(fired).toBe(1);
     window.removeEventListener(MDVR_LIVE_RESOLUTION_EVENT, onChange);
+  });
+
+  it('asks for the main stream when the sub stream never publishes', () => {
+    expect(mdvrSubStreamFallback('1', false, MDVR_SUBSTREAM_FALLBACK_MS - 1)).toBeNull();
+    expect(mdvrSubStreamFallback('1', true, MDVR_SUBSTREAM_FALLBACK_MS)).toBeNull();
+    expect(mdvrSubStreamFallback('0', false, MDVR_SUBSTREAM_FALLBACK_MS)).toBeNull();
+    expect(mdvrSubStreamFallback('1', false, MDVR_SUBSTREAM_FALLBACK_MS)).toBe('0');
   });
 });

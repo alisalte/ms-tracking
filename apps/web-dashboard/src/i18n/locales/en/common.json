@@ -710,6 +710,7 @@
       "queued": "Queued",
       "clickToPromote": "Click to view live",
       "waitingDevice": "Waiting for MDVR GPRS / RTMP…",
+      "commandHeld": "This device is not connected to the gateway. Live video starts when it dials in.",
       "channelBusy": "Camera {{channel}} is live on this device — it can only push one channel at a time",
       "clickToSwitch": "Click to view this camera",
       "snapshot": "Snapshot",
