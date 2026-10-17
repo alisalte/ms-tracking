@@ -22,7 +22,11 @@ import {
   type User,
 } from '../../domain/index.js';
 import { RefreshTokenFamily } from '../../domain/refresh-token-family.js';
-import type { RateLimiterStore, SessionStore } from '../../infrastructure/cache/session-store.js';
+import type {
+  RateLimiterStore,
+  RevocationStore,
+  SessionStore,
+} from '../../infrastructure/cache/session-store.js';
 import type { AuthRepository } from '../../infrastructure/persistence/auth.repository.js';
 import type { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 import type { TenantRepository } from '../../infrastructure/persistence/tenant.repository.js';
@@ -80,6 +84,7 @@ export class LoginUseCase {
     private readonly rateLimiter: RateLimiterStore,
     private readonly roles: RoleRepository,
     private readonly entitlements: TenantEntitlementUseCase,
+    private readonly revocation: RevocationStore,
     private readonly config: LoginConfig,
   ) {}
 
@@ -129,11 +134,22 @@ export class LoginUseCase {
       throw new InvalidCredentialsError();
     }
 
+    // A suspended or deactivated account must not receive a session. Role
+    // assignment revokes outstanding tokens; that watermark must not also
+    // reject the password check for an active user.
+    if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
+      throw new AccountLockedError();
+    }
+
     // 6. Issue tokens + create session + start refresh family.
+    // The iat is strictly after any user-level revocation watermark so a
+    // tenant-admin granted moments ago can sign in immediately. Tokens issued
+    // before the watermark stay rejected.
     const sessionId = randomUUID();
     const refreshFamilyId = randomUUID();
     const claims = await this.claims(user, tenant, sessionId);
-    const issued = await this.tokens.issuePair(claims, sessionId);
+    const issuedAt = await this.revocation.issuedAtForNewSession(user.id as string);
+    const issued = await this.tokens.issuePair(claims, sessionId, issuedAt);
     const family = RefreshTokenFamily.start(
       refreshFamilyId,
       {

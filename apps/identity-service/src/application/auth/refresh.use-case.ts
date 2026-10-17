@@ -53,9 +53,11 @@ export class RefreshTokenUseCase {
     await this.entitlements.assertRefreshAllowed(family.tenantId);
 
     const ctx = buildEventContext(family.tenantId, 'refresh_token_family', input.correlationId);
+    const issuedAt = await this.revocation.issuedAtForNewSession(family.userId);
     const newIssued = await this.tokens.issuePair(
       await this.claimsFor(family.userId, family.tenantId, family.sessionId),
       family.sessionId,
+      issuedAt,
     );
 
     const result = family.consume(

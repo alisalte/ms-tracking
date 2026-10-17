@@ -40,6 +40,7 @@ describe('login identifier', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
       {
         accessTtlSeconds: 60,
         refreshTtlSeconds: 60,
@@ -70,6 +71,7 @@ describe('login identifier', () => {
     const users = { findByEmail, findByUsernameInTenant } as unknown as UserRepository;
     const login = new LoginUseCase(
       users,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

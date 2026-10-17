@@ -51,7 +51,7 @@ export class JwtAuthGuard implements CanActivate {
 
     // Revocation check is optional; when wired, fail-closed on a revoked jti.
     if (this.deps.revocation) {
-      if (await this.deps.revocation.isRevoked(claims.jti, claims.sub)) {
+      if (await this.deps.revocation.isRevoked(claims.jti, claims.sub, claims.iat)) {
         throw new UnauthorizedException('Token is invalid or expired.');
       }
     }
