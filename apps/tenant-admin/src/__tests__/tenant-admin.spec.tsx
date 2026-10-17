@@ -2,7 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { assignImeisToFleet, listInbox } from '@/api/platform-assets';
+import {
+  assignImeisToFleet,
+  clearDevicesFromFleet,
+  listInbox,
+  listTenantDevices,
+} from '@/api/platform-assets';
 import { addDaysIso } from '@/lib/license';
 import { canManageTenants } from '@/lib/session';
 import { LoginPage } from '@/pages/LoginPage';
@@ -78,6 +83,7 @@ vi.mock('@/api/platform-assets', () => ({
   lookupImei: vi.fn(),
   claimDevice: vi.fn(),
   assignImeisToFleet: vi.fn(async () => ({ fleetId: 'fleet-1', assigned: [], failed: [] })),
+  clearDevicesFromFleet: vi.fn(async () => ({ cleared: [], failed: [] })),
 }));
 
 vi.mock('@/api/billing', async (importOriginal) => {
@@ -232,5 +238,40 @@ describe('tenant detail tabs', () => {
       }),
     );
     expect(await screen.findByText(/2 دستگاه به ناوگان|2 devices assigned/)).toBeInTheDocument();
+  });
+
+  it('removes a device from its fleet so it can join another one', async () => {
+    vi.mocked(listTenantDevices).mockResolvedValueOnce([
+      {
+        id: 'dev-1',
+        imei: '490154203237518',
+        serialNumber: null,
+        manufacturer: null,
+        model: null,
+        protocol: 'meitrack',
+        status: 'ACTIVE',
+        vehicleId: 'veh-1',
+        fleetId: 'fleet-1',
+        fleetName: 'North',
+        fleetCode: 'NORTH',
+      },
+    ]);
+    vi.mocked(clearDevicesFromFleet).mockResolvedValue({
+      cleared: [{ deviceId: 'dev-1', cleared: true }],
+      failed: [],
+    });
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /ناوگان|Fleets/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /برداشتن از ناوگان|Remove from fleet/i }),
+    );
+    await waitFor(() => expect(clearDevicesFromFleet).toHaveBeenCalledWith('t1', ['dev-1']));
+    expect(await screen.findByText(/1 دستگاه از ناوگان|1 devices removed/)).toBeInTheDocument();
   });
 });

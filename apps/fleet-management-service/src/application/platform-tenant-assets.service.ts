@@ -259,6 +259,45 @@ export class PlatformTenantAssetsService {
     return assignment(device.id, vehicleId, fleet, true);
   }
 
+  /**
+   * Take devices off their fleet. Each device is unbound from its vehicle, so
+   * it shows up again in the unassigned IMEI list and can join another fleet.
+   * A vehicle left with no devices is archived.
+   */
+  public async clearDevicesFromFleet(ctx: ActorContext, deviceIds: readonly string[]) {
+    const unique = [...new Set(deviceIds.map((id) => id.trim()).filter((id) => id.length > 0))];
+    if (unique.length === 0) throw new BadRequestException('Select at least one device.');
+    const cleared: Array<{ deviceId: string; cleared: boolean }> = [];
+    const failed: Array<{ deviceId: string; message: string }> = [];
+    for (const deviceId of unique) {
+      try {
+        cleared.push(await this.clearDeviceFleet(ctx, deviceId));
+      } catch (err) {
+        failed.push({
+          deviceId,
+          message:
+            err instanceof Error ? err.message : 'Could not remove the device from its fleet.',
+        });
+      }
+    }
+    return { cleared, failed };
+  }
+
+  public async clearDeviceFleet(
+    ctx: ActorContext,
+    deviceId: string,
+  ): Promise<{ deviceId: string; cleared: boolean }> {
+    const device = await this.devices.get(ctx, deviceId);
+    const bound = await this.bindings.getVehicleOfDevice(ctx, device.id);
+    if (!bound) return { deviceId: device.id, cleared: false };
+    await this.bindings.unbind(ctx, bound.vehicleId, device.id);
+    const remaining = await this.bindings.listDevicesForVehicle(ctx, bound.vehicleId);
+    if (remaining.length === 0) {
+      await this.vehicles.archive(ctx, bound.vehicleId).catch(() => undefined);
+    }
+    return { deviceId: device.id, cleared: true };
+  }
+
   private async createVehicleForDevice(
     ctx: ActorContext,
     device: DeviceRecord,

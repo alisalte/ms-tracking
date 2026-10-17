@@ -8,6 +8,7 @@ import {
   type PlatformFleet,
   assignDeviceToFleet,
   assignImeisToFleet,
+  clearDevicesFromFleet,
   createTenantFleet,
   listInbox,
   listTenantDevices,
@@ -33,6 +34,8 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [fleetPick, setFleetPick] = useState<Set<string>>(new Set());
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [targetFleetId, setTargetFleetId] = useState('');
@@ -116,6 +119,27 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
       setError(apiMessage(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const clearFleet = async (deviceIds: string[]) => {
+    if (deviceIds.length === 0) return;
+    setClearing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await clearDevicesFromFleet(tenantId, deviceIds);
+      const done = result.cleared.filter((row) => row.cleared).length;
+      if (done > 0) setNotice(t('fleets.removedMany', { count: done }));
+      if (result.failed.length > 0) {
+        setError(result.failed.map((row) => `${row.deviceId}: ${row.message}`).join(' '));
+      }
+      setFleetPick(new Set(result.failed.map((row) => row.deviceId)));
+      await reload();
+    } catch (err) {
+      setError(apiMessage(err));
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -338,57 +362,107 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
 
       <section className="overflow-x-auto rounded-xl border border-stone-200 bg-white p-4">
         <h2 className="text-sm font-semibold">{t('fleets.devicesTitle')}</h2>
+        <p className="mt-1 text-sm text-slate-600">{t('fleets.devicesHint')}</p>
         {onFleet.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">{t('fleets.emptyDevices')}</p>
         ) : (
-          <table className="mt-3 w-full text-sm">
-            <thead className="text-start text-slate-500">
-              <tr>
-                <th className="px-2 py-2 font-medium">{t('fleets.colImei')}</th>
-                <th className="px-2 py-2 font-medium">{t('fleets.colProtocol')}</th>
-                <th className="px-2 py-2 font-medium">{t('fleets.colStatus')}</th>
-                <th className="px-2 py-2 font-medium">{t('fleets.colFleet')}</th>
-                <th className="px-2 py-2 font-medium">{t('tenants.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {onFleet.map((device) => (
-                <tr key={device.id} className="border-t border-slate-100">
-                  <td className="px-2 py-2 font-mono">{device.imei}</td>
-                  <td className="px-2 py-2">{device.protocol}</td>
-                  <td className="px-2 py-2">{device.status}</td>
-                  <td className="px-2 py-2">{device.fleetName ?? t('fleets.unassigned')}</td>
-                  <td className="px-2 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        aria-label={t('fleets.pickFleet')}
-                        className="rounded-lg border border-slate-300 px-2 py-1"
-                        value={choice[device.id] ?? ''}
-                        onChange={(e) =>
-                          setChoice((prev) => ({ ...prev, [device.id]: e.target.value }))
-                        }
-                      >
-                        <option value="">{t('fleets.pickFleet')}</option>
-                        {activeFleets.map((fleet) => (
-                          <option key={fleet.id} value={fleet.id}>
-                            {fleet.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="rounded-lg bg-brand-500 px-3 py-1 text-sm font-semibold text-white disabled:opacity-60"
-                        disabled={!choice[device.id] || assigningId === device.id}
-                        onClick={() => void onAssign(device)}
-                      >
-                        {t('fleets.assign')}
-                      </button>
-                    </div>
-                  </td>
+          <>
+            <div className="mt-3">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold disabled:opacity-60"
+                disabled={clearing || fleetPick.size === 0}
+                onClick={() => void clearFleet([...fleetPick])}
+              >
+                {t('fleets.removeSelected')}
+              </button>
+            </div>
+            <table className="mt-3 w-full text-sm">
+              <thead className="text-start text-slate-500">
+                <tr>
+                  <th className="px-2 py-2 font-medium">
+                    <input
+                      type="checkbox"
+                      aria-label={t('fleets.selectAllOnFleet')}
+                      checked={fleetPick.size === onFleet.length}
+                      onChange={() =>
+                        setFleetPick((prev) =>
+                          prev.size === onFleet.length
+                            ? new Set()
+                            : new Set(onFleet.map((device) => device.id)),
+                        )
+                      }
+                    />
+                  </th>
+                  <th className="px-2 py-2 font-medium">{t('fleets.colImei')}</th>
+                  <th className="px-2 py-2 font-medium">{t('fleets.colProtocol')}</th>
+                  <th className="px-2 py-2 font-medium">{t('fleets.colStatus')}</th>
+                  <th className="px-2 py-2 font-medium">{t('fleets.colFleet')}</th>
+                  <th className="px-2 py-2 font-medium">{t('tenants.actions')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {onFleet.map((device) => (
+                  <tr key={device.id} className="border-t border-slate-100">
+                    <td className="px-2 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={device.imei}
+                        checked={fleetPick.has(device.id)}
+                        onChange={() =>
+                          setFleetPick((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(device.id)) next.delete(device.id);
+                            else next.add(device.id);
+                            return next;
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-2 font-mono">{device.imei}</td>
+                    <td className="px-2 py-2">{device.protocol}</td>
+                    <td className="px-2 py-2">{device.status}</td>
+                    <td className="px-2 py-2">{device.fleetName ?? t('fleets.unassigned')}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold disabled:opacity-60"
+                          disabled={clearing}
+                          onClick={() => void clearFleet([device.id])}
+                        >
+                          {t('fleets.removeFleet')}
+                        </button>
+                        <select
+                          aria-label={t('fleets.pickFleet')}
+                          className="rounded-lg border border-slate-300 px-2 py-1"
+                          value={choice[device.id] ?? ''}
+                          onChange={(e) =>
+                            setChoice((prev) => ({ ...prev, [device.id]: e.target.value }))
+                          }
+                        >
+                          <option value="">{t('fleets.pickFleet')}</option>
+                          {activeFleets.map((fleet) => (
+                            <option key={fleet.id} value={fleet.id}>
+                              {fleet.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-brand-500 px-3 py-1 text-sm font-semibold text-white disabled:opacity-60"
+                          disabled={!choice[device.id] || assigningId === device.id}
+                          onClick={() => void onAssign(device)}
+                        >
+                          {t('fleets.assign')}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </section>
     </div>
