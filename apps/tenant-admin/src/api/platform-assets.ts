@@ -125,6 +125,22 @@ export async function assignImeisToFleet(
   return data.data;
 }
 
+export interface ClearFleetResult {
+  cleared: Array<{ deviceId: string; cleared: boolean }>;
+  failed: Array<{ deviceId: string; message: string }>;
+}
+
+export async function clearDevicesFromFleet(
+  tenantId: string,
+  deviceIds: string[],
+): Promise<ClearFleetResult> {
+  const { data } = await api.post<{ data: ClearFleetResult }>(
+    `/platform/tenants/${tenantId}/devices/clear-fleet`,
+    { deviceIds },
+  );
+  return data.data;
+}
+
 export async function assignDeviceToFleet(
   tenantId: string,
   deviceId: string,

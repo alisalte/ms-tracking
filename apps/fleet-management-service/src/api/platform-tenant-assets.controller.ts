@@ -7,6 +7,7 @@
  *   POST   /api/v1/platform/tenants/:tenantId/fleets
  *   GET    /api/v1/platform/tenants/:tenantId/devices
  *   POST   /api/v1/platform/tenants/:tenantId/devices/assign
+ *   POST   /api/v1/platform/tenants/:tenantId/devices/clear-fleet
  *   PUT    /api/v1/platform/tenants/:tenantId/devices/:deviceId/fleet
  */
 import { CurrentUser, RequirePermissions } from '@fleetvision/auth';
@@ -38,6 +39,9 @@ const claimDeviceSchema = z.object({
 const assignImeisSchema = z.object({
   fleetId: z.string().uuid(),
   imeis: z.array(z.string().trim().min(8).max(32)).min(1).max(200),
+});
+const clearFleetSchema = z.object({
+  deviceIds: z.array(z.string().uuid()).min(1).max(200),
 });
 
 @Controller('api/v1/platform/tenants')
@@ -111,6 +115,22 @@ export class PlatformTenantAssetsController {
       this.actor(auth, req, tenantId),
       parsed.fleetId,
       parsed.imeis,
+    );
+    return { data };
+  }
+
+  @Post(':tenantId/devices/clear-fleet')
+  @RequirePermissions('billing.tenant.manage')
+  public async clearFleet(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Body(new ZodValidationPipe(clearFleetSchema)) body: unknown,
+  ) {
+    const parsed = body as { deviceIds: string[] };
+    const data = await this.assets.clearDevicesFromFleet(
+      this.actor(auth, req, tenantId),
+      parsed.deviceIds,
     );
     return { data };
   }

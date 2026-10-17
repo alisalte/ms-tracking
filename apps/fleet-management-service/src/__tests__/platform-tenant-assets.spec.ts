@@ -103,7 +103,9 @@ describe('PlatformTenantAssetsService', () => {
   };
   const bindings = {
     bind: jest.fn(),
+    unbind: jest.fn(),
     getVehicleOfDevice: jest.fn(),
+    listDevicesForVehicle: jest.fn(),
   };
   let svc: PlatformTenantAssetsService;
 
@@ -345,5 +347,41 @@ describe('PlatformTenantAssetsService', () => {
     expect(result.assigned.map((row) => row.imei)).toEqual(['490154203237518']);
     expect(result.failed.map((row) => row.imei)).toEqual(['356938035643809']);
     expect(vehicles.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes a device from its fleet and archives the empty vehicle', async () => {
+    devices.get.mockImplementation(async () => device({ vehicleId: VEHICLE_ID }));
+    bindings.getVehicleOfDevice.mockImplementation(async () => ({ vehicleId: VEHICLE_ID }));
+    bindings.unbind.mockImplementation(async () => undefined);
+    bindings.listDevicesForVehicle.mockImplementation(async () => []);
+    vehicles.archive.mockImplementation(async () => vehicle({ status: 'ARCHIVED' }));
+
+    const result = await svc.clearDevicesFromFleet(ctx, [DEVICE_ID, DEVICE_ID]);
+
+    expect(bindings.unbind).toHaveBeenCalledWith(ctx, VEHICLE_ID, DEVICE_ID);
+    expect(vehicles.archive).toHaveBeenCalledWith(ctx, VEHICLE_ID);
+    expect(result.cleared).toEqual([{ deviceId: DEVICE_ID, cleared: true }]);
+    expect(result.failed).toEqual([]);
+  });
+
+  it('keeps the vehicle when another device is still bound', async () => {
+    devices.get.mockImplementation(async () => device({ vehicleId: VEHICLE_ID }));
+    bindings.getVehicleOfDevice.mockImplementation(async () => ({ vehicleId: VEHICLE_ID }));
+    bindings.listDevicesForVehicle.mockImplementation(async () => [{ deviceId: 'other' }]);
+
+    const result = await svc.clearDeviceFleet(ctx, DEVICE_ID);
+
+    expect(result).toEqual({ deviceId: DEVICE_ID, cleared: true });
+    expect(vehicles.archive).not.toHaveBeenCalled();
+  });
+
+  it('leaves an already unassigned device in the pool', async () => {
+    devices.get.mockImplementation(async () => device({ vehicleId: null }));
+    bindings.getVehicleOfDevice.mockImplementation(async () => null);
+
+    const result = await svc.clearDeviceFleet(ctx, DEVICE_ID);
+
+    expect(result).toEqual({ deviceId: DEVICE_ID, cleared: false });
+    expect(bindings.unbind).not.toHaveBeenCalled();
   });
 });
