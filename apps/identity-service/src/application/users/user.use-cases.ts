@@ -111,9 +111,9 @@ export class UpdateUserUseCase {
 /**
  * Assign-role use-case. After a role grant the user's permission set changes,
  * so any outstanding access token (which carries the previous permission union,
- * Sprint B) must be invalidated: setting `revocation:user:<uid>` kills the
- * user's tokens within the access-token TTL — the client then refreshes and
- * obtains a token with the new permissions.
+ * Sprint B) must be invalidated. `revocation:user:<uid>` stores an issued-at
+ * watermark: tokens at or before that second die, and the next login or
+ * refresh mints a token after the watermark with the new permissions.
  */
 @Injectable()
 export class AssignRoleUseCase {

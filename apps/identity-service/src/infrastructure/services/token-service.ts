@@ -42,16 +42,26 @@ export class TokenService {
     private readonly config: TokenServiceConfig,
   ) {}
 
-  /** Issue an access + refresh token pair for an authenticated principal. */
-  public async issuePair(claims: AccessTokenClaims, sessionId: string): Promise<IssuedTokens> {
+  /**
+   * Issue an access + refresh token pair for an authenticated principal.
+   * `issuedAtSeconds` lets a login that follows a role-change watermark use
+   * an `iat` strictly after that watermark. `nbf` stays at the current second
+   * so the token is usable immediately.
+   */
+  public async issuePair(
+    claims: AccessTokenClaims,
+    sessionId: string,
+    issuedAtSeconds?: number,
+  ): Promise<IssuedTokens> {
     const now = Date.now();
+    const nowSec = Math.floor(now / 1000);
     const accessJti = randomUUID();
     const accessExpiresAt = new Date(now + this.config.accessTtlSeconds * 1000);
     const accessToken = await this.jwt.signAsync(
       {
         ...claims,
-        iat: Math.floor(now / 1000),
-        nbf: Math.floor(now / 1000),
+        iat: issuedAtSeconds ?? nowSec,
+        nbf: nowSec,
         exp: Math.floor(accessExpiresAt.getTime() / 1000),
         jti: accessJti,
         session_id: sessionId,

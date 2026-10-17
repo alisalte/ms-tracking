@@ -205,6 +205,7 @@ export class AuthModule {
             RateLimiterStore,
             RoleRepository,
             TenantEntitlementUseCase,
+            RevocationStore,
           ],
           useFactory: (
             u: UserRepository,
@@ -216,8 +217,9 @@ export class AuthModule {
             r: RateLimiterStore,
             roles: RoleRepository,
             entitlements: TenantEntitlementUseCase,
+            revocation: RevocationStore,
           ) =>
-            new LoginUseCase(u, t, a, h, tk, s, r, roles, entitlements, {
+            new LoginUseCase(u, t, a, h, tk, s, r, roles, entitlements, revocation, {
               accessTtlSeconds: accessTtl,
               refreshTtlSeconds: refreshTtl,
               maxAttempts: config.LOGIN_MAX_ATTEMPTS,

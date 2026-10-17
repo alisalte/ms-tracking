@@ -142,7 +142,7 @@ export class CompositeAuthGuard implements CanActivate {
   private async isTokenActive(claims: VerifiedAccessToken): Promise<boolean> {
     if (!this.revocation) return true;
     try {
-      return !(await this.revocation.isRevoked(claims.jti, claims.sub));
+      return !(await this.revocation.isRevoked(claims.jti, claims.sub, claims.iat));
     } catch (err) {
       // Fail-OPEN on revocation-store outage for availability; signature/expiry
       // remains the hard boundary. Documented remaining risk.

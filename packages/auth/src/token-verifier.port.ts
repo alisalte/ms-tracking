@@ -23,6 +23,8 @@ export interface AccessTokenClaims {
   readonly auth_time: number;
   /** Expiry (Unix seconds) — present on every verified token. */
   readonly exp: number;
+  /** Issued-at (Unix seconds). Compared with the user revocation watermark. */
+  readonly iat?: number;
 }
 
 export interface VerifiedToken extends AccessTokenClaims {
@@ -43,7 +45,7 @@ export interface TokenVerifier {
  * rely on short access-token TTLs — acceptable per the Sprint 1 design).
  */
 export interface RevocationChecker {
-  isRevoked(jti: string, sub: string): Promise<boolean>;
+  isRevoked(jti: string, sub: string, issuedAtSeconds?: number): Promise<boolean>;
 }
 
 /**
