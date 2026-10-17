@@ -125,8 +125,6 @@ function mdvrChannelStreamPath(
 export class DeviceCommandService {
   private readonly logger = new Logger(DeviceCommandService.name);
   private sweepTimer: NodeJS.Timeout | null = null;
-  /** Debounce auto-AB2 per device (md300 sends once per GPRS session). */
-  private readonly autoAb2At = new Map<string, number>();
 
   constructor(
     private readonly knex: Knex,
@@ -143,7 +141,7 @@ export class DeviceCommandService {
     } else {
       this.logger.warn(
         'MDVR public host could not be resolved at boot (MDVR_PUBLIC_HOST unset and ipify ' +
-          'lookup failed) — auto-AB2-on-connect and dashboard-triggered AB2/A9A rewrite are ' +
+          'lookup failed) — dashboard-triggered AB2/A9A rewrite is ' +
           'disabled until this service restarts. Set MDVR_PUBLIC_HOST explicitly or check ' +
           'outbound internet access from this container.',
       );
@@ -257,52 +255,15 @@ export class DeviceCommandService {
   }
 
   /**
-   * md300-main `live.js` sends AB2 as soon as the GPRS socket has an IMEI.
-   * Mirror that on AUTHENTICATED: push `rtmp://PUBLIC_IP:1935/live/md300`.
+   * Previously sent AB2 on every GPRS AUTHENTICATED (md300 `live.js`).
+   * Cellular MD300s re-authenticate often. Each of those AB2s — always the
+   * sub stream, 15s apart — restarted the RTMP handshake the wall had just
+   * started, so MediaMTX never reached "is publishing" and HLS stayed HTTP 204
+   * even after the operator's AB2 was SENT. Live video starts only when a tile
+   * sends AB2.
    */
-  public async startMdvrLiveOnConnect(tenantId: string, deviceId: string): Promise<void> {
-    const now = Date.now();
-    const prev = this.autoAb2At.get(deviceId) ?? 0;
-    if (now - prev < 15_000) return;
-
-    const host = this.options.mdvrPublicHost?.trim();
-    if (!host) {
-      this.logger.warn('Skipping auto-AB2: MDVR public host is unset.');
-      return;
-    }
-    const device = await this.devices.findById(tenantId, deviceId);
-    const path = mdvrChannelStreamPath(
-      this.options.mdvrRtmpPath ?? 'live/md300',
-      1,
-      'live',
-      device?.imei,
-    );
-    const port = this.options.mdvrRtmpPort ?? 1935;
-    const ctx: ActorContext = {
-      tenantId,
-      actorId: null,
-      actorType: 'SYSTEM',
-      requestId: null,
-      ipAddress: null,
-      userAgent: null,
-    };
-    try {
-      await this.create(ctx, deviceId, {
-        commandCode: 'AB2',
-        params: {
-          uploadUrl: `rtmp://${host}:${port}/${path}`,
-          channel: 1,
-          dataType: '0',
-          // Sub stream. The wall can still ask for the main stream; starting
-          // on it here is what left cameras waiting on a heavy cellular push.
-          streamType: '1',
-        },
-      });
-      this.autoAb2At.set(deviceId, now);
-      this.logger.log(`Auto AB2 sent for device ${deviceId} → rtmp://${host}:${port}/${path}`);
-    } catch (err) {
-      this.logger.warn(`Auto AB2 skipped for ${deviceId}: ${(err as Error).message}`);
-    }
+  public async startMdvrLiveOnConnect(_tenantId: string, _deviceId: string): Promise<void> {
+    return;
   }
 
   /**
