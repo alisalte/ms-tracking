@@ -76,6 +76,23 @@ export function deriveVehicleMotion(input: MotionInput): MotionResult {
 }
 
 /**
+ * True when `capturedAt` is a live fix: not missing, not in the far future,
+ * and no older than {@link MOTION_FRESH_MS}. A missing timestamp is NOT fresh
+ * — only a real recent GPS time counts as proof of life.
+ */
+export function isFreshCapturedAt(
+  capturedAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!capturedAt) return false;
+  const ts = Date.parse(capturedAt);
+  if (!Number.isFinite(ts)) return false;
+  const age = nowMs - ts;
+  // One minute of device-clock skew still counts; anything further ahead does not.
+  return age >= -60_000 && age <= MOTION_FRESH_MS;
+}
+
+/**
  * A live WebSocket fix is proof of life. Upgrade STALE/OFFLINE/UNKNOWN so a
  * vehicle that is actively reporting is never stuck "آفلاین" on the drawer
  * while the roster still shows motion from the same packet.

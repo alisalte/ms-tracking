@@ -25,8 +25,9 @@ import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { decorateTripEvents } from '@/lib/trip-events';
-import { deriveVehicleMotion } from '@/lib/vehicle-motion';
+import { pickVehicleDevice } from '@/lib/vehicle-device';
 import { formatVehicleLabel } from '@/lib/vehicle-label';
+import { deriveVehicleMotion, isFreshCapturedAt, presenceFromLiveFix } from '@/lib/vehicle-motion';
 import { mockMapVehicles, mockTripDetail, mockTrips } from '@/mock/fleet-data';
 import type { Alarm } from '@/types/alarm.types';
 import type { BoundDevice, FleetSummary } from '@/types/asset.types';
@@ -166,21 +167,49 @@ function fetchMapVehicles(): Promise<MapVehicle[]> {
         fetchLatestPositions(),
       ]);
       const statusByDevice = new Map(statuses.map((s) => [s.deviceId, s]));
-      const vehicleToDevice = new Map<string, { deviceId: string; lastSeenAt?: string }>();
+      // One presence per vehicle. Prefer the Meitrack/MDVR unit so the map's
+      // online chip matches the camera list; otherwise the best connection,
+      // not whichever device happened to be listed last.
+      const devicesByVehicle = new Map<
+        string,
+        Array<{
+          deviceId: string;
+          protocol?: string | null;
+          state?: VehiclePresence | null;
+          lastSeenAt?: string | null;
+        }>
+      >();
       for (const d of devices) {
-        if (d.vehicleId) {
-          const status = statusByDevice.get(d.id);
-          vehicleToDevice.set(d.vehicleId, { deviceId: d.id, lastSeenAt: status?.lastSeenAt });
-        }
+        if (!d.vehicleId) continue;
+        const status = statusByDevice.get(d.id);
+        const list = devicesByVehicle.get(d.vehicleId) ?? [];
+        list.push({
+          deviceId: d.id,
+          protocol: d.protocol,
+          state: status?.state,
+          lastSeenAt: status?.lastSeenAt,
+        });
+        devicesByVehicle.set(d.vehicleId, list);
       }
       const posByVehicle = new Map(positions.map((p) => [p.vehicleId, p]));
-      return vehicles.map((v) => {
-        const bound = vehicleToDevice.get(v.id);
+      const seen = new Set<string>();
+      const unique = vehicles.filter((v) => {
+        if (seen.has(v.id)) return false;
+        seen.add(v.id);
+        return true;
+      });
+      return unique.map((v) => {
+        const bound = pickVehicleDevice(devicesByVehicle.get(v.id) ?? []);
         const status = bound ? statusByDevice.get(bound.deviceId) : undefined;
-        const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
         // Positions of unbound devices are keyed by deviceId (gps-engine fallback).
         const pos =
           posByVehicle.get(v.id) ?? (bound ? posByVehicle.get(bound.deviceId) : undefined);
+        // Same proof-of-life rule as the live socket: a fresh fix is ONLINE
+        // even when the session row has not caught up yet.
+        const presence = presenceFromLiveFix(
+          status?.state ?? 'UNKNOWN',
+          isFreshCapturedAt(pos?.capturedAt),
+        );
         return toMapVehicle(v, presence, pos, bound?.deviceId, status?.lastSeenAt);
       });
     },
@@ -207,8 +236,18 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         apiGet<BoundDevice[]>(`/vehicles/${id}/devices`),
         fetchDeviceStatuses(),
       ]);
-      const primary = devicesWire.find((d) => d.isPrimary) ?? devicesWire[0];
-      const status = primary ? statusList.find((s) => s.deviceId === primary.deviceId) : undefined;
+      const picked = pickVehicleDevice(
+        devicesWire.map((d) => {
+          const row = statusList.find((s) => s.deviceId === d.deviceId);
+          return {
+            ...d,
+            protocol: d.protocol,
+            state: row?.state,
+            lastSeenAt: row?.lastSeenAt,
+          };
+        }),
+      );
+      const status = picked ? statusList.find((s) => s.deviceId === picked.deviceId) : undefined;
       let position: LatestPosition | undefined;
       try {
         position = await apiGetRaw<LatestPosition>(`/positions/${id}/latest`);
@@ -216,7 +255,10 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         // 404 when the vehicle has never reported — the drawer shows "never seen".
         position = undefined;
       }
-      const presence: VehiclePresence = status?.state ?? 'UNKNOWN';
+      const presence = presenceFromLiveFix(
+        status?.state ?? 'UNKNOWN',
+        isFreshCapturedAt(position?.capturedAt),
+      );
       const motion = deriveVehicleMotion({
         presence,
         speedKph: position?.speedKph ?? 0,
@@ -238,7 +280,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         updatedAt: position?.capturedAt ?? '',
         lastSeenAt: status?.lastSeenAt ?? position?.capturedAt ?? undefined,
         presence: motion.presence,
-        deviceId: primary?.deviceId,
+        deviceId: picked?.deviceId,
         odometer: vehicleWire.odometerKm ?? 0,
         address: '', // Reverse geocoding is a map-engine concern (out of scope).
         events: [],

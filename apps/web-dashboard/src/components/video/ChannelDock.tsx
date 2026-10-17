@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/tailwind-ui';
+import { onlineCameraDeviceCount } from '@/lib/camera-presence';
 import type { CameraChannel } from '@/types/video.types';
 
 interface ChannelDockProps {
@@ -62,35 +63,37 @@ export function ChannelDock({
       arr.push(c);
       m.set(key, arr);
     }
-    return Array.from(m.entries())
-      .map(([key, cams]) => {
-        const sorted = [...cams].sort(
+    return (
+      Array.from(m.entries())
+        .map(([key, cams]) => {
+          const sorted = [...cams].sort(
+            (a, b) =>
+              (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
+          );
+          const onlineCount = sorted.filter((c) => c.online && c.consentGiven).length;
+          const onWallCount = sorted.filter((c) => onWall.has(c.id)).length;
+          const head = sorted[0];
+          const label = head?.sourceLabel || head?.imei || key;
+          const imeiHint =
+            head?.imei && label && !label.includes(head.imei) ? head.imei : undefined;
+          return {
+            key,
+            label,
+            imeiHint,
+            cams: sorted,
+            onlineCount,
+            onWallCount,
+            anyOnline: onlineCount > 0,
+          };
+        })
+        // Active devices first, then those already on the wall.
+        .sort(
           (a, b) =>
-            (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) || a.label.localeCompare(b.label),
-        );
-        const onlineCount = sorted.filter((c) => c.online && c.consentGiven).length;
-        const onWallCount = sorted.filter((c) => onWall.has(c.id)).length;
-        const head = sorted[0];
-        const label = head?.sourceLabel || head?.imei || key;
-        const imeiHint =
-          head?.imei && label && !label.includes(head.imei) ? head.imei : undefined;
-        return {
-          key,
-          label,
-          imeiHint,
-          cams: sorted,
-          onlineCount,
-          onWallCount,
-          anyOnline: onlineCount > 0,
-        };
-      })
-      // Active devices first, then those already on the wall.
-      .sort(
-        (a, b) =>
-          Number(b.anyOnline) - Number(a.anyOnline) ||
-          b.onWallCount - a.onWallCount ||
-          a.label.localeCompare(b.label),
-      );
+            Number(b.anyOnline) - Number(a.anyOnline) ||
+            b.onWallCount - a.onWallCount ||
+            a.label.localeCompare(b.label),
+        )
+    );
   }, [filtered, onWall]);
 
   const toggleGroup = (key: string) => {
@@ -103,6 +106,7 @@ export function ChannelDock({
   };
 
   const hasAssigned = onWall.size > 0;
+  const onlineDevices = useMemo(() => onlineCameraDeviceCount(channels), [channels]);
 
   return (
     <div className="flex h-full w-[280px] min-w-[280px] flex-col overflow-hidden border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
@@ -111,6 +115,12 @@ export function ChannelDock({
         <div className="flex items-center gap-2">
           <p className="flex-1 text-sm font-semibold text-gray-800 dark:text-white">
             {t('video.dock.title')}
+            <span
+              data-testid="dock-online-count"
+              className="ms-2 font-semibold tabular-nums text-success-700 dark:text-success-400"
+            >
+              {t('video.dock.online')} · {onlineDevices}
+            </span>
           </p>
           <button
             type="button"
@@ -210,7 +220,9 @@ export function ChannelDock({
                       aria-hidden
                       className="size-2.5 shrink-0 rounded-full ring-2 ring-white dark:ring-graydark-300"
                       style={{ background: anyOnline ? '#12b76a' : '#64748b' }}
-                      title={anyOnline ? t('video.dock.deviceOnline') : t('video.dock.deviceOffline')}
+                      title={
+                        anyOnline ? t('video.dock.deviceOnline') : t('video.dock.deviceOffline')
+                      }
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">
@@ -254,8 +266,7 @@ export function ChannelDock({
                     cams.map((c) => {
                       const assigned = onWall.has(c.id);
                       const live = c.online && c.consentGiven;
-                      const camLabel =
-                        c.logicalChannel != null ? `CH${c.logicalChannel}` : c.label;
+                      const camLabel = c.logicalChannel != null ? `CH${c.logicalChannel}` : c.label;
                       return (
                         <button
                           key={c.id}

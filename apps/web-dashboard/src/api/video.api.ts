@@ -16,6 +16,7 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
+import { DEFAULT_MDVR_CHANNEL_NOS, alignCameraCatalog } from '@/lib/camera-presence';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { useCursorPagination } from '@/lib/use-cursor-pagination';
 import { captureSnapshot, downloadBlob } from '@/lib/video-stream';
@@ -37,17 +38,31 @@ async function fetchChannels(): Promise<CameraChannel[]> {
   return withMockFallback(
     // apiGetRaw: media-service returns a RAW array (no { data } envelope).
     async () => {
-      const [{ fetchAllVehiclesAsMap }, { formatVehicleLabel }, { isUuid }] = await Promise.all([
+      const [
+        { fetchAllVehiclesAsMap },
+        { formatVehicleLabel },
+        { isUuid },
+        { fetchDeviceStatuses, fetchLatestPositions },
+      ] = await Promise.all([
         import('./asset.api'),
         import('@/lib/vehicle-label'),
         import('@/lib/ids'),
+        import('./fleet.api'),
       ]);
-      const [wires, registry] = await Promise.all([
+      const [wires, registry, statuses, positions] = await Promise.all([
         apiGetRaw<MediaChannelWire[]>('/media/channels'),
         fetchAllVehiclesAsMap().catch(() => ({
           vehicles: [] as Array<{ id: string; name: string; code: string; plate: string | null }>,
-          devices: [] as Array<{ id: string; vehicleId: string | null; imei?: string }>,
+          devices: [] as Array<{
+            id: string;
+            vehicleId: string | null;
+            imei?: string;
+            protocol?: string;
+            status?: string;
+          }>,
         })),
+        fetchDeviceStatuses().catch(() => []),
+        fetchLatestPositions().catch(() => []),
       ]);
       const vehicleLabel = new Map(
         registry.vehicles.map((v) => [v.id, formatVehicleLabel(v) || v.name || v.code] as const),
@@ -61,8 +76,13 @@ async function fetchChannels(): Promise<CameraChannel[]> {
       }
       const rows = wires.map((w) => {
         const ch = mapMediaChannel(w);
-        const imei = (w.endpoint?.trim() || (w.deviceId ? deviceImei.get(w.deviceId) : undefined) || ch.imei)?.trim();
-        const vehicleId = w.vehicleId || (w.deviceId ? deviceVehicle.get(w.deviceId) : undefined) || null;
+        const imei = (
+          w.endpoint?.trim() ||
+          (w.deviceId ? deviceImei.get(w.deviceId) : undefined) ||
+          ch.imei
+        )?.trim();
+        const vehicleId =
+          w.vehicleId || (w.deviceId ? deviceVehicle.get(w.deviceId) : undefined) || null;
         const named = vehicleId ? vehicleLabel.get(vehicleId) : undefined;
         const sourceLabel = formatChannelSourceLabel({
           vehicleName: named,
@@ -79,13 +99,14 @@ async function fetchChannels(): Promise<CameraChannel[]> {
           deviceId: w.deviceId ?? ch.deviceId,
         };
       });
-      rows.sort(
-        (a, b) =>
-          a.sourceLabel.localeCompare(b.sourceLabel) ||
-          (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99) ||
-          a.label.localeCompare(b.label),
-      );
-      return rows;
+      // GPS presence (the map's online chip), not media-channel REGISTERED/OFFLINE.
+      return alignCameraCatalog({
+        channels: rows,
+        devices: registry.devices ?? [],
+        statuses,
+        fixes: positions.map((p) => ({ vehicleId: p.vehicleId, capturedAt: p.capturedAt })),
+        vehicleLabel: (id) => vehicleLabel.get(id),
+      });
     },
     () => resolveMock(mockChannels),
   );
@@ -132,7 +153,11 @@ interface MediaChannelWire {
   status: string;
 }
 
-/** Wire → UI channel mapping (status REGISTERED/ONLINE → online). Exported for tests. */
+/**
+ * Wire → UI channel mapping. Media REGISTERED counts as online only until GPS
+ * presence is applied (`alignCameraCatalog`) — the map is the source of truth.
+ * Exported for tests.
+ */
 export function mapMediaChannelForTest(w: MediaChannelWire): CameraChannel {
   return mapMediaChannel(w);
 }
@@ -496,7 +521,7 @@ export function useRegisterChannel() {
 }
 
 /** Default MDVR camera numbers (MD300 is typically two cameras). Extra channels via the wizard. */
-export const DEFAULT_MDVR_CHANNEL_NOS = [1, 2] as const;
+export { DEFAULT_MDVR_CHANNEL_NOS };
 
 /** Register CH1–CH2 for a bound MDVR so the video wall has something to play. */
 export async function registerDefaultMdvrChannels(input: {

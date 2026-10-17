@@ -238,7 +238,7 @@ function fetchVehicleDevices(vehicleId: string): Promise<BoundDevice[]> {
  */
 export async function fetchAllVehiclesAsMap(): Promise<{
   vehicles: Array<Pick<Vehicle, 'id' | 'name' | 'code' | 'plate'>>;
-  devices: Array<Pick<Device, 'id' | 'vehicleId' | 'imei'>>;
+  devices: Array<Pick<Device, 'id' | 'vehicleId' | 'imei' | 'protocol' | 'status'>>;
 }> {
   if (shouldUseMock()) {
     return resolveMock({ vehicles: mockVehicles(), devices: mockDevices() });
