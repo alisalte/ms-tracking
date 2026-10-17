@@ -87,6 +87,21 @@ export async function lookupImei(imei: string): Promise<ImeiLookup> {
   return data.data;
 }
 
+export interface AvailableDevice {
+  id: string;
+  imei: string;
+  protocol: string;
+  status: string;
+  tenantId: string;
+  manufacturer: string | null;
+  model: string | null;
+}
+
+export async function listAvailableDevices(): Promise<AvailableDevice[]> {
+  const { data } = await api.get<{ data: AvailableDevice[] }>('/platform/devices/available');
+  return data.data;
+}
+
 export async function listInbox(): Promise<InboxDevice[]> {
   const { data } = await api.get<{ data: InboxDevice[] }>('/platform/devices/inbox');
   return data.data;

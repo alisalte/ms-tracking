@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { apiMessage } from '@/api/client';
 import {
+  type AvailableDevice,
   type InboxDevice,
   type PlatformDevice,
   type PlatformFleet,
@@ -10,6 +11,7 @@ import {
   assignImeisToFleet,
   clearDevicesFromFleet,
   createTenantFleet,
+  listAvailableDevices,
   listInbox,
   listTenantDevices,
   listTenantFleets,
@@ -18,7 +20,7 @@ import {
 interface UnassignedImei {
   imei: string;
   protocol: string;
-  source: 'inbox' | 'tenant';
+  source: 'inbox' | 'tenant' | 'other';
   seenCount: number;
 }
 
@@ -26,6 +28,7 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
   const { t } = useTranslation();
   const [fleets, setFleets] = useState<PlatformFleet[]>([]);
   const [devices, setDevices] = useState<PlatformDevice[]>([]);
+  const [available, setAvailable] = useState<AvailableDevice[]>([]);
   const [inbox, setInbox] = useState<InboxDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -44,14 +47,16 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   const reload = async () => {
-    const [nextFleets, nextDevices, nextInbox] = await Promise.all([
+    const [nextFleets, nextDevices, nextInbox, nextAvailable] = await Promise.all([
       listTenantFleets(tenantId),
       listTenantDevices(tenantId),
       listInbox(),
+      listAvailableDevices(),
     ]);
     setFleets(nextFleets);
     setDevices(nextDevices);
     setInbox(nextInbox);
+    setAvailable(nextAvailable);
     setChoice((prev) => {
       const next = { ...prev };
       for (const device of nextDevices) {
@@ -69,7 +74,10 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
 
   const activeFleets = fleets.filter((fleet) => fleet.status === 'ACTIVE');
   const onFleet = devices.filter((device) => device.fleetId && device.status !== 'DECOMMISSIONED');
-  const unassigned = useMemo(() => collectUnassigned(devices, inbox), [devices, inbox]);
+  const unassigned = useMemo(
+    () => collectUnassigned(devices, available, inbox, tenantId),
+    [devices, available, inbox, tenantId],
+  );
 
   useEffect(() => {
     const active = fleets.filter((fleet) => fleet.status === 'ACTIVE');
@@ -323,7 +331,11 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
                     <td className="px-2 py-2 font-mono">{row.imei}</td>
                     <td className="px-2 py-2">{row.protocol}</td>
                     <td className="px-2 py-2">
-                      {row.source === 'inbox' ? t('fleets.sourceInbox') : t('fleets.sourceTenant')}
+                      {row.source === 'inbox'
+                        ? t('fleets.sourceInbox')
+                        : row.source === 'other'
+                          ? t('fleets.sourceOther')
+                          : t('fleets.sourceTenant')}
                       {row.seenCount > 0 ? ` · ${row.seenCount}` : ''}
                     </td>
                   </tr>
@@ -469,7 +481,12 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
   );
 }
 
-function collectUnassigned(devices: PlatformDevice[], inbox: InboxDevice[]): UnassignedImei[] {
+function collectUnassigned(
+  devices: PlatformDevice[],
+  available: AvailableDevice[],
+  inbox: InboxDevice[],
+  tenantId: string,
+): UnassignedImei[] {
   const rows: UnassignedImei[] = [];
   const seen = new Set<string>();
   for (const device of devices) {
@@ -479,6 +496,16 @@ function collectUnassigned(devices: PlatformDevice[], inbox: InboxDevice[]): Una
       imei: device.imei,
       protocol: device.protocol,
       source: 'tenant',
+      seenCount: 0,
+    });
+  }
+  for (const device of available) {
+    if (seen.has(device.imei) || device.status === 'DECOMMISSIONED') continue;
+    seen.add(device.imei);
+    rows.push({
+      imei: device.imei,
+      protocol: device.protocol,
+      source: device.tenantId === tenantId ? 'tenant' : 'other',
       seenCount: 0,
     });
   }

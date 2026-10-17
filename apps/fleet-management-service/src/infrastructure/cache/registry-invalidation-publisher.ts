@@ -25,7 +25,8 @@ export type RegistryInvalidationReason =
   | 'device.created'
   | 'device.updated'
   | 'device.status-changed'
-  | 'device.binding-changed';
+  | 'device.binding-changed'
+  | 'device.transferred';
 
 export class RegistryInvalidationPublisher {
   private readonly logger = new Logger(RegistryInvalidationPublisher.name);

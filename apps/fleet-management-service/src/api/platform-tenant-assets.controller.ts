@@ -172,6 +172,12 @@ export class PlatformDeviceInboxController {
     return { data: await this.assets.listInbox() };
   }
 
+  @Get('available')
+  @RequirePermissions('billing.tenant.manage')
+  public async available() {
+    return { data: await this.assets.listAvailableDevices() };
+  }
+
   @Get('by-imei/:imei')
   @RequirePermissions('billing.tenant.manage')
   public async byImei(@Param('imei') imei: string) {
