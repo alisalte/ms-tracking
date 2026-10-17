@@ -117,7 +117,7 @@ describe('auth.store', () => {
     // /me hydration succeeds and fills permissions
     vi.mocked(loginApi.getMe).mockResolvedValueOnce(fullUser);
 
-    const success = await useAuthStore.getState().login('test@fleetvision.io', 'pw', 'tenant-789');
+    const success = await useAuthStore.getState().login('test@fleetvision.io', 'pw');
 
     expect(success).toBe(true);
     const state = useAuthStore.getState();
@@ -132,7 +132,7 @@ describe('auth.store', () => {
     expect(state.error).toBeNull();
   });
 
-  it('login sends the form org name even when a stale tenant UUID is stored', async () => {
+  it('login clears a stale tenant and signs in with the identifier only', async () => {
     localStorageMock.setItem(
       'fleetvision_tokens',
       JSON.stringify({
@@ -145,16 +145,19 @@ describe('auth.store', () => {
     vi.mocked(loginApi.login).mockResolvedValueOnce(loginResponse);
     vi.mocked(loginApi.getMe).mockResolvedValueOnce(fullUser);
 
-    await useAuthStore.getState().login('test@fleetvision.io', 'pw', 'FleetVision');
+    await useAuthStore.getState().login('operator.one', 'pw');
 
-    expect(loginApi.login).toHaveBeenCalledWith('test@fleetvision.io', 'pw', 'FleetVision');
+    expect(loginApi.login).toHaveBeenCalledWith('operator.one', 'pw');
+    expect(localStorageMock.getItem('fleetvision_tenant_id')).not.toBe(
+      '00000000-0000-0000-0000-000000000000',
+    );
     expect(useAuthStore.getState().tenantId).toBe('tenant-789');
   });
 
   it('login resolves false and clears tokens on failure', async () => {
     vi.mocked(loginApi.login).mockRejectedValueOnce(new Error('Invalid credentials'));
 
-    const success = await useAuthStore.getState().login('x@y.z', 'bad', 'tenant-789');
+    const success = await useAuthStore.getState().login('x@y.z', 'bad');
 
     expect(success).toBe(false);
     const state = useAuthStore.getState();

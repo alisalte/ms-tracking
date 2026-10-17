@@ -6,7 +6,7 @@
     "password": "Password",
     "tenantId": "Organization",
     "loggingIn": "Signing in...",
-    "signInSubtitle": "Sign in to your fleet workspace",
+    "signInSubtitle": "Sign in with your email or username",
     "rememberDevice": "Remember this device",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -41,7 +41,7 @@
       "digitLabel": "Digit {{n}}"
     },
     "errors": {
-      "invalidCredentials": "Invalid email or password",
+      "invalidCredentials": "Invalid email, username, or password",
       "networkError": "Unable to connect to server"
     },
     "tenantIdHelp": "Exact organization name as created (e.g. FleetVision)",
@@ -1819,6 +1819,7 @@
       "activate": "Activate",
       "deactivate": "Deactivate",
       "colName": "Name",
+      "colUsername": "Username",
       "colRole": "Role",
       "colMfa": "MFA",
       "noRole": "No role",
@@ -2550,6 +2551,9 @@
   "validation": {
     "tenantId": {
       "required": "Tenant ID is required"
+    },
+    "identifier": {
+      "required": "Email or username is required"
     },
     "email": {
       "required": "Email is required",

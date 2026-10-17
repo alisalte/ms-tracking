@@ -94,6 +94,46 @@ export class UserRepository {
   }
 
   /**
+   * Login without an organization name. Email is unique per tenant, so a
+   * mailbox that exists in more than one tenant is ambiguous and returns null
+   * (the caller answers with the same generic credential error).
+   */
+  public async findUniqueByEmail(email: string): Promise<User | null> {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return null;
+    return withoutTenantContext(this.knex, async (trx) => {
+      const rows = await trx<UserRow>('iam.users')
+        .whereRaw('LOWER(email) = ?', [normalized])
+        .limit(2);
+      if (rows.length !== 1) return null;
+      const row = rows[0];
+      if (!row) return null;
+      const roleIds = await this.loadRoleIds(trx, row.tenant_id, row.id);
+      return this.toDomain(row, roleIds);
+    });
+  }
+
+  /**
+   * Login by username. Usernames are unique platform-wide (INV-IAM-02);
+   * comparison is case-insensitive, matching the in-tenant login path.
+   * More than one case-variant match is treated as ambiguous.
+   */
+  public async findUniqueByUsername(username: string): Promise<User | null> {
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) return null;
+    return withoutTenantContext(this.knex, async (trx) => {
+      const rows = await trx<UserRow>('iam.users')
+        .whereRaw('LOWER(username) = ?', [normalized])
+        .limit(2);
+      if (rows.length !== 1) return null;
+      const row = rows[0];
+      if (!row) return null;
+      const roleIds = await this.loadRoleIds(trx, row.tenant_id, row.id);
+      return this.toDomain(row, roleIds);
+    });
+  }
+
+  /**
    * Persist a (new or changed) user and its domain events atomically. New users
    * are INSERTed; existing users are UPDATEd with optimistic version check.
    *

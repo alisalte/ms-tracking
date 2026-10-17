@@ -3,11 +3,11 @@ import { Public } from '@fleetvision/auth';
  * Auth controller — login, refresh, logout, /me, sessions. Base path
  * `/api/v1/auth` (ARR API-1, Authentication.md §5).
  *
- * Login/register/refresh are PUBLIC (no Bearer required). The tenant is
- * supplied via the `X-Tenant-Id` header, which may carry either a UUID or a
- * tenant name/slug (e.g. "FleetVision"); the name is resolved server-side to
- * the canonical UUID before reaching the use case (INV-I02: tenant_id is always
- * server-verified, never trusted from the request body).
+ * Login/register/refresh are PUBLIC (no Bearer required). Login resolves the
+ * account from email or username and takes the tenant from that user row.
+ * An optional `X-Tenant-Id` header (UUID or tenant name) still scopes the
+ * lookup. Refresh keeps requiring the header. INV-I02: tenant_id is always
+ * server-verified, never trusted from the request body.
  */
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
@@ -39,17 +39,20 @@ export class AuthController {
   ) {}
 
   /**
-   * Resolve the `X-Tenant-Id` header to a canonical tenant UUID.
+   * Resolve an optional `X-Tenant-Id` header to a canonical tenant UUID.
    *
    * Accepts a UUID or a tenant name (ASCII or percent-encoded Unicode, e.g.
    * "شرکت سامان"). Names are resolved via `iam.tenants` case-insensitively.
-   * INV-I02: the tenant_id reaching the use case is always server-verified.
-   * Unknown / missing header → generic credentials error (no tenant oracle).
+   * A missing header returns null so login can find the account by email or
+   * username. A present but unknown header is a generic credentials error
+   * (no tenant oracle).
    */
-  private async resolveTenantId(rawTenantId: string | string[] | undefined): Promise<string> {
+  private async resolveTenantIdOptional(
+    rawTenantId: string | string[] | undefined,
+  ): Promise<string | null> {
     const raw = Array.isArray(rawTenantId) ? rawTenantId[0] : rawTenantId;
     const candidates = tenantHeaderCandidates(raw);
-    if (candidates.length === 0) throw new InvalidCredentialsError();
+    if (candidates.length === 0) return null;
 
     for (const candidate of candidates) {
       if (UUID_RE.test(candidate)) return candidate;
@@ -57,6 +60,13 @@ export class AuthController {
       if (resolved) return resolved;
     }
     throw new InvalidCredentialsError();
+  }
+
+  /** Refresh still requires a resolved tenant header. */
+  private async resolveTenantId(rawTenantId: string | string[] | undefined): Promise<string> {
+    const tenantId = await this.resolveTenantIdOptional(rawTenantId);
+    if (!tenantId) throw new InvalidCredentialsError();
+    return tenantId;
   }
 
   @Post('login')
@@ -80,7 +90,9 @@ export class AuthController {
       };
     };
   }> {
-    const tenantId = await this.resolveTenantId(req.headers['x-tenant-id'] as string | undefined);
+    const tenantId = await this.resolveTenantIdOptional(
+      req.headers['x-tenant-id'] as string | undefined,
+    );
     const result = await this.loginUseCase.execute({
       email: body.email,
       password: body.password,

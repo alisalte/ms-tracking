@@ -20,12 +20,11 @@ export class ForbiddenTenantAdminError extends Error {
   }
 }
 
-export async function login(tenantName: string, email: string, password: string): Promise<void> {
-  const { data } = await api.post<LoginEnvelope>(
-    '/auth/login',
-    { email, password },
-    { headers: { 'X-Tenant-Id': encodeURIComponent(tenantName) } },
-  );
+export async function login(identifier: string, password: string): Promise<void> {
+  const { data } = await api.post<LoginEnvelope>('/auth/login', {
+    email: identifier,
+    password,
+  });
   saveSession({
     accessToken: data.data.access_token,
     refreshToken: data.data.refresh_token,

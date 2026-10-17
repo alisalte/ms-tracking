@@ -2,7 +2,6 @@ import { create } from 'zustand';
 
 import * as loginApi from '@/api/auth.api';
 import { refreshTokensSingleFlight, subscribeTokensRefreshed } from '@/api/token-refresh';
-import { isUuid } from '@/lib/ids';
 import type { User } from '@/types/auth.types';
 import {
   clearTokens,
@@ -47,9 +46,9 @@ interface AuthState {
 
 /** Auth store actions. */
 interface AuthActions {
-  /** Login with email + password. Stores tokens and fetches user profile.
+  /** Login with email or username. Stores tokens and fetches user profile.
    *  Resolves `true` on success, `false` on failure (error also in state). */
-  login: (email: string, password: string, tenantId: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   /** Exchange the stored refresh token for a new access token. */
   refreshTokens: () => Promise<void>;
   /** Fetch the current user profile from /me. */
@@ -82,23 +81,17 @@ export const useAuthStore = create<AuthStore>((set) => ({
   isLoading: false,
   error: null,
   // Actions
-  login: async (email, password, tenantId) => {
+  login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
-      // Drop any previous session first. After a stack/DB re-seed the stored
-      // tenant is a dead UUID; the interceptor prefers that over the org name
-      // typed in the form, and identity returns generic "Invalid credentials".
+      // Drop any previous session first so a stale tenant UUID cannot be sent
+      // with this login. The server resolves the account and returns its tenant.
       clearTokens();
-      saveTenantId(tenantId.trim());
-      if (!isUuid(tenantId.trim())) saveTenantName(tenantId.trim());
-      const response = await loginApi.login(email.trim().toLowerCase(), password, tenantId.trim());
+      const response = await loginApi.login(email.trim().toLowerCase(), password);
 
-      // Persist tokens. Sprint I E2E fix: the login form accepts a tenant
-      // NAME ("FleetVision") — persist the server-resolved canonical UUID from
-      // the login response instead. The axios interceptor sends the stored
-      // value as X-Tenant-Id on every call, and identity's tenant-mismatch
-      // guard (Sprint B) 403s a name that differs from the token's tenant.
-      const canonicalTenantId = response.user.tenantId ?? tenantId;
+      // Persist the server-resolved tenant UUID. The axios interceptor sends
+      // that value as X-Tenant-Id on later calls; a name would 403.
+      const canonicalTenantId = response.user.tenantId;
       saveTokens({
         accessToken: response.accessToken,
         refreshToken: response.refreshToken,

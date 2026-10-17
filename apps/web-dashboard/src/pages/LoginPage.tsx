@@ -9,26 +9,21 @@ import { Alert, Button, Card, Checkbox, Input } from '@/components/tailwind-ui';
 import { useAuth } from '@/hooks/useAuth';
 
 /**
- * LoginPage — TailAdmin sign-in (Phase 3).
+ * LoginPage — TailAdmin sign-in.
  *
- * Same authentication contract as the MUI version: email + password + tenant
- * field (the backend requires an `X-Tenant-Id` header and no public tenant
- * resolver exists yet — documented divergence from AUTH-BR-12), validated by
- * the identical react-hook-form + zod schema, calling the same auth store
- * action. On success it navigates to the `?redirect` path (default
- * `/dashboard`); server errors surface in a TailAdmin Alert.
+ * Email or username plus password. The account's tenant is resolved on the
+ * server from that user, so the form does not ask for an organization name.
+ * On success it navigates to the `?redirect` path (default `/dashboard`);
+ * server errors surface in a TailAdmin Alert.
  */
 const loginSchema = z.object({
-  tenantId: z.string().trim().min(1, { message: 'validation.tenantId.required' }),
-  email: z.string().trim().min(1, { message: 'validation.email.required' }),
+  email: z.string().trim().min(1, { message: 'validation.identifier.required' }),
   password: z.string().min(1, { message: 'validation.password.required' }),
   rememberDevice: z.boolean(),
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
-/** Org name is prefilled so the browser does not autofill a stale tenant UUID. */
 const EMPTY_LOGIN: LoginForm = {
-  tenantId: 'FleetVision',
   email: '',
   password: '',
   rememberDevice: false,
@@ -54,7 +49,7 @@ export function LoginPage() {
 
   const onSubmit = async (values: LoginForm) => {
     clearError();
-    const success = await login(values.email, values.password, values.tenantId);
+    const success = await login(values.email, values.password);
     if (success) {
       navigate(redirectPath, { replace: true });
     }
@@ -87,24 +82,6 @@ export function LoginPage() {
         className="flex flex-col gap-4"
       >
         <Controller
-          name="tenantId"
-          control={control}
-          render={({ field }) => (
-            <Input
-              {...field}
-              value={field.value ?? ''}
-              id="tenantId"
-              label={t('auth.tenantId')}
-              autoComplete="off"
-              autoFocus
-              disabled={isLoading}
-              error={errors.tenantId ? t(errors.tenantId.message ?? '') : null}
-              hint={errors.tenantId ? null : t('auth.tenantIdHelp')}
-            />
-          )}
-        />
-
-        <Controller
           name="email"
           control={control}
           render={({ field }) => (
@@ -115,6 +92,7 @@ export function LoginPage() {
               type="text"
               label={t('auth.identifier')}
               autoComplete="username"
+              autoFocus
               disabled={isLoading}
               error={errors.email ? t(errors.email.message ?? '') : null}
             />

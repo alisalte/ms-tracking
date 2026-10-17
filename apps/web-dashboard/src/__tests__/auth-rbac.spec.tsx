@@ -117,9 +117,9 @@ function renderLoginAt(path = '/login') {
 }
 
 describe('LoginPage — TailAdmin sign-in', () => {
-  it('renders tenant/email/password fields with labels', () => {
+  it('renders email-or-username and password fields with labels', () => {
     renderLoginAt();
-    expect(screen.getByLabelText('Organization')).toBeTruthy();
+    expect(screen.queryByLabelText('Organization')).toBeNull();
     expect(screen.getByLabelText('Email or username')).toBeTruthy();
     expect(screen.getByLabelText('Password')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeTruthy();
@@ -127,20 +127,17 @@ describe('LoginPage — TailAdmin sign-in', () => {
 
   it('does not prefill email or password', () => {
     renderLoginAt();
-    expect((screen.getByLabelText('Organization') as HTMLInputElement).value).toBe('FleetVision');
     expect((screen.getByLabelText('Email or username') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('');
   });
 
   it('blocks submit and shows zod validation errors when empty', async () => {
     renderLoginAt();
-    fireEvent.change(screen.getByLabelText('Organization'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
     await waitFor(() => {
-      // All three required-field messages surface under the inputs.
-      expect(screen.getAllByText(/required/i).length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByText(/required/i).length).toBeGreaterThanOrEqual(2);
     });
     expect(loginApi.login).not.toHaveBeenCalled();
   });
@@ -150,17 +147,14 @@ describe('LoginPage — TailAdmin sign-in', () => {
     loginApi.getMe.mockResolvedValue(FULL_USER);
     renderLoginAt('/login?redirect=/map');
 
-    fireEvent.change(screen.getByLabelText('Organization'), {
-      target: { value: 'FleetVision' },
-    });
     fireEvent.change(screen.getByLabelText('Email or username'), {
-      target: { value: 'op@fleet.test' },
+      target: { value: 'operator.one' },
     });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Secret123!' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() => expect(screen.getByTestId('page').textContent).toBe('map'));
-    expect(loginApi.login).toHaveBeenCalledWith('op@fleet.test', 'Secret123!', 'FleetVision');
+    expect(loginApi.login).toHaveBeenCalledWith('operator.one', 'Secret123!');
     // Session persisted + canonical tenant resolved from the response.
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(useAuthStore.getState().tenantId).toBe('tenant-uuid-1');
@@ -171,9 +165,6 @@ describe('LoginPage — TailAdmin sign-in', () => {
     loginApi.login.mockRejectedValue(new Error('Invalid credentials'));
     renderLoginAt();
 
-    fireEvent.change(screen.getByLabelText('Organization'), {
-      target: { value: 'FleetVision' },
-    });
     fireEvent.change(screen.getByLabelText('Email or username'), {
       target: { value: 'op@fleet.test' },
     });

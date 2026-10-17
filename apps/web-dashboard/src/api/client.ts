@@ -57,16 +57,16 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.delete('Authorization');
   }
 
-  // Prefer a header already set on this request (the login form). Otherwise
-  // fall back to the stored session tenant, then the standalone key.
+  // Login resolves the account without an organization header. A leftover
+  // tenant UUID must not ride that request. Other calls use the stored tenant.
   // Non-ASCII org names (e.g. «شرکت سامان») must be percent-encoded — HTTP
   // headers are ByteString and Node/undici reject or mojibake them otherwise.
   const existingTenant = config.headers.get('X-Tenant-Id');
   const tenantHeader = typeof existingTenant === 'string' ? existingTenant : '';
   if (tenantHeader && needsPercentEncode(tenantHeader)) {
     config.headers.set('X-Tenant-Id', encodeURIComponent(tenantHeader));
-  } else if (!tenantHeader) {
-    const tenantId = isLogin ? getTenantId() : (stored?.tenantId ?? getTenantId());
+  } else if (!tenantHeader && !isLogin) {
+    const tenantId = stored?.tenantId ?? getTenantId();
     if (tenantId) {
       config.headers.set(
         'X-Tenant-Id',
