@@ -2,6 +2,7 @@
   "auth": {
     "login": "Sign In",
     "email": "Email",
+    "identifier": "Email or username",
     "password": "Password",
     "tenantId": "Organization",
     "loggingIn": "Signing in...",

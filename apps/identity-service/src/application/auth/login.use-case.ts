@@ -92,8 +92,8 @@ export class LoginUseCase {
       }
     }
 
-    // 2. Look up the user within the tenant.
-    const user = await this.users.findByEmail(input.tenantId, input.email);
+    // 2. Look up the user within the tenant (email, then username).
+    const user = await this.findLoginUser(input.tenantId, input.email);
     if (!user) {
       // No user — but still consume time to avoid an oracle.
       throw new InvalidCredentialsError();
@@ -183,6 +183,20 @@ export class LoginUseCase {
         roles: claims.roles,
       },
     };
+  }
+
+  /**
+   * Mailbox first when the identifier contains `@`, then the tenant's username.
+   * Both comparisons are case-insensitive. A miss stays a generic credential
+   * error so this does not reveal which identifier exists.
+   */
+  private async findLoginUser(tenantId: string, identifier: string): Promise<User | null> {
+    const raw = identifier.trim();
+    if (raw.includes('@')) {
+      const byEmail = await this.users.findByEmail(tenantId, raw);
+      if (byEmail) return byEmail;
+    }
+    return this.users.findByUsernameInTenant(tenantId, raw);
   }
 
   /**

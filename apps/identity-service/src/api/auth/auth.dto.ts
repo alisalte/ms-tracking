@@ -6,7 +6,9 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  // Email or username. Mailboxes are stored lowercase; usernames are matched
+  // case-insensitively inside the tenant named by X-Tenant-Id.
+  email: z.string().trim().toLowerCase().min(1).max(254),
   password: z.string().min(1),
 });
 export type LoginDto = z.infer<typeof loginSchema>;
@@ -23,7 +25,7 @@ export const changeUserStatusSchema = z.object({
 export type ChangeUserStatusDto = z.infer<typeof changeUserStatusSchema>;
 
 export const createUserSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   username: z.string().min(3).max(64),
   password: z.string().min(12),
   display_name: z.string().max(128).optional(),
@@ -82,7 +84,7 @@ export const provisionTenantSchema = z.object({
   name: z.string().trim().min(2).max(128),
   tier: z.enum(['STANDARD', 'PROFESSIONAL', 'ENTERPRISE']),
   region: z.string().trim().min(2).max(64),
-  admin_email: z.string().email(),
+  admin_email: z.string().trim().toLowerCase().email(),
   admin_username: z.string().min(3).max(64),
   admin_password: z.string().min(12),
   license: tenantLicenseFieldsSchema.optional(),

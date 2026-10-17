@@ -5,6 +5,7 @@
  * framework-specific.)
  */
 export * from './shared/ids.js';
+export * from './email.js';
 export * from './permissions.js';
 export * from './errors.js';
 export * from './password-policy.js';

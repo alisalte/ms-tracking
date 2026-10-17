@@ -16,6 +16,7 @@ import {
   Tenant as TenantClass,
   type TenantTier,
   User as UserClass,
+  normalizeEmail,
 } from '../../domain/index.js';
 import { assertPasswordPolicy } from '../../domain/password-policy.js';
 import { PLAN_DEFAULTS } from '../../domain/tenant-license.js';
@@ -90,7 +91,7 @@ export class ProvisionTenantUseCase {
       adminUserId,
       {
         tenantId,
-        email: input.adminEmail,
+        email: normalizeEmail(input.adminEmail),
         username: input.adminUsername,
         passwordHash: hash,
         displayName: 'Tenant Admin',

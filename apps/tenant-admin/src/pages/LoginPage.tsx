@@ -20,7 +20,7 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await login(tenantId.trim(), email.trim(), password);
+      await login(tenantId.trim(), email.trim().toLowerCase(), password);
       navigate('/', { replace: true });
     } catch (err) {
       clearSession();
@@ -64,9 +64,9 @@ export function LoginPage() {
             />
           </label>
           <label className="mt-4 block text-sm font-medium text-slate-700">
-            {t('auth.email')}
+            {t('auth.identifier')}
             <input
-              type="email"
+              type="text"
               className="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2"
               value={email}
               onChange={(ev) => setEmail(ev.target.value)}

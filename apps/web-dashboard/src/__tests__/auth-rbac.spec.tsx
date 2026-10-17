@@ -120,7 +120,7 @@ describe('LoginPage — TailAdmin sign-in', () => {
   it('renders tenant/email/password fields with labels', () => {
     renderLoginAt();
     expect(screen.getByLabelText('Organization')).toBeTruthy();
-    expect(screen.getByLabelText('Email')).toBeTruthy();
+    expect(screen.getByLabelText('Email or username')).toBeTruthy();
     expect(screen.getByLabelText('Password')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeTruthy();
   });
@@ -128,14 +128,14 @@ describe('LoginPage — TailAdmin sign-in', () => {
   it('does not prefill email or password', () => {
     renderLoginAt();
     expect((screen.getByLabelText('Organization') as HTMLInputElement).value).toBe('FleetVision');
-    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Email or username') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('');
   });
 
   it('blocks submit and shows zod validation errors when empty', async () => {
     renderLoginAt();
     fireEvent.change(screen.getByLabelText('Organization'), { target: { value: '' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
     await waitFor(() => {
@@ -153,7 +153,9 @@ describe('LoginPage — TailAdmin sign-in', () => {
     fireEvent.change(screen.getByLabelText('Organization'), {
       target: { value: 'FleetVision' },
     });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'op@fleet.test' } });
+    fireEvent.change(screen.getByLabelText('Email or username'), {
+      target: { value: 'op@fleet.test' },
+    });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Secret123!' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 
@@ -172,7 +174,9 @@ describe('LoginPage — TailAdmin sign-in', () => {
     fireEvent.change(screen.getByLabelText('Organization'), {
       target: { value: 'FleetVision' },
     });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'op@fleet.test' } });
+    fireEvent.change(screen.getByLabelText('Email or username'), {
+      target: { value: 'op@fleet.test' },
+    });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 

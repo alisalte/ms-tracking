@@ -14,6 +14,7 @@ import {
   User as UserClass,
   type UserProps,
   type UserStatus,
+  normalizeEmail,
 } from '../../domain/index.js';
 import { withTenantContext, withoutTenantContext } from './tenant-context.js';
 
@@ -49,10 +50,33 @@ export class UserRepository {
     });
   }
 
-  /** Find a user by email within a tenant (login path). */
+  /**
+   * Find a user by email within a tenant (login path).
+   * Comparison is case-insensitive so rows created before mailbox normalization
+   * still match the lowercased identifier the dashboards send.
+   */
   public async findByEmail(tenantId: string, email: string): Promise<User | null> {
+    const normalized = normalizeEmail(email);
     return withTenantContext(this.knex, tenantId, async (trx) => {
-      const row = await trx<UserRow>('iam.users').where({ tenant_id: tenantId, email }).first();
+      const row = await trx<UserRow>('iam.users')
+        .where({ tenant_id: tenantId })
+        .whereRaw('LOWER(email) = ?', [normalized])
+        .first();
+      if (!row) return null;
+      const roleIds = await this.loadRoleIds(trx, tenantId, row.id);
+      return this.toDomain(row, roleIds);
+    });
+  }
+
+  /** Find a user by username inside one tenant (login path). */
+  public async findByUsernameInTenant(tenantId: string, username: string): Promise<User | null> {
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) return null;
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const row = await trx<UserRow>('iam.users')
+        .where({ tenant_id: tenantId })
+        .whereRaw('LOWER(username) = ?', [normalized])
+        .first();
       if (!row) return null;
       const roleIds = await this.loadRoleIds(trx, tenantId, row.id);
       return this.toDomain(row, roleIds);

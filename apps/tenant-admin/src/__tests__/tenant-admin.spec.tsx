@@ -9,6 +9,7 @@ import {
   listInbox,
   listTenantDevices,
 } from '@/api/platform-assets';
+import { createTenantUser } from '@/api/tenants';
 import { addDaysIso } from '@/lib/license';
 import { canManageTenants } from '@/lib/session';
 import { LoginPage } from '@/pages/LoginPage';
@@ -47,6 +48,7 @@ vi.mock('@/api/tenants', async (importOriginal) => {
         permissions: ['fleet.read', 'fleet.write'],
       },
     ]),
+    createTenantUser: vi.fn(async () => ({ id: 'user-1' })),
     createTenantRole: vi.fn(),
     updateTenantRolePermissions: vi.fn(),
     setTenantUserRole: vi.fn(),
@@ -179,6 +181,40 @@ describe('tenant detail tabs', () => {
       'true',
     );
     expect(screen.getByRole('button', { name: /ایجاد کاربر|Create user/i })).toBeInTheDocument();
+    expect(screen.getByText(/نام سازمان را دقیقاً «FleetVision»/)).toBeInTheDocument();
+  });
+
+  it('stores the new user mailbox in lowercase and shows how to sign in', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /دسترسی|Access/i }));
+    expect(await screen.findByRole('option', { name: /ناظر|viewer/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/^ایمیل$|^Email$/), {
+      target: { value: 'Ali@Example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/^نام کاربری$|^Username$/), {
+      target: { value: 'operator.one' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/^رمز عبور$|^Password$/), {
+      target: { value: 'ChangeMe!Strong1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /ایجاد کاربر|Create user/i }));
+    await waitFor(() => {
+      expect(createTenantUser).toHaveBeenCalledWith('t1', {
+        email: 'ali@example.com',
+        username: 'operator.one',
+        password: 'ChangeMe!Strong1',
+        display_name: undefined,
+        role_id: 'role-viewer',
+      });
+    });
+    expect(screen.getByText(/ali@example.com/)).toBeInTheDocument();
+    expect(screen.getByText(/operator\.one/)).toBeInTheDocument();
   });
 
   it('opens fleet registration and device assignment for the tenant', async () => {
