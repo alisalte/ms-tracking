@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
+import { assignImeisToFleet, listInbox } from '@/api/platform-assets';
 import { addDaysIso } from '@/lib/license';
 import { canManageTenants } from '@/lib/session';
 import { LoginPage } from '@/pages/LoginPage';
@@ -76,6 +77,7 @@ vi.mock('@/api/platform-assets', () => ({
   listInbox: vi.fn(async () => []),
   lookupImei: vi.fn(),
   claimDevice: vi.fn(),
+  assignImeisToFleet: vi.fn(async () => ({ fleetId: 'fleet-1', assigned: [], failed: [] })),
 }));
 
 vi.mock('@/api/billing', async (importOriginal) => {
@@ -183,7 +185,52 @@ describe('tenant detail tabs', () => {
     expect(await screen.findByTestId('create-fleet-form')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ساخت ناوگان|Create fleet/i })).toBeInTheDocument();
     expect(await screen.findByText('490154203237518')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /تخصیص|Assign/i })).toBeInTheDocument();
+    expect(screen.getByTestId('unassigned-imeis')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /تخصیص انتخاب|Assign selected/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'North' })).toBeInTheDocument();
+  });
+
+  it('assigns every ticked IMEI that is not on a fleet', async () => {
+    vi.mocked(listInbox).mockResolvedValueOnce([
+      {
+        imei: '356938035643809',
+        protocol: 'gt06',
+        manufacturer: null,
+        model: null,
+        seenCount: 2,
+        firstSeenAt: '2026-06-01T00:00:00.000Z',
+        lastSeenAt: '2026-06-02T00:00:00.000Z',
+      },
+    ]);
+    vi.mocked(assignImeisToFleet).mockResolvedValue({
+      fleetId: 'fleet-1',
+      assigned: [
+        { imei: '490154203237518', deviceId: 'dev-1', created: false, assignment: null },
+        { imei: '356938035643809', deviceId: 'dev-2', created: true, assignment: null },
+      ],
+      failed: [],
+    });
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /ناوگان|Fleets/i }));
+    expect(await screen.findByRole('checkbox', { name: '356938035643809' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /انتخاب همه|Select all/i }));
+    const assign = screen.getByRole('button', { name: /تخصیص انتخاب|Assign selected/i });
+    await waitFor(() => expect(assign).toBeEnabled());
+    fireEvent.click(assign);
+    await waitFor(() =>
+      expect(assignImeisToFleet).toHaveBeenCalledWith('t1', {
+        fleetId: 'fleet-1',
+        imeis: ['490154203237518', '356938035643809'],
+      }),
+    );
+    expect(await screen.findByText(/2 دستگاه به ناوگان|2 devices assigned/)).toBeInTheDocument();
   });
 });

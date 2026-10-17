@@ -103,6 +103,28 @@ export async function claimDevice(
   return data.data;
 }
 
+export interface BulkAssignResult {
+  fleetId: string;
+  assigned: Array<{
+    imei: string;
+    deviceId: string;
+    created: boolean;
+    assignment: PlatformAssignment | null;
+  }>;
+  failed: Array<{ imei: string; message: string }>;
+}
+
+export async function assignImeisToFleet(
+  tenantId: string,
+  body: { fleetId: string; imeis: string[] },
+): Promise<BulkAssignResult> {
+  const { data } = await api.post<{ data: BulkAssignResult }>(
+    `/platform/tenants/${tenantId}/devices/assign`,
+    body,
+  );
+  return data.data;
+}
+
 export async function assignDeviceToFleet(
   tenantId: string,
   deviceId: string,

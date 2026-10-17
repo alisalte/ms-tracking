@@ -55,7 +55,37 @@ export class PlatformTenantAssetsService {
 
   public async listInbox() {
     if (!this.inbox) return [];
-    return this.inbox.listUnclaimed(100);
+    return this.inbox.listUnclaimed(500);
+  }
+
+  /**
+   * Place every selected IMEI on one fleet. Inbox sightings are claimed into
+   * this tenant first. An IMEI that already belongs to another tenant is
+   * reported in `failed` and does not roll back the rest.
+   */
+  public async assignImeisToFleet(ctx: ActorContext, fleetId: string, imeis: readonly string[]) {
+    const unique = [...new Set(imeis.map((imei) => imei.trim()).filter((imei) => imei.length > 0))];
+    if (unique.length === 0) throw new BadRequestException('Select at least one IMEI.');
+    const fleet = await this.fleets.get(ctx, fleetId);
+    if (fleet.status === 'ARCHIVED') {
+      throw new ConflictException('Archived fleets cannot receive devices.');
+    }
+    const assigned: Array<{
+      imei: string;
+      deviceId: string;
+      created: boolean;
+      assignment: PlatformDeviceAssignment | null;
+    }> = [];
+    const failed: Array<{ imei: string; message: string }> = [];
+    for (const imei of unique) {
+      try {
+        const result = await this.claimDevice(ctx, imei, fleetId);
+        assigned.push({ imei: requireImei(imei), ...result });
+      } catch (err) {
+        failed.push({ imei, message: err instanceof Error ? err.message : 'Assignment failed.' });
+      }
+    }
+    return { fleetId, assigned, failed };
   }
 
   public async lookupImei(imei: string) {
