@@ -3,12 +3,17 @@ import { useTranslation } from 'react-i18next';
 
 import { apiMessage } from '@/api/client';
 import {
+  type ImeiLookup,
+  type InboxDevice,
   type PlatformDevice,
   type PlatformFleet,
   assignDeviceToFleet,
+  claimDevice,
   createTenantFleet,
+  listInbox,
   listTenantDevices,
   listTenantFleets,
+  lookupImei,
 } from '@/api/platform-assets';
 
 export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
@@ -23,14 +28,21 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
   const [busy, setBusy] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, string>>({});
+  const [imei, setImei] = useState('');
+  const [lookup, setLookup] = useState<ImeiLookup | null>(null);
+  const [inbox, setInbox] = useState<InboxDevice[]>([]);
+  const [claimFleetId, setClaimFleetId] = useState('');
+  const [claimBusy, setClaimBusy] = useState(false);
 
   const reload = async () => {
-    const [nextFleets, nextDevices] = await Promise.all([
+    const [nextFleets, nextDevices, nextInbox] = await Promise.all([
       listTenantFleets(tenantId),
       listTenantDevices(tenantId),
+      listInbox(),
     ]);
     setFleets(nextFleets);
     setDevices(nextDevices);
+    setInbox(nextInbox);
     setChoice((prev) => {
       const next = { ...prev };
       for (const device of nextDevices) {
@@ -85,6 +97,47 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
       setError(apiMessage(err));
     } finally {
       setAssigningId(null);
+    }
+  };
+
+  const onLookup = async (event: FormEvent) => {
+    event.preventDefault();
+    setClaimBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const found = await lookupImei(imei.trim());
+      setLookup(found);
+      setClaimFleetId('');
+    } catch (err) {
+      setLookup(null);
+      setError(apiMessage(err));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const claimable =
+    lookup !== null && (lookup.state !== 'ASSIGNED' || lookup.tenantId === tenantId);
+
+  const onClaim = async () => {
+    if (!lookup || !claimable) return;
+    setClaimBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await claimDevice(tenantId, {
+        imei: lookup.imei,
+        fleetId: claimFleetId || undefined,
+      });
+      setNotice(t('fleets.claimed'));
+      setLookup(null);
+      setImei('');
+      await reload();
+    } catch (err) {
+      setError(apiMessage(err));
+    } finally {
+      setClaimBusy(false);
     }
   };
 
@@ -163,6 +216,78 @@ export function TenantFleetsPanel({ tenantId }: { tenantId: string }) {
               ))}
             </tbody>
           </table>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-stone-200 bg-white p-4" data-testid="imei-claim">
+        <h2 className="text-sm font-semibold">{t('fleets.claimTitle')}</h2>
+        <p className="mt-1 text-sm text-slate-600">{t('fleets.claimHint')}</p>
+        <form onSubmit={onLookup} className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="text-sm font-medium">
+            IMEI
+            <input
+              className="mt-1 w-56 rounded-lg border border-slate-300 px-3 py-2 font-mono"
+              value={imei}
+              onChange={(event) => setImei(event.target.value)}
+              inputMode="numeric"
+              required
+              minLength={15}
+              maxLength={20}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={claimBusy}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold"
+          >
+            {t('fleets.lookup')}
+          </button>
+        </form>
+        {lookup && (
+          <div className="mt-3 flex flex-wrap items-end gap-2 text-sm">
+            <p>
+              {t(`fleets.lookupState.${lookup.state}`)}
+              {lookup.protocol ? ` · ${lookup.protocol}` : ''}
+              {lookup.seenCount > 0 ? ` · ${lookup.seenCount}` : ''}
+            </p>
+            {claimable && (
+              <>
+                <select
+                  aria-label={t('fleets.claimFleet')}
+                  className="rounded-lg border border-slate-300 px-2 py-1"
+                  value={claimFleetId}
+                  onChange={(event) => setClaimFleetId(event.target.value)}
+                >
+                  <option value="">{t('fleets.claimFleet')}</option>
+                  {activeFleets.map((fleet) => (
+                    <option key={fleet.id} value={fleet.id}>
+                      {fleet.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={claimBusy}
+                  className="rounded-lg bg-brand-500 px-3 py-1 text-sm font-semibold text-white"
+                  onClick={() => void onClaim()}
+                >
+                  {t('fleets.claim')}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {inbox.length > 0 && (
+          <ul className="mt-3 text-sm text-slate-600">
+            {inbox.slice(0, 8).map((row) => (
+              <li key={row.imei} className="font-mono">
+                <button type="button" className="underline" onClick={() => setImei(row.imei)}>
+                  {row.imei}
+                </button>
+                {` · ${row.protocol} · ${row.seenCount}`}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

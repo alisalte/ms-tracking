@@ -7,6 +7,7 @@ import type { Redis } from '@fleetvision/cache-redis';
 import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
 import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { OperationsReportService } from '../application/operations-report.service.js';
 import { ReportScheduleService } from '../application/report-schedule.service.js';
 import { ReportScheduleWorker } from '../application/report-schedule.worker.js';
 import { ReportService } from '../application/report.service.js';
@@ -15,10 +16,12 @@ import { ExportRateLimiter, ReportCache } from '../infrastructure/cache/report-c
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { ReportScheduleRepository } from '../infrastructure/persistence/report-schedule.repository.js';
 import { ReportRepository } from '../infrastructure/persistence/report.repository.js';
+import { OperationsReportsController } from './operations-reports.controller.js';
 import { ReportSchedulesController } from './report-schedules.controller.js';
 import { ReportsController } from './reports.controller.js';
 import {
   EXPORT_RATE_LIMITER,
+  OPERATIONS_REPORT_SERVICE,
   REPORTING_CONFIG,
   REPORT_AUDIT_REPOSITORY,
   REPORT_CACHE,
@@ -111,13 +114,20 @@ export class ReportingModule {
             batchSize: config.REPORT_SCHEDULE_WORKER_BATCH_SIZE,
           }),
       },
+      {
+        provide: OPERATIONS_REPORT_SERVICE,
+        inject: [KNEX_TOKEN, REPORTING_CONFIG],
+        useFactory: (knex: unknown, cfg: ReportingConfig) =>
+          new OperationsReportService(knex as never, cfg.REPORT_QUERY_TIMEOUT_MS),
+      },
       ReportsController,
+      OperationsReportsController,
       ReportSchedulesController,
     ];
     return {
       module: ReportingModule,
       providers,
-      controllers: [ReportsController, ReportSchedulesController],
+      controllers: [ReportsController, OperationsReportsController, ReportSchedulesController],
     };
   }
 }

@@ -52,6 +52,9 @@ vi.mock('@/api/platform-assets', () => ({
   ]),
   createTenantFleet: vi.fn(),
   assignDeviceToFleet: vi.fn(),
+  listInbox: vi.fn(async () => []),
+  lookupImei: vi.fn(),
+  claimDevice: vi.fn(),
 }));
 
 vi.mock('@/api/billing', async (importOriginal) => {

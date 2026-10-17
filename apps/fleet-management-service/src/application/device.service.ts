@@ -15,9 +15,9 @@ import type { Page } from '@fleetvision/shared-kernel';
  * - `resolve(imei)` is the gateway's trusted lookup: global IMEI → identity, with
  *   the owning tenant's active-status checked. It is the source of truth for the
  *   device-gateway's auth-resolver L3 (cached upward; never per-packet).
- * - `enroll(imei)` is first-packet auto-provision: create the device (and a
- *   bound vehicle) in the API-key tenant so an SMS-configured unit appears on
- *   the map without a prior dashboard step. Idempotent on IMEI.
+ * - `enroll(imei)` records an unknown IMEI in the platform inbox when that
+ *   repository is wired. The unit is not placed in a customer tenant until an
+ *   operator claims it. An IMEI that is already owned is returned as-is.
  */
 import {
   ConflictException,
@@ -34,6 +34,7 @@ import type {
 } from '../domain/device/device-types.js';
 import type { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
 import type { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
+import type { DeviceInboxRepository } from '../infrastructure/persistence/device-inbox.repository.js';
 import {
   type DeviceListFilters,
   DeviceRepository,
@@ -68,6 +69,11 @@ export class DeviceService {
     private readonly bindings: BindingService | null = null,
     /** Optional — used by first-packet enroll to place the auto-created vehicle. */
     private readonly fleets: FleetRepository | null = null,
+    /**
+     * When set, an unknown IMEI is parked in the inbox instead of being
+     * created in the API-key tenant.
+     */
+    private readonly inbox: DeviceInboxRepository | null = null,
   ) {}
 
   // --- Management API -------------------------------------------------------
@@ -246,6 +252,16 @@ export class DeviceService {
         return this.resolve(input.imei);
       }
       return existing;
+    }
+
+    if (this.inbox) {
+      await this.inbox.record({
+        imei: input.imei,
+        protocol: input.protocol,
+        manufacturer: input.manufacturer ?? null,
+        model: input.model ?? null,
+      });
+      return { found: false, tenantActive: true };
     }
 
     try {

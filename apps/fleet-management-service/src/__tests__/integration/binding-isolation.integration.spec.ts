@@ -6,6 +6,7 @@ import type { ActorContext } from '../../application/service-context.js';
 import { VehicleService } from '../../application/vehicle.service.js';
 import { AuditRepository } from '../../infrastructure/persistence/audit.repository.js';
 import { BindingRepository } from '../../infrastructure/persistence/binding.repository.js';
+import { DeviceInboxRepository } from '../../infrastructure/persistence/device-inbox.repository.js';
 import { DeviceRepository } from '../../infrastructure/persistence/device.repository.js';
 import { FleetRepository } from '../../infrastructure/persistence/fleet.repository.js';
 import { VehicleRepository } from '../../infrastructure/persistence/vehicle.repository.js';
@@ -60,7 +61,16 @@ d('fleet-management integration — binding, resolve, IMEI, isolation (§30/§31
     fleets = new FleetService(c.knex, fleetRepo, audit);
     vehicles = new VehicleService(c.knex, vehicleRepo, fleetRepo, audit);
     binding = new BindingService(c.knex, vehicleRepo, deviceRepo, bindingRepo, audit);
-    devices = new DeviceService(c.knex, deviceRepo, audit, null, vehicleRepo, binding, fleetRepo);
+    devices = new DeviceService(
+      c.knex,
+      deviceRepo,
+      audit,
+      null,
+      vehicleRepo,
+      binding,
+      fleetRepo,
+      new DeviceInboxRepository(c.knex),
+    );
   });
 
   beforeEach(async () => {
@@ -205,35 +215,30 @@ d('fleet-management integration — binding, resolve, IMEI, isolation (§30/§31
     expect(res.found).toBe(false);
   });
 
-  it('enrolls an unknown IMEI as an ACTIVE device bound to a new vehicle', async () => {
+  it('parks an unknown IMEI in the inbox instead of a customer tenant', async () => {
     const im = imei('35888888888880');
     const first = await devices.enroll(actorFor(TENANT_A), { imei: im, protocol: 'meitrack' });
-    expect(first.found).toBe(true);
-    if (!first.found) return;
-    expect(first.device.status).toBe('ACTIVE');
-    expect(first.device.tenantId).toBe(TENANT_A);
-    expect(first.device.protocol).toBe('meitrack');
-    expect(first.device.vehicleId).toBeTruthy();
+    expect(first).toEqual({ found: false, tenantActive: true });
 
     const again = await devices.enroll(actorFor(TENANT_A), { imei: im, protocol: 'meitrack' });
-    expect(again.found).toBe(true);
-    if (!again.found) return;
-    expect(again.device.deviceId).toBe(first.device.deviceId);
-    expect(again.device.vehicleId).toBe(first.device.vehicleId);
+    expect(again.found).toBe(false);
 
-    const list = await binding.listDevicesForVehicle(actorFor(TENANT_A), first.device.vehicleId!);
-    expect(list).toHaveLength(1);
-    expect(list[0]?.deviceId).toBe(first.device.deviceId);
+    const listed = await devices.list(actorFor(TENANT_A), {}, { limit: 50 });
+    expect(listed.data).toHaveLength(0);
+    const sighting = await new DeviceInboxRepository(c.knex).findByImei(im);
+    expect(sighting?.seenCount).toBe(2);
+    expect(sighting?.claimedAt).toBeNull();
   });
 
-  it('enroll places the vehicle in an existing ACTIVE fleet rather than always creating AUTO', async () => {
-    const fleet = await fleets.create(actorFor(TENANT_A), { name: 'Ops', code: 'OPS' });
-    const im = imei('35888888888881');
-    const res = await devices.enroll(actorFor(TENANT_A), { imei: im, protocol: 'gt06' });
-    expect(res.found).toBe(true);
-    if (!res.found || !res.device.vehicleId) return;
-    const vehicle = await vehicles.get(actorFor(TENANT_A), res.device.vehicleId);
-    expect(vehicle.fleetId).toBe(fleet.id);
+  it('does not create a vehicle when an unknown IMEI connects and a fleet already exists', async () => {
+    await fleets.create(actorFor(TENANT_A), { name: 'Ops', code: 'OPS' });
+    const res = await devices.enroll(actorFor(TENANT_A), {
+      imei: imei('35888888888881'),
+      protocol: 'gt06',
+    });
+    expect(res.found).toBe(false);
+    const page = await vehicles.list(actorFor(TENANT_A), {}, { limit: 50 });
+    expect(page.data).toHaveLength(0);
   });
 
   it('resolve returns a SUSPENDED device (gateway maps to disabled) and a suspended tenant', async () => {

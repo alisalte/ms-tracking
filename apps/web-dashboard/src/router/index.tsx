@@ -20,6 +20,7 @@ import { MaintenancePage } from '@/pages/MaintenancePage';
 import { MfaVerifyPage } from '@/pages/MfaVerifyPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { NotificationCenterPage } from '@/pages/NotificationCenterPage';
+import { OperationsPage } from '@/pages/OperationsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
@@ -188,7 +189,9 @@ export const router = createBrowserRouter([
             element: (
               // Phase 3 — ANY-of gate mirrors the nav item's visibility rule
               // (vehicle.read OR fleet.read); the backend enforces per-entity.
-              <RequirePermission anyOf={[PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead, PERMISSIONS.driverRead]}>
+              <RequirePermission
+                anyOf={[PERMISSIONS.vehicleRead, PERMISSIONS.fleetRead, PERMISSIONS.driverRead]}
+              >
                 <AssetManagementPage />
               </RequirePermission>
             ),
@@ -209,6 +212,14 @@ export const router = createBrowserRouter([
           {
             path: '/drivers',
             element: <Navigate to="/assets?tab=drivers" replace />,
+          },
+          {
+            path: '/operations',
+            element: (
+              <RequirePermission permission={PERMISSIONS.reportRead}>
+                <OperationsPage />
+              </RequirePermission>
+            ),
           },
           {
             path: '/reports',

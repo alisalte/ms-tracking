@@ -242,7 +242,18 @@
     "unassigned": "Unassigned",
     "assign": "Assign",
     "assigned": "Device assigned to the fleet.",
-    "pickFleet": "Choose a fleet"
+    "pickFleet": "Choose a fleet",
+    "claimTitle": "Claim a connected device",
+    "claimHint": "A device that connects is not placed in any tenant. Look it up by IMEI and register it for this organisation. Optionally place it on a fleet in the same step.",
+    "lookup": "Look up",
+    "claim": "Register for this tenant",
+    "claimFleet": "Fleet after registration",
+    "claimed": "Device registered for this tenant.",
+    "lookupState": {
+      "INBOX": "Connected and waiting",
+      "UNKNOWN": "Not seen yet — it will be registered when you continue",
+      "ASSIGNED": "Already registered"
+    }
   },
   "common": {
     "loading": "Loading…",

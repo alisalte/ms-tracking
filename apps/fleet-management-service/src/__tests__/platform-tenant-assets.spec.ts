@@ -98,6 +98,8 @@ describe('PlatformTenantAssetsService', () => {
   const devices = {
     get: jest.fn(),
     list: jest.fn(),
+    resolve: jest.fn(),
+    create: jest.fn(),
   };
   const bindings = {
     bind: jest.fn(),
@@ -246,5 +248,63 @@ describe('PlatformTenantAssetsService', () => {
     await expect(svc.assignDeviceToFleet(ctx, DEVICE_ID, FLEET_ID)).rejects.toThrow(
       /Decommissioned/,
     );
+  });
+
+  it('claims an inbox IMEI into the path tenant', async () => {
+    const inbox = {
+      findByImei: jest.fn(async () => ({
+        imei: '490154203237518',
+        protocol: 'gt06',
+        manufacturer: 'Teltonika',
+        model: null,
+        seenCount: 3,
+        firstSeenAt: new Date('2026-06-01T00:00:00Z'),
+        lastSeenAt: new Date('2026-06-02T00:00:00Z'),
+        claimedTenantId: null,
+        claimedDeviceId: null,
+        claimedAt: null,
+      })),
+      markClaimed: jest.fn(async () => undefined),
+      listUnclaimed: jest.fn(async () => []),
+      record: jest.fn(),
+    };
+    const claimer = new PlatformTenantAssetsService(
+      fleets as never,
+      vehicles as never,
+      devices as never,
+      bindings as never,
+      inbox as never,
+    );
+    devices.resolve.mockImplementation(async () => ({ found: false, tenantActive: true }));
+    devices.create.mockImplementation(async () => device({ protocol: 'gt06' }));
+
+    const result = await claimer.claimDevice(ctx, '490154203237518');
+
+    expect(result).toEqual({ deviceId: DEVICE_ID, created: true, assignment: null });
+    expect(devices.create).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ imei: '490154203237518', protocol: 'gt06', status: 'ACTIVE' }),
+    );
+    expect(inbox.markClaimed).toHaveBeenCalledWith('490154203237518', TENANT, DEVICE_ID);
+  });
+
+  it('refuses an IMEI that already belongs to another tenant', async () => {
+    const claimer = new PlatformTenantAssetsService(
+      fleets as never,
+      vehicles as never,
+      devices as never,
+      bindings as never,
+      { findByImei: jest.fn(), markClaimed: jest.fn() } as never,
+    );
+    devices.resolve.mockImplementation(async () => ({
+      found: true,
+      tenantActive: true,
+      device: { deviceId: DEVICE_ID, tenantId: '99999999-9999-9999-9999-999999999999' },
+    }));
+
+    await expect(claimer.claimDevice(ctx, '490154203237518')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(devices.create).not.toHaveBeenCalled();
   });
 });

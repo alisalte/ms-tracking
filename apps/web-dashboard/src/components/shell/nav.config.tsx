@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   TerminalSquare,
+  Truck,
   UserRound,
   Video,
   Wrench,
@@ -129,6 +130,7 @@ export const NAV_GROUPS: NavGroup[] = [
     groupKey: 'reporting',
     items: [
       { key: 'reports', path: '/reports', icon: BarChart3, permission: PERMISSIONS.reportRead },
+      { key: 'mineOps', path: '/operations', icon: Truck, permission: PERMISSIONS.reportRead },
     ],
   },
   {
