@@ -24,6 +24,7 @@ import {
   Table,
   Tooltip,
 } from '@/components/tailwind-ui';
+import { onlineCameraDeviceCount } from '@/lib/camera-presence';
 import { displayLabel } from '@/lib/ids';
 import type { CameraChannel } from '@/types/video.types';
 
@@ -51,6 +52,9 @@ export function CamerasPanel({ channels, loading, onAddToWall }: CamerasPanelPro
       );
     });
   }, [channels, query, onlineOnly]);
+
+  // Same unit as the map's "آنلاین · N" chip: vehicles, not individual lenses.
+  const onlineDevices = useMemo(() => onlineCameraDeviceCount(channels), [channels]);
 
   if (loading) {
     return (
@@ -86,6 +90,12 @@ export function CamerasPanel({ channels, loading, onAddToWall }: CamerasPanelPro
         >
           {t('video.dock.online')}
         </button>
+        <span
+          data-testid="cameras-online-count"
+          className="text-sm font-semibold tabular-nums text-gray-600 dark:text-graydark-700"
+        >
+          {t('video.dock.online')} · {onlineDevices}
+        </span>
       </div>
 
       {filtered.length === 0 ? (

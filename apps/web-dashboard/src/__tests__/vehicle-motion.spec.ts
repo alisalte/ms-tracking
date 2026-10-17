@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MOTION_FRESH_MS,
   deriveVehicleMotion,
+  isFreshCapturedAt,
   presenceFromLiveFix,
 } from '@/lib/vehicle-motion';
 
@@ -50,6 +51,16 @@ describe('deriveVehicleMotion', () => {
       nowMs: now,
     });
     expect(m).toEqual({ state: 'stopped', speed: 0, presence: 'STALE' });
+  });
+});
+
+describe('isFreshCapturedAt', () => {
+  const now = Date.parse('2026-10-17T12:00:00Z');
+
+  it('accepts a fix inside the motion window and rejects a missing clock', () => {
+    expect(isFreshCapturedAt(new Date(now - 30_000).toISOString(), now)).toBe(true);
+    expect(isFreshCapturedAt(new Date(now - MOTION_FRESH_MS - 1).toISOString(), now)).toBe(false);
+    expect(isFreshCapturedAt(undefined, now)).toBe(false);
   });
 });
 
