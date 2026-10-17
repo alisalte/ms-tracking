@@ -278,37 +278,39 @@ export function useSnapshot() {
 /**
  * Base RTMP/HLS key as md300-main `live.js` (`RTMP_PATH = live/md300`).
  *
- * The MD300 drops extra path SEGMENTS (`live/md300/2`, `live/md300/pb` both
- * publish as `live/md300`), so a camera cannot be addressed by a sub-path.
- * The stream NAME is honoured though, so each camera gets its own key —
- * without that every tile resolves to one MediaMTX path and camera 2 can
- * only ever show whatever camera 1 is pushing.
+ * The MD300 drops extra path SEGMENTS, so a camera cannot be addressed by a
+ * sub-path. The stream NAME is honoured, so each device and each camera gets
+ * its own key. A shared `live/md300` made every vehicle on the wall publish
+ * to the same MediaMTX path and kick the RTMP handshake before HLS existed.
  */
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
 /**
- * Per-camera stream key. Channel 1 keeps the historical bare key (that is what
- * fleet-management's auto-AB2-on-connect uses); every other camera appends
- * `_<channel>` so two cameras can publish at the same time instead of fighting
- * for one MediaMTX path. Keep in sync with `mdvrChannelStreamPath`
- * (fleet-management), `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
+ * Per-device, per-camera stream key.
+ *
+ * `live/md300_<imei>` for channel 1, `live/md300_<imei>_<channel>` otherwise.
+ * Without an IMEI the historical bare key is kept (`live/md300`, `live/md300_2`).
+ * Keep in sync with `mdvrChannelStreamPath` (fleet-management),
+ * `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
-export function mdvrStreamKey(logicalChannel = 1): string {
+export function mdvrStreamKey(imei?: string, logicalChannel = 1): string {
+  const id = (imei ?? '').replace(/\D/g, '');
+  const root = id ? `${MDVR_RTMP_PATH}_${id}` : MDVR_RTMP_PATH;
   const n = Number(logicalChannel);
-  return Number.isFinite(n) && n > 1 ? `${MDVR_RTMP_PATH}_${n}` : MDVR_RTMP_PATH;
+  return Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
 }
 
 /** Host:port the device is told to push RTMP to (rewritten off-loopback server-side). */
-export function mdvrRtmpUploadUrl(_imei?: string, logicalChannel = 1): string {
+export function mdvrRtmpUploadUrl(imei?: string, logicalChannel = 1): string {
   const server = import.meta.env.VITE_MDVR_PUBLIC_HOST || window.location.hostname;
   const tcpPort = Number(import.meta.env.VITE_MDVR_RTMP_PORT ?? 1935);
-  return `rtmp://${server}:${tcpPort}/${mdvrStreamKey(logicalChannel)}`;
+  return `rtmp://${server}:${tcpPort}/${mdvrStreamKey(imei, logicalChannel)}`;
 }
 
 /** Same-origin HLS playlist (nginx `/media-hls` → MediaMTX :8888). */
-export function mdvrHlsUrl(_imei?: string, logicalChannel = 1): string {
-  return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrStreamKey(logicalChannel)}/index.m3u8`;
+export function mdvrHlsUrl(imei?: string, logicalChannel = 1): string {
+  return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrStreamKey(imei, logicalChannel)}/index.m3u8`;
 }
 
 /**
@@ -316,8 +318,27 @@ export function mdvrHlsUrl(_imei?: string, logicalChannel = 1): string {
  * is already publishing RTMP; the wall must not send another AB2 or MediaMTX
  * drops the publisher (`type 0/2 chunk but expected type 3`).
  */
-export function mdvrIngestHlsUrl(_imei?: string, logicalChannel = 1): string {
-  return `${window.location.protocol}//${window.location.host}/media-hls-ingest/${mdvrStreamKey(logicalChannel)}/index.m3u8`;
+export function mdvrIngestHlsUrl(imei?: string, logicalChannel = 1): string {
+  return `${window.location.protocol}//${window.location.host}/media-hls-ingest/${mdvrStreamKey(imei, logicalChannel)}/index.m3u8`;
+}
+
+/**
+ * HLS and raw-ingest playlists for the RTMP URL the server actually put in
+ * the AB2/AB4 body. The player must follow that path: it is the one the
+ * device was told to publish.
+ */
+export function mdvrUrlsFromRtmp(uploadUrl: string): { hls: string; ingest: string } | null {
+  try {
+    const path = new URL(uploadUrl).pathname.replace(/^\/+|\/+$/g, '');
+    if (!path) return null;
+    const origin = `${window.location.protocol}//${window.location.host}`;
+    return {
+      hls: `${origin}/media-hls/${path}/index.m3u8`,
+      ingest: `${origin}/media-hls-ingest/${path}/index.m3u8`,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -330,19 +351,19 @@ export function mdvrIngestHlsUrl(_imei?: string, logicalChannel = 1): string {
  * shows the LIVE camera while a recording is playing — the recording streams on
  * into a path with zero readers.
  */
-export function mdvrPlaybackStreamKey(logicalChannel = 1): string {
-  return `${mdvrStreamKey(logicalChannel)}/pb`;
+export function mdvrPlaybackStreamKey(imei?: string, logicalChannel = 1): string {
+  return `${mdvrStreamKey(imei, logicalChannel)}/pb`;
 }
 
-export function mdvrPlaybackRtmpUrl(_imei?: string, logicalChannel = 1): string {
+export function mdvrPlaybackRtmpUrl(imei?: string, logicalChannel = 1): string {
   const server = import.meta.env.VITE_MDVR_PUBLIC_HOST || window.location.hostname;
   const tcpPort = Number(import.meta.env.VITE_MDVR_RTMP_PORT ?? 1935);
-  return `rtmp://${server}:${tcpPort}/${mdvrPlaybackStreamKey(logicalChannel)}`;
+  return `rtmp://${server}:${tcpPort}/${mdvrPlaybackStreamKey(imei, logicalChannel)}`;
 }
 
 /** HLS for the recording, NOT the live camera (nginx passes `/pb` straight through). */
-export function mdvrPlaybackHlsUrl(_imei?: string, logicalChannel = 1): string {
-  return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrPlaybackStreamKey(logicalChannel)}/index.m3u8`;
+export function mdvrPlaybackHlsUrl(imei?: string, logicalChannel = 1): string {
+  return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrPlaybackStreamKey(imei, logicalChannel)}/index.m3u8`;
 }
 
 /** Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS in the operator's local clock. */

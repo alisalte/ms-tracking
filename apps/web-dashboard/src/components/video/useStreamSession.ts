@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiGet, apiPost } from '@/api/client';
-import { mdvrHlsUrl, mdvrIngestHlsUrl, mdvrRtmpUploadUrl } from '@/api/video.api';
+import { mdvrHlsUrl, mdvrIngestHlsUrl, mdvrRtmpUploadUrl, mdvrUrlsFromRtmp } from '@/api/video.api';
 import {
   MDVR_LIVE_RESOLUTION_EVENT,
   MDVR_SUBSTREAM_FALLBACK_MS,
@@ -107,9 +107,9 @@ const MAX_RETRIES = 3;
 const RECONNECT_BASE_MS = 1000;
 
 /**
- * Each camera publishes to its OWN RTMP/HLS key (`mdvrStreamKey`), so two
- * cameras on one MD300 can be live at the same time — they no longer fight
- * over a single MediaMTX path (which is what made every tile show camera 1).
+ * Each device and camera publishes to its OWN RTMP/HLS key (`mdvrStreamKey`),
+ * so two cameras on one MD300 — and two vehicles on the wall — can be live
+ * at the same time. A shared key made every tile kick the RTMP handshake.
  *
  * The lock below is therefore keyed per (IMEI, channel), i.e. per camera: it
  * only stops two tiles showing the SAME camera from firing duplicate AB2s
@@ -429,11 +429,14 @@ export function useStreamSession(
       const deviceId = channel.deviceId ?? '';
       const logicalChannel = channel.logicalChannel ?? 1;
       const uploadUrl = mdvrRtmpUploadUrl(imei, logicalChannel);
-      const url = mdvrHlsUrl(imei, logicalChannel);
+      // The server rewrites the URL into the AB2 body. Follow that path so the
+      // playlist is the one the device was told to publish.
+      let playUrl = mdvrHlsUrl(imei, logicalChannel);
+      let ingestUrl = mdvrIngestHlsUrl(imei, logicalChannel);
 
       const ingestIsLive = async (): Promise<boolean> => {
         try {
-          const res = await fetch(mdvrIngestHlsUrl(imei, logicalChannel), {
+          const res = await fetch(ingestUrl, {
             method: 'GET',
             cache: 'no-store',
           });
@@ -468,6 +471,11 @@ export function useStreamSession(
         });
         appliedMdvrStreamType.set(streamKey, streamType);
         const advertised = String(record.params?.uploadUrl ?? uploadUrl);
+        const resolved = mdvrUrlsFromRtmp(advertised);
+        if (resolved) {
+          playUrl = resolved.hls;
+          ingestUrl = resolved.ingest;
+        }
         mdvrLog(
           `AB2 queued id=${record.id} status=${record.status} advertisedUploadUrl=${advertised}`,
         );
@@ -489,7 +497,7 @@ export function useStreamSession(
         });
         if (cancelled) return;
         mdvrLog(`AB2 REST ${record.status} id=${record.id} — waiting for GPRS write`);
-        setHlsUrl(url);
+        setHlsUrl(playUrl);
         if (MDVR_LIVE_IO && streamType === '1') {
           if (subFallback) clearTimeout(subFallback);
           subFallback = setTimeout(() => {
@@ -524,7 +532,7 @@ export function useStreamSession(
           mdvrLog(
             `ingest already live channel=${logicalChannel} streamType=${streamType} — skip AB2 so we do not drop the RTMP publisher`,
           );
-          setHlsUrl(url);
+          setHlsUrl(playUrl);
           return;
         }
         if (publishing) {
@@ -545,7 +553,7 @@ export function useStreamSession(
               },
             });
             appliedMdvrStreamType.set(streamKey, streamType);
-            if (!cancelled) setHlsUrl(url);
+            if (!cancelled) setHlsUrl(playUrl);
             return;
           } catch (err) {
             mdvrLog('AB3 switch failed, falling back to AB2:', err);
@@ -581,7 +589,7 @@ export function useStreamSession(
 
       setBlockedByChannel(null);
       mdvrLog(
-        `opening channel=${channel.id} device=${deviceId} imei=${imei} cam=${logicalChannel} → AB2 uploadUrl=${uploadUrl} hlsUrl=${url}`,
+        `opening channel=${channel.id} device=${deviceId} imei=${imei} cam=${logicalChannel} → AB2 uploadUrl=${uploadUrl} hlsUrl=${playUrl}`,
       );
 
       timeoutTimerRef.current = setTimeout(() => {

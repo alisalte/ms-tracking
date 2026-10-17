@@ -1,12 +1,13 @@
 # MediaMTX — MD300/MDVR live ingest (AB2 RTMP push → HLS).
-# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300   (camera 1)
-#                rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_2 (camera 2), …
-# Browser plays same-origin /media-hls/live/md300[_N]/index.m3u8 (nginx → :8888).
+# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_<imei>   (camera 1)
+#                rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_<imei>_2 (camera 2), …
+# Browser plays same-origin /media-hls/live/md300_<imei>[_N]/index.m3u8 (nginx → :8888).
 #
-# One path per camera: the AB2 channel byte picks the camera, but the unit
-# publishes every camera to whatever stream key the AB2 uploadUrl carries. With
-# a single shared key the second camera cannot publish alongside the first, so
-# every tile ends up showing camera 1 — hence `<key>_<channel>` per camera.
+# One path per device and camera. The AB2 channel byte picks the camera, and
+# the uploadUrl stream name is where the unit publishes. A shared live/md300
+# made every vehicle on the wall kick the previous RTMP handshake, so HLS
+# stayed 204. Bare live/md300 and live/md300_<channel> remain for a unit
+# whose IMEI is not in the command.
 #
 # Camera 1 publishes H.264 (RTMP codec 7). Camera 2 publishes legacy HEVC
 # (RTMP codec 12) which MediaMTX < 1.16.2 rejects. After ingest, ffmpeg
@@ -18,7 +19,8 @@ logLevel: info
 # MD300 camera 1 often takes >10s after TCP connect to finish the RTMP
 # handshake (camera 2 is typically faster). The default 10s readTimeout
 # closed that socket before "is publishing", so HLS stayed empty (HTTP 204).
-readTimeout: 30s
+# 45s leaves room for a slow cellular handshake after one AB2.
+readTimeout: 45s
 writeTimeout: 30s
 
 rtmp: yes
@@ -165,4 +167,32 @@ paths:
   live/md300_2/pb_web:
   live/md300_3/pb_web:
   live/md300_4/pb_web:
+  # Per-device keys (IMEI is 15 digits; {10,} cannot match live/md300_2).
+  # Output is ${MTX_PATH}_web, which falls through to all_others so ffmpeg
+  # does not transcode its own publish and loop. $MTX_PATH_web would expand
+  # as an unknown variable and wipe the output URL.
+  "~^live/md300_[0-9]{10,}(_[0-9]+)?$":
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts+discardcorrupt
+      -err_detect ignore_err
+      -analyzeduration 1000000 -probesize 1000000
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -map 0:a?
+      -vf scale='trunc(min(960\,iw)/2)*2':-2
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 15 -keyint_min 15 -sc_threshold 0
+      -c:a copy
+      -f flv rtmp://127.0.0.1:1935/${MTX_PATH}_web
+    runOnReadyRestart: yes
+  "~^live/md300_[0-9]{10,}(_[0-9]+)?/pb$":
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning
+      -rtsp_transport tcp -fflags +genpts
+      -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+      -map 0:v:0 -an
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 50 -keyint_min 50 -sc_threshold 0
+      -f flv rtmp://127.0.0.1:1935/${MTX_PATH}_web
+    runOnReadyRestart: yes
   all_others:

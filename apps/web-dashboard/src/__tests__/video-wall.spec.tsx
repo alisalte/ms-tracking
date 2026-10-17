@@ -473,8 +473,8 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
         .map((call) => (call[1] as { params?: { uploadUrl?: string } })?.params?.uploadUrl);
       expect(urls).toEqual(
         expect.arrayContaining([
-          expect.stringMatching(/\/live\/md300$/),
-          expect.stringMatching(/\/live\/md300_2$/),
+          expect.stringMatching(/\/live\/md300_867191086416152$/),
+          expect.stringMatching(/\/live\/md300_867191086416152_2$/),
         ]),
       );
     });
@@ -698,22 +698,25 @@ describe('mapMediaChannel wire shape', () => {
     expect(ch.sourceLabel).toBe('IMEI 867191086416152');
   });
 
-  it('gives every camera its own RTMP/HLS key so two cameras can be live at once', async () => {
-    const { mdvrRtmpUploadUrl, mdvrHlsUrl } = await import('@/api/video.api');
-    // Camera 1 keeps the historical bare key (auto-AB2-on-connect uses it).
-    expect(mdvrRtmpUploadUrl('867191086416152')).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300$/);
-    expect(mdvrHlsUrl('867191086416152')).toContain('/media-hls/live/md300/index.m3u8');
-    // Camera 2 must NOT collide with camera 1 — otherwise both tiles resolve to
-    // one MediaMTX path and camera 2 can only ever show camera 1's picture.
-    expect(mdvrRtmpUploadUrl('867191086416152', 2)).toMatch(/\/live\/md300_2$/);
-    expect(mdvrHlsUrl('867191086416152', 2)).toContain('/media-hls/live/md300_2/index.m3u8');
-    expect(mdvrHlsUrl('867191086416152', 2)).not.toBe(mdvrHlsUrl('867191086416152', 1));
+  it('gives every device and camera its own RTMP/HLS key', async () => {
+    const { mdvrRtmpUploadUrl, mdvrHlsUrl, mdvrUrlsFromRtmp } = await import('@/api/video.api');
+    const imei = '867191086416152';
+    const other = '862221085937323';
+    expect(mdvrRtmpUploadUrl(imei)).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300_867191086416152$/);
+    expect(mdvrHlsUrl(imei)).toContain('/media-hls/live/md300_867191086416152/index.m3u8');
+    expect(mdvrRtmpUploadUrl(imei, 2)).toMatch(/\/live\/md300_867191086416152_2$/);
+    expect(mdvrHlsUrl(imei, 2)).toContain('/media-hls/live/md300_867191086416152_2/index.m3u8');
+    expect(mdvrHlsUrl(imei, 2)).not.toBe(mdvrHlsUrl(imei, 1));
+    expect(mdvrHlsUrl(imei)).not.toBe(mdvrHlsUrl(other));
+    const resolved = mdvrUrlsFromRtmp('rtmp://203.0.113.10:1935/live/md300_867191086416152_2');
+    expect(resolved?.hls).toContain('/media-hls/live/md300_867191086416152_2/index.m3u8');
+    expect(resolved?.ingest).toContain('/media-hls-ingest/live/md300_867191086416152_2/index.m3u8');
   });
 
   it('probes raw ingest HLS (no _web rewrite) so a live publisher is not sent a second AB2', async () => {
     const { mdvrIngestHlsUrl, mdvrHlsUrl } = await import('@/api/video.api');
     expect(mdvrIngestHlsUrl('867191086416152', 2)).toContain(
-      '/media-hls-ingest/live/md300_2/index.m3u8',
+      '/media-hls-ingest/live/md300_867191086416152_2/index.m3u8',
     );
     expect(mdvrIngestHlsUrl('867191086416152', 2)).not.toBe(mdvrHlsUrl('867191086416152', 2));
   });
@@ -725,12 +728,14 @@ describe('mapMediaChannel wire shape', () => {
     // AB4 publishes the SD-card clip to `<camera key>/pb` (verified on a live
     // MD300). Pointing the player at the live key instead plays the LIVE
     // camera while the recording streams into a path nobody reads.
-    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300_2\/pb$/);
+    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(
+      /\/live\/md300_867191086416152_2\/pb$/,
+    );
     expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain(
-      '/media-hls/live/md300/pb/index.m3u8',
+      '/media-hls/live/md300_867191086416152/pb/index.m3u8',
     );
     expect(mdvrPlaybackHlsUrl('867191086416152', 2)).toContain(
-      '/media-hls/live/md300_2/pb/index.m3u8',
+      '/media-hls/live/md300_867191086416152_2/pb/index.m3u8',
     );
     expect(mdvrPlaybackHlsUrl('867191086416152', 1)).not.toBe(mdvrHlsUrl('867191086416152', 1));
     expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toMatch(/^\d{12}$/);
