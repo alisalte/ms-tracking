@@ -365,9 +365,8 @@ const mdvrMockChannel = vi.hoisted(() => ({
   imei: '867191086416152',
 }));
 
-/** Second logical channel on the SAME device/IMEI — real MD300 hardware can
- * only push one RTMP stream at a time, so this exercises the single-flight
- * lock in useStreamSession (see "single active channel per MDVR device"). */
+/** Second logical channel on the SAME device/IMEI — each camera has its own
+ * RTMP key; both may be live, with AB2 dials serialised per IMEI. */
 const mdvrMockChannel2 = vi.hoisted(() => ({
   ...mdvrMockChannel,
   id: 'ch-mdvr-2',

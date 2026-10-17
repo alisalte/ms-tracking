@@ -162,8 +162,7 @@ export function VideoTile({
     );
   }
 
-  // MDVR: a different channel on this same device already holds the
-  // device's one RTMP stream (real hardware can't push two at once).
+  // MDVR: another tile already owns this same camera's live session.
   if (blockedByChannel !== null) {
     return (
       <TileFrame label={tileCaption} alert={false}>

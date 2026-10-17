@@ -54,11 +54,10 @@ export interface StreamSessionHook {
    */
   streamKind: 'real' | 'stub' | 'unavailable';
   /**
-   * MDVR path only: set when a DIFFERENT logical channel on this same
-   * device already holds the device's one live RTMP stream (real MD300
-   * hardware can push only one channel at a time). This tile is
-   * deliberately not sending its own AB2 — it will retry once that
-   * channel's tile closes.
+   * MDVR path only: set when another tile already owns THIS camera's live
+   * session (same IMEI + channel). Different cameras on one device each
+   * have their own RTMP key and do not block each other — but their AB2
+   * dials are serialised so one handshake cannot stall another.
    */
   blockedByChannel: number | null;
   /** Switch the simulcast layer (10 §2.3). */
@@ -66,8 +65,7 @@ export interface StreamSessionHook {
   /** Manually retry the connection (after an error). */
   retry: () => void;
   /**
-   * MDVR path: steal the device's one RTMP slot so THIS channel goes live
-   * (the previous camera yields). No-op on the mock path.
+   * MDVR path: nudge THIS camera to (re)send AB2. No-op on the mock path.
    */
   switchToThis: () => void;
   /** MDVR path: the HLS player reports the playlist is ready. */
@@ -86,18 +84,21 @@ const STATS_REFRESH_MS = 2000;
 const CONNECTION_TIMEOUT_MS = 120_000;
 
 /**
- * MD300 camera 1 often stalls its RTMP handshake if camera 2 dials :1935 in
- * the same second (TCP opens, then i/o timeout before "is publishing").
- * Stagger later cameras so cam1 can finish first.
+ * Camera 1's RTMP handshake often needs >10s on cellular (MediaMTX
+ * `readTimeout` is 45s for the same reason). A fixed 1s stagger let camera 2
+ * open :1935 mid-handshake, which stalled *both* publishers and left HLS on
+ * HTTP 204 forever. Later cameras now wait for this camera's ingest (or this
+ * budget) before the next AB2 dials.
  */
-/**
- * Camera 1's RTMP handshake stalls if another camera dials :1935 in the same
- * instant. One second is enough to leave that window; the old 3s gap made
- * camera 4 wait 9s before it even asked for video.
- */
-const AB2_STAGGER_MS = 1_000;
+const AB2_PEER_INGEST_WAIT_MS = 20_000;
 
-/** Vitest must not hit a live MediaMTX or wait 3s between cameras. */
+/**
+ * Tiny head-start so camera 1's effect usually enqueues its AB2 before camera 2
+ * when the wall opens both tiles in the same tick.
+ */
+const AB2_START_ORDER_MS = 200;
+
+/** Vitest must not hit a live MediaMTX or wait between cameras. */
 const MDVR_LIVE_IO = import.meta.env.MODE !== 'test';
 
 /** Max automatic reconnect attempts. */
@@ -144,6 +145,38 @@ const mdvrDelayedStop = new Map<string, ReturnType<typeof setTimeout>>();
  * change sends a fresh AB2 so the device actually switches.
  */
 const appliedMdvrStreamType = new Map<string, '0' | '1'>();
+/**
+ * Per-IMEI AB2 dial chain. Only one camera on a device may be mid-handshake
+ * at a time; the next camera runs after ingest is live or the peer wait ends.
+ */
+const mdvrAb2Tail = new Map<string, Promise<unknown>>();
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Run `task` as the sole AB2 dial for this IMEI. Concurrent callers queue
+ * behind the current handshake so camera 2 cannot open :1935 while camera 1
+ * is still publishing.
+ */
+function withDeviceAb2Slot(imei: string, task: () => Promise<void>): Promise<void> {
+  const prev = mdvrAb2Tail.get(imei) ?? Promise.resolve();
+  let release!: () => void;
+  const holding = new Promise<void>((r) => {
+    release = r;
+  });
+  mdvrAb2Tail.set(
+    imei,
+    prev.catch(() => undefined).then(() => holding),
+  );
+  return prev
+    .catch(() => undefined)
+    .then(task)
+    .finally(() => {
+      release();
+    });
+}
 
 /** Register to be notified (once) the next time this camera's lock frees up. */
 function waitForMdvrRelease(imei: string, channel: number, onFree: () => void): () => void {
@@ -244,6 +277,7 @@ export function resetMdvrLiveForTests(): void {
   mdvrPreferred.clear();
   mdvrPendingWaiters.clear();
   appliedMdvrStreamType.clear();
+  mdvrAb2Tail.clear();
   for (const t of mdvrDelayedStop.values()) clearTimeout(t);
   mdvrDelayedStop.clear();
 }
@@ -447,6 +481,26 @@ export function useStreamSession(
       };
 
       let subFallback: ReturnType<typeof setTimeout> | undefined;
+      let ab2Wire: 'SENT' | 'ACKED' | 'QUEUED' | 'FAILED' | null = null;
+
+      const holdSlotUntilIngestOrTimeout = async () => {
+        if (!MDVR_LIVE_IO || cancelled) return;
+        const until = Date.now() + AB2_PEER_INGEST_WAIT_MS;
+        while (!cancelled && Date.now() < until) {
+          if (await ingestIsLive()) {
+            mdvrLog(
+              `RTMP publisher up channel=${logicalChannel} — releasing device AB2 slot for the next camera`,
+            );
+            return;
+          }
+          await sleep(1000);
+        }
+        if (!cancelled) {
+          mdvrLog(
+            `no RTMP publisher within ${AB2_PEER_INGEST_WAIT_MS}ms channel=${logicalChannel} — releasing device AB2 slot so other cameras can try`,
+          );
+        }
+      };
 
       const postAb2 = async (streamType: '0' | '1') => {
         const streamKey = liveKey(imei, logicalChannel);
@@ -483,6 +537,7 @@ export function useStreamSession(
         // the truth if the gateway is still HELD (device not AUTHENTICATED).
         void waitForAb2OnWire(record.id, () => cancelled).then((wire) => {
           if (cancelled) return;
+          ab2Wire = wire;
           if (wire === 'QUEUED') {
             setCommandHeld(true);
             mdvrLog(
@@ -509,57 +564,71 @@ export function useStreamSession(
               mdvrLog(
                 `no RTMP on the sub stream after ${MDVR_SUBSTREAM_FALLBACK_MS}ms channel=${logicalChannel} — requesting the main stream`,
               );
-              await postAb2('0');
+              // Queue behind any in-flight peer handshake (same rule as startAb2).
+              await withDeviceAb2Slot(imei, async () => {
+                if (cancelled) return;
+                if (await ingestIsLive()) return;
+                await postAb2('0');
+                await holdSlotUntilIngestOrTimeout();
+              });
             })();
           }, MDVR_SUBSTREAM_FALLBACK_MS);
         }
       };
 
       const startAb2 = async () => {
-        const stagger = MDVR_LIVE_IO ? Math.max(0, logicalChannel - 1) * AB2_STAGGER_MS : 0;
-        if (stagger > 0) {
-          mdvrLog(
-            `stagger AB2 channel=${logicalChannel} by ${stagger}ms so camera 1 can finish the RTMP handshake`,
-          );
-          await new Promise((r) => setTimeout(r, stagger));
+        // Prefer lower channel numbers when the wall opens several tiles at once.
+        const orderDelay = MDVR_LIVE_IO ? Math.max(0, logicalChannel - 1) * AB2_START_ORDER_MS : 0;
+        if (orderDelay > 0) {
+          await sleep(orderDelay);
           if (cancelled) return;
         }
-        const streamType = mdvrStreamTypeForResolution(liveResolution);
-        const streamKey = liveKey(imei, logicalChannel);
-        const previous = appliedMdvrStreamType.get(streamKey);
-        const publishing = MDVR_LIVE_IO && (await ingestIsLive());
-        if (publishing && previous === streamType) {
-          mdvrLog(
-            `ingest already live channel=${logicalChannel} streamType=${streamType} — skip AB2 so we do not drop the RTMP publisher`,
-          );
-          setHlsUrl(playUrl);
-          return;
-        }
-        if (publishing) {
-          // Publisher is already up. A second AB2 drops the RTMP session and
-          // makes the tile slower, so switch bitrate in place. This also moves
-          // a leftover main-stream push (the old default) onto the sub stream.
-          mdvrLog(
-            `ingest live channel=${logicalChannel} — AB3 switch to streamType=${streamType} (${liveResolution})`,
-          );
-          try {
-            await apiPost(`/devices/${deviceId}/commands`, {
-              commandCode: 'AB3',
-              params: {
-                channel: logicalChannel,
-                control: '1',
-                closeType: '0',
-                switchType: streamType,
-              },
-            });
-            appliedMdvrStreamType.set(streamKey, streamType);
-            if (!cancelled) setHlsUrl(playUrl);
+
+        await withDeviceAb2Slot(imei, async () => {
+          if (cancelled) return;
+          const streamType = mdvrStreamTypeForResolution(liveResolution);
+          const streamKey = liveKey(imei, logicalChannel);
+          const previous = appliedMdvrStreamType.get(streamKey);
+          const publishing = MDVR_LIVE_IO && (await ingestIsLive());
+          if (publishing && previous === streamType) {
+            mdvrLog(
+              `ingest already live channel=${logicalChannel} streamType=${streamType} — skip AB2 so we do not drop the RTMP publisher`,
+            );
+            setHlsUrl(playUrl);
             return;
-          } catch (err) {
-            mdvrLog('AB3 switch failed, falling back to AB2:', err);
           }
-        }
-        await postAb2(streamType);
+          if (publishing) {
+            // Publisher is already up. A second AB2 drops the RTMP session and
+            // makes the tile slower, so switch bitrate in place. This also moves
+            // a leftover main-stream push (the old default) onto the sub stream.
+            mdvrLog(
+              `ingest live channel=${logicalChannel} — AB3 switch to streamType=${streamType} (${liveResolution})`,
+            );
+            try {
+              await apiPost(`/devices/${deviceId}/commands`, {
+                commandCode: 'AB3',
+                params: {
+                  channel: logicalChannel,
+                  control: '1',
+                  closeType: '0',
+                  switchType: streamType,
+                },
+              });
+              appliedMdvrStreamType.set(streamKey, streamType);
+              if (!cancelled) setHlsUrl(playUrl);
+              return;
+            } catch (err) {
+              mdvrLog('AB3 switch failed, falling back to AB2:', err);
+            }
+          }
+          if (logicalChannel > 1) {
+            mdvrLog(
+              `device AB2 slot acquired channel=${logicalChannel} — dialing after earlier cameras`,
+            );
+          }
+          await postAb2(streamType);
+          await holdSlotUntilIngestOrTimeout();
+        });
       };
 
       const lock = acquireMdvrLive(imei, logicalChannel, startAb2);
@@ -602,9 +671,19 @@ export function useStreamSession(
             );
             return;
           }
-          mdvrLog(
-            `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. Check: is the device connected to device-gateway (AUTHENTICATED)? Is AB2 still HELD (see device-gateway logs)? Is the device pushing RTMP to :1935?`,
-          );
+          if (ab2Wire === 'QUEUED' || ab2Wire === null) {
+            mdvrLog(
+              `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. AB2 never left QUEUED (GPRS socket not AUTHENTICATED / command HELD on device-gateway).`,
+            );
+          } else if (ab2Wire === 'FAILED') {
+            mdvrLog(
+              `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei}. AB2 FAILED/EXPIRED; device will not push RTMP.`,
+            );
+          } else {
+            mdvrLog(
+              `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei} cam=${logicalChannel}. AB2 was ${ab2Wire} but MediaMTX never got a publisher (HLS stayed 204). Check MediaMTX logs for TCP on :1935, try one camera alone, or switch Resolution to High if the sub stream is disabled on the unit.`,
+            );
+          }
           teardown();
           setSession((prev) => (prev ? { ...prev, state: 'error' } : prev));
           scheduleReconnect();
@@ -718,7 +797,7 @@ export function useStreamSession(
       return;
     }
     mdvrLog(
-      `switch → imei=${ch.imei} channel=${ch.logicalChannel ?? 1} (steal the device's one RTMP slot)`,
+      `switch → imei=${ch.imei} channel=${ch.logicalChannel ?? 1} (nudge this camera to resend AB2)`,
     );
     stealMdvrLive(ch.imei, ch.logicalChannel ?? 1);
   }, [retry]);
