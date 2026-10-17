@@ -18,6 +18,7 @@ import {
   mdvrPlaybackHlsUrl,
   mdvrPlaybackRtmpUrl,
   mdvrRtmpUploadUrl,
+  mdvrUrlsFromRtmp,
   toMdvrBcdTime,
 } from '@/api/video.api';
 import { waitForMdvrCommand } from '@/components/video/useMdvrResources';
@@ -148,6 +149,7 @@ export function useMdvrPlayback() {
       mdvrLog(
         `AB4 start device=${ch.deviceId} cam=${logicalChannel} ${toMdvrBcdTime(fromMs)}–${toMdvrBcdTime(toMs)} url=${url}`,
       );
+      let advertised = url;
       try {
         const queued = await apiPost<Record<string, unknown>, DeviceCommandRecord>(
           `/devices/${ch.deviceId}/commands`,
@@ -164,6 +166,7 @@ export function useMdvrPlayback() {
             },
           },
         );
+        advertised = String(queued.params?.url ?? url);
         const done = await waitForMdvrCommand(queued.id, PLAYBACK_TIMEOUT_MS, cancelled);
         if (done.status !== 'ACKED') {
           throw new Error(done.error ?? done.responseText ?? `AB4 ${done.status}`);
@@ -178,8 +181,9 @@ export function useMdvrPlayback() {
       await new Promise((r) => setTimeout(r, AB4_SWITCH_MS));
       if (cancelled()) return false;
       // Bust cached live segments and remount so hls.js does not keep the live edge.
+      const hls = mdvrUrlsFromRtmp(advertised)?.hls ?? mdvrPlaybackHlsUrl(ch.imei, logicalChannel);
       setPlayerKey((k) => k + 1);
-      setHlsUrl(`${mdvrPlaybackHlsUrl(ch.imei, logicalChannel)}?pb=${Date.now()}`);
+      setHlsUrl(`${hls}?pb=${Date.now()}`);
       setStatus('waiting');
       timeoutRef.current = setTimeout(() => {
         if (cancelled()) return;
