@@ -4,7 +4,8 @@
  *
  * Columns: IMEI (mono) · Serial · Manufacturer · Model · Protocol (badge) ·
  * Status (lifecycle badge) · Vehicle (resolved via vehicleId, '—' when
- * unbound) · Last Seen (relative from lastSeenAt, 'never' when null).
+ * unbound) · Fleet (the vehicle's fleet) · Last Seen (relative from
+ * lastSeenAt, 'never' when null).
  * Filters: status, protocol, free-text search. Row click opens the device
  * detail drawer; per-row actions (view / edit / decommission) gated by
  * `device.write`.
@@ -24,13 +25,22 @@ import {
   Toolbar,
 } from '@/components/tailwind-ui';
 import { relativeTime } from '@/lib/relative-time';
-import type { Device, DeviceProtocol, DeviceStatus, Driver, Vehicle } from '@/types/asset.types';
+import type {
+  Device,
+  DeviceProtocol,
+  DeviceStatus,
+  Driver,
+  Fleet,
+  Vehicle,
+} from '@/types/asset.types';
 import { Cpu } from 'lucide-react';
 
 interface DevicesTabProps {
   devices: Device[];
   /** Vehicle registry — resolves device.vehicleId → vehicle name. */
   vehicles: Vehicle[];
+  /** Fleet registry — resolves the bound vehicle's fleet name. */
+  fleets: Fleet[];
   /** Driver registry — resolves bound vehicle → assigned driver. */
   drivers: Driver[];
   loading?: boolean;
@@ -60,6 +70,7 @@ const PROTOCOLS: Array<DeviceProtocol | 'all'> = ['all', 'gt06', 'jt808', 'meitr
 export function DevicesTab({
   devices,
   vehicles,
+  fleets,
   drivers,
   loading = false,
   selectedId,
@@ -81,6 +92,16 @@ export function DevicesTab({
       vehicleId ? (byId.get(vehicleId)?.name ?? '—') : '—';
   }, [vehicles]);
 
+  const fleetName = useMemo(() => {
+    const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+    const fleetById = new Map(fleets.map((f) => [f.id, f.name]));
+    return (vehicleId: string | null): string => {
+      if (!vehicleId) return '—';
+      const fleetId = vehicleById.get(vehicleId)?.fleetId;
+      return fleetId ? (fleetById.get(fleetId) ?? '—') : '—';
+    };
+  }, [vehicles, fleets]);
+
   const driverName = useMemo(
     () => (vehicleId: string | null) => driverDisplayName(driverOnVehicle(drivers, vehicleId)),
     [drivers],
@@ -99,10 +120,11 @@ export function DevicesTab({
         (d.manufacturer?.toLowerCase().includes(q) ?? false) ||
         (d.model?.toLowerCase().includes(q) ?? false) ||
         vehicleName(d.vehicleId).toLowerCase().includes(q) ||
+        fleetName(d.vehicleId).toLowerCase().includes(q) ||
         assigned.toLowerCase().includes(q)
       );
     });
-  }, [devices, filterStatus, filterProtocol, query, vehicleName, driverName]);
+  }, [devices, filterStatus, filterProtocol, query, vehicleName, fleetName, driverName]);
 
   const columns: Array<TableColumn<Device>> = [
     {
@@ -150,6 +172,11 @@ export function DevicesTab({
       id: 'vehicle',
       headerKey: 'assets.device.colVehicle',
       render: (d) => (d.vehicleId ? vehicleName(d.vehicleId) : '—'),
+    },
+    {
+      id: 'fleet',
+      headerKey: 'assets.device.colFleet',
+      render: (d) => fleetName(d.vehicleId),
     },
     {
       id: 'driver',

@@ -19,6 +19,7 @@ import {
 } from '@/api/tenants';
 import { EmptyState } from '@/components/EmptyState';
 import { QuotaMeterCard } from '@/components/QuotaMeter';
+import { TenantFleetsPanel } from '@/components/TenantFleetsPanel';
 import { PLAN_CODES, bytesToGib, gibToBytes, isoDateOnly } from '@/lib/license';
 import { formatMoney } from '@/lib/money';
 
@@ -94,7 +95,9 @@ export function TenantDetailPage() {
     }
   };
 
-  const [tab, setTab] = useState<'overview' | 'rates' | 'invoices' | 'access'>('overview');
+  const [tab, setTab] = useState<'overview' | 'rates' | 'invoices' | 'fleets' | 'access'>(
+    'overview',
+  );
 
   if (!id) return null;
   const license = tenant?.license;
@@ -102,6 +105,7 @@ export function TenantDetailPage() {
     { id: 'overview' as const, label: t('detail.tabOverview') },
     { id: 'rates' as const, label: t('detail.tabRates') },
     { id: 'invoices' as const, label: t('detail.tabInvoices') },
+    { id: 'fleets' as const, label: t('detail.tabFleets') },
     { id: 'access' as const, label: t('detail.tabAccess') },
   ];
 
@@ -160,7 +164,9 @@ export function TenantDetailPage() {
         </div>
       </div>
 
-      {license && <LicenseHero name={tenant?.name ?? t('detail.title')} license={license} loc={loc} />}
+      {license && (
+        <LicenseHero name={tenant?.name ?? t('detail.title')} license={license} loc={loc} />
+      )}
 
       {tab === 'overview' && license && (
         <section className="rounded-xl border border-stone-200 bg-white p-4">
@@ -300,6 +306,8 @@ export function TenantDetailPage() {
           }}
         />
       )}
+
+      {tab === 'fleets' && <TenantFleetsPanel tenantId={id} />}
 
       {tab === 'access' && (
         <>

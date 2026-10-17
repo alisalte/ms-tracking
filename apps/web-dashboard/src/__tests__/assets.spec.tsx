@@ -234,6 +234,9 @@ vi.mock('@/api/driver.api', () => {
     useDrivers: () => ok(fx.drivers),
     useDriverDetail: (id: string | null) =>
       ok(id ? fx.drivers.find((d) => d.id === id) : undefined),
+    useDriverAssignments: () => ok([]),
+    useDriverBehaviorScore: () => ok(null),
+    useDriverBehaviorEvents: () => ok([]),
     useCreateDriver: mutation,
     useUpdateDriver: mutation,
     useDeactivateDriver: mutation,
@@ -413,6 +416,7 @@ describe('AssetManagementPage', () => {
     // Never-seen unbound device → relative "never"; bound one shows a vehicle.
     expect(screen.getByText('never')).toBeInTheDocument();
     expect(screen.getByText('Truck One')).toBeInTheDocument();
+    expect(screen.getByText('North Fleet')).toBeInTheDocument();
     expect(screen.getByText('Ali Karimi')).toBeInTheDocument();
   });
 
@@ -478,7 +482,14 @@ describe('AssetManagementPage', () => {
     renderAssets('/assets?tab=fleets');
     await waitFor(() => expect(screen.getByText('North Fleet')).toBeInTheDocument());
     expect(screen.queryByText('Import Excel')).not.toBeInTheDocument();
-    expect(screen.getByText('Add Fleets')).toBeInTheDocument();
+    expect(screen.queryByText('Add Fleets')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Fleets are created in tenant management. This list shows only this organisation's fleets.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export Excel' })).toBeInTheDocument();
   });
 

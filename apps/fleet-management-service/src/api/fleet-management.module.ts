@@ -15,6 +15,7 @@ import { DeviceCommandService } from '../application/device-command.service.js';
 import { DeviceService } from '../application/device.service.js';
 import { EvidenceCaptureWorker } from '../application/evidence-capture.worker.js';
 import { FleetService } from '../application/fleet.service.js';
+import { PlatformTenantAssetsService } from '../application/platform-tenant-assets.service.js';
 import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
 import type { FleetManagementConfig } from '../config/fleet-management.config.js';
@@ -36,6 +37,7 @@ import {
 } from './device-commands.controller.js';
 import { DevicesController } from './devices.controller.js';
 import { FleetsController } from './fleets.controller.js';
+import { PlatformTenantAssetsController } from './platform-tenant-assets.controller.js';
 import { SummaryController } from './summary.controller.js';
 import {
   BINDING_SERVICE,
@@ -49,6 +51,7 @@ import {
   EVIDENCE_CAPTURE_WORKER,
   FLEET_MANAGEMENT_CONFIG,
   FLEET_SERVICE,
+  PLATFORM_TENANT_ASSETS_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
   SUMMARY_SERVICE,
   VEHICLE_SERVICE,
@@ -109,6 +112,16 @@ export class FleetManagementModule {
           inject: [KNEX_TOKEN, FleetRepository, AuditRepository],
           useFactory: (knex: unknown, fleets: FleetRepository, audit: AuditRepository) =>
             new FleetService(knex as never, fleets, audit),
+        },
+        {
+          provide: PLATFORM_TENANT_ASSETS_SERVICE,
+          inject: [FLEET_SERVICE, VEHICLE_SERVICE, DEVICE_SERVICE, BINDING_SERVICE],
+          useFactory: (
+            fleets: FleetService,
+            vehicles: VehicleService,
+            devices: DeviceService,
+            bindings: BindingService,
+          ) => new PlatformTenantAssetsService(fleets, vehicles, devices, bindings),
         },
         {
           provide: VEHICLE_SERVICE,
@@ -278,6 +291,7 @@ export class FleetManagementModule {
       ],
       controllers: [
         FleetsController,
+        PlatformTenantAssetsController,
         VehiclesController,
         DevicesController,
         SummaryController,

@@ -25,6 +25,35 @@ vi.mock('@/api/tenants', async (importOriginal) => {
   };
 });
 
+vi.mock('@/api/platform-assets', () => ({
+  listTenantFleets: vi.fn(async () => [
+    {
+      id: 'fleet-1',
+      name: 'North',
+      code: 'NORTH',
+      description: null,
+      status: 'ACTIVE',
+    },
+  ]),
+  listTenantDevices: vi.fn(async () => [
+    {
+      id: 'dev-1',
+      imei: '490154203237518',
+      serialNumber: null,
+      manufacturer: null,
+      model: null,
+      protocol: 'meitrack',
+      status: 'ACTIVE',
+      vehicleId: null,
+      fleetId: null,
+      fleetName: null,
+      fleetCode: null,
+    },
+  ]),
+  createTenantFleet: vi.fn(),
+  assignDeviceToFleet: vi.fn(),
+}));
+
 vi.mock('@/api/billing', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/billing')>();
   return {
@@ -116,5 +145,21 @@ describe('tenant detail tabs', () => {
       'true',
     );
     expect(screen.getByRole('button', { name: /ایجاد کاربر|Create user/i })).toBeInTheDocument();
+  });
+
+  it('opens fleet registration and device assignment for the tenant', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /ناوگان|Fleets/i }));
+    expect(await screen.findByTestId('create-fleet-form')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ساخت ناوگان|Create fleet/i })).toBeInTheDocument();
+    expect(await screen.findByText('490154203237518')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /تخصیص|Assign/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'North' })).toBeInTheDocument();
   });
 });

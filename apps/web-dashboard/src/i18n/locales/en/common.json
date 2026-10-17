@@ -1242,7 +1242,8 @@
       "colName": "Name",
       "colCode": "Code",
       "colStatus": "Status",
-      "emptyDescription": "No fleets yet — create your first fleet to group vehicles."
+      "managedInTenantAdmin": "Fleets are created in tenant management. This list shows only this organisation's fleets.",
+      "emptyDescription": "No fleets yet. They are created for this organisation in tenant management."
     },
     "vehicle": {
       "notFound": "Vehicle not found.",
@@ -1275,7 +1276,7 @@
     },
     "device": {
       "notFound": "Device not found.",
-      "search": "Search IMEI / serial / model / driver…",
+      "search": "Search IMEI / serial / model / driver / fleet…",
       "imei": "IMEI",
       "serial": "Serial number",
       "manufacturer": "Manufacturer",
@@ -1288,6 +1289,7 @@
       "colModel": "Model",
       "colProtocol": "Protocol",
       "colVehicle": "Vehicle",
+      "colFleet": "Fleet",
       "colDriver": "Driver",
       "assignedDriver": "Assigned driver",
       "colLastSeen": "Last seen",

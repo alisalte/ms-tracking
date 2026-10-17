@@ -228,6 +228,12 @@ export const bindBodySchema = z.object({
 });
 export type BindDeviceInput = z.infer<typeof bindBodySchema>;
 
+/** Platform operator assigns a tenant device onto one of that tenant's fleets. */
+export const assignDeviceFleetSchema = z.object({
+  fleetId: uuid,
+});
+export type AssignDeviceFleetInput = z.infer<typeof assignDeviceFleetSchema>;
+
 // --- Device commands (06 §11.3 SendDeviceCommand) -----------------------------
 
 export const deviceCommandStatusSchema = z.enum(['QUEUED', 'SENT', 'ACKED', 'FAILED', 'EXPIRED']);
