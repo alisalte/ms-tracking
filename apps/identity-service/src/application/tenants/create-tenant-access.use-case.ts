@@ -16,7 +16,10 @@ export interface CreateTenantAccessInput {
   readonly username: string;
   readonly password: string;
   readonly displayName?: string;
-  readonly roleName: SystemRoleName;
+  /** System role name. Ignored when `roleId` is set. */
+  readonly roleName?: SystemRoleName;
+  /** Any role that already exists in the tenant, including a custom role. */
+  readonly roleId?: string;
   readonly correlationId?: string;
 }
 
@@ -33,7 +36,9 @@ export class CreateTenantAccessUseCase {
     const tenant = await this.tenants.findById(input.tenantId);
     if (!tenant) throw new NotFoundError('Tenant');
 
-    const role = await this.roles.findByName(input.tenantId, input.roleName);
+    const role = input.roleId
+      ? await this.roles.findById(input.tenantId, input.roleId)
+      : await this.roles.findByName(input.tenantId, input.roleName ?? 'viewer');
     if (!role) throw new NotFoundError('Role');
 
     const user = await this.createUser.execute({

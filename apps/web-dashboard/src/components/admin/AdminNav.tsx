@@ -11,7 +11,6 @@ import {
   CreditCard,
   KeyRound,
   Layers,
-  Lock,
   MapPin,
   Plug,
   ScrollText,
@@ -34,8 +33,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { key: 'organization', icon: Building2, enabled: true },
   { key: 'users', icon: Users, enabled: true },
-  { key: 'roles', icon: Lock, enabled: true },
-  { key: 'permissions', icon: ShieldCheck, enabled: true },
   { key: 'fleets', icon: Truck, enabled: true },
   { key: 'devices', icon: Layers, enabled: true },
   { key: 'geofences', icon: MapPin, enabled: true },

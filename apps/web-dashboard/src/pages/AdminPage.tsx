@@ -8,11 +8,11 @@
  * section + selection sync to the URL (`?section=`). Failed registry queries
  * surface as per-section ErrorState with retry — never as empty tables.
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
-import { usePermissions, useRoles, useUsers } from '@/api/admin.api';
+import { useRoles, useUsers } from '@/api/admin.api';
 import { AdminNav } from '@/components/admin/AdminNav';
 import { ApiKeysSection } from '@/components/admin/ApiKeysSection';
 import { AuditSection } from '@/components/admin/AuditSection';
@@ -23,14 +23,11 @@ import {
   PoliciesSection,
 } from '@/components/admin/OpsSections';
 import { OrganizationSection } from '@/components/admin/OrganizationSection';
-import { PermissionsSection } from '@/components/admin/PermissionsSection';
 import {
   DevicesSection,
   FleetsSection,
   GeofencesSection,
 } from '@/components/admin/RegistrySections';
-import { RoleDetailDrawer } from '@/components/admin/RoleDetailDrawer';
-import { RolesSection } from '@/components/admin/RolesSection';
 import { SettingsSection } from '@/components/admin/SettingsSection';
 import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer';
 import { UsersSection } from '@/components/admin/UsersSection';
@@ -66,7 +63,6 @@ export function AdminPage() {
 
   // Per-section selection state.
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
 
   // Per-section filter state.
   const [userStatus, setUserStatus] = useState<AdminUserStatus | 'all'>('all');
@@ -74,11 +70,6 @@ export function AdminPage() {
 
   const users = useUsers();
   const roles = useRoles();
-  const permissions = usePermissions();
-  const selectedRole = useMemo(
-    () => (roles.data ?? []).find((r) => r.id === selectedRoleId) ?? null,
-    [roles.data, selectedRoleId],
-  );
 
   const setSection = (next: AdminSection) => {
     const p = new URLSearchParams(params);
@@ -88,22 +79,8 @@ export function AdminPage() {
 
   // A failed registry query is a failed section — render the shared error
   // state with retry instead of an empty table that reads as "no data".
-  const sectionError =
-    section === 'users'
-      ? users.error
-      : section === 'roles'
-        ? roles.error
-        : section === 'permissions'
-          ? permissions.error
-          : null;
-  const sectionRetry =
-    section === 'users'
-      ? () => void users.refetch()
-      : section === 'roles'
-        ? () => void roles.refetch()
-        : section === 'permissions'
-          ? () => void permissions.refetch()
-          : undefined;
+  const sectionError = section === 'users' ? users.error : null;
+  const sectionRetry = section === 'users' ? () => void users.refetch() : undefined;
 
   return (
     <div className="flex h-full flex-col">
@@ -148,22 +125,13 @@ export function AdminPage() {
                   />
                 </>
               )}
-              {section === 'roles' && (
-                <>
-                  <RolesSection
-                    roles={roles.data ?? []}
-                    loading={roles.isLoading}
-                    selectedId={selectedRoleId}
-                    onSelect={setSelectedRoleId}
-                  />
-                  <RoleDetailDrawer role={selectedRole} onClose={() => setSelectedRoleId(null)} />
-                </>
-              )}
-              {section === 'permissions' && (
-                <PermissionsSection
-                  catalog={permissions.data ?? []}
-                  loading={permissions.isLoading}
-                />
+              {(section === 'roles' || section === 'permissions') && (
+                <p
+                  className="text-sm text-gray-600 dark:text-graydark-600"
+                  data-testid="access-managed-elsewhere"
+                >
+                  {t('admin.roles.managedInTenantAdmin')}
+                </p>
               )}
               {section === 'fleets' && <FleetsSection />}
               {section === 'devices' && <DevicesSection />}
