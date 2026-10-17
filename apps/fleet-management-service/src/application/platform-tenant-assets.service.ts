@@ -58,6 +58,11 @@ export class PlatformTenantAssetsService {
     return this.inbox.listUnclaimed(500);
   }
 
+  /** Devices with no fleet, including ones owned by another tenant. */
+  public listAvailableDevices(): Promise<DeviceRecord[]> {
+    return this.devices.listWithoutFleet(500);
+  }
+
   /**
    * Place every selected IMEI on one fleet. Inbox sightings are claimed into
    * this tenant first. An IMEI that already belongs to another tenant is
@@ -133,7 +138,12 @@ export class PlatformTenantAssetsService {
     const resolved = await this.devices.resolve(normalized);
     if (resolved.found) {
       if (resolved.device.tenantId !== ctx.tenantId) {
-        throw new ConflictException('This IMEI is already assigned to another tenant.');
+        if (resolved.device.vehicleId) {
+          throw new ConflictException(
+            'Remove the device from its current fleet before moving it to another tenant.',
+          );
+        }
+        await this.devices.transferToTenant(ctx, resolved.device.deviceId);
       }
       const assignment = fleetId
         ? await this.assignDeviceToFleet(ctx, resolved.device.deviceId, fleetId)

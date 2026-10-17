@@ -100,6 +100,8 @@ describe('PlatformTenantAssetsService', () => {
     list: jest.fn(),
     resolve: jest.fn(),
     create: jest.fn(),
+    transferToTenant: jest.fn(),
+    listWithoutFleet: jest.fn(async () => []),
   };
   const bindings = {
     bind: jest.fn(),
@@ -290,7 +292,7 @@ describe('PlatformTenantAssetsService', () => {
     expect(inbox.markClaimed).toHaveBeenCalledWith('490154203237518', TENANT, DEVICE_ID);
   });
 
-  it('refuses an IMEI that already belongs to another tenant', async () => {
+  it('refuses an IMEI that is still on another tenant fleet', async () => {
     const claimer = new PlatformTenantAssetsService(
       fleets as never,
       vehicles as never,
@@ -301,13 +303,44 @@ describe('PlatformTenantAssetsService', () => {
     devices.resolve.mockImplementation(async () => ({
       found: true,
       tenantActive: true,
-      device: { deviceId: DEVICE_ID, tenantId: '99999999-9999-9999-9999-999999999999' },
+      device: {
+        deviceId: DEVICE_ID,
+        tenantId: '99999999-9999-9999-9999-999999999999',
+        vehicleId: VEHICLE_ID,
+      },
     }));
 
     await expect(claimer.claimDevice(ctx, '490154203237518')).rejects.toBeInstanceOf(
       ConflictException,
     );
+    expect(devices.transferToTenant).not.toHaveBeenCalled();
     expect(devices.create).not.toHaveBeenCalled();
+  });
+
+  it('moves a fleet-free device from another tenant onto this fleet', async () => {
+    devices.resolve.mockImplementation(async () => ({
+      found: true,
+      tenantActive: true,
+      device: {
+        deviceId: DEVICE_ID,
+        tenantId: '99999999-9999-9999-9999-999999999999',
+        vehicleId: null,
+        protocol: 'meitrack',
+      },
+    }));
+    devices.transferToTenant.mockImplementation(async () => undefined);
+    devices.get.mockImplementation(async () => device());
+    fleets.get.mockImplementation(async () => fleet());
+    bindings.getVehicleOfDevice.mockImplementation(async () => null);
+    vehicles.create.mockImplementation(async () => vehicle({ fleetId: FLEET_ID }));
+    bindings.bind.mockImplementation(async () => ({}));
+
+    const result = await svc.claimDevice(ctx, '490154203237518', FLEET_ID);
+
+    expect(devices.transferToTenant).toHaveBeenCalledWith(ctx, DEVICE_ID);
+    expect(vehicles.create).toHaveBeenCalled();
+    expect(result.deviceId).toBe(DEVICE_ID);
+    expect(result.assignment?.fleetId).toBe(FLEET_ID);
   });
 
   it('assigns every ticked IMEI to one fleet and keeps going when one is refused', async () => {
@@ -323,7 +356,11 @@ describe('PlatformTenantAssetsService', () => {
         return {
           found: true,
           tenantActive: true,
-          device: { deviceId: 'other-device', tenantId: '99999999-9999-9999-9999-999999999999' },
+          device: {
+            deviceId: 'other-device',
+            tenantId: '99999999-9999-9999-9999-999999999999',
+            vehicleId: VEHICLE_ID,
+          },
         };
       }
       return {

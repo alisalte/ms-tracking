@@ -239,6 +239,61 @@ export class DeviceService {
     return this.devices.resolveByImei(imei);
   }
 
+  /** Every device that is not on a fleet, across tenants. */
+  public listWithoutFleet(limit = 500): Promise<DeviceRecord[]> {
+    return this.devices.listWithoutFleet(limit);
+  }
+
+  /**
+   * Move a fleet-free device to another tenant. GPS history stays on the old
+   * vehicle in the previous tenant; only the registry row changes owner.
+   * A device that is still bound to a vehicle cannot move.
+   */
+  public async transferToTenant(ctx: ActorContext, deviceId: string): Promise<void> {
+    const row = await this.knex
+      .from('fleet.devices as d')
+      .leftJoin('fleet.vehicle_devices as vd', 'vd.device_id', 'd.id')
+      .whereRaw('d.id = ?::uuid', [deviceId])
+      .first<{ id: string; tenant_id: string; imei: string; vehicle_id: string | null }>(
+        'd.id as id',
+        'd.tenant_id as tenant_id',
+        'd.imei as imei',
+        'vd.vehicle_id as vehicle_id',
+      );
+    if (!row) throw new NotFoundException('Device not found.');
+    if (row.vehicle_id) {
+      throw new ConflictException(
+        'Remove the device from its current fleet before moving it to another tenant.',
+      );
+    }
+    if (row.tenant_id === ctx.tenantId) return;
+
+    await this.knex.transaction(async (trx) => {
+      await trx('fleet.haul_members').whereRaw('device_id = ?::uuid', [deviceId]).delete();
+      const updated = await trx('fleet.devices')
+        .whereRaw('id = ?::uuid', [deviceId])
+        .update({
+          tenant_id: trx.raw('?::uuid', [ctx.tenantId]),
+          updated_at: trx.fn.now(),
+          version: trx.raw('version + 1'),
+        });
+      if (!updated) throw new ConflictException('Device was modified by another request.');
+      await this.audit.append(
+        trx,
+        this.entry(
+          ctx,
+          'device.transferred',
+          deviceId,
+          { tenantId: row.tenant_id },
+          { tenantId: ctx.tenantId },
+        ),
+      );
+    });
+    await this.inbox?.markClaimed(row.imei, ctx.tenantId, deviceId);
+    this.invalidation?.invalidate(row.imei, 'device.transferred', row.tenant_id);
+    this.invalidation?.invalidate(row.imei, 'device.transferred', ctx.tenantId);
+  }
+
   /**
    * First-packet auto-provision for the API-key tenant. Idempotent: an existing
    * IMEI is returned as-is (and unbound units in this tenant get a vehicle).

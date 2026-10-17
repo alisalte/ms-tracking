@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assignImeisToFleet,
   clearDevicesFromFleet,
+  listAvailableDevices,
   listInbox,
   listTenantDevices,
 } from '@/api/platform-assets';
@@ -80,6 +81,7 @@ vi.mock('@/api/platform-assets', () => ({
   createTenantFleet: vi.fn(),
   assignDeviceToFleet: vi.fn(),
   listInbox: vi.fn(async () => []),
+  listAvailableDevices: vi.fn(async () => []),
   lookupImei: vi.fn(),
   claimDevice: vi.fn(),
   assignImeisToFleet: vi.fn(async () => ({ fleetId: 'fleet-1', assigned: [], failed: [] })),
@@ -273,5 +275,30 @@ describe('tenant detail tabs', () => {
     );
     await waitFor(() => expect(clearDevicesFromFleet).toHaveBeenCalledWith('t1', ['dev-1']));
     expect(await screen.findByText(/1 دستگاه از ناوگان|1 devices removed/)).toBeInTheDocument();
+  });
+
+  it('lists a fleet-free device from another tenant so it can be moved', async () => {
+    vi.mocked(listTenantDevices).mockResolvedValueOnce([]);
+    vi.mocked(listAvailableDevices).mockResolvedValueOnce([
+      {
+        id: 'dev-other',
+        imei: '356938035643809',
+        protocol: 'meitrack',
+        status: 'ACTIVE',
+        tenantId: 'other-tenant',
+        manufacturer: null,
+        model: null,
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /ناوگان|Fleets/i }));
+    expect(await screen.findByText('356938035643809')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'مستاجر دیگر' })).toBeInTheDocument();
   });
 });

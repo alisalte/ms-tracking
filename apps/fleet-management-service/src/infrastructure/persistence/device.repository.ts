@@ -153,6 +153,38 @@ export class DeviceRepository {
    * Used by the resolve endpoint. Joins the owning tenant (active check) and the
    * current binding (vehicle). Never throws — a missing/odd row is `{found:false}`.
    */
+  /**
+   * Devices that are not bound to a vehicle, in any tenant. These are the
+   * units an operator can move onto another tenant's fleet. Historical
+   * positions stay on the previous vehicle and are not returned here.
+   */
+  public async listWithoutFleet(limit = 500): Promise<DeviceRecord[]> {
+    const rows = await this.knex
+      .from('fleet.devices as d')
+      .leftJoin('fleet.vehicle_devices as vd', 'vd.device_id', 'd.id')
+      .whereNull('vd.device_id')
+      .whereNot('d.status', 'DECOMMISSIONED')
+      .orderBy('d.imei', 'asc')
+      .limit(limit)
+      .select<DeviceRow[]>(
+        'd.id as id',
+        'd.tenant_id as tenant_id',
+        'd.imei as imei',
+        'd.serial_number as serial_number',
+        'd.manufacturer as manufacturer',
+        'd.model as model',
+        'd.protocol as protocol',
+        'd.status as status',
+        'd.last_seen_at as last_seen_at',
+        'd.connected_at as connected_at',
+        'd.disconnected_at as disconnected_at',
+        'd.version as version',
+        'd.created_at as created_at',
+        'd.updated_at as updated_at',
+      );
+    return rows.map((row) => DeviceRepository.toRecord({ ...row, vehicle_id: null }));
+  }
+
   public async resolveByImei(imei: string): Promise<DeviceResolution> {
     // Cross-schema join (fleet.devices + fleet.vehicle_devices + iam.tenants).
     // Use fully-qualified names WITHOUT withSchema() — withSchema() would prepend
