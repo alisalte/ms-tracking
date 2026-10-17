@@ -343,17 +343,11 @@ describe('DeviceCommandService', () => {
     );
   });
 
-  it('auto-sends AB2 to the device key when the GPRS session authenticates', async () => {
+  it('does not send AB2 when the GPRS session authenticates', async () => {
     const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
     await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
-    expect(published).toHaveLength(1);
-    const event = published[0] as { commandCode?: string; payloadHex?: string };
-    expect(event.commandCode).toBe('AB2');
-    expect(event.payloadHex?.toLowerCase()).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451', 'ascii').toString('hex'),
-    );
     await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
-    expect(published).toHaveLength(1);
+    expect(published).toHaveLength(0);
   });
 });
 

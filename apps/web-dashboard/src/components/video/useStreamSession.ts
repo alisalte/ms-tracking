@@ -309,24 +309,42 @@ function releaseMdvrLive(imei: string, channel: number, stop: () => Promise<void
   for (const notify of waiters) notify();
 }
 
-/** Poll until the gateway actually wrote AB2 (QUEUED → SENT). HELD stays QUEUED. */
+/**
+ * Poll the command row. SENT only means the gateway wrote the frame; keep
+ * going until the device replies (ACKED/FAILED) so the console shows `AB2,OK`
+ * or the unit's error instead of stopping at "on the wire".
+ */
 async function waitForAb2OnWire(
   commandId: string,
   isCancelled: () => boolean,
 ): Promise<'SENT' | 'ACKED' | 'QUEUED' | 'FAILED'> {
+  let sawSent = false;
   for (let i = 0; i < 45; i++) {
-    if (isCancelled()) return 'QUEUED';
+    if (isCancelled()) return sawSent ? 'SENT' : 'QUEUED';
     try {
       const rec = await apiGet<DeviceCommandRecord>(`/device-commands/${commandId}`);
-      if (i === 0 || i % 5 === 0 || rec.status !== 'QUEUED') {
-        mdvrLog(`AB2 ${commandId} status=${rec.status}`);
+      if (rec.status === 'SENT') {
+        if (!sawSent) {
+          sawSent = true;
+          mdvrLog(
+            `AB2 ${commandId} status=SENT — frame is on the GPRS socket, waiting for the device reply`,
+          );
+        }
+      } else if (i === 0 || i % 5 === 0 || rec.status !== 'QUEUED') {
+        mdvrLog(`AB2 ${commandId} status=${rec.status} response=${rec.responseText ?? ''}`);
       }
-      if (rec.status === 'SENT' || rec.status === 'ACKED') return rec.status;
+      if (rec.status === 'ACKED') return 'ACKED';
       if (rec.status === 'FAILED' || rec.status === 'EXPIRED') return 'FAILED';
     } catch (err) {
       if (i === 0 || i % 5 === 0) mdvrLog('AB2 status poll error:', err);
     }
     await new Promise((r) => setTimeout(r, 2000));
+  }
+  if (sawSent) {
+    mdvrLog(
+      `AB2 ${commandId} stayed SENT — device never replied. RTMP may still start, or the unit ignored the command.`,
+    );
+    return 'SENT';
   }
   mdvrLog(
     `AB2 ${commandId} still QUEUED — device-gateway has not written it (GPRS socket is not AUTHENTICATED; command is HELD).`,
@@ -544,7 +562,14 @@ export function useStreamSession(
               `AB2 still not on the GPRS socket — MediaMTX will stay empty until device ${deviceId} (imei=${imei}) authenticates on device-gateway :5023/:6180.`,
             );
           } else if (wire === 'FAILED') {
-            mdvrLog(`AB2 ${record.id} FAILED/EXPIRED — device will not push RTMP`);
+            mdvrLog(
+              `AB2 ${record.id} FAILED/EXPIRED — device will not push RTMP (see response= above)`,
+            );
+          } else if (wire === 'ACKED') {
+            setCommandHeld(false);
+            mdvrLog(
+              `AB2 ACKED for device=${deviceId} — unit accepted the command; waiting for RTMP on :1935`,
+            );
           } else {
             setCommandHeld(false);
             mdvrLog(`AB2 ${wire} on the wire for device=${deviceId} — waiting for RTMP ingest`);
