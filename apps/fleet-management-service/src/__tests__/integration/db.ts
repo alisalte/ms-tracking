@@ -155,7 +155,7 @@ async function seedTenantLicense(knex: Knex, tenantId: string): Promise<void> {
 /** Truncate fleet tables between tests (order respects FKs). */
 export async function truncateFleet(knex: Knex): Promise<void> {
   await knex.raw(
-    'TRUNCATE fleet.vehicle_devices, fleet.devices, fleet.vehicles, fleet.fleets RESTART IDENTITY CASCADE',
+    'TRUNCATE fleet.haul_members, fleet.haul_routes, fleet.vehicle_devices, fleet.devices, fleet.vehicles, fleet.fleets, fleet.device_inbox RESTART IDENTITY CASCADE',
   );
   await knex.raw('TRUNCATE audit.audit_entries RESTART IDENTITY CASCADE');
   await knex.raw('TRUNCATE iam.tenants RESTART IDENTITY CASCADE');

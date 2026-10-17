@@ -7,7 +7,7 @@ import { defineConfig } from 'vite';
  * Dev proxy — routes each `/api/v1/*` prefix to the service that owns it, so
  * the browser talks to one origin (no CORS) exactly like the nginx deployment:
  *
- *   /api/v1/fleets | vehicles | devices | summary   → fleet-management (3006)
+ *   /api/v1/fleets | vehicles | devices | summary | haul-routes → fleet-management (3006)
  *   /api/v1/positions | trips                      → gps-engine (3005; backend has NO /api/v1 prefix → stripped)
  *   /api/v1/tracking/devices                        → gps-engine /devices (prefix stripped)
  *   /api/v1/map | route | location                  → map-engine (3009; prefix stripped — Sprint F)
@@ -47,6 +47,7 @@ export default defineConfig({
       // Device-command catalog (same service as devices — distinct prefix).
       '/api/v1/device-commands': { target: fleetTarget, changeOrigin: true },
       '/api/v1/summary': { target: fleetTarget, changeOrigin: true },
+      '/api/v1/haul-routes': { target: fleetTarget, changeOrigin: true },
       '/api/v1/positions': {
         target: gpsTarget,
         changeOrigin: true,

@@ -7,9 +7,11 @@
  * a vehicle in the chosen fleet and binds the device.
  */
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import type { DeviceRecord, DeviceRole } from '../domain/device/device-types.js';
+import type { DeviceRecord, DeviceRole, Protocol } from '../domain/device/device-types.js';
+import { isValidImei, normalizeImei } from '../domain/device/imei.js';
 import type { FleetRecord } from '../domain/fleet/fleet-types.js';
 import type { VehicleRecord } from '../domain/vehicle/vehicle-types.js';
+import type { DeviceInboxRepository } from '../infrastructure/persistence/device-inbox.repository.js';
 import type { BindingService } from './binding.service.js';
 import type { DeviceService } from './device.service.js';
 import type { FleetService } from './fleet.service.js';
@@ -48,7 +50,78 @@ export class PlatformTenantAssetsService {
     private readonly vehicles: VehicleService,
     private readonly devices: DeviceService,
     private readonly bindings: BindingService,
+    private readonly inbox: DeviceInboxRepository | null = null,
   ) {}
+
+  public async listInbox() {
+    if (!this.inbox) return [];
+    return this.inbox.listUnclaimed(100);
+  }
+
+  public async lookupImei(imei: string) {
+    const normalized = requireImei(imei);
+    const resolved = await this.devices.resolve(normalized);
+    const sighting = this.inbox ? await this.inbox.findByImei(normalized) : null;
+    if (resolved.found) {
+      return {
+        imei: normalized,
+        state: 'ASSIGNED' as const,
+        tenantId: resolved.device.tenantId,
+        deviceId: resolved.device.deviceId,
+        protocol: resolved.device.protocol,
+        firstSeenAt: sighting?.firstSeenAt.toISOString() ?? null,
+        lastSeenAt: sighting?.lastSeenAt.toISOString() ?? null,
+        seenCount: sighting?.seenCount ?? 0,
+      };
+    }
+    if (sighting && !sighting.claimedAt) {
+      return {
+        imei: normalized,
+        state: 'INBOX' as const,
+        tenantId: null,
+        deviceId: null,
+        protocol: sighting.protocol,
+        firstSeenAt: sighting.firstSeenAt.toISOString(),
+        lastSeenAt: sighting.lastSeenAt.toISOString(),
+        seenCount: sighting.seenCount,
+      };
+    }
+    return {
+      imei: normalized,
+      state: 'UNKNOWN' as const,
+      tenantId: null,
+      deviceId: null,
+      protocol: null,
+      firstSeenAt: null,
+      lastSeenAt: null,
+      seenCount: 0,
+    };
+  }
+
+  public async claimDevice(ctx: ActorContext, imei: string, fleetId?: string) {
+    const normalized = requireImei(imei);
+    const resolved = await this.devices.resolve(normalized);
+    if (resolved.found) {
+      if (resolved.device.tenantId !== ctx.tenantId) {
+        throw new ConflictException('This IMEI is already assigned to another tenant.');
+      }
+      const assignment = fleetId
+        ? await this.assignDeviceToFleet(ctx, resolved.device.deviceId, fleetId)
+        : null;
+      return { deviceId: resolved.device.deviceId, created: false, assignment };
+    }
+    const sighting = this.inbox ? await this.inbox.findByImei(normalized) : null;
+    const device = await this.devices.create(ctx, {
+      imei: normalized,
+      protocol: asProtocol(sighting?.protocol),
+      manufacturer: sighting?.manufacturer ?? undefined,
+      model: sighting?.model ?? undefined,
+      status: 'ACTIVE',
+    });
+    await this.inbox?.markClaimed(normalized, ctx.tenantId, device.id);
+    const assignment = fleetId ? await this.assignDeviceToFleet(ctx, device.id, fleetId) : null;
+    return { deviceId: device.id, created: true, assignment };
+  }
 
   public createFleet(ctx: ActorContext, input: CreateFleetInput): Promise<FleetRecord> {
     return this.fleets.create(ctx, input);
@@ -220,4 +293,16 @@ function vehicleCodes(device: DeviceRecord): string[] {
 
 function isCodeConflict(err: unknown): boolean {
   return err instanceof ConflictException && /code/i.test(err.message);
+}
+
+function requireImei(imei: string): string {
+  if (!isValidImei(imei))
+    throw new BadRequestException('imei must be 15 digits with a valid check digit.');
+  return normalizeImei(imei);
+}
+
+function asProtocol(value: string | null | undefined): Protocol {
+  if (value === 'gt06' || value === 'jt808' || value === 'meitrack' || value === 'stub')
+    return value;
+  return 'meitrack';
 }

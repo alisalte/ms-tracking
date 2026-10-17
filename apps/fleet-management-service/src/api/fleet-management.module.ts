@@ -15,6 +15,7 @@ import { DeviceCommandService } from '../application/device-command.service.js';
 import { DeviceService } from '../application/device.service.js';
 import { EvidenceCaptureWorker } from '../application/evidence-capture.worker.js';
 import { FleetService } from '../application/fleet.service.js';
+import { HaulRouteService } from '../application/haul-route.service.js';
 import { PlatformTenantAssetsService } from '../application/platform-tenant-assets.service.js';
 import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
@@ -27,6 +28,7 @@ import { resolveMdvrPublicHost } from '../infrastructure/mdvr-public-host.js';
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { BindingRepository } from '../infrastructure/persistence/binding.repository.js';
 import { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
+import { DeviceInboxRepository } from '../infrastructure/persistence/device-inbox.repository.js';
 import { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import { EvidenceCaptureRepository } from '../infrastructure/persistence/evidence-capture.repository.js';
 import { FleetRepository } from '../infrastructure/persistence/fleet.repository.js';
@@ -37,7 +39,11 @@ import {
 } from './device-commands.controller.js';
 import { DevicesController } from './devices.controller.js';
 import { FleetsController } from './fleets.controller.js';
-import { PlatformTenantAssetsController } from './platform-tenant-assets.controller.js';
+import { HaulRoutesController } from './haul-routes.controller.js';
+import {
+  PlatformDeviceInboxController,
+  PlatformTenantAssetsController,
+} from './platform-tenant-assets.controller.js';
 import { SummaryController } from './summary.controller.js';
 import {
   BINDING_SERVICE,
@@ -51,6 +57,7 @@ import {
   EVIDENCE_CAPTURE_WORKER,
   FLEET_MANAGEMENT_CONFIG,
   FLEET_SERVICE,
+  HAUL_ROUTE_SERVICE,
   PLATFORM_TENANT_ASSETS_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
   SUMMARY_SERVICE,
@@ -85,6 +92,11 @@ export class FleetManagementModule {
           provide: DeviceRepository,
           useExisting: DEVICE_REPOSITORY,
         },
+        {
+          provide: DeviceInboxRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new DeviceInboxRepository(knex as never),
+        },
         // Audit + remaining repos are stateless; construct directly via factories.
         {
           provide: AuditRepository,
@@ -115,13 +127,26 @@ export class FleetManagementModule {
         },
         {
           provide: PLATFORM_TENANT_ASSETS_SERVICE,
-          inject: [FLEET_SERVICE, VEHICLE_SERVICE, DEVICE_SERVICE, BINDING_SERVICE],
+          inject: [
+            FLEET_SERVICE,
+            VEHICLE_SERVICE,
+            DEVICE_SERVICE,
+            BINDING_SERVICE,
+            DeviceInboxRepository,
+          ],
           useFactory: (
             fleets: FleetService,
             vehicles: VehicleService,
             devices: DeviceService,
             bindings: BindingService,
-          ) => new PlatformTenantAssetsService(fleets, vehicles, devices, bindings),
+            inbox: DeviceInboxRepository,
+          ) => new PlatformTenantAssetsService(fleets, vehicles, devices, bindings, inbox),
+        },
+        {
+          provide: HAUL_ROUTE_SERVICE,
+          inject: [KNEX_TOKEN, AuditRepository, DeviceRepository],
+          useFactory: (knex: unknown, audit: AuditRepository, devices: DeviceRepository) =>
+            new HaulRouteService(knex as never, audit, devices),
         },
         {
           provide: VEHICLE_SERVICE,
@@ -162,6 +187,7 @@ export class FleetManagementModule {
             VehicleRepository,
             BINDING_SERVICE,
             FleetRepository,
+            DeviceInboxRepository,
           ],
           useFactory: (
             knex: unknown,
@@ -171,6 +197,7 @@ export class FleetManagementModule {
             vehicles: VehicleRepository,
             bindings: BindingService,
             fleets: FleetRepository,
+            inbox: DeviceInboxRepository,
           ) =>
             new DeviceService(
               knex as never,
@@ -180,6 +207,7 @@ export class FleetManagementModule {
               vehicles,
               bindings,
               fleets,
+              inbox,
             ),
         },
         // Dashboard count aggregate (Sprint E §21) — read-only, existing domains.
@@ -291,7 +319,9 @@ export class FleetManagementModule {
       ],
       controllers: [
         FleetsController,
+        HaulRoutesController,
         PlatformTenantAssetsController,
+        PlatformDeviceInboxController,
         VehiclesController,
         DevicesController,
         SummaryController,

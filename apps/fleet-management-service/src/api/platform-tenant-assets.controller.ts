@@ -30,6 +30,10 @@ import { ZodValidationPipe } from './shared/zod-validation.pipe.js';
 import { PLATFORM_TENANT_ASSETS_SERVICE } from './tokens.js';
 
 const uuidSchema = z.string().uuid();
+const claimDeviceSchema = z.object({
+  imei: z.string().trim().min(8).max(32),
+  fleetId: z.string().uuid().optional(),
+});
 
 @Controller('api/v1/platform/tenants')
 export class PlatformTenantAssetsController {
@@ -72,6 +76,23 @@ export class PlatformTenantAssetsController {
     return { data };
   }
 
+  @Post(':tenantId/devices/claim')
+  @RequirePermissions('billing.tenant.manage')
+  public async claimDevice(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Body(new ZodValidationPipe(claimDeviceSchema)) body: unknown,
+  ) {
+    const parsed = body as { imei: string; fleetId?: string };
+    const data = await this.assets.claimDevice(
+      this.actor(auth, req, tenantId),
+      parsed.imei,
+      parsed.fleetId,
+    );
+    return { data };
+  }
+
   @Put(':tenantId/devices/:deviceId/fleet')
   @RequirePermissions('billing.tenant.manage')
   public async assignDevice(
@@ -93,6 +114,26 @@ export class PlatformTenantAssetsController {
 
   private actor(auth: AuthenticatedContext, req: Request, tenantId: string) {
     return actorForTenant(auth, req, parseUuid(tenantId, 'tenantId'));
+  }
+}
+
+@Controller('api/v1/platform/devices')
+export class PlatformDeviceInboxController {
+  constructor(
+    @Inject(PLATFORM_TENANT_ASSETS_SERVICE)
+    private readonly assets: PlatformTenantAssetsService,
+  ) {}
+
+  @Get('inbox')
+  @RequirePermissions('billing.tenant.manage')
+  public async inbox() {
+    return { data: await this.assets.listInbox() };
+  }
+
+  @Get('by-imei/:imei')
+  @RequirePermissions('billing.tenant.manage')
+  public async byImei(@Param('imei') imei: string) {
+    return { data: await this.assets.lookupImei(imei) };
   }
 }
 
