@@ -6,6 +6,7 @@
  *   GET    /api/v1/platform/tenants/:tenantId/fleets
  *   POST   /api/v1/platform/tenants/:tenantId/fleets
  *   GET    /api/v1/platform/tenants/:tenantId/devices
+ *   POST   /api/v1/platform/tenants/:tenantId/devices/assign
  *   PUT    /api/v1/platform/tenants/:tenantId/devices/:deviceId/fleet
  */
 import { CurrentUser, RequirePermissions } from '@fleetvision/auth';
@@ -33,6 +34,10 @@ const uuidSchema = z.string().uuid();
 const claimDeviceSchema = z.object({
   imei: z.string().trim().min(8).max(32),
   fleetId: z.string().uuid().optional(),
+});
+const assignImeisSchema = z.object({
+  fleetId: z.string().uuid(),
+  imeis: z.array(z.string().trim().min(8).max(32)).min(1).max(200),
 });
 
 @Controller('api/v1/platform/tenants')
@@ -89,6 +94,23 @@ export class PlatformTenantAssetsController {
       this.actor(auth, req, tenantId),
       parsed.imei,
       parsed.fleetId,
+    );
+    return { data };
+  }
+
+  @Post(':tenantId/devices/assign')
+  @RequirePermissions('billing.tenant.manage')
+  public async assignImeis(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Body(new ZodValidationPipe(assignImeisSchema)) body: unknown,
+  ) {
+    const parsed = body as { fleetId: string; imeis: string[] };
+    const data = await this.assets.assignImeisToFleet(
+      this.actor(auth, req, tenantId),
+      parsed.fleetId,
+      parsed.imeis,
     );
     return { data };
   }

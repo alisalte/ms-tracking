@@ -307,4 +307,43 @@ describe('PlatformTenantAssetsService', () => {
     );
     expect(devices.create).not.toHaveBeenCalled();
   });
+
+  it('assigns every ticked IMEI to one fleet and keeps going when one is refused', async () => {
+    const bulk = new PlatformTenantAssetsService(
+      fleets as never,
+      vehicles as never,
+      devices as never,
+      bindings as never,
+      { findByImei: jest.fn(async () => null), markClaimed: jest.fn() } as never,
+    );
+    devices.resolve.mockImplementation(async (imei: unknown) => {
+      if (imei === '356938035643809') {
+        return {
+          found: true,
+          tenantActive: true,
+          device: { deviceId: 'other-device', tenantId: '99999999-9999-9999-9999-999999999999' },
+        };
+      }
+      return {
+        found: true,
+        tenantActive: true,
+        device: { deviceId: DEVICE_ID, tenantId: TENANT, protocol: 'meitrack' },
+      };
+    });
+    devices.get.mockImplementation(async () => device());
+    fleets.get.mockImplementation(async () => fleet());
+    bindings.getVehicleOfDevice.mockImplementation(async () => null);
+    vehicles.create.mockImplementation(async () => vehicle({ fleetId: FLEET_ID }));
+    bindings.bind.mockImplementation(async () => ({}));
+
+    const result = await bulk.assignImeisToFleet(ctx, FLEET_ID, [
+      '490154203237518',
+      '356938035643809',
+      '490154203237518',
+    ]);
+
+    expect(result.assigned.map((row) => row.imei)).toEqual(['490154203237518']);
+    expect(result.failed.map((row) => row.imei)).toEqual(['356938035643809']);
+    expect(vehicles.create).toHaveBeenCalledTimes(1);
+  });
 });
