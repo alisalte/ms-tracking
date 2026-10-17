@@ -70,6 +70,11 @@ export interface StreamSessionHook {
   switchToThis: () => void;
   /** MDVR path: the HLS player reports the playlist is ready. */
   onPlayerReady: () => void;
+  /**
+   * MDVR path: the live command is still QUEUED. The gateway has not written
+   * it, which means this unit has no authenticated GPRS socket yet.
+   */
+  commandHeld: boolean;
 }
 
 /** Heartbeat interval for live latency/signal refresh (simulated, mock path). */
@@ -315,6 +320,7 @@ export function useStreamSession(
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [errorState, setErrorState] = useState(false);
   const [blockedByChannel, setBlockedByChannel] = useState<number | null>(null);
+  const [commandHeld, setCommandHeld] = useState(false);
   const [liveResolution, setLiveResolution] = useState<MdvrLiveResolution>(() =>
     loadMdvrLiveResolution(),
   );
@@ -416,6 +422,7 @@ export function useStreamSession(
 
     // ── MDVR real path ──────────────────────────────────────────────────────
     if (mdvr) {
+      setCommandHeld(false);
       const imei = channel.imei ?? '';
       const deviceId = channel.deviceId ?? '';
       const logicalChannel = channel.logicalChannel ?? 1;
@@ -507,12 +514,14 @@ export function useStreamSession(
         void waitForAb2OnWire(record.id, () => cancelled).then((wire) => {
           if (cancelled) return;
           if (wire === 'QUEUED') {
+            setCommandHeld(true);
             mdvrLog(
               `AB2 still not on the GPRS socket — MediaMTX will stay empty until device ${deviceId} (imei=${imei}) authenticates on device-gateway :5023/:6180.`,
             );
           } else if (wire === 'FAILED') {
             mdvrLog(`AB2 ${record.id} FAILED/EXPIRED — device will not push RTMP`);
           } else {
+            setCommandHeld(false);
             mdvrLog(`AB2 ${wire} on the wire for device=${deviceId} — waiting for RTMP ingest`);
           }
         });
@@ -696,6 +705,7 @@ export function useStreamSession(
     mode,
     streamKind,
     blockedByChannel,
+    commandHeld,
     setQuality,
     retry,
     switchToThis,

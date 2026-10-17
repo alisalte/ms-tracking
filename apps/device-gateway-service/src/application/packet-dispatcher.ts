@@ -197,7 +197,10 @@ export class PacketDispatcher {
       published++;
     }
 
-    if (authenticated && session.deviceId) {
+    // Drain AB2/AB3 held while the socket was down. Not only on the login
+    // packet: a command that arrives just after AUTHENTICATED must still go
+    // out on the next frame, otherwise it sits QUEUED until the unit redials.
+    if (session.deviceId && session.canDispatchCommand()) {
       await this.deps.commandDispatcher?.flushHeld(session.deviceId);
     }
 

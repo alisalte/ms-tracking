@@ -324,6 +324,94 @@ describe('CommandDispatcher (downstream command path, 06 §6.2)', () => {
     expect(written).toEqual(['AB2']);
   });
 
+  it('flushes each camera on its own — a stop for channel 1 does not drop channel 2', async () => {
+    const written: string[] = [];
+    const events: Array<Record<string, unknown>> = [];
+    let session: FakeSession | null = null;
+    const sessions = {
+      byDeviceId: (deviceId: string) =>
+        session && session.deviceId === deviceId ? (session as never as DeviceSession) : null,
+      writerFor: () => (data: Buffer) => {
+        written.push(data.toString('hex'));
+        return true;
+      },
+    } as unknown as SessionManager;
+    const adapter = {
+      id: 'meitrack',
+      encode: (cmd: { payload: Record<string, unknown> }) =>
+        Buffer.from(String(cmd.payload.hex ?? ''), 'hex'),
+    } as unknown as ProtocolAdapter;
+    const kafka = {
+      publishCommandEvent: async (event: Record<string, unknown>) => {
+        events.push(event);
+      },
+    } as unknown as DeviceGatewayKafkaProducer;
+    const dispatcher = new CommandDispatcher(
+      sessions,
+      { get: () => adapter } as unknown as AdapterRegistry,
+      kafka,
+      null,
+    );
+    // AB2, + urlLen 1 + 'a' + channel
+    const ab2 = (channel: number, id: string) => ({
+      ...REQUEST,
+      commandId: id,
+      commandCode: 'AB2',
+      payloadText: null,
+      payloadHex: Buffer.from([0x41, 0x42, 0x32, 0x2c, 0x01, 0x61, channel]).toString('hex'),
+    });
+    // AB3, + channel + control/close/switch
+    const ab3 = (channel: number, id: string) => ({
+      ...REQUEST,
+      commandId: id,
+      commandCode: 'AB3',
+      payloadText: null,
+      payloadHex: Buffer.from([0x41, 0x42, 0x33, 0x2c, channel, 0, 0, 0]).toString('hex'),
+    });
+    await dispatcher.dispatch(ab2(1, 'start-1'));
+    await dispatcher.dispatch(ab2(2, 'start-2'));
+    await dispatcher.dispatch(ab3(1, 'stop-1'));
+    session = makeSession();
+    await dispatcher.flushHeld(DEVICE_ID);
+    const channels = written.map((hex) => Buffer.from(hex, 'hex'));
+    const stopped = channels.filter((b) => b.subarray(0, 4).toString('ascii') === 'AB3,');
+    const started = channels.filter((b) => b.subarray(0, 4).toString('ascii') === 'AB2,');
+    expect(stopped.map((b) => b[4])).toEqual([1]);
+    expect(started.map((b) => b[b.length - 1])).toEqual([2]);
+    expect(events).toContainEqual(
+      expect.objectContaining({ commandId: 'start-1', result: 'REJECTED', reason: 'SUPERSEDED' }),
+    );
+  });
+
+  it('sweepHeld writes a command that was held before the socket authenticated', async () => {
+    const written: Buffer[] = [];
+    let session: FakeSession | null = null;
+    const sessions = {
+      byDeviceId: (deviceId: string) =>
+        session && session.deviceId === deviceId ? (session as never as DeviceSession) : null,
+      writerFor: () => (data: Buffer) => {
+        written.push(data);
+        return true;
+      },
+    } as unknown as SessionManager;
+    const adapter = {
+      id: 'meitrack',
+      encode: (cmd: { payload: Record<string, unknown> }) =>
+        Buffer.from(String(cmd.payload.text ?? ''), 'ascii'),
+    } as unknown as ProtocolAdapter;
+    const dispatcher = new CommandDispatcher(
+      sessions,
+      { get: () => adapter } as unknown as AdapterRegistry,
+      null,
+      null,
+    );
+    await dispatcher.dispatch({ ...REQUEST, commandCode: 'AB2', payloadText: 'AB2' });
+    expect(written).toHaveLength(0);
+    session = makeSession();
+    await dispatcher.sweepHeld();
+    expect(written).toHaveLength(1);
+  });
+
   it('stays silent (ROUTED_ELSEWHERE) when another instance owns the session', async () => {
     const { dispatcher, events } = makeDeps({
       session: null,
