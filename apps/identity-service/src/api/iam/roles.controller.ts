@@ -20,7 +20,8 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { Role } from '../../domain/index.js';
-import type { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
+import { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 import { RequirePermissions } from '../shared/permissions.guard.js';
 import { getPrincipal } from '../shared/principal.js';
 import { permissionCatalog, roleView, sanitizeCustomPermissions } from './permission-catalog.js';
