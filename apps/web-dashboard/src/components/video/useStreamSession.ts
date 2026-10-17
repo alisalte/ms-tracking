@@ -20,9 +20,11 @@ import { apiGet, apiPost } from '@/api/client';
 import { mdvrHlsUrl, mdvrIngestHlsUrl, mdvrRtmpUploadUrl } from '@/api/video.api';
 import {
   MDVR_LIVE_RESOLUTION_EVENT,
+  MDVR_SUBSTREAM_FALLBACK_MS,
   type MdvrLiveResolution,
   loadMdvrLiveResolution,
   mdvrStreamTypeForResolution,
+  mdvrSubStreamFallback,
 } from '@/lib/mdvr-live-resolution';
 import { MockMediaSignalingClient, type StreamHandle, openStream } from '@/lib/video-stream';
 import { mockStreamSession } from '@/mock/video-data';
@@ -441,6 +443,70 @@ export function useStreamSession(
         }
       };
 
+      let subFallback: ReturnType<typeof setTimeout> | undefined;
+
+      const postAb2 = async (streamType: '0' | '1') => {
+        const streamKey = liveKey(imei, logicalChannel);
+        mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
+          uploadUrl,
+          channel: logicalChannel,
+          dataType: '0',
+          streamType,
+          resolution: liveResolution,
+        });
+        const record = await apiPost<
+          { commandCode: string; params: Record<string, string | number> },
+          DeviceCommandRecord
+        >(`/devices/${deviceId}/commands`, {
+          commandCode: 'AB2',
+          params: {
+            uploadUrl,
+            channel: logicalChannel,
+            dataType: '0',
+            streamType,
+          },
+        });
+        appliedMdvrStreamType.set(streamKey, streamType);
+        const advertised = String(record.params?.uploadUrl ?? uploadUrl);
+        mdvrLog(
+          `AB2 queued id=${record.id} status=${record.status} advertisedUploadUrl=${advertised}`,
+        );
+        // Don't block HLS attach — poll in the background so the console tells
+        // the truth if the gateway is still HELD (device not AUTHENTICATED).
+        void waitForAb2OnWire(record.id, () => cancelled).then((wire) => {
+          if (cancelled) return;
+          if (wire === 'QUEUED') {
+            setCommandHeld(true);
+            mdvrLog(
+              `AB2 still not on the GPRS socket — MediaMTX will stay empty until device ${deviceId} (imei=${imei}) authenticates on device-gateway :5023/:6180.`,
+            );
+          } else if (wire === 'FAILED') {
+            mdvrLog(`AB2 ${record.id} FAILED/EXPIRED — device will not push RTMP`);
+          } else {
+            setCommandHeld(false);
+            mdvrLog(`AB2 ${wire} on the wire for device=${deviceId} — waiting for RTMP ingest`);
+          }
+        });
+        if (cancelled) return;
+        mdvrLog(`AB2 REST ${record.status} id=${record.id} — waiting for GPRS write`);
+        setHlsUrl(url);
+        if (MDVR_LIVE_IO && streamType === '1') {
+          if (subFallback) clearTimeout(subFallback);
+          subFallback = setTimeout(() => {
+            void (async () => {
+              if (cancelled) return;
+              const live = await ingestIsLive();
+              if (cancelled) return;
+              if (mdvrSubStreamFallback('1', live, MDVR_SUBSTREAM_FALLBACK_MS) !== '0') return;
+              mdvrLog(
+                `no RTMP on the sub stream after ${MDVR_SUBSTREAM_FALLBACK_MS}ms channel=${logicalChannel} — requesting the main stream`,
+              );
+              await postAb2('0');
+            })();
+          }, MDVR_SUBSTREAM_FALLBACK_MS);
+        }
+      };
+
       const startAb2 = async () => {
         const stagger = MDVR_LIVE_IO ? Math.max(0, logicalChannel - 1) * AB2_STAGGER_MS : 0;
         if (stagger > 0) {
@@ -485,49 +551,7 @@ export function useStreamSession(
             mdvrLog('AB3 switch failed, falling back to AB2:', err);
           }
         }
-        mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
-          uploadUrl,
-          channel: logicalChannel,
-          dataType: '0',
-          streamType,
-          resolution: liveResolution,
-        });
-        const record = await apiPost<
-          { commandCode: string; params: Record<string, string | number> },
-          DeviceCommandRecord
-        >(`/devices/${deviceId}/commands`, {
-          commandCode: 'AB2',
-          params: {
-            uploadUrl,
-            channel: logicalChannel,
-            dataType: '0',
-            streamType,
-          },
-        });
-        appliedMdvrStreamType.set(streamKey, streamType);
-        const advertised = String(record.params?.uploadUrl ?? uploadUrl);
-        mdvrLog(
-          `AB2 queued id=${record.id} status=${record.status} advertisedUploadUrl=${advertised}`,
-        );
-        // Don't block HLS attach — poll in the background so the console tells
-        // the truth if the gateway is still HELD (device not AUTHENTICATED).
-        void waitForAb2OnWire(record.id, () => cancelled).then((wire) => {
-          if (cancelled) return;
-          if (wire === 'QUEUED') {
-            setCommandHeld(true);
-            mdvrLog(
-              `AB2 still not on the GPRS socket — MediaMTX will stay empty until device ${deviceId} (imei=${imei}) authenticates on device-gateway :5023/:6180.`,
-            );
-          } else if (wire === 'FAILED') {
-            mdvrLog(`AB2 ${record.id} FAILED/EXPIRED — device will not push RTMP`);
-          } else {
-            setCommandHeld(false);
-            mdvrLog(`AB2 ${wire} on the wire for device=${deviceId} — waiting for RTMP ingest`);
-          }
-        });
-        if (cancelled) return;
-        mdvrLog(`AB2 REST ${record.status} id=${record.id} — waiting for GPRS write`);
-        setHlsUrl(url);
+        await postAb2(streamType);
       };
 
       const lock = acquireMdvrLive(imei, logicalChannel, startAb2);
@@ -590,6 +614,7 @@ export function useStreamSession(
 
       return () => {
         cancelled = true;
+        if (subFallback) clearTimeout(subFallback);
         yielders?.delete(onYield);
         releaseMdvrLive(imei, logicalChannel, stopMdvr);
         teardown();
