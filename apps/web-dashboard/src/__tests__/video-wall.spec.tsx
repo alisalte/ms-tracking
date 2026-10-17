@@ -407,6 +407,10 @@ vi.mock('@/components/video/useMdvrResources', async (importOriginal) => {
 });
 
 describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   afterEach(() => {
     mdvrOverride.channels = null;
     resourcesOverride.status = 'idle';
@@ -446,6 +450,11 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
         .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2')
         .map((call) => (call[1] as { params?: { channel?: number } })?.params?.channel);
       expect(new Set(channels)).toEqual(new Set([1, 2]));
+      const streamTypes = vi
+        .mocked(apiPost)
+        .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2')
+        .map((call) => (call[1] as { params?: { streamType?: string } })?.params?.streamType);
+      expect(streamTypes.every((type) => type === '1')).toBe(true);
     });
     // Neither tile is held back behind the other any more.
     expect(screen.queryAllByText(/is live on this device/).length).toBe(0);

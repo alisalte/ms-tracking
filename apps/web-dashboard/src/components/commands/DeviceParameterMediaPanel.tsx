@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useCommandHistory, useIssueCommands } from '@/api/command.api';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Input, Select } from '@/components/tailwind-ui';
+import { useMdvrLiveResolution } from '@/hooks/useMdvrLiveResolution';
 import {
   type FtpPhotoMode,
   type MediaParameterSett,
@@ -47,6 +48,7 @@ export function DeviceParameterMediaPanel({
   );
 
   const [sett, setSett] = useState<MediaParameterSett>(defaultMediaSett);
+  const [resolution, setResolution] = useMdvrLiveResolution();
   const [source, setSource] = useState<ParameterSnapshotSource>('default');
   const [progress, setProgress] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -224,7 +226,7 @@ export function DeviceParameterMediaPanel({
       <Alert variant="info">
         {t('commands.parameter.media.intro', {
           defaultValue:
-            'On-device Media Parameter — speaker volume (BB8) and FTP photo upload (B64). Event-linked channel recording stays under Alarm.',
+            'On-device Media Parameter — speaker volume (BB8), FTP photo upload (B64), and live picture resolution. Event-linked channel recording stays under Alarm.',
         })}
       </Alert>
 
@@ -250,6 +252,26 @@ export function DeviceParameterMediaPanel({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        <Select
+          label={t('video.resolution.label', { defaultValue: 'Resolution' })}
+          hint={t('video.resolution.hint', {
+            defaultValue:
+              'Low uses the camera sub stream so live view opens sooner. High is the main stream.',
+          })}
+          value={resolution}
+          onChange={(e) => setResolution(e.target.value === 'high' ? 'high' : 'low')}
+          options={[
+            {
+              value: 'low',
+              label: t('video.resolution.low', { defaultValue: 'Low (sub stream, opens faster)' }),
+            },
+            {
+              value: 'high',
+              label: t('video.resolution.high', { defaultValue: 'High (main stream)' }),
+            },
+          ]}
+          data-testid="device-parameter-media-resolution"
+        />
         <Input
           label={t('commands.parameter.media.volume', { defaultValue: 'Speaker volume (%)' })}
           type="number"

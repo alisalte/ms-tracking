@@ -18,6 +18,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiGet, apiPost } from '@/api/client';
 import { mdvrHlsUrl, mdvrIngestHlsUrl, mdvrRtmpUploadUrl } from '@/api/video.api';
+import {
+  MDVR_LIVE_RESOLUTION_EVENT,
+  type MdvrLiveResolution,
+  loadMdvrLiveResolution,
+  mdvrStreamTypeForResolution,
+} from '@/lib/mdvr-live-resolution';
 import { MockMediaSignalingClient, type StreamHandle, openStream } from '@/lib/video-stream';
 import { mockStreamSession } from '@/mock/video-data';
 import type { DeviceCommandRecord } from '@/types/command.types';
@@ -77,7 +83,12 @@ const CONNECTION_TIMEOUT_MS = 120_000;
  * the same second (TCP opens, then i/o timeout before "is publishing").
  * Stagger later cameras so cam1 can finish first.
  */
-const AB2_STAGGER_MS = 3_000;
+/**
+ * Camera 1's RTMP handshake stalls if another camera dials :1935 in the same
+ * instant. One second is enough to leave that window; the old 3s gap made
+ * camera 4 wait 9s before it even asked for video.
+ */
+const AB2_STAGGER_MS = 1_000;
 
 /** Vitest must not hit a live MediaMTX or wait 3s between cameras. */
 const MDVR_LIVE_IO = import.meta.env.MODE !== 'test';
@@ -120,6 +131,12 @@ const mdvrPreferred = new Map<string, number>();
 const mdvrPendingWaiters = new Map<string, Set<() => void>>();
 /** Delayed AB3 after the live tile unmounts (React Strict Mode remounts in between). */
 const mdvrDelayedStop = new Map<string, ReturnType<typeof setTimeout>>();
+/**
+ * Stream type last requested for this camera (`0` main, `1` sub).
+ * A live publisher is left alone when it already matches; a resolution
+ * change sends a fresh AB2 so the device actually switches.
+ */
+const appliedMdvrStreamType = new Map<string, '0' | '1'>();
 
 /** Register to be notified (once) the next time this camera's lock frees up. */
 function waitForMdvrRelease(imei: string, channel: number, onFree: () => void): () => void {
@@ -219,6 +236,7 @@ export function resetMdvrLiveForTests(): void {
   mdvrStopping.clear();
   mdvrPreferred.clear();
   mdvrPendingWaiters.clear();
+  appliedMdvrStreamType.clear();
   for (const t of mdvrDelayedStop.values()) clearTimeout(t);
   mdvrDelayedStop.clear();
 }
@@ -297,6 +315,9 @@ export function useStreamSession(
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [errorState, setErrorState] = useState(false);
   const [blockedByChannel, setBlockedByChannel] = useState<number | null>(null);
+  const [liveResolution, setLiveResolution] = useState<MdvrLiveResolution>(() =>
+    loadMdvrLiveResolution(),
+  );
 
   const mdvr = isMdvrChannel(channel);
   const mode: 'mdvr' | 'mock' | null = channel ? (mdvr ? 'mdvr' : 'mock') : null;
@@ -347,6 +368,14 @@ export function useStreamSession(
     retryCountRef.current += 1;
     reconnectTimerRef.current = setTimeout(() => setRetryTrigger((n) => n + 1), delay);
   }, []);
+
+  /** Re-request the live push when Media settings or the wall changes resolution. */
+  useEffect(() => {
+    if (!mdvr) return;
+    const sync = () => setLiveResolution(loadMdvrLiveResolution());
+    window.addEventListener(MDVR_LIVE_RESOLUTION_EVENT, sync);
+    return () => window.removeEventListener(MDVR_LIVE_RESOLUTION_EVENT, sync);
+  }, [mdvr]);
 
   /** Fire-and-forget AB3 stop so the device tears down its RTMP push. */
   const stopMdvr = useCallback(async () => {
@@ -414,18 +443,47 @@ export function useStreamSession(
           await new Promise((r) => setTimeout(r, stagger));
           if (cancelled) return;
         }
-        if (MDVR_LIVE_IO && (await ingestIsLive())) {
+        const streamType = mdvrStreamTypeForResolution(liveResolution);
+        const streamKey = liveKey(imei, logicalChannel);
+        const previous = appliedMdvrStreamType.get(streamKey);
+        const publishing = MDVR_LIVE_IO && (await ingestIsLive());
+        if (publishing && previous === streamType) {
           mdvrLog(
-            `ingest already live channel=${logicalChannel} — skip AB2 so we do not drop the RTMP publisher`,
+            `ingest already live channel=${logicalChannel} streamType=${streamType} — skip AB2 so we do not drop the RTMP publisher`,
           );
           setHlsUrl(url);
           return;
+        }
+        if (publishing) {
+          // Publisher is already up. A second AB2 drops the RTMP session and
+          // makes the tile slower, so switch bitrate in place. This also moves
+          // a leftover main-stream push (the old default) onto the sub stream.
+          mdvrLog(
+            `ingest live channel=${logicalChannel} — AB3 switch to streamType=${streamType} (${liveResolution})`,
+          );
+          try {
+            await apiPost(`/devices/${deviceId}/commands`, {
+              commandCode: 'AB3',
+              params: {
+                channel: logicalChannel,
+                control: '1',
+                closeType: '0',
+                switchType: streamType,
+              },
+            });
+            appliedMdvrStreamType.set(streamKey, streamType);
+            if (!cancelled) setHlsUrl(url);
+            return;
+          } catch (err) {
+            mdvrLog('AB3 switch failed, falling back to AB2:', err);
+          }
         }
         mdvrLog(`POST /devices/${deviceId}/commands AB2`, {
           uploadUrl,
           channel: logicalChannel,
           dataType: '0',
-          streamType: '0',
+          streamType,
+          resolution: liveResolution,
         });
         const record = await apiPost<
           { commandCode: string; params: Record<string, string | number> },
@@ -436,9 +494,10 @@ export function useStreamSession(
             uploadUrl,
             channel: logicalChannel,
             dataType: '0',
-            streamType: '0',
+            streamType,
           },
         });
+        appliedMdvrStreamType.set(streamKey, streamType);
         const advertised = String(record.params?.uploadUrl ?? uploadUrl);
         mdvrLog(
           `AB2 queued id=${record.id} status=${record.status} advertisedUploadUrl=${advertised}`,
@@ -584,7 +643,7 @@ export function useStreamSession(
       teardown();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel, currentQuality, retryTrigger, mdvr]);
+  }, [channel, currentQuality, retryTrigger, mdvr, liveResolution]);
 
   /** MDVR path: called by the HLS player when the playlist is ready / playback starts. */
   const onPlayerReady = useCallback(() => {

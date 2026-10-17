@@ -2,6 +2,8 @@
  * Device Parameter → Media (Phase 3).
  *
  * Composite form for speaker volume (BB8) + FTP photo upload (B64).
+ * Live picture resolution is a platform preference (main vs sub stream),
+ * not a device encode command — see `mdvr-live-resolution`.
  * Event-linked CH recording stays under Alarm (CB8). Live/playback cmds
  * remain in the Command Center catalog.
  */

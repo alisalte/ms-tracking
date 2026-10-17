@@ -37,12 +37,19 @@ apiAddress: :9997
 paths:
   # Camera 1 — the historical bare key (also used by auto-AB2-on-connect).
   live/md300:
+    # Short probe + 15-frame GOP: the default 5s analyze and the device's own
+    # keyframe gap (often several seconds) were most of the wait before the
+    # first HLS segment. Cap width at 960 so a main-stream push encodes faster;
+    # the sub stream is already smaller and is not upscaled.
     runOnReady: >
       ffmpeg -hide_banner -loglevel warning
       -rtsp_transport tcp -fflags +genpts
+      -analyzeduration 1000000 -probesize 1000000
       -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
       -map 0:v:0 -map 0:a?
+      -vf scale='trunc(min(960\,iw)/2)*2':-2
       -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
+      -g 15 -keyint_min 15 -sc_threshold 0
       -c:a copy
       -f flv rtmp://127.0.0.1:1935/live/md300_web
     runOnReadyRestart: yes
@@ -50,17 +57,18 @@ paths:
   # Spelled out rather than a regex so the output path is a literal (no
   # dependency on shell expansion of $MTX_PATH inside runOnReady).
   live/md300_2:
-    # HEVC ingest: wait for SPS/IDR, ignore corrupt refs, 1s GOP so `_web` HLS
+    # HEVC ingest: short probe, ignore corrupt refs, 15-frame GOP so `_web` HLS
     # has a real segment before the wall times out and re-sends AB2.
     runOnReady: >
       ffmpeg -hide_banner -loglevel warning
       -rtsp_transport tcp -fflags +genpts+discardcorrupt
       -err_detect ignore_err
-      -analyzeduration 3000000 -probesize 3000000
+      -analyzeduration 1000000 -probesize 1000000
       -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
       -map 0:v:0 -map 0:a?
+      -vf scale='trunc(min(960\,iw)/2)*2':-2
       -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
-      -g 30 -keyint_min 30 -sc_threshold 0
+      -g 15 -keyint_min 15 -sc_threshold 0
       -c:a copy
       -f flv rtmp://127.0.0.1:1935/live/md300_2_web
     runOnReadyRestart: yes
@@ -69,11 +77,12 @@ paths:
       ffmpeg -hide_banner -loglevel warning
       -rtsp_transport tcp -fflags +genpts+discardcorrupt
       -err_detect ignore_err
-      -analyzeduration 3000000 -probesize 3000000
+      -analyzeduration 1000000 -probesize 1000000
       -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
       -map 0:v:0 -map 0:a?
+      -vf scale='trunc(min(960\,iw)/2)*2':-2
       -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
-      -g 30 -keyint_min 30 -sc_threshold 0
+      -g 15 -keyint_min 15 -sc_threshold 0
       -c:a copy
       -f flv rtmp://127.0.0.1:1935/live/md300_3_web
     runOnReadyRestart: yes
@@ -82,11 +91,12 @@ paths:
       ffmpeg -hide_banner -loglevel warning
       -rtsp_transport tcp -fflags +genpts+discardcorrupt
       -err_detect ignore_err
-      -analyzeduration 3000000 -probesize 3000000
+      -analyzeduration 1000000 -probesize 1000000
       -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
       -map 0:v:0 -map 0:a?
+      -vf scale='trunc(min(960\,iw)/2)*2':-2
       -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
-      -g 30 -keyint_min 30 -sc_threshold 0
+      -g 15 -keyint_min 15 -sc_threshold 0
       -c:a copy
       -f flv rtmp://127.0.0.1:1935/live/md300_4_web
     runOnReadyRestart: yes

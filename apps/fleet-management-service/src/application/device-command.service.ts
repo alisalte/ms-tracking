@@ -276,7 +276,9 @@ export class DeviceCommandService {
           uploadUrl: `rtmp://${host}:${port}/${path}`,
           channel: 1,
           dataType: '0',
-          streamType: '0',
+          // Sub stream. The wall can still ask for the main stream; starting
+          // on it here is what left cameras waiting on a heavy cellular push.
+          streamType: '1',
         },
       });
       this.autoAb2At.set(deviceId, now);
