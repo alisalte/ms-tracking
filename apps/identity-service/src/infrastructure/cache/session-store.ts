@@ -77,26 +77,55 @@ export class SessionStore {
     }
   }
 
-  /** Revoke all sessions for a user (logout-all). */
+  /** Revoke all sessions for a user (logout-all) and drop them from the tenant set. */
   public async revokeAllForUser(userId: string): Promise<string[]> {
     const sessionIds = await this.redis.smembers(`session:user:${userId}`);
-    if (sessionIds.length > 0) {
-      await this.redis.del(...sessionIds.map((id) => `session:${id}`));
+    for (const id of sessionIds) {
+      await this.revoke(id);
     }
     await this.redis.del(`session:user:${userId}`);
     return sessionIds;
   }
 
-  /** Live sessions for a tenant (prunes stale ids). */
+  /**
+   * Free a slot for a new sign-in. This user's previous sessions are closed
+   * first. When the tenant is still at its license cap, the oldest remaining
+   * sessions are closed until one slot is open.
+   */
+  public async makeRoom(tenantId: string, userId: string, maxConcurrent: number): Promise<void> {
+    await this.revokeAllForUser(userId);
+    const cap = Math.max(1, Math.floor(maxConcurrent) || 1);
+    const live = await this.liveForTenant(tenantId);
+    const overflow = live.length - (cap - 1);
+    if (overflow <= 0) return;
+    const oldest = [...live].sort((a, b) => a.issuedAt - b.issuedAt).slice(0, overflow);
+    for (const session of oldest) {
+      await this.revoke(session.sessionId);
+    }
+  }
+
+  /** Live sessions for a tenant (prunes ids whose hash is gone or past absolute expiry). */
   public async countForTenant(tenantId: string): Promise<number> {
+    const live = await this.liveForTenant(tenantId);
+    return live.length;
+  }
+
+  private async liveForTenant(tenantId: string): Promise<SessionData[]> {
     const key = `session:tenant:${tenantId}`;
     const ids = await this.redis.smembers(key);
-    if (ids.length === 0) return 0;
-    let live = 0;
+    const live: SessionData[] = [];
+    const now = Date.now();
     for (const id of ids) {
-      const exists = await this.redis.exists(`session:${id}`);
-      if (exists) live += 1;
-      else await this.redis.srem(key, id);
+      const data = await this.get(id);
+      if (!data || data.tenantId !== tenantId || data.absoluteExpiresAt <= now) {
+        await this.redis.srem(key, id);
+        if (data) {
+          await this.redis.del(`session:${id}`);
+          await this.redis.srem(`session:user:${data.userId}`, id);
+        }
+        continue;
+      }
+      live.push(data);
     }
     return live;
   }

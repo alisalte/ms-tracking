@@ -7,7 +7,6 @@ import {
   TenantLicenseExpiredError,
   TenantLoginWindowError,
   TenantQuotaExceededError,
-  TenantSessionLimitError,
 } from '../../domain/errors.js';
 import {
   type LicensePlanCode,
@@ -67,15 +66,16 @@ export class TenantEntitlementUseCase {
     return license;
   }
 
-  public async assertLoginAllowed(
-    tenantId: string,
-    concurrentSessions: number,
-  ): Promise<TenantLicense> {
+  /**
+   * Expiry and login-window gates. The concurrent-session cap is applied when
+   * the new session is created: a fresh sign-in replaces that user's sessions
+   * and, if the tenant is still full, the oldest one, so a retry is not stuck.
+   */
+  public async assertLoginAllowed(tenantId: string): Promise<TenantLicense> {
     const license = await this.requireLicense(tenantId);
     const status = licenseStatus(license);
     if (status === 'EXPIRED') throw new TenantLicenseExpiredError();
     if (!isWithinLoginHours(license)) throw new TenantLoginWindowError();
-    if (concurrentSessions >= license.maxConcurrentSessions) throw new TenantSessionLimitError();
     return license;
   }
 
