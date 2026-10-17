@@ -263,11 +263,13 @@ export function AssetManagementPage() {
                 </Button>
               </PermissionGate>
             )}
-            <PermissionGate requires={WRITE_PERMISSION[tab]}>
-              <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
-                {t('common.add')} {t(`assets.tabs.${tab}`)}
-              </Button>
-            </PermissionGate>
+            {tab !== 'fleets' && (
+              <PermissionGate requires={WRITE_PERMISSION[tab]}>
+                <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
+                  {t('common.add')} {t(`assets.tabs.${tab}`)}
+                </Button>
+              </PermissionGate>
+            )}
           </div>
         }
       />
@@ -290,19 +292,22 @@ export function AssetManagementPage() {
         ) : (
           <>
             {tab === 'fleets' && (
-              <FleetsTab
-                fleets={fleets}
-                vehicles={vehicles}
-                loading={fleetsQuery.isLoading}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                filterStatus={fleetStatus}
-                query={fleetQuery}
-                onFilterStatus={setFleetStatus}
-                onQuery={setFleetQuery}
-                onEdit={openEdit}
-                onDelete={(id, name) => setDeleteTarget({ id, name })}
-              />
+              <div className="flex flex-col gap-3">
+                <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-graydark-200 dark:bg-graydark-100 dark:text-graydark-700">
+                  {t('assets.fleet.managedInTenantAdmin')}
+                </p>
+                <FleetsTab
+                  fleets={fleets}
+                  vehicles={vehicles}
+                  loading={fleetsQuery.isLoading}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  filterStatus={fleetStatus}
+                  query={fleetQuery}
+                  onFilterStatus={setFleetStatus}
+                  onQuery={setFleetQuery}
+                />
+              </div>
             )}
             {tab === 'vehicles' && (
               <VehiclesTab
@@ -325,6 +330,7 @@ export function AssetManagementPage() {
               <DevicesTab
                 devices={devices}
                 vehicles={vehicles}
+                fleets={fleets}
                 drivers={drivers}
                 loading={devicesQuery.isLoading}
                 selectedId={selectedId}
