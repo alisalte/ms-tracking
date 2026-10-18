@@ -86,10 +86,27 @@ export function useAlarmEvidence(alarm: Alarm) {
     return evidenceChannelForPhoto(mdvrChannels, eventPhoto) ?? null;
   }, [mdvrChannels, eventPhoto, platform.data?.videoChannel]);
   const hasCamera = mdvrChannels.length > 0;
+  const deviceId = mdvrChannels[0]?.deviceId ?? '';
+  const cameraKey = mdvrChannels.map((c) => `${c.id}:${c.logicalChannel ?? 1}`).join('|');
+  const mdvrChannelsRef = useRef(mdvrChannels);
+  mdvrChannelsRef.current = mdvrChannels;
   const loadRequested = session.alarmId === alarm.id && session.loadRequested;
   const includeNearby = session.alarmId === alarm.id && session.includeNearby;
   const shouldFetch = loadRequested;
+  const photoOnServer = platform.data?.photoAvailable === true;
+  const serverFetching =
+    platform.data?.status === 'PENDING' || platform.data?.status === 'FETCHING';
+  const platformSettled = platform.isFetched || platform.isError;
+  const [giveUpServerPhoto, setGiveUpServerPhoto] = useState(false);
   const photoUrl = useMemo(() => (photoBlob ? URL.createObjectURL(photoBlob) : null), [photoBlob]);
+
+  useEffect(() => {
+    if (!alarm.id) return;
+    setGiveUpServerPhoto(false);
+    if (!serverFetching) return;
+    const timer = setTimeout(() => setGiveUpServerPhoto(true), 20_000);
+    return () => clearTimeout(timer);
+  }, [alarm.id, serverFetching]);
 
   useEffect(() => {
     return () => {
@@ -128,19 +145,27 @@ export function useAlarmEvidence(alarm: Alarm) {
       return;
     }
 
-    const deviceId = mdvrChannels[0]?.deviceId;
+    const cameras = cameraKey ? mdvrChannelsRef.current : [];
     const eventMode = eventMedia && !includeNearby;
+    // The photo URL 404s until fleet-management has stored the JPEG. Hitting it
+    // anyway, then starting a second D00, collides with the server download.
+    const waitForServerPhoto =
+      !platformSettled || (serverFetching && !giveUpServerPhoto && !photoOnServer);
+    if (eventMode && waitForServerPhoto) {
+      setStatus('listing');
+      return;
+    }
     setStatus('listing');
 
     void (async () => {
       const errors: string[] = [];
       let gotPhoto = false;
       let listed = 0;
-      if (eventMode) {
+      if (eventMode && photoOnServer) {
         try {
-          const platform = await fetchAlarmEvidencePhoto(alarm.id);
+          const platformPhoto = await fetchAlarmEvidencePhoto(alarm.id);
           if (cancelled()) return;
-          setPhotoBlob(platform);
+          setPhotoBlob(platformPhoto);
           gotPhoto = true;
         } catch {
           /* fall through to device D00 */
@@ -161,7 +186,7 @@ export function useAlarmEvidence(alarm: Alarm) {
       if (!eventMode) {
         try {
           const result = await listMdvrEvidence(
-            mdvrChannels,
+            cameras,
             window.fromMs,
             window.toMs,
             true,
@@ -192,13 +217,18 @@ export function useAlarmEvidence(alarm: Alarm) {
     };
   }, [
     alarm.id,
+    cameraKey,
     channelsLoading,
+    deviceId,
     eventMedia,
     eventPhotoName,
+    giveUpServerPhoto,
     hasCamera,
     includeNearby,
     isFetched,
-    mdvrChannels,
+    photoOnServer,
+    platformSettled,
+    serverFetching,
     shouldFetch,
     window,
   ]);
