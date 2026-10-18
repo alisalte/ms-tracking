@@ -50,6 +50,29 @@ describe('parsePositionEnvelope', () => {
     expect(event.quality).toBe('VALID');
   });
 
+  it('keeps a CCE parameter map and a CAN-absent verdict on the position', () => {
+    const event = parsePositionEnvelope(
+      positionEnvelope({
+        telemetry: {
+          cce: {
+            event: 31,
+            paramIds: ['0x40', '0x02'],
+            params: { '0x40': '1f00', '0x02': '55c20502' },
+            can: { present: false, ids: [] },
+          },
+        },
+      }),
+    );
+    expect(event.metadata).toEqual({
+      cce: {
+        event: 31,
+        paramIds: ['0x40', '0x02'],
+        params: { '0x40': '1f00', '0x02': '55c20502' },
+        can: { present: false, ids: [] },
+      },
+    });
+  });
+
   it('falls back to `id` when `messageId` is absent', () => {
     const { messageId: _omit, ...env } = JSON.parse(positionEnvelope());
     void _omit;

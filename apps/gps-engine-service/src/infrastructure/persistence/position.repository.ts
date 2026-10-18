@@ -34,6 +34,19 @@ export interface LatestPosition {
   readonly capturedAt: Date;
   readonly ingestedAt: Date;
   readonly quality: number;
+  /** Decoded CCE record when this fix came from a Meitrack CCE packet. */
+  readonly cce?: CceRecord | null;
+}
+
+/** Full CCE parameter map plus the CAN present/absent verdict. */
+export interface CceRecord {
+  readonly event: number;
+  readonly paramIds: readonly string[];
+  readonly params: Readonly<Record<string, string>>;
+  readonly can: {
+    readonly present: boolean;
+    readonly ids: readonly string[];
+  } & Readonly<Record<string, unknown>>;
 }
 
 export class PositionRepository {
@@ -66,7 +79,9 @@ export class PositionRepository {
         speed_kmh: event.speedKph,
         ignition_on: event.ignitionOn,
         quality: QUALITY_CODE[event.quality],
-        metadata: this.knex.raw('?::jsonb', [JSON.stringify({ protocolId: event.protocolId })]),
+        metadata: this.knex.raw('?::jsonb', [
+          JSON.stringify({ protocolId: event.protocolId, ...(event.metadata ?? {}) }),
+        ]),
       })
       .onConflict(['event_id', 'captured_at'])
       .ignore();
@@ -210,6 +225,7 @@ interface PositionRow {
   captured_at: Date | string;
   ingested_at: Date | string;
   quality: number;
+  metadata?: unknown;
 }
 
 function toLatest(row: PositionRow): LatestPosition {
@@ -225,5 +241,39 @@ function toLatest(row: PositionRow): LatestPosition {
     capturedAt: new Date(row.captured_at),
     ingestedAt: new Date(row.ingested_at),
     quality: Number(row.quality),
+    cce: cceFromMetadata(row.metadata),
+  };
+}
+
+function cceFromMetadata(metadata: unknown): CceRecord | null {
+  let value = metadata;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const cce = (value as { cce?: unknown }).cce;
+  if (!cce || typeof cce !== 'object' || Array.isArray(cce)) return null;
+  const rec = cce as {
+    event?: unknown;
+    paramIds?: unknown;
+    params?: unknown;
+    can?: { present?: unknown; ids?: unknown };
+  };
+  if (typeof rec.event !== 'number' || !Array.isArray(rec.paramIds)) return null;
+  if (!rec.params || typeof rec.params !== 'object' || Array.isArray(rec.params)) return null;
+  if (typeof rec.can?.present !== 'boolean' || !Array.isArray(rec.can.ids)) return null;
+  return {
+    event: rec.event,
+    paramIds: rec.paramIds.filter((id): id is string => typeof id === 'string'),
+    params: rec.params as Record<string, string>,
+    can: {
+      ...(rec.can as Record<string, unknown>),
+      present: rec.can.present,
+      ids: rec.can.ids.filter((id): id is string => typeof id === 'string'),
+    },
   };
 }

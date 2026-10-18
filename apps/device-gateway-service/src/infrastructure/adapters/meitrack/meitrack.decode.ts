@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto';
 import { DeviceMessage, type Position } from '../../../domain/device-message.js';
 import { ProtocolError } from '../../../domain/errors.js';
 import type { RawPacket } from '../../../domain/raw-packet.js';
+import { snapshotCce } from './meitrack.cce-snapshot.js';
 import { mapDmsAlarmType, mapMeitrackEvent } from './meitrack.codes.js';
 import { buildMeitrackFrame } from './meitrack.encode.js';
 import { MEITRACK_COMMAND } from './meitrack.frames.js';
@@ -611,6 +612,15 @@ function parseCceGroups(
     off += 4;
     return v;
   };
+  // 0xFE is the documented extension (0xFE30 / 0xFE2F add one ID byte).
+  // 0xF8 is the high byte of CAN IDs 0xF825 / 0xF826 / 0xF827.
+  const readExtendedId = (): number => {
+    let id = readU8();
+    if ((id === 0xfe || id === 0xf8) && remaining() > 0) {
+      id = ((id << 8) | readU8()) & 0xffff;
+    }
+    return id;
+  };
 
   if (withOneByteGroup) {
     const n1 = readU8();
@@ -623,13 +633,15 @@ function parseCceGroups(
 
   const n2 = readU8();
   for (let i = 0; i < n2 && remaining() >= 3; i++) {
-    const id = readU8();
+    const id = readExtendedId();
+    if (remaining() < 2) break;
     const v = readU16();
     params.push({ id, value: Buffer.from([v & 0xff, (v >> 8) & 0xff]) });
   }
   const n4 = readU8();
   for (let i = 0; i < n4 && remaining() >= 5; i++) {
-    const id = readU8();
+    const id = readExtendedId();
+    if (remaining() < 4) break;
     const v = readU32();
     params.push({
       id,
@@ -638,10 +650,7 @@ function parseCceGroups(
   }
   const nn = readU8();
   for (let i = 0; i < nn && remaining() > 0; i++) {
-    let id = readU8();
-    if (id === 0xfe && remaining() > 0) {
-      id = ((id << 8) | readU8()) & 0xffff;
-    }
+    const id = readExtendedId();
     const len = remaining() > 0 ? readU8() : 0;
     const take = Math.min(len, remaining());
     const value = buf.subarray(off, off + take);
@@ -825,6 +834,9 @@ function messagesFromCcePacket(
       }
     : undefined;
 
+  const cce = snapshotCce(params);
+  const withCce = (extra?: Record<string, unknown>): Record<string, unknown> =>
+    extra ? { ...extra, cce } : { cce };
   const messages: DeviceMessage[] = [];
   if (event === 34) {
     messages.push(
@@ -832,7 +844,7 @@ function messagesFromCcePacket(
         type: 'COMMAND_ACK',
         serialOrImei: imei,
         timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
-        telemetry: { command: 'A10', response: 'OK' },
+        telemetry: withCce({ command: 'A10', response: 'OK' }),
       }),
     );
   }
@@ -861,7 +873,7 @@ function messagesFromCcePacket(
         timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
         position,
         alarms: [alarm],
-        telemetry: detail,
+        telemetry: withCce(detail),
       }),
     );
   }
@@ -872,6 +884,19 @@ function messagesFromCcePacket(
         serialOrImei: imei,
         timestamp: position.timestamp,
         position,
+        telemetry: withCce(),
+      }),
+    );
+  }
+  // Heartbeats and invalid fixes are not map positions. Still publish the full
+  // parameter map so a CAN-less packet is recorded as can=absent, not dropped.
+  if (messages.length === 0) {
+    messages.push(
+      message(raw, {
+        type: 'TELEMETRY',
+        serialOrImei: imei,
+        timestamp: Number.isNaN(timestamp.getTime()) ? new Date(raw.receivedAt) : timestamp,
+        telemetry: withCce({ command: 'CCE' }),
       }),
     );
   }
