@@ -279,26 +279,24 @@ export function useSnapshot() {
  * Base RTMP/HLS key as md300-main `live.js` (`RTMP_PATH = live/md300`).
  *
  * The MD300 drops extra path SEGMENTS, so a camera cannot be addressed by a
- * sub-path. The stream NAME is honoured, so each device and each camera gets
- * its own key. A shared `live/md300` made every vehicle on the wall publish
- * to the same MediaMTX path and kick the RTMP handshake before HLS existed.
+ * sub-path. The stream NAME is honoured: channel 1 publishes `live/md300` and
+ * channel N publishes `live/md300_N`. A per-IMEI name (`live/md300_<imei>`)
+ * was rejected or never produced an RTMP publisher on the unit that used to
+ * show a picture on the bare key.
  */
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
 /**
- * Per-device, per-camera stream key.
- *
- * `live/md300_<imei>` for channel 1, `live/md300_<imei>_<channel>` otherwise.
- * Without an IMEI the historical bare key is kept (`live/md300`, `live/md300_2`).
+ * Camera stream key. Channel 1 is `live/md300`; channel N > 1 is
+ * `live/md300_N`. The IMEI is ignored — this firmware publishes the bare key
+ * that `live.js` and the last working wall both used.
  * Keep in sync with `mdvrChannelStreamPath` (fleet-management),
  * `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
-export function mdvrStreamKey(imei?: string, logicalChannel = 1): string {
-  const id = (imei ?? '').replace(/\D/g, '');
-  const root = id ? `${MDVR_RTMP_PATH}_${id}` : MDVR_RTMP_PATH;
+export function mdvrStreamKey(_imei?: string, logicalChannel = 1): string {
   const n = Number(logicalChannel);
-  return Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
+  return Number.isFinite(n) && n > 1 ? `${MDVR_RTMP_PATH}_${n}` : MDVR_RTMP_PATH;
 }
 
 /** Host:port the device is told to push RTMP to (rewritten off-loopback server-side). */

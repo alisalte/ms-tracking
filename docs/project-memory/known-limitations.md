@@ -47,7 +47,7 @@ Whether MD300 actually writes a snapshot and a short event clip at DMS time depe
 
 ## Device Parameter → Media (Phase 3)
 
-- Covers **BB8** speaker volume + **B64** FTP photo upload, plus a platform **live resolution** preference (main vs sub stream) shared with the video wall. It does not rewrite the device's stored encode profile.
+- Covers **BB8** speaker volume + **B64** FTP photo upload, plus a platform **live resolution** label on the video wall. The AB2 wire byte stays `0` (main stream); this MD300 returns `AB2,Error` for the sub stream. It does not rewrite the device's stored encode profile.
 - Live stream / playback / D03 capture remain Command Center catalog actions (not Parameter sett).
 - Event-linked channel recording remains under Alarm (CB8), not duplicated here.
 

@@ -259,16 +259,13 @@ describe('DeviceCommandService', () => {
       },
     });
     const event = published[0] as { payloadHex?: string };
-    const want = Buffer.from(
-      'rtmp://203.0.113.10:1935/live/md300_866854036516451',
-      'ascii',
-    ).toString('hex');
+    const want = Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex');
     expect(event?.payloadHex?.toLowerCase()).toContain(want);
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
       Buffer.from('localhost', 'ascii').toString('hex'),
     );
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
-      Buffer.from('live/md300_866854036516451_2', 'ascii').toString('hex'),
+      Buffer.from('866854036516451', 'ascii').toString('hex'),
     );
   });
 
@@ -298,11 +295,12 @@ describe('DeviceCommandService', () => {
     expect(
       major!.subarray(0, major!.length - 1).equals(minor!.subarray(0, minor!.length - 1)),
     ).toBe(true);
+    // Live AB2 is pinned to the main stream. This MD300 returns AB2,Error for
+    // stream type 1 and then rejects the next dial too.
     expect(major![major!.length - 1]).toBe(0);
-    expect(minor![minor!.length - 1]).toBe(1);
-    expect(major!.toString('ascii')).toContain(
-      'rtmp://203.0.113.10:1935/live/md300_866854036516451',
-    );
+    expect(minor![minor!.length - 1]).toBe(0);
+    expect(major!.toString('ascii')).toContain('rtmp://203.0.113.10:1935/live/md300');
+    expect(major!.toString('ascii')).not.toContain('866854036516451');
     expect(major!.toString('ascii')).not.toContain('low');
     await expect(
       service.create(CTX, DEVICE_ID, {
@@ -312,7 +310,7 @@ describe('DeviceCommandService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('puts AB2 channel 2 on that device’s own key', async () => {
+  it('puts AB2 channel 2 on live/md300_2', async () => {
     const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
     await service.create(CTX, DEVICE_ID, {
       commandCode: 'AB2',
@@ -325,14 +323,14 @@ describe('DeviceCommandService', () => {
     });
     const event = published[0] as { payloadHex?: string };
     expect(event?.payloadHex?.toLowerCase()).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451_2', 'ascii').toString('hex'),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300_2', 'ascii').toString('hex'),
     );
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
       Buffer.from('live/md300/2', 'ascii').toString('hex'),
     );
   });
 
-  it('gives two devices different AB2 paths so they do not kick one RTMP handshake', async () => {
+  it('tells every device the bare live/md300 key this firmware publishes', async () => {
     const otherId = '33333333-3333-3333-3333-333333333333';
     const { service, published } = makeDeps({
       mdvrPublicHost: '203.0.113.10',
@@ -352,13 +350,13 @@ describe('DeviceCommandService', () => {
     const hexes = published.map((event) =>
       String((event as { payloadHex?: string }).payloadHex ?? '').toLowerCase(),
     );
-    expect(hexes[0]).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451', 'ascii').toString('hex'),
-    );
-    expect(hexes[1]).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_867191086416053', 'ascii').toString('hex'),
-    );
-    expect(hexes[0]).not.toContain(Buffer.from('867191086416053', 'ascii').toString('hex'));
+    const bare = Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex');
+    expect(hexes[0]).toContain(bare);
+    expect(hexes[1]).toContain(bare);
+    expect(hexes[0]).not.toContain(Buffer.from('866854036516451', 'ascii').toString('hex'));
+    expect(hexes[1]).not.toContain(Buffer.from('867191086416053', 'ascii').toString('hex'));
+    expect(hexes[0]!.slice(-2)).toBe('00');
+    expect(hexes[1]!.slice(-2)).toBe('00');
   });
 
   it('rewrites AB4 playback URL onto that device’s /pb key', async () => {
@@ -377,17 +375,22 @@ describe('DeviceCommandService', () => {
     });
     const event = published[0] as { payloadHex?: string };
     expect(event?.payloadHex?.toLowerCase()).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451_2/pb', 'ascii').toString(
-        'hex',
-      ),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300_2/pb', 'ascii').toString('hex'),
     );
   });
 
-  it('does not send AB2 when the GPRS session authenticates', async () => {
+  it('sends one main-stream AB2 to live/md300 when the GPRS session authenticates', async () => {
     const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
     await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
+    expect(published).toHaveLength(1);
+    const event = published[0] as { commandCode?: string; payloadHex?: string };
+    expect(event.commandCode).toBe('AB2');
+    expect(event.payloadHex?.toLowerCase()).toContain(
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex'),
+    );
+    expect(event.payloadHex?.toLowerCase().endsWith('00')).toBe(true);
     await service.startMdvrLiveOnConnect(CTX.tenantId, DEVICE_ID);
-    expect(published).toHaveLength(0);
+    expect(published).toHaveLength(1);
   });
 });
 
