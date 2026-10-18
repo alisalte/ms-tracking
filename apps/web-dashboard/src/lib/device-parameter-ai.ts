@@ -51,8 +51,11 @@ export function defaultAiSett(): AiParameterSett {
   };
 }
 
+/** Meitrack event 126 — ADAS/DMS. C90 only arms the buzzer; GPRS still needs B99. */
+const DMS_GPRS_EVENT = '126';
+
 export function composeAiCommands(sett: AiParameterSett): ComposedAiCommand[] {
-  return [
+  const cmds: ComposedAiCommand[] = [
     {
       commandCode: 'C90',
       params: {
@@ -65,6 +68,19 @@ export function composeAiCommands(sett: AiParameterSett): ComposedAiCommand[] {
       label: 'C90 DMS alerts',
     },
   ];
+  const uploadToServer =
+    sett.absence === '1' ||
+    sett.distraction === '1' ||
+    sett.smoking === '1' ||
+    sett.phoneCall === '1';
+  if (uploadToServer) {
+    cmds.push({
+      commandCode: 'B99',
+      params: { target: '2', operation: '2', eventCodes: DMS_GPRS_EVENT },
+      label: 'B99 GPRS DMS',
+    });
+  }
+  return cmds;
 }
 
 /** Empty GET probe (catalog: empty params = read). */

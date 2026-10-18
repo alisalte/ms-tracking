@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import type { RawPacket } from '../domain/raw-packet.js';
 import { MeitrackAdapter } from '../infrastructure/adapters/meitrack/meitrack.adapter.js';
+import { buildCceCacheAck } from '../infrastructure/adapters/meitrack/meitrack.decode.js';
 import { meitrackChecksum } from '../infrastructure/adapters/meitrack/meitrack.frames.js';
 import { ByteReader, NEED_MORE } from '../infrastructure/transport/byte-reader.js';
 
@@ -329,12 +330,12 @@ describe('MeitrackAdapter.encode', () => {
 
 // ── CCE binary frames (MDVR telemetry/DMS alarms) ─────────────────────────────
 
-/** Build a CCE frame with a binary parameter body (mirrors the device wire format). */
-function cceFrame(params: Buffer): Buffer {
-  const body = Buffer.concat([Buffer.from(`${IMEI},CCE,`, 'ascii'), params]);
+/** Build a CCE (or CFF-wrapped cache) frame with a binary parameter body. */
+function cceFrame(params: Buffer, command = 'CCE', dataId = 'A'): Buffer {
+  const body = Buffer.concat([Buffer.from(`${IMEI},${command},`, 'ascii'), params]);
   const commaBlock = Buffer.concat([Buffer.from(',', 'ascii'), body]);
   const length = commaBlock.length + 1 + 2 + 2;
-  const head = `$$A${String(length)}`;
+  const head = `$$${dataId}${String(length)}`;
   const checksumRegion = Buffer.concat([
     Buffer.from(head, 'ascii'),
     commaBlock,
@@ -532,6 +533,83 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(msgs.some((m) => m.alarms?.[0]?.code === 'TRACK_BY_INTERVAL')).toBe(false);
   });
 
+  it('decodes a device-shaped event 126 that follows a track in the same upload', () => {
+    // Wire FE31 value starts at protocol+type (no inner ID_Len). Photo is the
+    // calling sample from MDVR GPRS Protocol V2.0 (protocol 0x02, type 0x07).
+    const photo = Buffer.from('240822120001_CH2_E126S7_0.jpg', 'ascii');
+    const fe31 = Buffer.concat([Buffer.from([0x02, 0x07]), photo]);
+    const track = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [
+          [0x08, 40],
+          [0x40, 35],
+        ],
+        [
+          [0x02, LAT],
+          [0x03, LNG],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const dms = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [[0x40, 126]],
+        [
+          [0x02, LAT],
+          [0x03, LNG],
+          [0x04, T0],
+        ],
+        [[0xfe31, fe31]],
+      ),
+    ]);
+    const frame = cceFrame(envelopedPackets([track, dms], 3), 'CCE', 'P');
+    const msgs = decodeFrame(frame);
+    const alarm = msgs.find((m) => m.type === 'ALARM');
+    expect(alarm?.alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
+    expect(alarm?.telemetry?.photoName).toContain('E126S7');
+    expect(msgs.some((m) => m.alarms?.[0]?.code === 'TRACK_BY_INTERVAL')).toBe(false);
+
+    const ack = buildCceCacheAck(frame);
+    expect(ack).not.toBeNull();
+    const text = ack?.toString('ascii') ?? '';
+    expect(text.startsWith('@@P')).toBe(true);
+    expect(text).toContain(`,${IMEI},CFF,2*`);
+  });
+
+  it('decodes a CFF cache reply that carries the same CCE body', () => {
+    const fe31 = Buffer.concat([
+      Buffer.from([0x02, 0x07]),
+      Buffer.from('240822120001_CH2_E126S7_0.jpg', 'ascii'),
+    ]);
+    const dms = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams([[0x40, 126]], [], [[0xfe31, fe31]]),
+    ]);
+    const frame = cceFrame(enveloped(dms, 1), 'CFF', 'P');
+    const msgs = decodeFrame(frame);
+    expect(msgs.map((m) => m.type)).toContain('ALARM');
+    expect(first(msgs).alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
+    const ack = buildCceCacheAck(frame);
+    expect(ack?.toString('ascii')).toContain(`,${IMEI},CFF,1*`);
+  });
+
+  it('does not CFF-ack a live CCE upload with an empty device buffer', () => {
+    const groups = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [[0x40, 0]],
+        [
+          [0x02, LAT],
+          [0x03, LNG],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    expect(buildCceCacheAck(cceFrame(enveloped(groups, 0)))).toBeNull();
+  });
+
   it('accepts DMS detail on 0xFE2D as well as 0xFE31', () => {
     const fe2d = Buffer.from([3, 0x02, 0x08, 0x00]); // smoking
     const params = cceParams([[0x40, 126]], [], [[0xfe2d, fe2d]]);
@@ -548,7 +626,8 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
   function envelopedPackets(packets: Buffer[], cacheRemaining = 0): Buffer {
     const chunks: Buffer[] = [];
     for (const groups of packets) {
-      const pktLen = 4 + groups.length;
+      // Length counts bytes AFTER the uint16 (id-count + groups), matching the device.
+      const pktLen = 2 + groups.length;
       const hdr = Buffer.alloc(4);
       hdr.writeUInt16LE(pktLen, 0);
       hdr.writeUInt16LE(0, 2);

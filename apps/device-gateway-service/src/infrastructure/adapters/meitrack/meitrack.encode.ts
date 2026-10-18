@@ -44,12 +44,12 @@ function mediaDataId(body: Buffer): string {
  * after the length comma, i.e. `<imei>,<command>[,<args>]`). Computes length and
  * checksum per the spec.
  */
-export function buildMeitrackFrame(content: string): Buffer {
+export function buildMeitrackFrame(content: string, dataId = OUT_DATA_ID): Buffer {
   const commaBlock = `,${content}`;
   // Length = comma + content + '*' + checksum(2) + '\r\n'(2).
   const length = commaBlock.length + 1 + 2 + 2;
   const lengthStr = String(length);
-  const head = `${OUT_FLAG}${OUT_DATA_ID}${lengthStr}`;
+  const head = `${OUT_FLAG}${dataId}${lengthStr}`;
   const checksumRegion = `${head}${commaBlock}*`;
   const checksum = meitrackChecksum(Buffer.from(checksumRegion, 'ascii'));
   return Buffer.from(`${checksumRegion}${checksum}${TAIL}`, 'ascii');

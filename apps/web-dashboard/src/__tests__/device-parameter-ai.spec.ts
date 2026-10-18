@@ -17,7 +17,7 @@ describe('composeAiCommands', () => {
     sett.volume = '1';
     sett.smoking = '0';
     const cmds = composeAiCommands(sett);
-    expect(cmds).toHaveLength(1);
+    expect(cmds).toHaveLength(2);
     expect(cmds[0]).toMatchObject({
       commandCode: 'C90',
       params: {
@@ -28,6 +28,20 @@ describe('composeAiCommands', () => {
         phoneCall: '1',
       },
     });
+    expect(cmds[1]).toMatchObject({
+      commandCode: 'B99',
+      params: { target: '2', operation: '2', eventCodes: '126' },
+    });
+  });
+
+  it('does not authorize GPRS event 126 when every DMS behavior is off', () => {
+    const sett = defaultAiSett();
+    sett.absence = '0';
+    sett.distraction = '0';
+    sett.smoking = '0';
+    sett.phoneCall = '0';
+    const cmds = composeAiCommands(sett);
+    expect(cmds.map((c) => c.commandCode)).toEqual(['C90']);
   });
 
   it('composes CD1 calibration as a one-shot action', () => {

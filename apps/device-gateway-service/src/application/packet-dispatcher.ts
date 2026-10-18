@@ -20,6 +20,7 @@ import { DeviceMessage } from '../domain/device-message.js';
 import type { DeviceSession } from '../domain/device-session.js';
 import { ProtocolError } from '../domain/errors.js';
 import type { RawPacket } from '../domain/raw-packet.js';
+import { buildCceCacheAck } from '../infrastructure/adapters/meitrack/meitrack.decode.js';
 import { PhotoAssembler } from '../infrastructure/adapters/meitrack/meitrack.photo-assembler.js';
 import type { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/kafka-producer.js';
 import type { ProtocolAdapter } from '../infrastructure/protocol/protocol-adapter.js';
@@ -204,7 +205,36 @@ export class PacketDispatcher {
       await this.deps.commandDispatcher?.flushHeld(session.deviceId);
     }
 
+    if (adapter.id === 'meitrack' && session.canPublish()) {
+      this.acknowledgeCceCache(session, raw);
+    }
+
     return { published, authenticated, close: false, closeReason: null };
+  }
+
+  /**
+   * Delete the MDVR records we just stored. Without this the device repeats the
+   * buffer head (usually a track) and never reaches a queued driver alarm.
+   */
+  private acknowledgeCceCache(session: DeviceSession, raw: RawPacket): void {
+    let ack: Buffer | null;
+    try {
+      ack = buildCceCacheAck(raw.payload);
+    } catch (err) {
+      this.logger.warn(
+        `CFF cache ack build failed session=${session.id}: ${(err as Error).message}`,
+      );
+      return;
+    }
+    if (!ack || ack.length === 0) return;
+    const writer = this.deps.sessionManager.writerFor(session.id as string);
+    if (!writer) return;
+    const ok = writer(ack);
+    if (!ok) {
+      this.logger.warn(`CFF cache ack write failed session=${session.id}`);
+      return;
+    }
+    this.logger.log(`CFF cache ack session=${session.id} bytes=${ack.length}`);
   }
 
   /** Bind the session's resolved identity onto a pre-auth message (06 §9.2). */

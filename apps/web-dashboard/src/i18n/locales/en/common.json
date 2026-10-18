@@ -2343,7 +2343,7 @@
       },
       "ai": {
         "title": "AI / DMS settings",
-        "intro": "On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. Does not set photo/clip capture duration.",
+        "intro": "On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. Applying also authorizes GPRS upload of event 126 (driver monitoring). Until you apply once more, the device does not send those alerts to the server.",
         "volume": "Alert volume",
         "volumeSilent": "Silent",
         "volumeMedium": "Medium",
@@ -2416,7 +2416,8 @@
         "exitFence": "Exit Fence",
         "extBatteryOn": "Ext-Battery On",
         "extBatteryCut": "Ext-Battery Cut",
-        "gpsLost": "GPS Signal Lost"
+        "gpsLost": "GPS Signal Lost",
+        "driverMonitoring": "Driver monitoring (DMS)"
       }
     },
     "readable": "readable",

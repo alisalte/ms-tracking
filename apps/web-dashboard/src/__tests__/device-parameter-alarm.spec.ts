@@ -25,7 +25,8 @@ describe('composeAlarmLinkSettCommands', () => {
     expect(codes).toContain(16);
     expect(ALARM_PARAMETER_EVENTS.find((e) => e.code === 16)?.labelKey).toBe('input8Inactive');
     expect(ALARM_PARAMETER_EVENTS.find((e) => e.code === 2)?.defaultAlarmHead).toBe('In2 Active');
-    expect(ALARM_PARAMETER_EVENTS).toHaveLength(24);
+    expect(ALARM_PARAMETER_EVENTS.find((e) => e.code === 126)?.labelKey).toBe('driverMonitoring');
+    expect(ALARM_PARAMETER_EVENTS).toHaveLength(25);
   });
 
   it('emits B91 head and B99 GPRS for default transfer', () => {

@@ -243,7 +243,7 @@ export function DeviceParameterAiPanel({
       <Alert variant="info">
         {t('commands.parameter.ai.intro', {
           defaultValue:
-            'On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. Does not set photo/clip capture duration.',
+            'On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. Applying also authorizes GPRS upload of event 126 (driver monitoring). Until you apply once more, the device does not send those alerts to the server.',
         })}
       </Alert>
 

@@ -51,6 +51,9 @@ export const ALARM_PARAMETER_EVENTS: readonly AlarmParameterEventDef[] = [
   { code: 22, labelKey: 'extBatteryOn', defaultAlarmHead: 'Ext-Battery On' },
   { code: 23, labelKey: 'extBatteryCut', defaultAlarmHead: 'Ext-Battery Cut' },
   { code: 24, labelKey: 'gpsLost', defaultAlarmHead: 'GPS Signal Lost' },
+  // Event 126 is the MDVR ADAS/DMS upload. C90 arms detection; B99 GPRS must
+  // include 126 or the unit never sends پایش راننده to the server.
+  { code: 126, labelKey: 'driverMonitoring', defaultAlarmHead: 'DMS' },
 ] as const;
 
 export interface AssociatedPhone {
