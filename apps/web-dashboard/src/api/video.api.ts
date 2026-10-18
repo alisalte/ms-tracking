@@ -366,20 +366,27 @@ export function mdvrPlaybackHlsUrl(imei?: string, logicalChannel = 1): string {
   return `${window.location.protocol}//${window.location.host}/media-hls/${mdvrPlaybackStreamKey(imei, logicalChannel)}/index.m3u8`;
 }
 
-/** Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS in the operator's local clock. */
+/**
+ * Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS on the device clock.
+ *
+ * MD300 event files are stamped in UTC (a JPEG named `20261018121349_…` is
+ * the same instant as `raisedAt` `2026-10-18T12:13:49Z`). Sending the
+ * operator's local wall clock — Iran is UTC+3:30 — asks for 15:43 and the
+ * unit answers FFF5 (no file). This matches `toMdvrBcdUtc` on the server.
+ */
 export function toMdvrBcdTime(ms: number): string {
   const d = new Date(ms);
   if (!Number.isFinite(d.getTime())) return '000000000000';
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${String(d.getFullYear()).slice(-2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return `${String(d.getUTCFullYear()).slice(-2)}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
 }
 
-/** Inverse of `toMdvrBcdTime` — 12-digit BCD → epoch ms in the operator's local clock. */
+/** Inverse of `toMdvrBcdTime` — 12-digit device BCD (UTC) → epoch ms. */
 export function fromMdvrBcdTime(bcd: string): number {
   const s = String(bcd).replace(/\D/g, '').padStart(12, '0').slice(0, 12);
   const yy = Number(s.slice(0, 2));
   const year = yy >= 70 ? 1900 + yy : 2000 + yy;
-  const d = new Date(
+  return Date.UTC(
     year,
     Number(s.slice(2, 4)) - 1,
     Number(s.slice(4, 6)),
@@ -387,7 +394,6 @@ export function fromMdvrBcdTime(bcd: string): number {
     Number(s.slice(8, 10)),
     Number(s.slice(10, 12)),
   );
-  return d.getTime();
 }
 
 /** One MDVR SD-card file from an AB8 resource-list ACK. */
