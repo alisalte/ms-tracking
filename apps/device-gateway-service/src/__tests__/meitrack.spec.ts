@@ -639,6 +639,17 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(alarm?.telemetry?.dmsDetail).toBe('Distracted driving');
   });
 
+  it('restores the g of a 0xFE31 photo name the MD300 sends one byte short', () => {
+    // Real uploads stored `20261018124405_CH1_dca.jp`; D00 with it gets FFF5.
+    const fe31 = Buffer.concat([
+      Buffer.from([0x02, 0x07]),
+      Buffer.from('20261018124405_CH1_dca.jp', 'ascii'),
+    ]);
+    const params = cceParams([[0x40, 655]], [], [[0xfe31, fe31]]);
+    const alarm = decodeFrame(cceFrame(params)).find((m) => m.type === 'ALARM');
+    expect(alarm?.telemetry?.photoName).toBe('20261018124405_CH1_dca.jpg');
+  });
+
   it('decodes this MD300 event 662 (irblk.jpg) as a blocked camera', () => {
     const fe31 = Buffer.concat([Buffer.from([0x02, 0x0d]), Buffer.from('irblk.jpg', 'ascii')]);
     const params = cceParams([[0x40, 662]], [], [[0xfe31, fe31]]);

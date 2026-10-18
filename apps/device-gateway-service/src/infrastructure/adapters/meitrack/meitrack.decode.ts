@@ -680,6 +680,16 @@ function isLegacyDmsIdLen(value: Buffer): boolean {
   return idLen === value.length - 1 && idLen >= 3 && protocol >= 1 && protocol <= 4;
 }
 
+/**
+ * MD300 0xFE31 photo names arrive one byte short (`….jp`): the device's
+ * n-byte length does not count the last character. D00 with that name gets
+ * FFF5 (no file), so the platform photo always failed. Restore the extension.
+ */
+export function repairJpegName(name: string): string {
+  if (/\.jpe?$/i.test(name)) return `${name}g`;
+  return name;
+}
+
 function parseDmsDetail(value: Buffer): DmsDetail | null {
   if (value.length < 2) return null;
   const legacy = isLegacyDmsIdLen(value);
@@ -693,7 +703,7 @@ function parseDmsDetail(value: Buffer): DmsDetail | null {
     // Trailing NUL padding is dropped at the byte level (no control chars in regex).
     let end = slice.length;
     while (end > 0 && slice[end - 1] === 0) end--;
-    photoName = slice.subarray(0, end).toString('ascii') || null;
+    photoName = repairJpegName(slice.subarray(0, end).toString('ascii')) || null;
   }
   return { protocol, alarmType, photoName };
 }
