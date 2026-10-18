@@ -27,6 +27,14 @@ describe('parseMdvrEventPhotoName', () => {
     expect(parsed?.bcdTime).toBe('240823120009');
     expect(parsed?.capturedAtMs).toBe(fromMdvrBcdTime('240823120009'));
   });
+
+  it('reads channel from an MD300 name that has no E/S tag', () => {
+    const parsed = parseMdvrEventPhotoName('20261018121349_CH1_daa.jpg');
+    expect(parsed?.channel).toBe(1);
+    expect(parsed?.bcdTime).toBe('261018121349');
+    expect(parsed?.eventCode).toBe(0);
+    expect(parsed?.capturedAtMs).toBe(Date.parse('2026-10-18T12:13:49.000Z'));
+  });
 });
 
 describe('parseMdvrPhotoAck', () => {
@@ -59,13 +67,23 @@ describe('alarmEventVideoWindow', () => {
   });
 
   it('keeps the photo timestamp when it is close to the alarm', () => {
-    const raised = new Date(2026, 8, 5, 12, 0, 9);
-    const bcd = `${String(raised.getFullYear()).slice(-2)}${String(raised.getMonth() + 1).padStart(2, '0')}${String(raised.getDate()).padStart(2, '0')}120009`;
-    const photo = parseMdvrEventPhotoName(`${bcd}_CH2_E126S8_0.jpg`);
+    const raised = new Date(Date.UTC(2026, 8, 5, 12, 0, 9));
+    const photo = parseMdvrEventPhotoName('260905120009_CH2_E126S8_0.jpg');
     const win = alarmEventVideoWindow(photo, raised.toISOString());
     expect(win).not.toBeNull();
     expect(photo).not.toBeNull();
     expect(win!.fromMs).toBe(photo!.capturedAtMs - 60_000);
+  });
+
+  it('asks AB4 for the device clock on the JPEG, not the operator timezone', () => {
+    const raised = '2026-10-18T12:13:49.000Z';
+    const photo = parseMdvrEventPhotoName('20261018121349_CH1_daa.jpg');
+    const win = alarmEventVideoWindow(photo, raised);
+    expect(win).not.toBeNull();
+    expect(toMdvrBcdTime(win!.fromMs)).toBe('261018121249');
+    expect(toMdvrBcdTime(win!.toMs)).toBe('261018121649');
+    expect(toMdvrBcdTime(Date.parse(raised) - 5_000)).toBe('261018121344');
+    expect(toMdvrBcdTime(Date.parse(raised) + 10_000)).toBe('261018121359');
   });
 });
 

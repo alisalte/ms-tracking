@@ -70,7 +70,9 @@ export function AlarmEventVideo({
     void (async () => {
       for (const attempt of attempts) {
         if (cancelled) return;
-        const ok = await startRef.current(attempt.ch, attempt.from, attempt.to, '0');
+        // avType 3 = video or audio/video. Event clips are often video-only;
+        // avType 0 (audio+video required) makes the unit answer FFF5.
+        const ok = await startRef.current(attempt.ch, attempt.from, attempt.to, '3');
         if (cancelled || ok) return;
       }
     })();

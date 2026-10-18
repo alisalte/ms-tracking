@@ -196,7 +196,12 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
               <Film size={14} aria-hidden />
               {t('alarms.detail.videos')}
             </p>
-            {evidence.videoChannel && evidence.videoWindow ? (
+            {listing ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-graydark-600">
+                <Spinner size="sm" />
+                {t('alarms.detail.loadingEventMedia')}
+              </div>
+            ) : evidence.videoChannel && evidence.videoWindow ? (
               <AlarmEventVideo
                 channel={evidence.videoChannel}
                 fromMs={evidence.videoWindow.fromMs}

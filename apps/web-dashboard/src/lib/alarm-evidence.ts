@@ -240,7 +240,13 @@ export function sortEvidenceChannels(channels: CameraChannel[]): CameraChannel[]
   });
 }
 
-/** Meitrack event snapshot name: `240823120009_CH2_E126S8_0.jpg`. */
+/**
+ * Meitrack event snapshot name.
+ *
+ * Protocol examples are 12-digit `240823120009_CH2_E126S8_0.jpg`. This MD300
+ * writes 14-digit UTC stamps and drops the E/S tag: `20261018121349_CH1_daa.jpg`.
+ * `bcdTime` is always the 12-digit device clock (YYMMDDHHMMSS) AB4/AB8 use.
+ */
 export interface MdvrEventPhotoRef {
   filename: string;
   bcdTime: string;
@@ -250,31 +256,53 @@ export interface MdvrEventPhotoRef {
   subEventCode: number;
 }
 
-export function parseMdvrEventPhotoName(name: string | undefined): MdvrEventPhotoRef | null {
-  const filename = name?.trim() ?? '';
-  if (!filename) return null;
-  const tagged = filename.match(/^(\d{12})_CH(\d+)_E(\d+)S(\d+)/i);
-  if (tagged) {
-    const bcdTime = tagged[1] ?? '';
-    return {
-      filename,
-      bcdTime,
-      capturedAtMs: fromMdvrBcdTime(bcdTime),
-      channel: Number(tagged[2]),
-      eventCode: Number(tagged[3]),
-      subEventCode: Number(tagged[4]),
-    };
-  }
-  const timed = filename.match(/^(\d{12})/);
-  const bcdTime = timed?.[1] ?? '';
+/** `YYYYMMDDHHMMSS` → `YYMMDDHHMMSS`. 12-digit stamps pass through. */
+function deviceBcdStamp(stamp: string): string {
+  return stamp.length === 14 ? stamp.slice(2) : stamp;
+}
+
+function photoRef(
+  filename: string,
+  stamp: string,
+  channel: number,
+  eventCode: number,
+  subEventCode: number,
+): MdvrEventPhotoRef {
+  const bcdTime = deviceBcdStamp(stamp);
   return {
     filename,
     bcdTime,
-    capturedAtMs: bcdTime ? fromMdvrBcdTime(bcdTime) : Number.NaN,
-    channel: 0,
-    eventCode: 0,
-    subEventCode: 0,
+    capturedAtMs: fromMdvrBcdTime(bcdTime),
+    channel,
+    eventCode,
+    subEventCode,
   };
+}
+
+export function parseMdvrEventPhotoName(name: string | undefined): MdvrEventPhotoRef | null {
+  const filename = name?.trim() ?? '';
+  if (!filename) return null;
+  const tagged = filename.match(/^(\d{14}|\d{12})_CH(\d+)_E(\d+)S(\d+)/i);
+  if (tagged?.[1]) {
+    return photoRef(filename, tagged[1], Number(tagged[2]), Number(tagged[3]), Number(tagged[4]));
+  }
+  const channelOnly = filename.match(/^(\d{14}|\d{12})_CH(\d+)(?:_|\.)/i);
+  if (channelOnly?.[1]) {
+    return photoRef(filename, channelOnly[1], Number(channelOnly[2]), 0, 0);
+  }
+  const timed = filename.match(/^(\d{14}|\d{12})/);
+  const stamp = timed?.[1] ?? '';
+  if (!stamp) {
+    return {
+      filename,
+      bcdTime: '',
+      capturedAtMs: Number.NaN,
+      channel: 0,
+      eventCode: 0,
+      subEventCode: 0,
+    };
+  }
+  return photoRef(filename, stamp, 0, 0, 0);
 }
 
 /** Short playback window around the event snapshot (or `raisedAt`). */

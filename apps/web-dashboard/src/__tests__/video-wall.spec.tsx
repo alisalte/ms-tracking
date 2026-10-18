@@ -747,7 +747,7 @@ describe('mapMediaChannel wire shape', () => {
       '/media-hls/live/md300_867191086416152_2/pb/index.m3u8',
     );
     expect(mdvrPlaybackHlsUrl('867191086416152', 1)).not.toBe(mdvrHlsUrl('867191086416152', 1));
-    expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toMatch(/^\d{12}$/);
+    expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toBe('260904113005');
   });
 
   it('round-trips MDVR BCD timestamps and parses an AB8 ack JSON', async () => {
