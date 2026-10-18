@@ -110,12 +110,42 @@ function nestedObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/**
+ * MD300 snapshots are `….jpg`. A length off-by-one on the CCE photo field
+ * stores `….jp` and D00 then asks for a file the card does not have.
+ */
+export function normalizeMdvrPhotoFilename(name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+  if (!trimmed) return undefined;
+  if (/\.jp$/i.test(trimmed)) return `${trimmed}g`;
+  if (/\.jpe$/i.test(trimmed)) return `${trimmed}g`;
+  return trimmed;
+}
+
+function photoNameScore(name: string): number {
+  if (/\.jpe?g$/i.test(name)) return 2;
+  return 1;
+}
+
+/** Keep a complete `.jpg` name when detail and a later detection disagree. */
+function preferPhotoName(
+  current: string | undefined,
+  next: string | undefined,
+): string | undefined {
+  const left = normalizeMdvrPhotoFilename(current);
+  const right = normalizeMdvrPhotoFilename(next);
+  if (!left) return right;
+  if (!right) return left;
+  if (photoNameScore(right) > photoNameScore(left)) return right;
+  if (photoNameScore(left) > photoNameScore(right)) return left;
+  return left.length >= right.length ? left : right;
+}
+
 function photoNameFromObject(obj: Record<string, unknown> | null): string | undefined {
   if (!obj) return undefined;
-  const direct = stringField(obj, 'photoName');
-  if (direct) return direct;
+  const direct = normalizeMdvrPhotoFilename(stringField(obj, 'photoName'));
   const nested = nestedObject(obj.lastDetection);
-  return nested ? photoNameFromObject(nested) : undefined;
+  return preferPhotoName(direct, nested ? photoNameFromObject(nested) : undefined);
 }
 
 export function alarmEventPhotoName(detail: string): string | undefined {
@@ -150,7 +180,7 @@ function hintFromObject(obj: Record<string, unknown> | null): AlarmEventMediaHin
 
 function mergeHint(into: AlarmEventMediaHint, from: AlarmEventMediaHint): AlarmEventMediaHint {
   return {
-    photoName: into.photoName ?? from.photoName,
+    photoName: preferPhotoName(into.photoName, from.photoName),
     eventCode: into.eventCode ?? from.eventCode,
     subEventCode: into.subEventCode ?? from.subEventCode,
   };

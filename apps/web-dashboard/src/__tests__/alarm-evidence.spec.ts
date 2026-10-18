@@ -161,6 +161,24 @@ describe('alarmEventMediaHint', () => {
     });
   });
 
+  it('repairs a jpeg name that lost its last letter', () => {
+    const alarm = {
+      type: 'dms' as const,
+      code: 'DMS_PHONE_CALL',
+      rawType: undefined,
+      detail: '{"photoName":"20261018124405_CH1_dca.jp"}',
+      sourceEvents: [
+        {
+          id: 'e1',
+          type: 'device.alarm.DMS_PHONE_CALL.v1',
+          ts: '2026-10-18T12:44:05.000Z',
+          detail: '{"photoName":"20261018124405_CH1_dca.jpg"}',
+        },
+      ],
+    };
+    expect(alarmEventMediaHint(alarm).photoName).toBe('20261018124405_CH1_dca.jpg');
+  });
+
   it('defaults DMS eventCode to 126 when the packet omitted it', () => {
     const alarm = {
       type: 'dms' as const,
