@@ -286,16 +286,21 @@ export function useSnapshot() {
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
+/** IMEI digits kept in the stream name (the tail is what differs between units). */
+export const MDVR_STREAM_ID_DIGITS = 6;
+
 /**
  * Per-device, per-camera stream key.
  *
- * `live/md300_<imei>` for channel 1, `live/md300_<imei>_<channel>` otherwise.
+ * `live/md300_<id>` for channel 1, `live/md300_<id>_<channel>` otherwise, where
+ * `<id>` is the last 6 digits of the IMEI. The full 15-digit IMEI made the RTMP
+ * URL too long for the MD300: the unit answered `AB2,Error` and never pushed.
  * Without an IMEI the historical bare key is kept (`live/md300`, `live/md300_2`).
  * Keep in sync with `mdvrChannelStreamPath` (fleet-management),
  * `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
 export function mdvrStreamKey(imei?: string, logicalChannel = 1): string {
-  const id = (imei ?? '').replace(/\D/g, '');
+  const id = (imei ?? '').replace(/\D/g, '').slice(-MDVR_STREAM_ID_DIGITS);
   const root = id ? `${MDVR_RTMP_PATH}_${id}` : MDVR_RTMP_PATH;
   const n = Number(logicalChannel);
   return Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
