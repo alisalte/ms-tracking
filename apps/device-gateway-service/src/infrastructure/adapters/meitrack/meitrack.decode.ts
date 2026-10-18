@@ -524,18 +524,24 @@ function hasCceEnvelope(buf: Buffer): boolean {
   return pktLen >= 8 && 6 + pktLen <= buf.length;
 }
 
-function parseCceParams(buf: Buffer): CceParam[] {
+/**
+ * One CCE upload is a list of records (MDVR GPRS Protocol V2.0 §1.2). MD300s
+ * flush a DMS/ADAS event (code 126) in the same frame as later periodic tracks
+ * (code 35). Merging every record into one map kept only the last event code,
+ * so the driver alarm never became an ALARM and never reached the alarm center.
+ */
+function parseCcePackets(buf: Buffer): CceParam[][] {
   if (hasCceEnvelope(buf)) {
-    const enveloped = parseEnvelopedCce(buf);
+    const packets = parseEnvelopedCce(buf);
     // Trust the envelope only when it yields a real event code (0x40) — otherwise
     // fall through to the legacy non-enveloped layout used by some trackers/tests.
-    if (enveloped.some((p) => p.id === 0x40)) return enveloped;
+    if (packets.some((params) => params.some((p) => p.id === 0x40))) return packets;
   }
-  return parseCceGroups(buf, 0, buf.length, false);
+  return [parseCceGroups(buf, 0, buf.length, false)];
 }
 
-function parseEnvelopedCce(buf: Buffer): CceParam[] {
-  const params: CceParam[] = [];
+function parseEnvelopedCce(buf: Buffer): CceParam[][] {
+  const packets: CceParam[][] = [];
   const nPkts = buf.readUInt16LE(4);
   let off = 6;
   for (let p = 0; p < nPkts && off + 4 <= buf.length; p++) {
@@ -544,10 +550,10 @@ function parseEnvelopedCce(buf: Buffer): CceParam[] {
     off += 2;
     off += 2; // id-count (informational)
     const pktEnd = Math.min(buf.length, pktStart + pktLen);
-    params.push(...parseCceGroups(buf, off, pktEnd, true));
+    packets.push(parseCceGroups(buf, off, pktEnd, true));
     off = pktEnd;
   }
-  return params;
+  return packets;
 }
 
 /**
@@ -654,6 +660,8 @@ function parseDmsDetail(value: Buffer): DmsDetail | null {
 /**
  * Decode a CCE frame → POSITION and/or ALARM message(s). The event code rides
  * parameter 0x40 (2-byte LE); event 126 carries the DMS/ADAS detail in 0xFE31.
+ * Each inner record is decoded on its own so an earlier driver alarm is not
+ * overwritten by a later track record in the same upload.
  */
 function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
   // Locate the binary body: $$<id><len>,<IMEI>,CCE,<binary…>*<cc>
@@ -675,12 +683,40 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
     throw new ProtocolError('CCE frame has an empty body.', 'meitrack');
   }
 
-  let params: CceParam[] = [];
+  let packets: CceParam[][] = [];
   try {
-    params = parseCceParams(body);
+    packets = parseCcePackets(body);
   } catch {
-    params = [];
+    packets = [];
   }
+  const cacheRemaining = hasCceEnvelope(body) ? body.readUInt32LE(0) : 0;
+  const livePacket = cacheRemaining === 0;
+  const messages: DeviceMessage[] = [];
+  for (const params of packets) {
+    messages.push(...messagesFromCcePacket(raw, imei, params, livePacket));
+  }
+  if (messages.length === 0) {
+    // MD300 keepalives are CCE with IMEI but no GPS yet. Still authenticate
+    // so held AB2/AB3 can flush onto the GPRS socket.
+    messages.push(
+      message(raw, {
+        type: 'TELEMETRY',
+        serialOrImei: imei,
+        timestamp: new Date(raw.receivedAt),
+        telemetry: { command: 'CCE' },
+      }),
+    );
+  }
+  return messages;
+}
+
+/** One inner CCE record → ALARM and/or POSITION. No keepalive fallback. */
+function messagesFromCcePacket(
+  raw: RawPacket,
+  imei: string,
+  params: readonly CceParam[],
+  livePacket: boolean,
+): DeviceMessage[] {
   const byId = new Map<number, CceParam>();
   for (const p of params) byId.set(p.id, p);
 
@@ -722,8 +758,6 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
   // 0x05: 0 = invalid, 1 = valid. Missing (older frames / unit tests) → trust coords.
   // Event 31 is a GPRS heartbeat — GPS in that packet is defined invalid.
   const gpsValid = event !== 31 && gpsFlag !== 0;
-  const cacheRemaining = hasCceEnvelope(body) ? body.readUInt32LE(0) : 0;
-  const livePacket = cacheRemaining === 0;
   // GPS time = seconds since 2000-01-01. Live packets with a skewed GPS clock
   // must use receive time so gps-engine does not tag them STALE and drop them
   // from the live map.
@@ -806,18 +840,6 @@ function decodeCce(raw: RawPacket): readonly DeviceMessage[] {
         serialOrImei: imei,
         timestamp: position.timestamp,
         position,
-      }),
-    );
-  }
-  if (messages.length === 0) {
-    // MD300 keepalives are CCE with IMEI but no GPS yet. Still authenticate
-    // so held AB2/AB3 can flush onto the GPRS socket.
-    messages.push(
-      message(raw, {
-        type: 'TELEMETRY',
-        serialOrImei: imei,
-        timestamp: new Date(raw.receivedAt),
-        telemetry: { command: 'CCE' },
       }),
     );
   }
