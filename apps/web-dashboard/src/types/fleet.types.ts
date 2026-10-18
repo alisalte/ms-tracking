@@ -116,6 +116,27 @@ export interface CceRecord {
   paramIds: string[];
   params: Record<string, string>;
   can: CceCan & Record<string, unknown>;
+  /** Scaled non-CAN IDs (CCE ID Protocol V1.0). Absent on records stored before it. */
+  status?: CceStatus & Record<string, unknown>;
+}
+
+/** Device status from a CCE packet. A key is set only when that ID was sent. */
+export interface CceStatus {
+  gsmSignal?: number;
+  satellites?: number;
+  hdop?: number;
+  altitudeM?: number;
+  batteryV?: number;
+  batteryPct?: number;
+  externalPowerV?: number;
+  mileageM?: number;
+  runTimeS?: number;
+  inputs?: number;
+  outputs?: number;
+  rfid?: number;
+  baseStation?: { mcc: number; mnc: number; lac: number; cellId: number; rxLevelDbm: number };
+  temperatures?: Array<{ slot: number; sensor: number; celsius: number }>;
+  cameras?: { supported: number; connected: number[] };
 }
 
 /** CAN IDs from a CCE packet. `present: false` means the packet was read and had none. */

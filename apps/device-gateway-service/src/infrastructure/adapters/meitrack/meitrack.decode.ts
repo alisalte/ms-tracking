@@ -822,20 +822,22 @@ function messagesFromCcePacket(
   const coordsOk = latRaw !== null && lngRaw !== null && !(latRaw === 0 && lngRaw === 0) && inRange;
   // A10 (event 34) always records an in-range fix so locate-now lands on the map.
   const hasFix = coordsOk && (gpsValid || event === 34);
+  const cce = snapshotCce(params);
   const position: Position | undefined = hasFix
     ? {
         latitude,
         longitude,
         speedKph: speed,
         headingDeg: heading,
-        altitudeM: null,
+        altitudeM: cce.status.altitudeM ?? null,
         satellites: u8(0x06),
         timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+        // Not taken from input 1: it is unverified on MD300 wiring. The raw
+        // input bits are in cce.status.inputs.
         ignitionOn: true,
       }
     : undefined;
 
-  const cce = snapshotCce(params);
   const withCce = (extra?: Record<string, unknown>): Record<string, unknown> =>
     extra ? { ...extra, cce } : { cce };
   const messages: DeviceMessage[] = [];

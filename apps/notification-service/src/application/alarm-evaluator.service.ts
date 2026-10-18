@@ -688,7 +688,12 @@ function isNonAlarmDeviceCode(code: string): boolean {
 
 /** Device alarm code → dashboard alarm catalog type. */
 function deviceAlarmCatalogType(code: string): string {
-  if (code.startsWith('DMS_') || code.startsWith('ADAS_') || code.startsWith('FATIGUE')) {
+  if (
+    code.startsWith('DMS_') ||
+    code.startsWith('ADAS_') ||
+    code.startsWith('BSD_') ||
+    code.startsWith('FATIGUE')
+  ) {
     return 'dms';
   }
   if (code.startsWith('VIDEO_') || code.startsWith('STORAGE_')) return 'camera';
@@ -713,7 +718,11 @@ function deviceAlarmCatalogType(code: string): string {
     case 'ACCELERATION':
     case 'CORNERING':
     case 'DRIVING_BEHAVIOR':
+    case 'ROLLOVER':
       return 'collision';
+    case 'IDLE_OVERTIME':
+    case 'IDLE_RECOVERY':
+      return 'idle';
     case 'TOW':
       return 'tow';
     case 'JAMMING':
