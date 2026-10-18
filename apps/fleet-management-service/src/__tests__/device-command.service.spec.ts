@@ -259,16 +259,13 @@ describe('DeviceCommandService', () => {
       },
     });
     const event = published[0] as { payloadHex?: string };
-    const want = Buffer.from(
-      'rtmp://203.0.113.10:1935/live/md300_866854036516451',
-      'ascii',
-    ).toString('hex');
+    const want = Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex');
     expect(event?.payloadHex?.toLowerCase()).toContain(want);
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
       Buffer.from('localhost', 'ascii').toString('hex'),
     );
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
-      Buffer.from('live/md300_866854036516451_2', 'ascii').toString('hex'),
+      Buffer.from('live/md300_2', 'ascii').toString('hex'),
     );
   });
 
@@ -300,9 +297,7 @@ describe('DeviceCommandService', () => {
     ).toBe(true);
     expect(major![major!.length - 1]).toBe(0);
     expect(minor![minor!.length - 1]).toBe(1);
-    expect(major!.toString('ascii')).toContain(
-      'rtmp://203.0.113.10:1935/live/md300_866854036516451',
-    );
+    expect(major!.toString('ascii')).toContain('rtmp://203.0.113.10:1935/live/md300');
     expect(major!.toString('ascii')).not.toContain('low');
     await expect(
       service.create(CTX, DEVICE_ID, {
@@ -312,7 +307,7 @@ describe('DeviceCommandService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('puts AB2 channel 2 on that device’s own key', async () => {
+  it('puts AB2 channel 2 on the live/md300_2 key', async () => {
     const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
     await service.create(CTX, DEVICE_ID, {
       commandCode: 'AB2',
@@ -325,14 +320,14 @@ describe('DeviceCommandService', () => {
     });
     const event = published[0] as { payloadHex?: string };
     expect(event?.payloadHex?.toLowerCase()).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451_2', 'ascii').toString('hex'),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300_2', 'ascii').toString('hex'),
     );
     expect(event?.payloadHex?.toLowerCase()).not.toContain(
       Buffer.from('live/md300/2', 'ascii').toString('hex'),
     );
   });
 
-  it('gives two devices different AB2 paths so they do not kick one RTMP handshake', async () => {
+  it('keeps the IMEI out of the AB2 URL (real MD300s answer AB2,Error to it)', async () => {
     const otherId = '33333333-3333-3333-3333-333333333333';
     const { service, published } = makeDeps({
       mdvrPublicHost: '203.0.113.10',
@@ -353,15 +348,16 @@ describe('DeviceCommandService', () => {
       String((event as { payloadHex?: string }).payloadHex ?? '').toLowerCase(),
     );
     expect(hexes[0]).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451', 'ascii').toString('hex'),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex'),
     );
     expect(hexes[1]).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_867191086416053', 'ascii').toString('hex'),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300', 'ascii').toString('hex'),
     );
-    expect(hexes[0]).not.toContain(Buffer.from('867191086416053', 'ascii').toString('hex'));
+    expect(hexes[0]).not.toContain(Buffer.from('md300_', 'ascii').toString('hex'));
+    expect(hexes[1]).not.toContain(Buffer.from('867191086416053', 'ascii').toString('hex'));
   });
 
-  it('rewrites AB4 playback URL onto that device’s /pb key', async () => {
+  it('rewrites AB4 playback URL onto the camera’s /pb key', async () => {
     const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
     await service.create(CTX, DEVICE_ID, {
       commandCode: 'AB4',
@@ -377,9 +373,7 @@ describe('DeviceCommandService', () => {
     });
     const event = published[0] as { payloadHex?: string };
     expect(event?.payloadHex?.toLowerCase()).toContain(
-      Buffer.from('rtmp://203.0.113.10:1935/live/md300_866854036516451_2/pb', 'ascii').toString(
-        'hex',
-      ),
+      Buffer.from('rtmp://203.0.113.10:1935/live/md300_2/pb', 'ascii').toString('hex'),
     );
   });
 

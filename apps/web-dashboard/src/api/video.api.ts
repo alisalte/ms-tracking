@@ -287,16 +287,18 @@ export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
 /**
- * Per-device, per-camera stream key.
+ * Per-camera stream key: `live/md300` for channel 1, `live/md300_<channel>`
+ * otherwise — the URL the MD300 accepted up to a379be7.
  *
- * `live/md300_<imei>` for channel 1, `live/md300_<imei>_<channel>` otherwise.
- * Without an IMEI the historical bare key is kept (`live/md300`, `live/md300_2`).
+ * The IMEI is deliberately NOT in the key. `live/md300_<imei>[_N]` made real
+ * units answer `AB2,Error` and never open RTMP. The cost is that two vehicles
+ * opened at the same time share a key. `imei` stays in the signature so
+ * callers do not change if a per-device key the unit accepts is found.
  * Keep in sync with `mdvrChannelStreamPath` (fleet-management),
  * `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
-export function mdvrStreamKey(imei?: string, logicalChannel = 1): string {
-  const id = (imei ?? '').replace(/\D/g, '');
-  const root = id ? `${MDVR_RTMP_PATH}_${id}` : MDVR_RTMP_PATH;
+export function mdvrStreamKey(_imei?: string, logicalChannel = 1): string {
+  const root = MDVR_RTMP_PATH;
   const n = Number(logicalChannel);
   return Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
 }
