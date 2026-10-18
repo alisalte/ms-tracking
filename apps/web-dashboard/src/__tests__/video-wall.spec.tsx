@@ -453,7 +453,17 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
         .mocked(apiPost)
         .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2')
         .map((call) => (call[1] as { params?: { streamType?: string } })?.params?.streamType);
-      expect(streamTypes.every((type) => type === '1')).toBe(true);
+      expect(streamTypes.every((type) => type === '0')).toBe(true);
+      const postedResolution = vi
+        .mocked(apiPost)
+        .mock.calls.filter((call) => (call[1] as { commandCode?: string })?.commandCode === 'AB2')
+        .some((call) =>
+          Object.prototype.hasOwnProperty.call(
+            (call[1] as { params?: object }).params ?? {},
+            'resolution',
+          ),
+        );
+      expect(postedResolution).toBe(false);
     });
     // Neither tile is held back behind the other any more.
     expect(screen.queryAllByText(/is live on this device/).length).toBe(0);

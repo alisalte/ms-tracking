@@ -13,9 +13,9 @@ import {
 describe('mdvr live resolution', () => {
   beforeEach(() => localStorage.clear());
 
-  it('defaults to the sub stream so cameras open on the lighter push', () => {
-    expect(DEFAULT_MDVR_LIVE_RESOLUTION).toBe('low');
-    expect(loadMdvrLiveResolution()).toBe('low');
+  it('defaults to the main stream — the push md300 live.js and the last working wall sent', () => {
+    expect(DEFAULT_MDVR_LIVE_RESOLUTION).toBe('high');
+    expect(loadMdvrLiveResolution()).toBe('high');
     expect(mdvrStreamTypeForResolution('low')).toBe('1');
     expect(mdvrStreamTypeForResolution('high')).toBe('0');
   });
@@ -26,9 +26,9 @@ describe('mdvr live resolution', () => {
       fired += 1;
     };
     window.addEventListener(MDVR_LIVE_RESOLUTION_EVENT, onChange);
-    saveMdvrLiveResolution('high');
-    saveMdvrLiveResolution('high');
-    expect(loadMdvrLiveResolution()).toBe('high');
+    saveMdvrLiveResolution('low');
+    saveMdvrLiveResolution('low');
+    expect(loadMdvrLiveResolution()).toBe('low');
     expect(fired).toBe(1);
     window.removeEventListener(MDVR_LIVE_RESOLUTION_EVENT, onChange);
   });

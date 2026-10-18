@@ -256,14 +256,14 @@ export function DeviceParameterMediaPanel({
           label={t('video.resolution.label', { defaultValue: 'Resolution' })}
           hint={t('video.resolution.hint', {
             defaultValue:
-              'Low uses the camera sub stream so live view opens sooner. High is the main stream.',
+              'High is the main stream and is what this MD300 publishes. Low asks for the sub stream; some units acknowledge that command and never push video.',
           })}
           value={resolution}
           onChange={(e) => setResolution(e.target.value === 'high' ? 'high' : 'low')}
           options={[
             {
               value: 'low',
-              label: t('video.resolution.low', { defaultValue: 'Low (sub stream, opens faster)' }),
+              label: t('video.resolution.low', { defaultValue: 'Low (sub stream)' }),
             },
             {
               value: 'high',
