@@ -101,18 +101,13 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
  * two MediaMTX paths. Each new RTMP handshake kicked the previous one, so
  * MediaMTX never reached "is publishing" and HLS stayed HTTP 204.
  *
- * The stream name is therefore `<base>_<id>` (channel 1) or
- * `<base>_<id>_<channel>` (channel N > 1), where `<id>` is the last 6 digits
- * of the IMEI. The full 15-digit IMEI made the URL too long for the MD300:
- * it answered `AB2,Error` and never opened RTMP. Without an IMEI we keep the
+ * The stream name is therefore `<base>_<imei>` (channel 1) or
+ * `<base>_<imei>_<channel>` (channel N > 1). Without an IMEI we keep the
  * historical bare key so a single unit still has a path. Playback appends
  * `/pb`, which a real MD300 publishes as its own path. Keep in sync with
  * `mdvrStreamKey` (dashboard), `infra/docker/mediamtx.yml` and the nginx
  * `/media-hls` map.
  */
-/** IMEI digits kept in the stream name. Keep equal to the dashboard constant. */
-const MDVR_STREAM_ID_DIGITS = 6;
-
 function mdvrChannelStreamPath(
   base: string,
   channel: unknown,
@@ -120,7 +115,7 @@ function mdvrChannelStreamPath(
   imei?: string,
 ): string {
   const root = (base || 'live/md300').replace(/^\/+|\/+$/g, '');
-  const id = (imei ?? '').replace(/\D/g, '').slice(-MDVR_STREAM_ID_DIGITS);
+  const id = (imei ?? '').replace(/\D/g, '');
   const keyed = id ? `${root}_${id}` : root;
   const n = Number(channel);
   const perCamera = Number.isFinite(n) && n > 1 ? `${keyed}_${n}` : keyed;
