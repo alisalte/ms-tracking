@@ -497,6 +497,41 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(first(msgs).alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
   });
 
+  it('keeps a DMS alarm when a later track record shares the same CCE upload', () => {
+    const fe31 = Buffer.from([3, 0x02, 0x07, 0x00]); // phone call
+    const dms = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [[0x40, 126]],
+        [
+          [0x02, LAT],
+          [0x03, LNG],
+          [0x04, T0],
+        ],
+        [[0xfe31, fe31]],
+      ),
+    ]);
+    const track = Buffer.concat([
+      Buffer.from([1, 0x05, 0x01]),
+      cceParams(
+        [
+          [0x08, 40],
+          [0x40, 35],
+        ],
+        [
+          [0x02, LAT],
+          [0x03, LNG],
+          [0x04, T0],
+        ],
+      ),
+    ]);
+    const msgs = decodeFrame(cceFrame(envelopedPackets([dms, track], 12)));
+    const alarm = msgs.find((m) => m.type === 'ALARM');
+    expect(alarm?.alarms?.[0]?.code).toBe('DMS_PHONE_CALL');
+    expect(msgs.filter((m) => m.type === 'POSITION').length).toBeGreaterThan(0);
+    expect(msgs.some((m) => m.alarms?.[0]?.code === 'TRACK_BY_INTERVAL')).toBe(false);
+  });
+
   it('accepts DMS detail on 0xFE2D as well as 0xFE31', () => {
     const fe2d = Buffer.from([3, 0x02, 0x08, 0x00]); // smoking
     const params = cceParams([[0x40, 126]], [], [[0xfe2d, fe2d]]);
@@ -506,13 +541,23 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
 
   /** MDVR envelope: cache uint32 + packet-count uint16 + per-packet (len, id-count). */
   function enveloped(groups: Buffer, cacheRemaining = 0): Buffer {
-    const pktLen = 4 + groups.length;
-    const env = Buffer.alloc(10);
+    return envelopedPackets([groups], cacheRemaining);
+  }
+
+  /** Several inner records in one CCE upload (the MD300 cache-flush shape). */
+  function envelopedPackets(packets: Buffer[], cacheRemaining = 0): Buffer {
+    const chunks: Buffer[] = [];
+    for (const groups of packets) {
+      const pktLen = 4 + groups.length;
+      const hdr = Buffer.alloc(4);
+      hdr.writeUInt16LE(pktLen, 0);
+      hdr.writeUInt16LE(0, 2);
+      chunks.push(hdr, groups);
+    }
+    const env = Buffer.alloc(6);
     env.writeUInt32LE(cacheRemaining, 0);
-    env.writeUInt16LE(1, 4);
-    env.writeUInt16LE(pktLen, 6);
-    env.writeUInt16LE(0, 8);
-    return Buffer.concat([env, groups]);
+    env.writeUInt16LE(packets.length, 4);
+    return Buffer.concat([env, ...chunks]);
   }
 
   it('decodes an MDVR-enveloped CCE position (cache header + 1-byte group)', () => {
