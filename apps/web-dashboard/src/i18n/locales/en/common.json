@@ -1049,6 +1049,7 @@
       "DMS_PHONE_CALL": "Phone call",
       "DMS_SMOKING": "Smoking",
       "DMS_CAMERA_OCCLUSION": "Camera blocked",
+      "DMS_DISTRACTION": "Distracted driving",
       "DMS_LOOK_LEFT": "Looking left",
       "DMS_LOOK_RIGHT": "Looking right",
       "DMS_HEAD_UP": "Head up",
@@ -2350,7 +2351,7 @@
       },
       "ai": {
         "title": "AI / DMS settings",
-        "intro": "On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. Applying also authorizes GPRS upload of event 126 (driver monitoring). Until you apply once more, the device does not send those alerts to the server.",
+        "intro": "On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. This MD300 uploads driver monitoring as events 655–663 (not 126). Those rows show in Alerts as driver monitoring. A C90 rejection (FFFE) does not stop the alerts.",
         "volume": "Alert volume",
         "volumeSilent": "Silent",
         "volumeMedium": "Medium",

@@ -700,7 +700,8 @@ function parseDmsDetail(value: Buffer): DmsDetail | null {
 
 /**
  * Decode a CCE frame → POSITION and/or ALARM message(s). The event code rides
- * parameter 0x40 (2-byte LE); event 126 carries the DMS/ADAS detail in 0xFE31.
+ * parameter 0x40 (2-byte LE). DMS/ADAS detail is 0xFE31 on event 126 and, on
+ * this MD300, on events 655–663.
  * Each inner record is decoded on its own so an earlier driver alarm is not
  * overwritten by a later track record in the same upload.
  */
@@ -852,17 +853,20 @@ function messagesFromCcePacket(
     let alarm = mapMeitrackEvent(event);
     let detail: Record<string, unknown> | undefined;
     // 0xFE31 is the documented DMS/ADAS detail; some firmware also uses 0xFE2D.
+    // This MD300 attaches it to events 655–663 (not 126). Any event that
+    // carries a protocol 1–4 detail is a driver alarm.
     const fe31 = byId.get(0xfe31) ?? byId.get(0xfe2d);
-    if (event === 126 && fe31) {
+    if (fe31) {
       const dms = parseDmsDetail(fe31.value);
-      if (dms) {
-        const mapped = mapDmsAlarmType(dms.protocol, dms.alarmType);
+      if (dms && dms.protocol >= 1 && dms.protocol <= 4) {
+        const mapped = mapDmsAlarmType(dms.protocol, dms.alarmType, dms.photoName);
         alarm = { code: mapped.code, source: String(event), severity: mapped.severity };
         detail = {
           dmsProtocol: dms.protocol,
           dmsAlarmType: dms.alarmType,
           dmsDetail: mapped.detail,
           photoName: dms.photoName,
+          deviceEvent: event,
         };
       }
     }

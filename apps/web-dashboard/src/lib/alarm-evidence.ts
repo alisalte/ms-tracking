@@ -56,7 +56,9 @@ export function isDmsAlarm(
     blob.includes('ADAS_') ||
     blob.includes('FATIGUE') ||
     /DEVICE\.ALARM\.DMS/.test(blob) ||
-    /_E126S\d/.test(blob)
+    /_E126S\d/.test(blob) ||
+    /_E66[0-3]S\d/.test(blob) ||
+    /_E65[5-9]S\d/.test(blob)
   );
 }
 

@@ -243,7 +243,7 @@ export function DeviceParameterAiPanel({
       <Alert variant="info">
         {t('commands.parameter.ai.intro', {
           defaultValue:
-            'On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. Applying also authorizes GPRS upload of event 126 (driver monitoring). Until you apply once more, the device does not send those alerts to the server.',
+            'On-device AI / DMS Parameter (C90) — alert volume and absence, distraction, smoking, and phone-call toggles. This MD300 uploads driver monitoring as events 655–663 (not 126). Those rows show in Alerts as driver monitoring. A C90 rejection (FFFE) does not stop the alerts.',
         })}
       </Alert>
 
