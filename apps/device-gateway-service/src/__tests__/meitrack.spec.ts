@@ -349,6 +349,12 @@ function cceFrame(params: Buffer, command = 'CCE', dataId = 'A'): Buffer {
   ]);
 }
 
+/** 0xFE / 0xF8 IDs are two bytes on the wire (CAN 0xF825 and DMS 0xFE31). */
+function idBytes(id: number): Buffer {
+  if (id > 0xff) return Buffer.from([(id >> 8) & 0xff, id & 0xff]);
+  return Buffer.from([id & 0xff]);
+}
+
 /** CCE parameter stream: 2-byte group + 4-byte group + n-byte group. */
 function cceParams(
   twoByte: Array<[number, number]>,
@@ -358,11 +364,14 @@ function cceParams(
   const parts: Buffer[] = [];
   parts.push(Buffer.from([twoByte.length]));
   for (const [id, v] of twoByte) {
-    parts.push(Buffer.from([id, v & 0xff, (v >> 8) & 0xff]));
+    parts.push(idBytes(id), Buffer.from([v & 0xff, (v >> 8) & 0xff]));
   }
   parts.push(Buffer.from([fourByte.length]));
   for (const [id, v] of fourByte) {
-    parts.push(Buffer.from([id, v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]));
+    parts.push(
+      idBytes(id),
+      Buffer.from([v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]),
+    );
   }
   parts.push(Buffer.from([nByte.length]));
   for (const [id, value] of nByte) {
@@ -676,6 +685,70 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(msgs.map((m) => m.type)).toEqual(['TELEMETRY']);
   });
 
+  it('records every CCE parameter and reports CAN absent when the packet has none', () => {
+    const params = cceParams(
+      [
+        [0x08, 42],
+        [0x40, 0],
+      ],
+      [
+        [0x02, LAT],
+        [0x03, LNG],
+        [0x04, T0],
+      ],
+    );
+    const msg = first(decodeFrame(cceFrame(params)));
+    const cce = msg.telemetry?.cce as {
+      event: number;
+      paramIds: string[];
+      params: Record<string, string>;
+      can: { present: boolean; ids: string[] };
+    };
+    expect(cce.event).toBe(0);
+    expect(cce.paramIds).toEqual(['0x08', '0x40', '0x02', '0x03', '0x04']);
+    expect(cce.params['0x08']).toBe('2a00');
+    expect(cce.can).toEqual({ present: false, ids: [] });
+  });
+
+  it('decodes CAN IDs that ride inside a CCE position packet', () => {
+    const groups = Buffer.concat([
+      Buffer.from([3, 0x05, 0x01, 0x97, 0x14, 0x9d, 0x23]),
+      cceParams(
+        [
+          [0x08, 10],
+          [0x40, 0],
+          [0x99, 0x0412],
+          [0x9c, 50],
+          [0xf826, 0x09b0],
+        ],
+        [
+          [0x02, LAT],
+          [0x03, LNG],
+          [0x04, T0],
+          [0x98, 513],
+          [0x9a, 100],
+          [0xf825, 0x00020012],
+        ],
+      ),
+    ]);
+    const msg = first(decodeFrame(cceFrame(enveloped(groups))));
+    expect(msg.type).toBe('POSITION');
+    expect(msg.telemetry?.cce).toMatchObject({
+      can: {
+        present: true,
+        ids: ['0x97', '0x9d', '0x99', '0x9c', '0x98', '0x9a', '0xf825', '0xf826'],
+        acceleratorPedalPct: 20,
+        fuelLevelPct: 35,
+        rpm: 1042,
+        coolantTempC: 50,
+        totalFuelL: 513,
+        engineHours: 10,
+        batteryVoltageV: 1310.9,
+        coolantLevelPct: 24.8,
+      },
+    });
+  });
+
   it('does not treat a GPRS heartbeat (event 31) as a map position', () => {
     const groups = Buffer.concat([
       Buffer.from([1, 0x05, 0x01]),
@@ -690,6 +763,10 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     ]);
     const msgs = decodeFrame(cceFrame(enveloped(groups)));
     expect(msgs.map((m) => m.type)).toEqual(['TELEMETRY']);
+    const cce = msgs[0]?.telemetry?.cce as { can: { present: boolean }; paramIds: string[] };
+    expect(cce.can.present).toBe(false);
+    expect(cce.paramIds).toContain('0x40');
+    expect(cce.paramIds).toContain('0x02');
   });
 
   it('ACKs A10 when the device replies with event 34', () => {

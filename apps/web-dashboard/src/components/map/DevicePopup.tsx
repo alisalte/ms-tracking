@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Clock,
+  Cpu,
   Gauge,
   History,
   LocateFixed,
@@ -32,6 +33,7 @@ import { LiveBadge } from '@/components/dashboard/LiveBadge';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
 import { localizeAlarmMessage, localizeAlarmType } from '@/lib/alarm-copy';
+import { formatCanFact } from '@/lib/cce-can';
 import { lastSeenLabel } from '@/lib/relative-time';
 import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 import { status } from '@/theme/palette';
@@ -236,6 +238,13 @@ export function DevicePopup({
                 label={t('map.popup.odometer')}
                 value={fmtKm(data.odometer)}
                 tone="gray"
+              />
+              <Fact
+                icon={Cpu}
+                label={t('map.popup.can')}
+                value={formatCanFact(data.cce, t)}
+                tone={data.cce?.can.present ? 'info' : 'gray'}
+                fullWidth
               />
               <Fact icon={User} label={t('map.popup.driver')} value={driverLabel} tone="gray" />
               {/* §19 Last seen — device status last_seen, falling back to the fix. */}
@@ -514,6 +523,7 @@ function mergePopupVehicle(
     lng: roster.lng || base.lng,
     ignitionOn,
     lastSeenAt: roster.lastSeenAt ?? detail?.lastSeenAt,
+    cce: roster.cce !== undefined ? roster.cce : detail?.cce,
     updatedAt,
     deviceId: roster.deviceId ?? detail?.deviceId,
   };

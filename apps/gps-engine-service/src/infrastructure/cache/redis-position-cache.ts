@@ -8,7 +8,7 @@
  */
 import type { Redis } from '@fleetvision/cache-redis';
 import type { PositionEvent } from '../../domain/position-event.js';
-import type { LatestPosition } from '../persistence/position.repository.js';
+import type { CceRecord, LatestPosition } from '../persistence/position.repository.js';
 
 /** JSON shape stored in Redis (compact keys for the hot path). */
 interface CachedPosition {
@@ -19,6 +19,7 @@ interface CachedPosition {
   readonly alt: number | null;
   readonly ign: boolean | null;
   readonly ts: string; // ISO captured-at
+  readonly cce?: CceRecord;
 }
 
 export class RedisPositionCache {
@@ -38,6 +39,7 @@ export class RedisPositionCache {
 
   /** Write-through the latest position on ingest (best-effort; never throws). */
   public async setLatest(event: PositionEvent): Promise<void> {
+    const cce = event.metadata?.cce;
     const value: CachedPosition = {
       lat: event.latitude,
       lng: event.longitude,
@@ -46,6 +48,7 @@ export class RedisPositionCache {
       alt: event.altitudeM,
       ign: event.ignitionOn,
       ts: event.capturedAt.toISOString(),
+      ...(isCceRecord(cce) ? { cce } : {}),
     };
     try {
       await this.redis.set(
@@ -125,5 +128,16 @@ function fromCached(raw: string, tenantId: string, vehicleId: string): LatestPos
     capturedAt: new Date(c.ts),
     ingestedAt: new Date(c.ts),
     quality: 1,
+    cce: isCceRecord(c.cce) ? c.cce : null,
   };
+}
+
+function isCceRecord(value: unknown): value is CceRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const rec = value as { can?: { present?: unknown }; paramIds?: unknown; event?: unknown };
+  return (
+    typeof rec.event === 'number' &&
+    Array.isArray(rec.paramIds) &&
+    typeof rec.can?.present === 'boolean'
+  );
 }

@@ -34,6 +34,11 @@ export interface PositionEventProps {
   readonly protocolId: string;
   /** Assigned by the validation gates; defaults to VALID before validation. */
   readonly quality: Quality;
+  /**
+   * Protocol extras persisted in `vehicle_positions.metadata`. Meitrack CCE
+   * rides here as `{ cce }` (full parameter map + CAN verdict).
+   */
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 export class PositionEvent {
@@ -52,6 +57,7 @@ export class PositionEvent {
   public readonly ingestedAt: Date;
   public readonly protocolId: string;
   public readonly quality: Quality;
+  public readonly metadata?: Readonly<Record<string, unknown>>;
 
   constructor(props: PositionEventProps) {
     this.messageId = props.messageId;
@@ -69,6 +75,7 @@ export class PositionEvent {
     this.ingestedAt = props.ingestedAt;
     this.protocolId = props.protocolId;
     this.quality = props.quality;
+    this.metadata = props.metadata;
   }
 
   /** Return a copy with an updated quality (immutable update). */

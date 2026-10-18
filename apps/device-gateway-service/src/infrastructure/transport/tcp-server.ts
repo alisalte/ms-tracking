@@ -20,6 +20,12 @@ import type { DeviceSession, Transport } from '../../domain/index.js';
 import type { ProtocolAdapter } from '../protocol/protocol-adapter.js';
 import { ByteReader, NEED_MORE } from './byte-reader.js';
 
+/**
+ * Bytes of the first TCP chunk written to the log. A live MD300 CCE frame is
+ * about 150–170 bytes; 80 hid the tail where CAN and the n-byte group sit.
+ */
+const FIRST_CHUNK_LOG_BYTES = 512;
+
 /** Per-connection context handed to the pipeline callback. */
 export interface TcpConnectionContext {
   readonly socket: Socket;
@@ -146,7 +152,7 @@ export class TcpListener implements OnApplicationShutdown {
     socket.on('data', (chunk: Buffer) => {
       if (!loggedFirstBytes) {
         loggedFirstBytes = true;
-        const preview = chunk.subarray(0, 80);
+        const preview = chunk.subarray(0, FIRST_CHUNK_LOG_BYTES);
         this.logger.log(
           `First ${chunk.length}B from ${remoteAddress}:${remotePort} session=${session.id}: ` +
             `hex=${preview.toString('hex')} ascii=${JSON.stringify(preview.toString('latin1'))}`,

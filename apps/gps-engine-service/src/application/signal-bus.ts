@@ -24,6 +24,8 @@ export interface PositionSignal {
   readonly headingDeg: number;
   readonly capturedAt: string;
   readonly quality: string;
+  /** CCE parameter map + CAN verdict, when this fix came from a CCE packet. */
+  readonly cce?: Readonly<Record<string, unknown>>;
 }
 
 export interface DeviceStatusSignal {
@@ -90,6 +92,9 @@ export class SignalBus {
       headingDeg: event.headingDeg,
       capturedAt: event.capturedAt.toISOString(),
       quality: event.quality,
+      ...(event.metadata?.cce && typeof event.metadata.cce === 'object'
+        ? { cce: event.metadata.cce as Record<string, unknown> }
+        : {}),
     };
     this.emitter.emit(SIGNAL.POSITION, signal);
   }

@@ -65,6 +65,8 @@ export interface MapVehicle {
   presence?: VehiclePresence;
   /** Backend-provided last-seen (ISO) — never fabricated client-side. */
   lastSeenAt?: string;
+  /** Latest CCE record for this fix, including whether CAN was in the packet. */
+  cce?: CceRecord | null;
 }
 
 // ── Sprint E: REAL gps-engine wire types (live tracking bootstrap) ───────────
@@ -104,6 +106,30 @@ export interface LatestPosition {
   ingestedAt: string;
   /** Numeric quality code: 0 REJECTED, 1 VALID, 2 STALE, 3 LOW_ACCURACY, 4 SUSPECT_JUMP. */
   quality: number;
+  /** Meitrack CCE parameter map and CAN verdict. Null when this fix was not a CCE packet. */
+  cce?: CceRecord | null;
+}
+
+/** One decoded MD300 CCE record stored with the position. */
+export interface CceRecord {
+  event: number;
+  paramIds: string[];
+  params: Record<string, string>;
+  can: CceCan & Record<string, unknown>;
+}
+
+/** CAN IDs from a CCE packet. `present: false` means the packet was read and had none. */
+export interface CceCan {
+  present: boolean;
+  ids: string[];
+  acceleratorPedalPct?: number;
+  fuelLevelPct?: number;
+  rpm?: number;
+  coolantTempC?: number;
+  tachographSpeedKph?: number;
+  wheelSpeedKph?: number;
+  engineHours?: number;
+  totalFuelL?: number;
 }
 
 /** Recent event row in the device popup drawer (UI_UX_Design.md §2.5). */

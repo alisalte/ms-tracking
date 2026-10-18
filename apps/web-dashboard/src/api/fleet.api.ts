@@ -82,6 +82,7 @@ function toMapVehicle(
     deviceId,
     presence: motion.presence,
     lastSeenAt,
+    cce: pos?.cce ?? null,
   };
 }
 
@@ -281,6 +282,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         lastSeenAt: status?.lastSeenAt ?? position?.capturedAt ?? undefined,
         presence: motion.presence,
         deviceId: picked?.deviceId,
+        cce: position?.cce ?? null,
         odometer: vehicleWire.odometerKm ?? 0,
         address: '', // Reverse geocoding is a map-engine concern (out of scope).
         events: [],

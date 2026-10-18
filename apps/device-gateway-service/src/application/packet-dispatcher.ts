@@ -20,6 +20,11 @@ import { DeviceMessage } from '../domain/device-message.js';
 import type { DeviceSession } from '../domain/device-session.js';
 import { ProtocolError } from '../domain/errors.js';
 import type { RawPacket } from '../domain/raw-packet.js';
+import {
+  formatCceFrameLog,
+  formatCceRecordLog,
+  isCceSnapshot,
+} from '../infrastructure/adapters/meitrack/meitrack.cce-snapshot.js';
 import { buildCceCacheAck } from '../infrastructure/adapters/meitrack/meitrack.decode.js';
 import { PhotoAssembler } from '../infrastructure/adapters/meitrack/meitrack.photo-assembler.js';
 import type { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/kafka-producer.js';
@@ -85,6 +90,9 @@ export class PacketDispatcher {
 
     let authenticated = false;
     let published = 0;
+
+    const frameLog = formatCceFrameLog(raw.payload);
+    if (frameLog) this.logger.log(frameLog);
 
     for (const msg of messages) {
       // Stage 3: auth/resolve on LOGIN (06 §7). Fail-closed: unknown/disabled → close.
@@ -191,6 +199,11 @@ export class PacketDispatcher {
           session.recordData(raw.receivedAt);
         }
         await this.deps.sessionManager.touch(session);
+      }
+
+      const cce = normalized.telemetry?.cce;
+      if (isCceSnapshot(cce)) {
+        this.logger.log(formatCceRecordLog(normalized.serialOrImei, normalized.type, cce));
       }
 
       // Stage 5: publish (06 §8). Fail-closed invariant enforced by canPublish().

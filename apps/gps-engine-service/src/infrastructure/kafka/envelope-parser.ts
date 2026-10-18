@@ -37,6 +37,7 @@ interface PositionEnvelope {
   readonly messageType?: string;
   readonly timestamp?: string;
   readonly time?: string;
+  readonly telemetry?: unknown;
   readonly position?: {
     readonly latitude?: number;
     readonly longitude?: number;
@@ -123,7 +124,18 @@ export function parsePositionEnvelope(raw: Buffer | string): PositionEvent {
     ingestedAt,
     protocolId: env.protocolId ?? '',
     quality: 'VALID',
+    metadata: cceMetadata(env.telemetry),
   });
+}
+
+/** Keep a decoded CCE record (parameter map + CAN verdict) on the position. */
+function cceMetadata(telemetry: unknown): Record<string, unknown> | undefined {
+  if (!telemetry || typeof telemetry !== 'object' || Array.isArray(telemetry)) return undefined;
+  const cce = (telemetry as { cce?: unknown }).cce;
+  if (!cce || typeof cce !== 'object' || Array.isArray(cce)) return undefined;
+  const rec = cce as { can?: { present?: unknown }; paramIds?: unknown };
+  if (typeof rec.can?.present !== 'boolean' || !Array.isArray(rec.paramIds)) return undefined;
+  return { cce };
 }
 
 /** Raw session-lifecycle envelope shape (06 §13.2 publishSessionLifecycle). */
