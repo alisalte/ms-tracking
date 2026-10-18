@@ -737,6 +737,9 @@ function deviceAlarmCatalogType(code: string): string {
     case 'FACE_ID_ALARM':
       return 'dms';
     default:
+      // This MD300 uploads driver monitoring as events 655–663 (and 126 on
+      // other firmware). An older gateway still emits EVENT_n for those.
+      if (/^EVENT_(126|65[5-9]|66[0-3])$/.test(code)) return 'dms';
       if (code.startsWith('INPUT_')) return 'ignition';
       return 'other';
   }

@@ -619,6 +619,49 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(buildCceCacheAck(cceFrame(enveloped(groups, 0)))).toBeNull();
   });
 
+  it('decodes this MD300 event 659 (ddw.jpg) as distracted driving', () => {
+    // Live upload: event 659, FE31 value starts at protocol+type, photo ddw.jpg.
+    const fe31 = Buffer.concat([Buffer.from([0x02, 0x0c]), Buffer.from('ddw.jpg', 'ascii')]);
+    const params = cceParams(
+      [[0x40, 659]],
+      [
+        [0x02, LAT],
+        [0x03, LNG],
+        [0x04, T0],
+      ],
+      [[0xfe31, fe31]],
+    );
+    const msgs = decodeFrame(cceFrame(params));
+    const alarm = msgs.find((m) => m.type === 'ALARM');
+    expect(alarm?.alarms?.[0]?.code).toBe('DMS_DISTRACTION');
+    expect(alarm?.alarms?.[0]?.source).toBe('659');
+    expect(alarm?.telemetry?.photoName).toBe('ddw.jpg');
+    expect(alarm?.telemetry?.dmsDetail).toBe('Distracted driving');
+  });
+
+  it('decodes this MD300 event 662 (irblk.jpg) as a blocked camera', () => {
+    const fe31 = Buffer.concat([Buffer.from([0x02, 0x0d]), Buffer.from('irblk.jpg', 'ascii')]);
+    const params = cceParams([[0x40, 662]], [], [[0xfe31, fe31]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('DMS_CAMERA_OCCLUSION');
+    expect(first(msgs).alarms?.[0]?.source).toBe('662');
+    expect(first(msgs).telemetry?.photoName).toBe('irblk.jpg');
+  });
+
+  it('keeps a 655–663 upload as a driver alarm when FE31 is missing', () => {
+    const params = cceParams([[0x40, 655]], []);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('ADAS_DMS_ALARM');
+    expect(first(msgs).alarms?.[0]?.source).toBe('655');
+  });
+
+  it('names an unknown FE31 type from the photo when the event is not 126', () => {
+    const fe31 = Buffer.concat([Buffer.from([0x02, 0x55]), Buffer.from('ddw.jpg', 'ascii')]);
+    const params = cceParams([[0x40, 660]], [], [[0xfe31, fe31]]);
+    const msgs = decodeFrame(cceFrame(params));
+    expect(first(msgs).alarms?.[0]?.code).toBe('DMS_DISTRACTION');
+  });
+
   it('accepts DMS detail on 0xFE2D as well as 0xFE31', () => {
     const fe2d = Buffer.from([3, 0x02, 0x08, 0x00]); // smoking
     const params = cceParams([[0x40, 126]], [], [[0xfe2d, fe2d]]);

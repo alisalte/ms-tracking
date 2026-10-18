@@ -519,6 +519,13 @@ describe('Sprint G — device-alarm DMS persistence', () => {
     };
   }
 
+  it('catalogs this MD300 event 659 as driver monitoring', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'EVENT_659', source: '659' }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.type).toBe('dms');
+  });
+
   it('persists a DMS alarm as catalog type dms (not the raw code)', async () => {
     const { service, alarms } = makeHarness([]);
     await service.processDeviceAlarm(dmsAlarm());

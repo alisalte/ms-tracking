@@ -31,6 +31,9 @@ describe('mapAlarmType', () => {
     expect(mapAlarmType('EVENT_10')).toBe('ignition');
     expect(mapAlarmType('EVENT_35')).toBe('other');
     expect(mapAlarmType('EVENT_41')).toBe('other');
+    expect(mapAlarmType('EVENT_659')).toBe('dms');
+    expect(mapAlarmType('EVENT_662')).toBe('dms');
+    expect(mapAlarmType('DMS_DISTRACTION')).toBe('dms');
     expect(mapAlarmType('STOP_MOVING')).toBe('other');
     expect(mapAlarmType('ENTER_SLEEP')).toBe('other');
     expect(mapAlarmType('INPUT_2_INACTIVE')).toBe('ignition');

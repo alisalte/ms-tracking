@@ -71,9 +71,19 @@ export const MEITRACK_EVENTS: Readonly<Record<number, Pick<Alarm, 'code' | 'seve
   90: { code: 'CORNERING', severity: 'WARNING' },
   91: { code: 'CORNERING', severity: 'WARNING' },
   114: { code: 'DRIVING_BEHAVIOR', severity: 'WARNING' },
-  // 126 carries the DMS/ADAS detail in CCE parameter 0xFE31 — when present the
-  // decoder upgrades this generic label via mapDmsAlarmType (see below).
+  // 126 is the protocol's DMS/ADAS event. This MD300 firmware does not use it:
+  // the GPRS whitelist and live uploads use 655–663, and 0xFE31 (when present)
+  // upgrades the generic label via mapDmsAlarmType.
   126: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  655: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  656: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  657: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  658: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  659: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  660: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  661: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  662: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
+  663: { code: 'ADAS_DMS_ALARM', severity: 'WARNING' },
   129: { code: 'BRAKING', severity: 'WARNING' },
   130: { code: 'ACCELERATION', severity: 'WARNING' },
   135: { code: 'FATIGUE_DRIVING', severity: 'WARNING' },
@@ -160,6 +170,10 @@ const MEITRACK_DMS_TYPES_P2: Readonly<
   9: { code: 'DMS_DRINKING', detail: 'Drinking', severity: 'WARNING' },
   10: { code: 'DMS_DRIVER_ABSENCE', detail: 'Driver absence', severity: 'CRITICAL' },
   11: { code: 'DMS_CAMERA_OCCLUSION', detail: 'Camera occlusion', severity: 'WARNING' },
+  // This MD300 firmware extends protocol 0x02 past the V2.0 table. Live
+  // uploads used type 12 with photo ddw.jpg and type 13 with photo irblk.jpg.
+  12: { code: 'DMS_DISTRACTION', detail: 'Distracted driving', severity: 'WARNING' },
+  13: { code: 'DMS_CAMERA_OCCLUSION', detail: 'IR camera blocked', severity: 'WARNING' },
   128: { code: 'ADAS_FCW', detail: 'Forward collision warning', severity: 'CRITICAL' },
   129: { code: 'ADAS_DISTANCE_DETECTION', detail: 'Distance detection', severity: 'WARNING' },
   130: { code: 'ADAS_LDW_LEFT', detail: 'Left lane departure', severity: 'WARNING' },
@@ -167,14 +181,47 @@ const MEITRACK_DMS_TYPES_P2: Readonly<
   132: { code: 'ADAS_FRONT_VEHICLE_STARTED', detail: 'Front vehicle started', severity: 'INFO' },
 };
 
+/** Photo basename this firmware stores when the numeric type is outside the table. */
+function dmsFromPhotoName(photoName: string | null | undefined): DmsAlarm | null {
+  const base = (photoName ?? '').split(/[/\\]/).pop()?.toLowerCase() ?? '';
+  if (!base) return null;
+  if (base.startsWith('ddw') || base.includes('distract')) {
+    return { code: 'DMS_DISTRACTION', detail: 'Distracted driving', severity: 'WARNING' };
+  }
+  if (base.startsWith('irblk') || base.includes('occlusion')) {
+    return { code: 'DMS_CAMERA_OCCLUSION', detail: 'IR camera blocked', severity: 'WARNING' };
+  }
+  if (base.includes('phone') || base.startsWith('call')) {
+    return { code: 'DMS_PHONE_CALL', detail: 'Phone call', severity: 'WARNING' };
+  }
+  if (base.startsWith('smok')) {
+    return { code: 'DMS_SMOKING', detail: 'Smoking', severity: 'WARNING' };
+  }
+  if (base.startsWith('yawn')) {
+    return { code: 'DMS_YAWNING', detail: 'Yawning', severity: 'WARNING' };
+  }
+  if (base.startsWith('fatigue') || base.includes('drowsy')) {
+    return { code: 'DMS_DROWSINESS', detail: 'Drowsiness', severity: 'CRITICAL' };
+  }
+  return null;
+}
+
 /**
- * Map an event-126 0xFE31 alarm detail to a canonical DMS/ADAS alarm. Unknown
- * types keep the generic ADAS_DMS_ALARM code with the raw type in `detail`.
+ * Map a 0xFE31 alarm detail to a canonical DMS/ADAS alarm. Unknown types fall
+ * back to the photo name (`ddw.jpg`, `irblk.jpg`) and otherwise keep
+ * ADAS_DMS_ALARM with the raw type in `detail`.
  */
-export function mapDmsAlarmType(protocol: number, alarmType: number): DmsAlarm {
-  const table = protocol === 1 ? MEITRACK_DMS_TYPES_P1 : MEITRACK_DMS_TYPES_P2;
-  const entry = table[alarmType];
+export function mapDmsAlarmType(
+  protocol: number,
+  alarmType: number,
+  photoName?: string | null,
+): DmsAlarm {
+  const table =
+    protocol === 1 ? MEITRACK_DMS_TYPES_P1 : protocol === 2 ? MEITRACK_DMS_TYPES_P2 : null;
+  const entry = table?.[alarmType];
   if (entry) return { ...entry };
+  const fromPhoto = dmsFromPhotoName(photoName);
+  if (fromPhoto) return fromPhoto;
   return {
     code: 'ADAS_DMS_ALARM',
     detail: `Protocol ${protocol} alarm type ${alarmType}`,
