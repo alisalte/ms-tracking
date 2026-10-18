@@ -13,10 +13,12 @@ const STORAGE_KEY = 'fv:mdvr-live-resolution';
 export const MDVR_LIVE_RESOLUTION_EVENT = 'fv:mdvr-live-resolution';
 
 /**
- * Sub stream by default. Main-stream pushes are what made cameras sit on
- * "waiting" for so long; the lighter stream starts sooner.
+ * Main stream by default. AB2 has no resolution field — this preference is
+ * only the stream-type byte (0 major, 1 minor). md300 `live.js` and the last
+ * working wall both sent 0. Minor (1) is acknowledged by units whose sub
+ * stream is off, and then no RTMP publisher ever appears.
  */
-export const DEFAULT_MDVR_LIVE_RESOLUTION: MdvrLiveResolution = 'low';
+export const DEFAULT_MDVR_LIVE_RESOLUTION: MdvrLiveResolution = 'high';
 
 export function isMdvrLiveResolution(value: unknown): value is MdvrLiveResolution {
   return value === 'high' || value === 'low';

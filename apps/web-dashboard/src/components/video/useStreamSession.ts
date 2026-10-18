@@ -20,11 +20,9 @@ import { apiGet, apiPost } from '@/api/client';
 import { mdvrHlsUrl, mdvrIngestHlsUrl, mdvrRtmpUploadUrl, mdvrUrlsFromRtmp } from '@/api/video.api';
 import {
   MDVR_LIVE_RESOLUTION_EVENT,
-  MDVR_SUBSTREAM_FALLBACK_MS,
   type MdvrLiveResolution,
   loadMdvrLiveResolution,
   mdvrStreamTypeForResolution,
-  mdvrSubStreamFallback,
 } from '@/lib/mdvr-live-resolution';
 import { MockMediaSignalingClient, type StreamHandle, openStream } from '@/lib/video-stream';
 import { mockStreamSession } from '@/mock/video-data';
@@ -84,13 +82,13 @@ const STATS_REFRESH_MS = 2000;
 const CONNECTION_TIMEOUT_MS = 120_000;
 
 /**
- * Camera 1's RTMP handshake often needs >10s on cellular (MediaMTX
- * `readTimeout` is 45s for the same reason). A fixed 1s stagger let camera 2
- * open :1935 mid-handshake, which stalled *both* publishers and left HLS on
- * HTTP 204 forever. Later cameras now wait for this camera's ingest (or this
- * budget) before the next AB2 dials.
+ * Camera 1's RTMP handshake often needs >10s on cellular. MediaMTX closes the
+ * socket at `readTimeout` (45s) if the handshake is still open, so the next
+ * camera must not dial before that. Releasing the slot at 20s let camera 2's
+ * AB2 land while camera 1 was still connecting — both publishers died and HLS
+ * stayed HTTP 204 even after an AB2,OK for the main stream.
  */
-const AB2_PEER_INGEST_WAIT_MS = 20_000;
+const AB2_PEER_INGEST_WAIT_MS = 45_000;
 
 /**
  * Tiny head-start so camera 1's effect usually enqueues its AB2 before camera 2
@@ -498,7 +496,6 @@ export function useStreamSession(
         }
       };
 
-      let subFallback: ReturnType<typeof setTimeout> | undefined;
       let ab2Wire: 'SENT' | 'ACKED' | 'QUEUED' | 'FAILED' | null = null;
 
       const holdSlotUntilIngestOrTimeout = async () => {
@@ -527,7 +524,9 @@ export function useStreamSession(
           channel: logicalChannel,
           dataType: '0',
           streamType,
-          resolution: liveResolution,
+          // Logged only. AB2's struct is url + channel + dataType + streamType.
+          // `resolution` is not a protocol field and must not be posted.
+          resolutionLabel: liveResolution,
         });
         const record = await apiPost<
           { commandCode: string; params: Record<string, string | number> },
@@ -578,27 +577,6 @@ export function useStreamSession(
         if (cancelled) return;
         mdvrLog(`AB2 REST ${record.status} id=${record.id} — waiting for GPRS write`);
         setHlsUrl(playUrl);
-        if (MDVR_LIVE_IO && streamType === '1') {
-          if (subFallback) clearTimeout(subFallback);
-          subFallback = setTimeout(() => {
-            void (async () => {
-              if (cancelled) return;
-              const live = await ingestIsLive();
-              if (cancelled) return;
-              if (mdvrSubStreamFallback('1', live, MDVR_SUBSTREAM_FALLBACK_MS) !== '0') return;
-              mdvrLog(
-                `no RTMP on the sub stream after ${MDVR_SUBSTREAM_FALLBACK_MS}ms channel=${logicalChannel} — requesting the main stream`,
-              );
-              // Queue behind any in-flight peer handshake (same rule as startAb2).
-              await withDeviceAb2Slot(imei, async () => {
-                if (cancelled) return;
-                if (await ingestIsLive()) return;
-                await postAb2('0');
-                await holdSlotUntilIngestOrTimeout();
-              });
-            })();
-          }, MDVR_SUBSTREAM_FALLBACK_MS);
-        }
       };
 
       const startAb2 = async () => {
@@ -653,6 +631,16 @@ export function useStreamSession(
           }
           await postAb2(streamType);
           await holdSlotUntilIngestOrTimeout();
+          // A minor-stream AB2 is often AB2,OK with no RTMP publisher. Send the
+          // major stream before this slot is released. Doing it afterwards let
+          // the next camera dial in the gap and kill both handshakes.
+          if (!cancelled && streamType === '1' && !(await ingestIsLive())) {
+            mdvrLog(
+              `no RTMP publisher on the sub stream channel=${logicalChannel} — requesting the main stream before the next camera dials`,
+            );
+            await postAb2('0');
+            await holdSlotUntilIngestOrTimeout();
+          }
         });
       };
 
@@ -726,7 +714,6 @@ export function useStreamSession(
 
       return () => {
         cancelled = true;
-        if (subFallback) clearTimeout(subFallback);
         yielders?.delete(onYield);
         releaseMdvrLive(imei, logicalChannel, stopMdvr);
         teardown();

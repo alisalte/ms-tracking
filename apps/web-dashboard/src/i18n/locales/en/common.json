@@ -668,9 +668,9 @@
     },
     "resolution": {
       "label": "Resolution",
-      "low": "Low (sub stream, opens faster)",
+      "low": "Low (sub stream)",
       "high": "High (main stream)",
-      "hint": "Low uses the camera sub stream so live view opens sooner. High is the main stream."
+      "hint": "High is the main stream and is what this MD300 publishes. Low asks for the sub stream; some units acknowledge that command and never push video."
     },
     "toolbar": {
       "live": "live",

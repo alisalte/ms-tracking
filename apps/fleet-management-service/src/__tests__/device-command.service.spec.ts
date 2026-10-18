@@ -272,6 +272,46 @@ describe('DeviceCommandService', () => {
     );
   });
 
+  it('encodes AB2 stream type as one trailing byte and rejects a resolution field', async () => {
+    const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
+    const base = {
+      uploadUrl: 'rtmp://localhost:1935/live/md300',
+      channel: 1,
+      dataType: '0',
+    };
+    await service.create(CTX, DEVICE_ID, {
+      commandCode: 'AB2',
+      params: { ...base, streamType: '0' },
+    });
+    await service.create(CTX, DEVICE_ID, {
+      commandCode: 'AB2',
+      params: { ...base, streamType: '1' },
+    });
+    const bodies = published.map((event) =>
+      Buffer.from(String((event as { payloadHex?: string }).payloadHex ?? ''), 'hex'),
+    );
+    const major = bodies[0];
+    const minor = bodies[1];
+    expect(major).toBeDefined();
+    expect(minor).toBeDefined();
+    // AB2, + len + url + channel + dataType + streamType. Only the last byte moves.
+    expect(
+      major!.subarray(0, major!.length - 1).equals(minor!.subarray(0, minor!.length - 1)),
+    ).toBe(true);
+    expect(major![major!.length - 1]).toBe(0);
+    expect(minor![minor!.length - 1]).toBe(1);
+    expect(major!.toString('ascii')).toContain(
+      'rtmp://203.0.113.10:1935/live/md300_866854036516451',
+    );
+    expect(major!.toString('ascii')).not.toContain('low');
+    await expect(
+      service.create(CTX, DEVICE_ID, {
+        commandCode: 'AB2',
+        params: { ...base, streamType: '0', resolution: 'low' },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('puts AB2 channel 2 on that device’s own key', async () => {
     const { service, published } = makeDeps({ mdvrPublicHost: '203.0.113.10' });
     await service.create(CTX, DEVICE_ID, {
