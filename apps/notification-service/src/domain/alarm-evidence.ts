@@ -85,10 +85,19 @@ export function computeVideoWindow(raisedAt: Date): { from: Date; to: Date } {
   };
 }
 
+/**
+ * Older gateways stored MD300 photo names one byte short (`….jp`). D00 with
+ * that name gets FFF5, so the platform photo always failed.
+ */
+export function repairJpegName(name: string): string {
+  if (/\.jpe?$/i.test(name)) return `${name}g`;
+  return name;
+}
+
 export function extractPhotoName(detail: Record<string, unknown> | null): string | null {
   if (!detail) return null;
   const direct = detail.photoName;
-  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  if (typeof direct === 'string' && direct.trim()) return repairJpegName(direct.trim());
   const nested = detail.lastDetection;
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
     return extractPhotoName(nested as Record<string, unknown>);

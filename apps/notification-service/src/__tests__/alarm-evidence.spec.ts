@@ -17,6 +17,10 @@ describe('alarm-evidence domain', () => {
 
   it('extracts photoName and cabin channel', () => {
     expect(extractPhotoName({ photoName: 'a.jpg' })).toBe('a.jpg');
+    // Stored by an older gateway one byte short — D00 needs the real name.
+    expect(extractPhotoName({ photoName: '20261018124405_CH1_dca.jp' })).toBe(
+      '20261018124405_CH1_dca.jpg',
+    );
     expect(extractCabinChannel('240823120009_CH2_E126S8_0.jpg')).toBe(2);
     expect(extractCabinChannel(null)).toBe(2);
   });
