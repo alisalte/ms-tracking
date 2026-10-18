@@ -6,6 +6,8 @@
  * record therefore carries the complete parameter map plus `can.present`,
  * so a later log or position row can say whether CAN arrived.
  */
+import { type CceStatus, decodeCceStatus } from './meitrack.cce-status.js';
+
 export interface CceParamView {
   readonly id: number;
   readonly value: Buffer;
@@ -46,6 +48,8 @@ export interface CceSnapshot {
   readonly paramIds: readonly string[];
   readonly params: Readonly<Record<string, string>>;
   readonly can: CceCan;
+  /** Every documented non-CAN ID, scaled (GPS, I/O, power, cell, sensors…). */
+  readonly status: CceStatus;
 }
 
 /** First-packet and framed-CCE logs keep this many raw bytes (a live MD300 CCE is ~160). */
@@ -79,7 +83,13 @@ export function snapshotCce(params: readonly CceParamView[]): CceSnapshot {
     byId.set(param.id, param.value);
   }
   const event = readU16(byId.get(0x40)) ?? readU8(byId.get(0x01)) ?? 0;
-  return { event, paramIds, params: values, can: decodeCan(byId) };
+  return {
+    event,
+    paramIds,
+    params: values,
+    can: decodeCan(byId),
+    status: decodeCceStatus(params),
+  };
 }
 
 /**

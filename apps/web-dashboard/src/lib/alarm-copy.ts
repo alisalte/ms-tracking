@@ -100,6 +100,45 @@ export const MEITRACK_EVENT_NUM_TO_CODE: Readonly<Record<number, string>> = {
   135: 'FATIGUE_DRIVING',
   136: 'FATIGUE_TIME',
   647: 'FACE_ID_ALARM',
+  // MEITRACK GPRS (CCE ID) Protocol V1.0 §1.2.
+  37: 'RFID',
+  70: 'INCOMING_CALL_REJECTED',
+  71: 'LOCATION_BY_CALL',
+  72: 'INCOMING_CALL_AUTO_ANSWERED',
+  83: 'ULTRASONIC_SENSOR_DROP',
+  87: 'TPMS_ALARM',
+  94: 'OUTPUT_1_ACTIVE',
+  95: 'OUTPUT_2_ACTIVE',
+  96: 'OUTPUT_3_ACTIVE',
+  97: 'OUTPUT_4_ACTIVE',
+  98: 'OUTPUT_5_ACTIVE',
+  99: 'OUTPUT_1_INACTIVE',
+  100: 'OUTPUT_2_INACTIVE',
+  101: 'OUTPUT_3_INACTIVE',
+  102: 'OUTPUT_4_INACTIVE',
+  103: 'OUTPUT_5_INACTIVE',
+  117: 'PEOPLE_COUNTER',
+  128: 'ROLLOVER',
+  133: 'IDLE_OVERTIME',
+  134: 'IDLE_RECOVERY',
+  138: 'SPEED_RECOVERY',
+  139: 'MAINTENANCE_NOTICE',
+  159: 'OUTPUT_6_ACTIVE',
+  160: 'OUTPUT_7_ACTIVE',
+  161: 'OUTPUT_8_ACTIVE',
+  162: 'OUTPUT_6_INACTIVE',
+  163: 'OUTPUT_7_INACTIVE',
+  164: 'OUTPUT_8_INACTIVE',
+  165: 'BLUETOOTH_PERIPHERAL_ALARM',
+  648: 'ADAS_FCW',
+  650: 'ADAS_PEDESTRIAN_CW',
+  651: 'ADAS_LDW_LEFT',
+  652: 'ADAS_LDW_RIGHT',
+  653: 'ADAS_HMW',
+  669: 'BSD_FRONT',
+  670: 'BSD_BEHIND',
+  671: 'BSD_LEFT',
+  672: 'BSD_RIGHT',
 };
 
 /** Resolve `EVENT_35` → `TRACK_BY_INTERVAL`; named codes pass through. */
@@ -160,13 +199,15 @@ export function mapAlarmType(raw: string | undefined): AlarmType {
     u === 'BRAKING' ||
     u === 'ACCELERATION' ||
     u === 'CORNERING' ||
-    u === 'DRIVING_BEHAVIOR'
+    u === 'DRIVING_BEHAVIOR' ||
+    u === 'ROLLOVER'
   ) {
     return 'collision';
   }
   if (u.startsWith('VIDEO') || u.startsWith('STORAGE') || u === 'CAMERA') return 'camera';
   if (
     u.startsWith('ADAS') ||
+    u.startsWith('BSD_') ||
     u.startsWith('DMS') ||
     u.includes('DMS_') ||
     u.includes('.DMS') ||
@@ -190,7 +231,15 @@ export function mapAlarmType(raw: string | undefined): AlarmType {
   if (u === 'IGNITION_ON' || u === 'IGNITION_OFF' || u === 'IGNITION' || u.startsWith('INPUT_')) {
     return 'ignition';
   }
-  if (u === 'PROLONGED_IDLE' || u === 'PARKING' || u === 'IDLE') return 'idle';
+  if (
+    u === 'PROLONGED_IDLE' ||
+    u === 'PARKING' ||
+    u === 'IDLE' ||
+    u === 'IDLE_OVERTIME' ||
+    u === 'IDLE_RECOVERY'
+  ) {
+    return 'idle';
+  }
   if (
     u === 'DEVICE_REBOOT' ||
     u === 'ENTER_SLEEP' ||
@@ -252,6 +301,46 @@ const ALARM_CODE_DEFAULTS: Readonly<Record<string, { en: string; fa: string }>> 
   VIDEO_LOSS_CH2: { en: 'Video loss · camera 2', fa: 'قطع تصویر دوربین ۲' },
   DEVICE_OFFLINE: { en: 'Tracker connection lost', fa: 'ارتباط با دستگاه قطع شد' },
   DEVICE_ONLINE: { en: 'Tracker connection restored', fa: 'ارتباط با دستگاه برقرار شد' },
+  RFID: { en: 'RFID card swiped', fa: 'کارت RFID کشیده شد' },
+  INCOMING_CALL_REJECTED: { en: 'Incoming call rejected', fa: 'تماس ورودی رد شد' },
+  LOCATION_BY_CALL: { en: 'Location requested by call', fa: 'درخواست موقعیت با تماس' },
+  INCOMING_CALL_AUTO_ANSWERED: {
+    en: 'Incoming call auto-answered',
+    fa: 'پاسخ خودکار به تماس ورودی',
+  },
+  ULTRASONIC_SENSOR_DROP: {
+    en: 'Ultrasonic fuel sensor dropped',
+    fa: 'قطع سنسور اولتراسونیک سوخت',
+  },
+  TPMS_ALARM: { en: 'Tyre pressure alarm', fa: 'هشدار فشار باد تایر' },
+  PEOPLE_COUNTER: { en: 'People counter', fa: 'شمارنده مسافر' },
+  ROLLOVER: { en: 'Rollover', fa: 'واژگونی' },
+  IDLE_OVERTIME: { en: 'Idle overtime', fa: 'درجا کار کردن طولانی' },
+  IDLE_RECOVERY: { en: 'Idle ended', fa: 'پایان درجا کار کردن' },
+  SPEED_RECOVERY: { en: 'Speed back to normal', fa: 'بازگشت سرعت به حد مجاز' },
+  MAINTENANCE_NOTICE: { en: 'Maintenance due', fa: 'زمان سرویس' },
+  BLUETOOTH_PERIPHERAL_ALARM: { en: 'Bluetooth peripheral alarm', fa: 'هشدار دستگاه بلوتوثی' },
+  ADAS_PEDESTRIAN_CW: { en: 'Pedestrian collision warning', fa: 'هشدار برخورد با عابر' },
+  BSD_FRONT: { en: 'Blind spot · front', fa: 'نقطه کور · جلو' },
+  BSD_BEHIND: { en: 'Blind spot · rear', fa: 'نقطه کور · عقب' },
+  BSD_LEFT: { en: 'Blind spot · left', fa: 'نقطه کور · چپ' },
+  BSD_RIGHT: { en: 'Blind spot · right', fa: 'نقطه کور · راست' },
+  OUTPUT_1_ACTIVE: { en: 'Output 1 on', fa: 'خروجی ۱ فعال' },
+  OUTPUT_1_INACTIVE: { en: 'Output 1 off', fa: 'خروجی ۱ غیرفعال' },
+  OUTPUT_2_ACTIVE: { en: 'Output 2 on', fa: 'خروجی ۲ فعال' },
+  OUTPUT_2_INACTIVE: { en: 'Output 2 off', fa: 'خروجی ۲ غیرفعال' },
+  OUTPUT_3_ACTIVE: { en: 'Output 3 on', fa: 'خروجی ۳ فعال' },
+  OUTPUT_3_INACTIVE: { en: 'Output 3 off', fa: 'خروجی ۳ غیرفعال' },
+  OUTPUT_4_ACTIVE: { en: 'Output 4 on', fa: 'خروجی ۴ فعال' },
+  OUTPUT_4_INACTIVE: { en: 'Output 4 off', fa: 'خروجی ۴ غیرفعال' },
+  OUTPUT_5_ACTIVE: { en: 'Output 5 on', fa: 'خروجی ۵ فعال' },
+  OUTPUT_5_INACTIVE: { en: 'Output 5 off', fa: 'خروجی ۵ غیرفعال' },
+  OUTPUT_6_ACTIVE: { en: 'Output 6 on', fa: 'خروجی ۶ فعال' },
+  OUTPUT_6_INACTIVE: { en: 'Output 6 off', fa: 'خروجی ۶ غیرفعال' },
+  OUTPUT_7_ACTIVE: { en: 'Output 7 on', fa: 'خروجی ۷ فعال' },
+  OUTPUT_7_INACTIVE: { en: 'Output 7 off', fa: 'خروجی ۷ غیرفعال' },
+  OUTPUT_8_ACTIVE: { en: 'Output 8 on', fa: 'خروجی ۸ فعال' },
+  OUTPUT_8_INACTIVE: { en: 'Output 8 off', fa: 'خروجی ۸ غیرفعال' },
 };
 
 export function localizeAlarmCode(t: TFunction, code: string): string {

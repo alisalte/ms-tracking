@@ -47,6 +47,8 @@ export interface CceRecord {
     readonly present: boolean;
     readonly ids: readonly string[];
   } & Readonly<Record<string, unknown>>;
+  /** Scaled non-CAN IDs (GPS, I/O, power, cell, sensors). Absent on older rows. */
+  readonly status?: Readonly<Record<string, unknown>>;
 }
 
 export class PositionRepository {
@@ -262,6 +264,7 @@ function cceFromMetadata(metadata: unknown): CceRecord | null {
     paramIds?: unknown;
     params?: unknown;
     can?: { present?: unknown; ids?: unknown };
+    status?: unknown;
   };
   if (typeof rec.event !== 'number' || !Array.isArray(rec.paramIds)) return null;
   if (!rec.params || typeof rec.params !== 'object' || Array.isArray(rec.params)) return null;
@@ -275,5 +278,8 @@ function cceFromMetadata(metadata: unknown): CceRecord | null {
       present: rec.can.present,
       ids: rec.can.ids.filter((id): id is string => typeof id === 'string'),
     },
+    ...(rec.status && typeof rec.status === 'object' && !Array.isArray(rec.status)
+      ? { status: rec.status as Record<string, unknown> }
+      : {}),
   };
 }
