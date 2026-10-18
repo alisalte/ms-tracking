@@ -22,7 +22,6 @@ import {
   MDVR_LIVE_RESOLUTION_EVENT,
   type MdvrLiveResolution,
   loadMdvrLiveResolution,
-  mdvrStreamTypeForResolution,
 } from '@/lib/mdvr-live-resolution';
 import { MockMediaSignalingClient, type StreamHandle, openStream } from '@/lib/video-stream';
 import { mockStreamSession } from '@/mock/video-data';
@@ -106,9 +105,9 @@ const MAX_RETRIES = 3;
 const RECONNECT_BASE_MS = 1000;
 
 /**
- * Each device and camera publishes to its OWN RTMP/HLS key (`mdvrStreamKey`),
- * so two cameras on one MD300 — and two vehicles on the wall — can be live
- * at the same time. A shared key made every tile kick the RTMP handshake.
+ * Camera 1 publishes `live/md300` and camera N publishes `live/md300_N`.
+ * That bare key is what this MD300 pushes. A per-IMEI name was ACK'd or
+ * rejected and never became a MediaMTX publisher.
  *
  * The lock below is therefore keyed per (IMEI, channel), i.e. per camera: it
  * only stops two tiles showing the SAME camera from firing duplicate AB2s
@@ -589,40 +588,18 @@ export function useStreamSession(
 
         await withDeviceAb2Slot(imei, async () => {
           if (cancelled) return;
-          const streamType = mdvrStreamTypeForResolution(liveResolution);
-          const streamKey = liveKey(imei, logicalChannel);
-          const previous = appliedMdvrStreamType.get(streamKey);
+          // Always the main stream. This MD300 answers AB2,Error to stream
+          // type 1, and a follow-up AB2 then fails too. The resolution menu
+          // does not change the wire byte.
+          const streamType = '0' as const;
           const publishing = MDVR_LIVE_IO && (await ingestIsLive());
-          if (publishing && previous === streamType) {
+          if (publishing) {
             mdvrLog(
               `ingest already live channel=${logicalChannel} streamType=${streamType} — skip AB2 so we do not drop the RTMP publisher`,
             );
+            appliedMdvrStreamType.set(liveKey(imei, logicalChannel), streamType);
             setHlsUrl(playUrl);
             return;
-          }
-          if (publishing) {
-            // Publisher is already up. A second AB2 drops the RTMP session and
-            // makes the tile slower, so switch bitrate in place. This also moves
-            // a leftover main-stream push (the old default) onto the sub stream.
-            mdvrLog(
-              `ingest live channel=${logicalChannel} — AB3 switch to streamType=${streamType} (${liveResolution})`,
-            );
-            try {
-              await apiPost(`/devices/${deviceId}/commands`, {
-                commandCode: 'AB3',
-                params: {
-                  channel: logicalChannel,
-                  control: '1',
-                  closeType: '0',
-                  switchType: streamType,
-                },
-              });
-              appliedMdvrStreamType.set(streamKey, streamType);
-              if (!cancelled) setHlsUrl(playUrl);
-              return;
-            } catch (err) {
-              mdvrLog('AB3 switch failed, falling back to AB2:', err);
-            }
           }
           if (logicalChannel > 1) {
             mdvrLog(
@@ -631,16 +608,6 @@ export function useStreamSession(
           }
           await postAb2(streamType);
           await holdSlotUntilIngestOrTimeout();
-          // A minor-stream AB2 is often AB2,OK with no RTMP publisher. Send the
-          // major stream before this slot is released. Doing it afterwards let
-          // the next camera dial in the gap and kill both handshakes.
-          if (!cancelled && streamType === '1' && !(await ingestIsLive())) {
-            mdvrLog(
-              `no RTMP publisher on the sub stream channel=${logicalChannel} — requesting the main stream before the next camera dials`,
-            );
-            await postAb2('0');
-            await holdSlotUntilIngestOrTimeout();
-          }
         });
       };
 
@@ -694,7 +661,7 @@ export function useStreamSession(
             );
           } else {
             mdvrLog(
-              `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei} cam=${logicalChannel}. AB2 was ${ab2Wire} but MediaMTX never got a publisher (HLS stayed 204). Check MediaMTX logs for TCP on :1935, try one camera alone, or switch Resolution to High if the sub stream is disabled on the unit.`,
+              `TIMEOUT (${CONNECTION_TIMEOUT_MS}ms) waiting for stream — device=${deviceId} imei=${imei} cam=${logicalChannel}. AB2 was ${ab2Wire} but MediaMTX never got a publisher (HLS stayed 204). Check MediaMTX logs for TCP on :1935 and that the unit is pushing rtmp to live/md300.`,
             );
           }
           teardown();
@@ -776,7 +743,7 @@ export function useStreamSession(
       teardown();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel, currentQuality, retryTrigger, mdvr, liveResolution]);
+  }, [channel, currentQuality, retryTrigger, mdvr]);
 
   /** MDVR path: called by the HLS player when the playlist is ready / playback starts. */
   const onPlayerReady = useCallback(() => {

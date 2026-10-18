@@ -93,38 +93,34 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
 
 /**
  * md300 `live.js` tells the unit `rtmp://IP:1935/live/md300`. Extra path
- * SEGMENTS are dropped by the unit, so a camera cannot be addressed by a
- * sub-path — but the stream NAME is honoured.
+ * SEGMENTS are dropped by the unit (`live/md300/2` and `live/md300/pb` both
+ * publish as `live/md300` on some firmware), so a camera cannot be addressed
+ * by a sub-path — but the stream NAME is honoured.
  *
- * Every vehicle used to be told `live/md300` and `live/md300_<channel>`.
- * Opening the wall on several devices then made them all publish to those
- * two MediaMTX paths. Each new RTMP handshake kicked the previous one, so
- * MediaMTX never reached "is publishing" and HLS stayed HTTP 204.
- *
- * The stream name is therefore `<base>_<imei>` (channel 1) or
- * `<base>_<imei>_<channel>` (channel N > 1). Without an IMEI we keep the
- * historical bare key so a single unit still has a path. Playback appends
- * `/pb`, which a real MD300 publishes as its own path. Keep in sync with
- * `mdvrStreamKey` (dashboard), `infra/docker/mediamtx.yml` and the nginx
- * `/media-hls` map.
+ * Channel 1 keeps the bare key `live/md300`. Channel N > 1 becomes
+ * `<base>_<N>` (`live/md300_2`). This is the path a real MD300 accepted with
+ * `AB2,OK` and actually pushed. Putting the IMEI in the name
+ * (`live/md300_<imei>`) made the same unit answer `AB2,Error` or ACK and then
+ * never open RTMP, so HLS stayed HTTP 204. Playback appends `/pb`. Keep in
+ * sync with `mdvrStreamKey` (dashboard), `infra/docker/mediamtx.yml` and the
+ * nginx `/media-hls` map.
  */
 function mdvrChannelStreamPath(
   base: string,
   channel: unknown,
   kind: 'live' | 'playback' = 'live',
-  imei?: string,
 ): string {
   const root = (base || 'live/md300').replace(/^\/+|\/+$/g, '');
-  const id = (imei ?? '').replace(/\D/g, '');
-  const keyed = id ? `${root}_${id}` : root;
   const n = Number(channel);
-  const perCamera = Number.isFinite(n) && n > 1 ? `${keyed}_${n}` : keyed;
+  const perCamera = Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
   return kind === 'playback' ? `${perCamera}/pb` : perCamera;
 }
 
 export class DeviceCommandService {
   private readonly logger = new Logger(DeviceCommandService.name);
   private sweepTimer: NodeJS.Timeout | null = null;
+  /** Debounce auto-AB2 per device (md300 sends once per GPRS session). */
+  private readonly autoAb2At = new Map<string, number>();
 
   constructor(
     private readonly knex: Knex,
@@ -141,7 +137,7 @@ export class DeviceCommandService {
     } else {
       this.logger.warn(
         'MDVR public host could not be resolved at boot (MDVR_PUBLIC_HOST unset and ipify ' +
-          'lookup failed) — dashboard-triggered AB2/A9A rewrite is ' +
+          'lookup failed) — auto-AB2-on-connect and dashboard-triggered AB2/A9A rewrite are ' +
           'disabled until this service restarts. Set MDVR_PUBLIC_HOST explicitly or check ' +
           'outbound internet access from this container.',
       );
@@ -183,10 +179,7 @@ export class DeviceCommandService {
     let validated: Record<string, string | number>;
     let payload: CommandPayload;
     try {
-      validated = validateParams(
-        def,
-        this.resolveMediaDialback(def.code, input.params ?? {}, deviceRow.imei),
-      );
+      validated = validateParams(def, this.resolveMediaDialback(def.code, input.params ?? {}));
       payload = buildPayload(def, validated);
     } catch (err) {
       if (err instanceof CommandValidationError) {
@@ -255,15 +248,47 @@ export class DeviceCommandService {
   }
 
   /**
-   * Previously sent AB2 on every GPRS AUTHENTICATED (md300 `live.js`).
-   * Cellular MD300s re-authenticate often. Each of those AB2s — always the
-   * sub stream, 15s apart — restarted the RTMP handshake the wall had just
-   * started, so MediaMTX never reached "is publishing" and HLS stayed HTTP 204
-   * even after the operator's AB2 was SENT. Live video starts only when a tile
-   * sends AB2.
+   * md300-main `live.js` sends AB2 as soon as the GPRS socket has an IMEI.
+   * Mirror that on AUTHENTICATED: push `rtmp://PUBLIC_IP:1935/live/md300`
+   * with stream type 0 (main). This unit answers `AB2,Error` to stream type 1,
+   * and a per-IMEI path never became a MediaMTX publisher. A second call
+   * inside 15s is dropped so a burst of re-auths does not restart RTMP.
    */
-  public async startMdvrLiveOnConnect(_tenantId: string, _deviceId: string): Promise<void> {
-    return;
+  public async startMdvrLiveOnConnect(tenantId: string, deviceId: string): Promise<void> {
+    const now = Date.now();
+    const prev = this.autoAb2At.get(deviceId) ?? 0;
+    if (now - prev < 15_000) return;
+
+    const host = this.options.mdvrPublicHost?.trim();
+    if (!host) {
+      this.logger.warn('Skipping auto-AB2: MDVR public host is unset.');
+      return;
+    }
+    const path = mdvrChannelStreamPath(this.options.mdvrRtmpPath ?? 'live/md300', 1);
+    const port = this.options.mdvrRtmpPort ?? 1935;
+    const ctx: ActorContext = {
+      tenantId,
+      actorId: null,
+      actorType: 'SYSTEM',
+      requestId: null,
+      ipAddress: null,
+      userAgent: null,
+    };
+    try {
+      await this.create(ctx, deviceId, {
+        commandCode: 'AB2',
+        params: {
+          uploadUrl: `rtmp://${host}:${port}/${path}`,
+          channel: 1,
+          dataType: '0',
+          streamType: '0',
+        },
+      });
+      this.autoAb2At.set(deviceId, now);
+      this.logger.log(`Auto AB2 sent for device ${deviceId} → rtmp://${host}:${port}/${path}`);
+    } catch (err) {
+      this.logger.warn(`Auto AB2 skipped for ${deviceId}: ${(err as Error).message}`);
+    }
   }
 
   /**
@@ -275,7 +300,6 @@ export class DeviceCommandService {
   private resolveMediaDialback(
     commandCode: string,
     params: Record<string, string | number | boolean>,
-    imei?: string,
   ): Record<string, string | number | boolean> {
     const host = this.options.mdvrPublicHost?.trim() ?? '';
     if (!host) return params;
@@ -294,7 +318,7 @@ export class DeviceCommandService {
       const key = commandCode === 'AB2' ? 'uploadUrl' : 'url';
       const raw = String(params[key] ?? '');
       if (!raw) return params;
-      return {
+      const rewritten = {
         ...params,
         [key]: rewriteRtmpUrl(
           raw,
@@ -304,10 +328,13 @@ export class DeviceCommandService {
             this.options.mdvrRtmpPath ?? 'live/md300',
             params.channel,
             commandCode === 'AB4' ? 'playback' : 'live',
-            imei,
           ),
         ),
       };
+      // This MD300 answers AB2,Error to the minor stream (byte 1) and then
+      // refuses the next main-stream dial. Live video is always the main stream.
+      if (commandCode === 'AB2') rewritten.streamType = '0';
+      return rewritten;
     }
 
     return params;

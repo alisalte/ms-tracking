@@ -1,13 +1,12 @@
 # MediaMTX — MD300/MDVR live ingest (AB2 RTMP push → HLS).
-# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_<imei>   (camera 1)
-#                rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_<imei>_2 (camera 2), …
-# Browser plays same-origin /media-hls/live/md300_<imei>[_N]/index.m3u8 (nginx → :8888).
+# Device pushes rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300   (camera 1)
+#                rtmp://<MDVR_PUBLIC_HOST>:1935/live/md300_2 (camera 2), …
+# Browser plays same-origin /media-hls/live/md300[_N]/index.m3u8 (nginx → :8888).
 #
-# One path per device and camera. The AB2 channel byte picks the camera, and
-# the uploadUrl stream name is where the unit publishes. A shared live/md300
-# made every vehicle on the wall kick the previous RTMP handshake, so HLS
-# stayed 204. Bare live/md300 and live/md300_<channel> remain for a unit
-# whose IMEI is not in the command.
+# The AB2 channel byte picks the camera. This MD300 publishes the bare key
+# (the path that returned AB2,OK and a picture). A per-IMEI name was ACK'd
+# or rejected and never became a publisher. The regex paths below stay so an
+# older command that still names live/md300_<imei> can be transcoded.
 #
 # Camera 1 publishes H.264 (RTMP codec 7). Camera 2 publishes legacy HEVC
 # (RTMP codec 12) which MediaMTX < 1.16.2 rejects. After ingest, ffmpeg
