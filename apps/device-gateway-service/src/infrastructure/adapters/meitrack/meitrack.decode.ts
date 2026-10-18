@@ -25,6 +25,7 @@ import { DeviceMessage, type Position } from '../../../domain/device-message.js'
 import { ProtocolError } from '../../../domain/errors.js';
 import type { RawPacket } from '../../../domain/raw-packet.js';
 import { mapDmsAlarmType, mapMeitrackEvent } from './meitrack.codes.js';
+import { buildMeitrackFrame } from './meitrack.encode.js';
 import { MEITRACK_COMMAND } from './meitrack.frames.js';
 
 /** Parsed tracking-family frame: $$<id><len>,<body>*<cc>\r\n → command + body fields. */
@@ -97,8 +98,8 @@ function message(
  * code) + `telemetry.response` (the result payload, e.g. 'OK').
  */
 export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
-  // Binary bodies (CCE / AB8) must be detected before comma-splitting.
-  if (isCceFrame(raw.payload)) {
+  // Binary bodies (CCE / CFF cache / AB8) must be detected before comma-splitting.
+  if (binaryEventCommand(raw.payload)) {
     return decodeCce(raw);
   }
   if (isAb8Reply(raw.payload)) {
@@ -484,15 +485,29 @@ function decodeAb8(raw: RawPacket): DeviceMessage {
 
 // ── CCE (MDVR binary telemetry/alarm frame, MDVR GPRS Protocol V2.0 §2) ──────
 
-/** Detect `$$…,<imei>,CCE,` frames (the CCE body is binary — never comma-split). */
-function isCceFrame(payload: Buffer): boolean {
-  const head = payload.subarray(0, Math.min(payload.length, 64)).toString('binary');
-  const firstComma = head.indexOf(',');
-  const secondComma = head.indexOf(',', firstComma + 1);
-  const thirdComma = head.indexOf(',', secondComma + 1);
-  if (firstComma === -1 || secondComma === -1 || thirdComma === -1) return false;
-  // Command = the SECOND comma field ($$<len>,<imei>,<cmd>,…).
-  return head.substring(secondComma + 1, thirdComma) === 'CCE';
+/**
+ * `$$…,<imei>,CCE,` is always a binary event body.
+ * `$$…,<imei>,CFF,` is the same body when the device answers a cache pull
+ * (`CFF,<CCE data>`); a short text reply such as `CFF,OK` stays a command ACK.
+ */
+function binaryEventCommand(payload: Buffer): 'CCE' | 'CFF' | null {
+  const head = payload.subarray(0, Math.min(payload.length, 80));
+  const firstComma = head.indexOf(0x2c);
+  const secondComma = firstComma === -1 ? -1 : head.indexOf(0x2c, firstComma + 1);
+  const thirdComma = secondComma === -1 ? -1 : head.indexOf(0x2c, secondComma + 1);
+  if (firstComma === -1 || secondComma === -1 || thirdComma === -1) return null;
+  const cmd = head.subarray(secondComma + 1, thirdComma).toString('ascii');
+  if (cmd === 'CCE') return 'CCE';
+  if (cmd !== 'CFF') return null;
+  const star = payload.lastIndexOf(0x2a);
+  if (star <= thirdComma) return null;
+  const body = payload.subarray(thirdComma + 1, star);
+  if (body.length < 10) return null;
+  for (let i = 0; i < Math.min(body.length, 8); i++) {
+    const b = body[i] ?? 0;
+    if (b === 0 || b > 0x7e) return 'CFF';
+  }
+  return null;
 }
 
 /** One decoded CCE parameter. */
@@ -520,8 +535,9 @@ function hasCceEnvelope(buf: Buffer): boolean {
   const nPkts = buf.readUInt16LE(4);
   if (nPkts < 1 || nPkts > 64) return false;
   const pktLen = buf.readUInt16LE(6);
-  // Packet header starts at offset 6; the packet must fit in the remaining body.
-  return pktLen >= 8 && 6 + pktLen <= buf.length;
+  // Length is the byte count AFTER the uint16 length field (id-count + groups).
+  // The first packet must fit: offset 6 + 2 + pktLen.
+  return pktLen >= 4 && 8 + pktLen <= buf.length;
 }
 
 /**
@@ -545,11 +561,15 @@ function parseEnvelopedCce(buf: Buffer): CceParam[][] {
   const nPkts = buf.readUInt16LE(4);
   let off = 6;
   for (let p = 0; p < nPkts && off + 4 <= buf.length; p++) {
-    const pktStart = off;
+    // MDVR GPRS Protocol V2.0 / Traccar decodeBinaryE: the uint16 length counts
+    // the bytes AFTER itself (2-byte id-count + parameter groups). Treating it
+    // as including the length field ends the record 2 bytes early and desyncs
+    // every following record — a later event 126 never becomes an alarm.
     const pktLen = buf.readUInt16LE(off);
     off += 2;
+    const pktEnd = Math.min(buf.length, off + pktLen);
+    if (pktEnd < off + 2) break;
     off += 2; // id-count (informational)
-    const pktEnd = Math.min(buf.length, pktStart + pktLen);
     packets.push(parseCceGroups(buf, off, pktEnd, true));
     off = pktEnd;
   }
@@ -638,14 +658,26 @@ interface DmsDetail {
   readonly photoName: string | null;
 }
 
-function parseDmsDetail(value: Buffer): DmsDetail | null {
-  // <ID_Len><AlarmProtocol><AlarmType><PhotoName…> — ID_Len counts the bytes
-  // AFTER it (protocol + type + photo).
-  if (value.length < 3) return null;
+/**
+ * Some fixtures prefix `<ID_Len><protocol><type>…` where ID_Len counts the
+ * bytes after itself. The device value does not: the n-byte group length is
+ * already consumed, and the value starts at AlarmProtocol (PDF example
+ * `02 07` + photo, Traccar `0xFE31`).
+ */
+function isLegacyDmsIdLen(value: Buffer): boolean {
+  if (value.length < 4) return false;
+  const idLen = value[0] ?? 0;
   const protocol = value[1] ?? 0;
-  const alarmType = value[2] ?? 0;
+  return idLen === value.length - 1 && idLen >= 3 && protocol >= 1 && protocol <= 4;
+}
+
+function parseDmsDetail(value: Buffer): DmsDetail | null {
+  if (value.length < 2) return null;
+  const legacy = isLegacyDmsIdLen(value);
+  const protocol = legacy ? (value[1] ?? 0) : (value[0] ?? 0);
+  const alarmType = legacy ? (value[2] ?? 0) : (value[1] ?? 0);
   let photoName: string | null = null;
-  const nameBytes = value.subarray(3);
+  const nameBytes = value.subarray(legacy ? 3 : 2);
   const zero = nameBytes.indexOf(0);
   const slice = zero >= 0 ? nameBytes.subarray(0, zero) : nameBytes;
   if (slice.length > 0) {
@@ -844,4 +876,46 @@ function messagesFromCcePacket(
     );
   }
   return messages;
+}
+
+/**
+ * Confirm a cached MDVR upload so the device deletes it and sends the next
+ * record (MDVR GPRS Protocol V2.0 §3.64 CFF). The reply data ID must match the
+ * inbound frame or the unit ignores the delete and the buffer head never
+ * advances — a stuck track record then hides every later driver alarm.
+ *
+ * Live CCE (cache remaining 0) is not confirmed. A CFF body is itself buffered
+ * data and is always confirmed, including the last record.
+ */
+export function buildCceCacheAck(payload: Buffer): Buffer | null {
+  const kind = binaryEventCommand(payload);
+  if (!kind || payload.length < 3 || payload[0] !== 0x24 || payload[1] !== 0x24) return null;
+  const dataId = String.fromCharCode(payload[2] ?? 0);
+  if (!/^[A-Za-z0-9]$/.test(dataId)) return null;
+
+  const starIdx = payload.lastIndexOf(0x2a);
+  const firstComma = payload.indexOf(0x2c);
+  if (starIdx < 0 || firstComma < 0) return null;
+  const imeiEnd = payload.indexOf(0x2c, firstComma + 1);
+  if (imeiEnd < 0) return null;
+  const imei = payload.subarray(firstComma + 1, imeiEnd).toString('ascii');
+  if (!/^\d{10,17}$/.test(imei)) return null;
+  const bodyStart = payload.indexOf(0x2c, imeiEnd + 1);
+  if (bodyStart < 0 || bodyStart >= starIdx) return null;
+  const body = payload.subarray(bodyStart + 1, starIdx);
+  if (!hasCceEnvelope(body)) return null;
+  const cacheRemaining = body.readUInt32LE(0);
+  if (kind === 'CCE' && cacheRemaining === 0) return null;
+  let packets: CceParam[][] = [];
+  try {
+    packets = parseCcePackets(body);
+  } catch {
+    return null;
+  }
+  // Delete only records we actually decoded. A bad length must not drop unread cache.
+  const parsed = packets.filter((params) => params.some((p) => p.id === 0x40)).length;
+  if (parsed < 1 || parsed > 64) return null;
+  // Quantity is hexadecimal (the documented example `CFF,1` is one record).
+  const qty = parsed.toString(16).toUpperCase();
+  return buildMeitrackFrame(`${imei},CFF,${qty}`, dataId);
 }
