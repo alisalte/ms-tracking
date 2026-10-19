@@ -147,7 +147,9 @@
     "downloadUsedGib": "Download this month (GiB)",
     "saveUsage": "Save usage",
     "usageSaved": "Usage counters saved.",
-    "sessionPolicy": "License, rates, and sign-in policy"
+    "sessionPolicy": "License, rates, and sign-in policy",
+    "tabApiKeys": "API keys",
+    "tabSettings": "Settings"
   },
   "invoices": {
     "title": "Invoices",
@@ -251,7 +253,10 @@
       "report": "Reports",
       "audit": "Audit",
       "billing": "Billing"
-    }
+    },
+    "editEmail": "Edit email",
+    "saveEmail": "Save",
+    "emailChanged": "User email updated."
   },
   "roles": {
     "tenant-admin": "Tenant admin",
@@ -311,5 +316,33 @@
     "save": "Save",
     "cancel": "Cancel",
     "back": "Back"
+  },
+  "settings": {
+    "hint": "Organisation settings (language, timezone, units, data retention) are set per tenant here.",
+    "orgName": "Organisation name",
+    "locale": "Language",
+    "timezone": "Timezone",
+    "dateFormat": "Date format",
+    "distanceUnit": "Distance unit",
+    "volumeUnit": "Volume unit",
+    "tempUnit": "Temperature unit",
+    "retentionDays": "Data retention (days)",
+    "save": "Save",
+    "reset": "Reset",
+    "saved": "Settings saved."
+  },
+  "apikeys": {
+    "hint": "API keys for this organisation are issued and revoked here.",
+    "create": "Create key",
+    "name": "Name",
+    "scopes": "Scopes",
+    "scopesHint": "Separate permissions with commas or spaces, e.g. tracking.read",
+    "submit": "Create",
+    "prefix": "Prefix",
+    "revoke": "Revoke",
+    "empty": "No keys yet.",
+    "plaintextTitle": "Copy the key now",
+    "plaintextHelp": "This key is shown only once.",
+    "confirmRevoke": "Revoke key “{{name}}”?"
   }
 }

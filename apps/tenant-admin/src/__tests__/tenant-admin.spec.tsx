@@ -9,7 +9,12 @@ import {
   listInbox,
   listTenantDevices,
 } from '@/api/platform-assets';
-import { createTenantUser } from '@/api/tenants';
+import {
+  createTenantApiKey,
+  createTenantUser,
+  updateTenantSettings,
+  updateTenantUserEmail,
+} from '@/api/tenants';
 import { addDaysIso } from '@/lib/license';
 import { canManageTenants } from '@/lib/session';
 import { LoginPage } from '@/pages/LoginPage';
@@ -52,6 +57,35 @@ vi.mock('@/api/tenants', async (importOriginal) => {
     createTenantRole: vi.fn(),
     updateTenantRolePermissions: vi.fn(),
     setTenantUserRole: vi.fn(),
+    updateTenantUserEmail: vi.fn(async () => undefined),
+    getTenantSettings: vi.fn(async () => ({
+      locale: 'fa',
+      timezone: 'Asia/Tehran',
+      dateFormat: 'YYYY-MM-DD',
+      distanceUnit: 'km',
+      volumeUnit: 'L',
+      tempUnit: 'C',
+      orgName: 'FleetVision',
+      retentionDays: 180,
+    })),
+    updateTenantSettings: vi.fn(async (_id: string, patch: Record<string, unknown>) => ({
+      locale: 'fa',
+      timezone: 'Asia/Tehran',
+      dateFormat: 'YYYY-MM-DD',
+      distanceUnit: 'km',
+      volumeUnit: 'L',
+      tempUnit: 'C',
+      orgName: 'FleetVision',
+      retentionDays: 180,
+      ...patch,
+    })),
+    listTenantApiKeys: vi.fn(async () => []),
+    createTenantApiKey: vi.fn(async () => ({
+      id: 'k1',
+      key: 'fv_live_secret',
+      keyPrefix: 'fv_live_xxx',
+    })),
+    revokeTenantApiKey: vi.fn(),
   };
 });
 
@@ -215,6 +249,71 @@ describe('tenant detail tabs', () => {
     });
     expect(screen.getByText(/ali@example.com/)).toBeInTheDocument();
     expect(screen.getByText(/operator\.one/)).toBeInTheDocument();
+  });
+
+  it('edits a user email from the access tab', async () => {
+    const { listTenantUsers } = await import('@/api/tenants');
+    vi.mocked(listTenantUsers).mockResolvedValueOnce([
+      {
+        id: 'u1',
+        tenant_id: 't1',
+        email: 'old@example.com',
+        username: 'op',
+        status: 'ACTIVE',
+        display_name: null,
+        roles: ['viewer'],
+        last_login_at: null,
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /دسترسی|Access/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /ویرایش ایمیل|Edit email/i }));
+    fireEvent.change(screen.getByLabelText(/^ایمیل$|^Email$/), {
+      target: { value: 'New@Example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^ذخیره$|^Save$/ }));
+    await waitFor(() => {
+      expect(updateTenantUserEmail).toHaveBeenCalledWith('t1', 'u1', 'new@example.com');
+    });
+  });
+
+  it('manages organisation settings and API keys for the tenant', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /تنظیمات|Settings/i }));
+    const retention = await screen.findByDisplayValue('180');
+    fireEvent.change(retention, { target: { value: '365' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ذخیره$|^Save$/ }));
+    await waitFor(() => {
+      expect(updateTenantSettings).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ retentionDays: 365 }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: /کلید API|API keys/i }));
+    fireEvent.change(await screen.findByPlaceholderText(/^نام$|^Name$/), {
+      target: { value: 'ci' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^ساخت$|^Create$/ }));
+    await waitFor(() => {
+      expect(createTenantApiKey).toHaveBeenCalledWith('t1', {
+        name: 'ci',
+        scopes: ['tracking.read'],
+      });
+    });
+    expect(await screen.findByText('fv_live_secret')).toBeInTheDocument();
   });
 
   it('opens fleet registration and device assignment for the tenant', async () => {

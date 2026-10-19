@@ -258,3 +258,84 @@ export async function setTenantUserStatus(
 ): Promise<void> {
   await api.patch(`/tenants/${tenantId}/users/${userId}/status`, { status });
 }
+
+export async function updateTenantUserEmail(
+  tenantId: string,
+  userId: string,
+  email: string,
+): Promise<void> {
+  await api.put(`/tenants/${tenantId}/users/${userId}`, { email });
+}
+
+export interface TenantSettings {
+  locale: 'en' | 'fa';
+  timezone: string;
+  dateFormat: string;
+  distanceUnit: 'km' | 'mi';
+  volumeUnit: 'L' | 'gal';
+  tempUnit: 'C' | 'F';
+  orgName: string;
+  retentionDays: number;
+}
+
+export async function getTenantSettings(tenantId: string): Promise<TenantSettings> {
+  const { data } = await api.get<{ data: TenantSettings }>(`/tenants/${tenantId}/settings`);
+  return data.data;
+}
+
+export async function updateTenantSettings(
+  tenantId: string,
+  patch: Partial<TenantSettings>,
+): Promise<TenantSettings> {
+  const { data } = await api.put<{ data: TenantSettings }>(`/tenants/${tenantId}/settings`, patch);
+  return data.data;
+}
+
+export interface TenantApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  status: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+}
+
+interface ApiKeyWire {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  status: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+}
+
+export async function listTenantApiKeys(tenantId: string): Promise<TenantApiKey[]> {
+  const { data } = await api.get<{ data: ApiKeyWire[] }>(`/tenants/${tenantId}/api-keys`);
+  return data.data.map((k) => ({
+    id: k.id,
+    name: k.name,
+    keyPrefix: k.key_prefix,
+    scopes: k.scopes,
+    status: k.status,
+    expiresAt: k.expires_at,
+    lastUsedAt: k.last_used_at,
+  }));
+}
+
+/** The plaintext key is returned once, only here. */
+export async function createTenantApiKey(
+  tenantId: string,
+  input: { name: string; scopes: string[] },
+): Promise<{ id: string; key: string; keyPrefix: string }> {
+  const { data } = await api.post<{ data: { id: string; key: string; key_prefix: string } }>(
+    `/tenants/${tenantId}/api-keys`,
+    input,
+  );
+  return { id: data.data.id, key: data.data.key, keyPrefix: data.data.key_prefix };
+}
+
+export async function revokeTenantApiKey(tenantId: string, keyId: string): Promise<void> {
+  await api.delete(`/tenants/${tenantId}/api-keys/${keyId}`);
+}

@@ -14,6 +14,7 @@ import {
   setTenantUserRole,
   setTenantUserStatus,
   updateTenantRolePermissions,
+  updateTenantUserEmail,
 } from '@/api/tenants';
 
 export function TenantAccessPanel({
@@ -38,6 +39,9 @@ export function TenantAccessPanel({
   const [displayName, setDisplayName] = useState('');
   const [roleId, setRoleId] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState('');
 
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
@@ -161,6 +165,24 @@ export function TenantAccessPanel({
     }
   };
 
+  const onSaveEmail = async (user: TenantUser) => {
+    const next = editEmail.trim().toLowerCase();
+    if (!next || next === user.email) {
+      setEditingId(null);
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    try {
+      await updateTenantUserEmail(tenantId, user.id, next);
+      setEditingId(null);
+      setNotice(t('access.emailChanged'));
+      await reload();
+    } catch (err) {
+      setError(apiMessage(err));
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4" data-testid="tenant-access-panel">
       <p className="text-sm text-slate-600">{t('access.hint')}</p>
@@ -246,7 +268,47 @@ export function TenantAccessPanel({
           <tbody>
             {users.map((user) => (
               <tr key={user.id} className="border-t border-slate-100">
-                <td className="px-4 py-2">{user.email}</td>
+                <td className="px-4 py-2">
+                  {editingId === user.id ? (
+                    <span className="flex items-center gap-2">
+                      <input
+                        aria-label={t('detail.email')}
+                        type="email"
+                        className="rounded-lg border border-slate-300 px-2 py-1"
+                        value={editEmail}
+                        onChange={(event) => setEditEmail(event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="text-emerald-700"
+                        onClick={() => void onSaveEmail(user)}
+                      >
+                        {t('access.saveEmail')}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-slate-500"
+                        onClick={() => setEditingId(null)}
+                      >
+                        {t('common.cancel')}
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      {user.email}
+                      <button
+                        type="button"
+                        className="text-brand-600"
+                        onClick={() => {
+                          setEditingId(user.id);
+                          setEditEmail(user.email);
+                        }}
+                      >
+                        {t('access.editEmail')}
+                      </button>
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2">{user.username}</td>
                 <td className="px-4 py-2">
                   <select

@@ -220,12 +220,14 @@ describe('AdminPage', () => {
     expect(screen.queryByTestId('admin-create-role')).not.toBeInTheDocument();
   });
 
-  it('renders the settings form on the Settings section', async () => {
+  it('shows the settings read-only and points editing to tenant administration', async () => {
     renderAdmin('/admin?section=settings');
     await waitFor(() => {
       expect(screen.getByText('Organization name')).toBeInTheDocument();
     });
     expect(screen.getByText(/200 days remaining/)).toBeInTheDocument();
+    expect(screen.getByTestId('settings-managed-elsewhere')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
   });
 
   it('renders the audit log on the Audit section', async () => {
@@ -263,16 +265,10 @@ describe('AdminPage', () => {
     expect(domains.has('fleet')).toBe(true);
   });
 
-  it('opens the create-user dialog from the users toolbar', async () => {
+  it('sends user creation and changes to tenant administration', async () => {
     renderAdmin();
-    await waitFor(() => {
-      expect(screen.getByTestId('admin-create-user')).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId('admin-create-user'));
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId('users-managed-elsewhere')).toBeInTheDocument();
+    expect(screen.queryByTestId('admin-create-user')).not.toBeInTheDocument();
   });
 
   it('renders the organization snapshot', async () => {
@@ -295,6 +291,8 @@ describe('AdminPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/No API keys yet/)).toBeInTheDocument();
     });
+    expect(screen.getByTestId('apikeys-managed-elsewhere')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create/ })).not.toBeInTheDocument();
   });
 
   it('renders billing as a tenant snapshot without fake invoices', async () => {
