@@ -113,7 +113,7 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
     case MEITRACK_COMMAND.TRACKING:
       return decodeTracking(raw, frame.fields);
     case 'D00':
-      // Photo chunk (D00 download response) — hex payload, always text-safe.
+      // Photo chunk (D00 download response) — raw JPEG bytes (or hex text).
       return [decodePhotoChunk(raw, frame.fields)];
     case 'D01':
       // Photo filename listing (D01 response).
@@ -259,13 +259,7 @@ function decodePhotoChunk(raw: RawPacket, fields: readonly string[]): DeviceMess
   const filename = fields[2] ?? '';
   const totalPackets = Number.parseInt(fields[3] ?? '', 10) || 0;
   const packetIndex = Number.parseInt(fields[4] ?? '', 10) || 0;
-  const hexData = fields[5] ?? '';
-  let chunkBase64 = '';
-  try {
-    chunkBase64 = hexData ? Buffer.from(hexData, 'hex').toString('base64') : '';
-  } catch {
-    chunkBase64 = '';
-  }
+  const chunk = photoChunkBytes(raw.payload);
   return message(raw, {
     type: 'PHOTO',
     serialOrImei: imei,
@@ -275,10 +269,35 @@ function decodePhotoChunk(raw: RawPacket, fields: readonly string[]): DeviceMess
       filename,
       totalPackets,
       packetIndex,
-      chunkBase64,
-      chunkBytes: hexData.length / 2,
+      chunkBase64: chunk.toString('base64'),
+      chunkBytes: chunk.length,
     },
   });
+}
+
+/**
+ * D00 chunk payload: everything after the 5th comma up to `*<cc>\r\n`. The
+ * MD300 sends raw JPEG bytes (which may contain commas), not hex text — hex
+ * decoding stopped at the first 0xFF, so every chunk was dropped and D00
+ * never completed. Hex-text payloads are still accepted.
+ */
+function photoChunkBytes(payload: Buffer): Buffer {
+  let start = -1;
+  let commas = 0;
+  for (let i = 0; i < payload.length; i++) {
+    if (payload[i] === 0x2c && ++commas === 6) {
+      start = i + 1;
+      break;
+    }
+  }
+  const end = payload.length - 5; // '*' of the *<cc>\r\n tail
+  if (start < 0 || end <= start) return Buffer.alloc(0);
+  const data = payload.subarray(start, end);
+  const text = data.toString('latin1');
+  if (data.length % 2 === 0 && /^[0-9A-Fa-f]+$/.test(text)) {
+    return Buffer.from(text, 'hex');
+  }
+  return Buffer.from(data);
 }
 
 /**
