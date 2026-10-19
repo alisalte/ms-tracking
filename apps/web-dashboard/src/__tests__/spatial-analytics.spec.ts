@@ -143,3 +143,27 @@ describe('movementInsights', () => {
     expect(i.matrix[6]?.[8]).toBe(7200);
   });
 });
+
+describe('worst-vehicle score cap', () => {
+  const busyClean = {
+    points: 1008,
+    weakPoints: 8,
+    noFixPoints: 0,
+    lowQualityPoints: 0,
+    gaps: 0,
+  };
+
+  it('is rosy when only the fleet aggregate is used', () => {
+    expect(coverageScore(busyClean)).toBeGreaterThanOrEqual(99);
+  });
+
+  it('is capped by the worst single vehicle so busy clean traffic cannot hide a dead spot', () => {
+    const cell = { ...busyClean, worstVehicleScore: 40 };
+    expect(coverageScore(cell)).toBe(40);
+    expect(coverageLevel(cell)).toBe('poor');
+  });
+
+  it('ignores a missing worst score', () => {
+    expect(coverageScore({ ...busyClean, worstVehicleScore: null })).toBe(coverageScore(busyClean));
+  });
+});

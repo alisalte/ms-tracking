@@ -20,7 +20,10 @@ const GAP_MIN_METERS = 300;
 const DT_CAP_SECONDS = 600;
 /** Below this speed a fix counts as stopped. */
 const MOVING_KPH = 5;
-/** Cell cap per response — keeps the payload bounded on month-long windows. */
+/**
+ * Cell cap per response — keeps the payload bounded on month-long windows.
+ * Coverage keeps problem cells first, so the cap never trims weak spots.
+ */
 const MAX_CELLS = 6_000;
 
 export interface AnalyticsQuery {
@@ -44,6 +47,8 @@ export interface CoverageCellRow {
   readonly lowQualityPoints: number;
   readonly gaps: number;
   readonly vehicles: number;
+  /** Lowest 0..100 signal score any single vehicle had in the cell (null = no data). */
+  readonly worstVehicleScore: number | null;
 }
 
 export interface MovementCellRow {
@@ -91,36 +96,60 @@ export class PositionAnalyticsRepository {
    */
   public async coverageCells(q: AnalyticsQuery): Promise<CoverageCellRow[]> {
     const { sql, bindings } = this.base(q);
+    // Counters are first built per (vehicle, cell) and only then folded into the
+    // cell. The fold keeps the fleet totals AND the worst single-vehicle score:
+    // one tracker losing the sky must not vanish into thousands of clean fixes
+    // from other vehicles (the fleet view would read 100% while the same
+    // vehicle picked on its own shows the weak spots). The score formula below
+    // mirrors `coverageScore` in domain/spatial-analytics.ts.
     const result = await this.knex.raw(
       `WITH ${sql},
        gaps AS (
-         SELECT floor(prev_lat / ?)::int AS gy, floor(prev_lng / ?)::int AS gx, count(*) AS gaps
+         SELECT vehicle_id, floor(prev_lat / ?)::int AS gy, floor(prev_lng / ?)::int AS gx,
+                count(*) AS gaps
            FROM pts
           WHERE prev_at IS NOT NULL
             AND extract(epoch FROM captured_at - prev_at) > ?
             AND dist_m > ?
-          GROUP BY 1, 2
+          GROUP BY 1, 2, 3
        ),
        cells AS (
-         SELECT floor(latitude / ?)::int AS gy, floor(longitude / ?)::int AS gx,
+         SELECT vehicle_id, floor(latitude / ?)::int AS gy, floor(longitude / ?)::int AS gx,
                 count(*) AS points,
                 count(sats) AS sat_points,
-                avg(sats) AS avg_sats,
+                coalesce(sum(sats), 0) AS sat_sum,
                 count(*) FILTER (WHERE sats BETWEEN 1 AND 4) AS weak_points,
                 count(*) FILTER (WHERE sats = 0 OR gps_valid = 'false') AS nofix_points,
-                count(*) FILTER (WHERE quality IN (?, ?)) AS lowq_points,
-                count(DISTINCT vehicle_id) AS vehicles
+                count(*) FILTER (WHERE quality IN (?, ?)) AS lowq_points
            FROM pts
-          GROUP BY 1, 2
+          GROUP BY 1, 2, 3
+       ),
+       vc AS (
+         SELECT coalesce(c.vehicle_id, g.vehicle_id) AS vehicle_id,
+                coalesce(c.gy, g.gy) AS gy, coalesce(c.gx, g.gx) AS gx,
+                coalesce(c.points, 0) AS points, coalesce(c.sat_points, 0) AS sat_points,
+                coalesce(c.sat_sum, 0) AS sat_sum,
+                coalesce(c.weak_points, 0) AS weak_points,
+                coalesce(c.nofix_points, 0) AS nofix_points,
+                coalesce(c.lowq_points, 0) AS lowq_points,
+                coalesce(g.gaps, 0) AS gaps
+           FROM cells c
+           FULL OUTER JOIN gaps g
+             ON g.vehicle_id = c.vehicle_id AND g.gy = c.gy AND g.gx = c.gx
        )
-       SELECT coalesce(c.gy, g.gy) AS gy, coalesce(c.gx, g.gx) AS gx,
-              coalesce(c.points, 0) AS points, coalesce(c.sat_points, 0) AS sat_points,
-              c.avg_sats, coalesce(c.weak_points, 0) AS weak_points,
-              coalesce(c.nofix_points, 0) AS nofix_points,
-              coalesce(c.lowq_points, 0) AS lowq_points,
-              coalesce(g.gaps, 0) AS gaps, coalesce(c.vehicles, 0) AS vehicles
-         FROM cells c FULL OUTER JOIN gaps g ON g.gy = c.gy AND g.gx = c.gx
-        ORDER BY coalesce(c.points, 0) + coalesce(g.gaps, 0) DESC
+       SELECT gy, gx,
+              sum(points) AS points, sum(sat_points) AS sat_points,
+              sum(sat_sum)::float8 / nullif(sum(sat_points), 0) AS avg_sats,
+              sum(weak_points) AS weak_points, sum(nofix_points) AS nofix_points,
+              sum(lowq_points) AS lowq_points, sum(gaps) AS gaps,
+              count(*) FILTER (WHERE points > 0) AS vehicles,
+              min(100.0 * (1 - least(1.0,
+                    (weak_points * 0.6 + nofix_points + lowq_points * 0.8 + gaps * 3)::float8
+                    / nullif(points + gaps, 0)))) AS worst_score
+         FROM vc
+        GROUP BY gy, gx
+        ORDER BY (sum(weak_points) + sum(nofix_points) + sum(lowq_points) + sum(gaps)) > 0 DESC,
+                 sum(points) + sum(gaps) DESC
         LIMIT ?`,
       [
         ...bindings,
@@ -146,6 +175,7 @@ export class PositionAnalyticsRepository {
       lowQualityPoints: num(r.lowq_points),
       gaps: num(r.gaps),
       vehicles: num(r.vehicles),
+      worstVehicleScore: r.worst_score === null ? null : Math.round(num(r.worst_score)),
     }));
   }
 

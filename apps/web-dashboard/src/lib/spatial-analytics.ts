@@ -9,7 +9,11 @@ import type { Alarm } from '@/types/alarm.types';
 
 const METERS_PER_DEG = 111_320;
 
-/** Same 0..100 score the server computes, with GPS-loss alarms weighed like gaps. */
+/**
+ * Same 0..100 score the server computes, with GPS-loss alarms weighed like gaps.
+ * Capped by the worst single-vehicle score so a fleet-wide cell is never rosier
+ * than what its worst-served vehicle saw.
+ */
 export function coverageScore(c: {
   points: number;
   weakPoints: number;
@@ -17,12 +21,15 @@ export function coverageScore(c: {
   lowQualityPoints: number;
   gaps: number;
   lossAlarms?: number;
+  worstVehicleScore?: number | null;
 }): number {
   const gaps = c.gaps + (c.lossAlarms ?? 0);
   const total = c.points + gaps;
   if (total <= 0) return 0;
   const penalty = c.weakPoints * 0.6 + c.noFixPoints + c.lowQualityPoints * 0.8 + gaps * 3;
-  return Math.round(100 * (1 - Math.min(1, penalty / total)));
+  const score = Math.round(100 * (1 - Math.min(1, penalty / total)));
+  const worst = c.worstVehicleScore;
+  return worst === null || worst === undefined ? score : Math.min(score, worst);
 }
 
 /**
