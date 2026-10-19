@@ -69,6 +69,8 @@ const HOLD_WHEN_OFFLINE = new Set([
   'AB8',
   'A9A',
   'A9B',
+  'A9D',
+  'A9E',
   'A10',
   'A11',
   'A12',

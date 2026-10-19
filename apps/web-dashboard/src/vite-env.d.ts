@@ -18,6 +18,8 @@ interface ImportMetaEnv {
   readonly VITE_MDVR_RTMP_PORT?: string;
   /** Same as md300-main `RTMP_PATH` (default live/md300). */
   readonly VITE_MDVR_RTMP_PATH?: string;
+  /** mdvr-streamer device dialback port advertised in A9D (default 6182). */
+  readonly VITE_MDVR_VIDEO_PORT?: string;
 }
 
 interface ImportMeta {
