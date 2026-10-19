@@ -286,19 +286,25 @@ export function useSnapshot() {
 export const MDVR_RTMP_PATH =
   import.meta.env.VITE_MDVR_RTMP_PATH?.replace(/^\/+/, '') || 'live/md300';
 
+/** IMEI digits kept in the stream name — short enough for the MD300's URL. */
+export const MDVR_STREAM_ID_DIGITS = 4;
+
 /**
- * Per-camera stream key: `live/md300` for channel 1, `live/md300_<channel>`
- * otherwise — the URL the MD300 accepted up to a379be7.
+ * Per-device, per-camera stream key: `live/md300_<id>` for channel 1 and
+ * `live/md300_<id>_<channel>` otherwise, where `<id>` is the last 4 IMEI
+ * digits. Without an IMEI the bare key stays (`live/md300`, `live/md300_2`).
  *
- * The IMEI is deliberately NOT in the key. `live/md300_<imei>[_N]` made real
- * units answer `AB2,Error` and never open RTMP. The cost is that two vehicles
- * opened at the same time share a key. `imei` stays in the signature so
- * callers do not change if a per-device key the unit accepts is found.
+ * One shared key let a second vehicle take over the first one's RTMP
+ * session (`closed: terminated`), so only one vehicle showed on the wall.
+ * The full 15-digit IMEI made the URL 53 characters and units answered
+ * `AB2,Error`; 4 digits keeps it at ≤ 45, next to the 40-character
+ * `live/md300_2/pb` the unit is known to accept.
  * Keep in sync with `mdvrChannelStreamPath` (fleet-management),
  * `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
-export function mdvrStreamKey(_imei?: string, logicalChannel = 1): string {
-  const root = MDVR_RTMP_PATH;
+export function mdvrStreamKey(imei?: string, logicalChannel = 1): string {
+  const id = (imei ?? '').replace(/\D/g, '').slice(-MDVR_STREAM_ID_DIGITS);
+  const root = id ? `${MDVR_RTMP_PATH}_${id}` : MDVR_RTMP_PATH;
   const n = Number(logicalChannel);
   return Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
 }

@@ -96,22 +96,28 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
  * SEGMENTS are dropped by the unit, so a camera cannot be addressed by a
  * sub-path — but the stream NAME is honoured.
  *
- * The stream name is `<base>` (channel 1) or `<base>_<channel>` (channel
- * N > 1), as it was up to a379be7 when live video worked. Adding the IMEI
- * (`<base>_<imei>[_N]`) made real units answer `AB2,Error` and never open
- * RTMP, so it was removed. Two vehicles opened at the same time share a key.
- * Playback appends `/pb`, which a real MD300 publishes as its own path. Keep
- * in sync with `mdvrStreamKey` (dashboard), `infra/docker/mediamtx.yml` and
- * the nginx `/media-hls` map.
+ * The stream name is `<base>_<id>` (channel 1) or `<base>_<id>_<channel>`,
+ * where `<id>` is the last 4 IMEI digits. One shared `<base>` let a second
+ * vehicle take over the first one's RTMP session, so only one vehicle showed.
+ * The full 15-digit IMEI made the URL too long and units answered
+ * `AB2,Error`; 4 digits keeps it near the length the unit is known to accept.
+ * Without an IMEI the bare key stays. Playback appends `/pb`, which a real
+ * MD300 publishes as its own path. Keep in sync with `mdvrStreamKey`
+ * (dashboard), `infra/docker/mediamtx.yml` and the nginx `/media-hls` map.
  */
+const MDVR_STREAM_ID_DIGITS = 4;
+
 function mdvrChannelStreamPath(
   base: string,
   channel: unknown,
   kind: 'live' | 'playback' = 'live',
+  imei?: string,
 ): string {
   const root = (base || 'live/md300').replace(/^\/+|\/+$/g, '');
+  const id = (imei ?? '').replace(/\D/g, '').slice(-MDVR_STREAM_ID_DIGITS);
+  const keyed = id ? `${root}_${id}` : root;
   const n = Number(channel);
-  const perCamera = Number.isFinite(n) && n > 1 ? `${root}_${n}` : root;
+  const perCamera = Number.isFinite(n) && n > 1 ? `${keyed}_${n}` : keyed;
   return kind === 'playback' ? `${perCamera}/pb` : perCamera;
 }
 
@@ -176,7 +182,10 @@ export class DeviceCommandService {
     let validated: Record<string, string | number>;
     let payload: CommandPayload;
     try {
-      validated = validateParams(def, this.resolveMediaDialback(def.code, input.params ?? {}));
+      validated = validateParams(
+        def,
+        this.resolveMediaDialback(def.code, input.params ?? {}, deviceRow.imei),
+      );
       payload = buildPayload(def, validated);
     } catch (err) {
       if (err instanceof CommandValidationError) {
@@ -265,6 +274,7 @@ export class DeviceCommandService {
   private resolveMediaDialback(
     commandCode: string,
     params: Record<string, string | number | boolean>,
+    imei?: string,
   ): Record<string, string | number | boolean> {
     const host = this.options.mdvrPublicHost?.trim() ?? '';
     if (!host) return params;
@@ -293,6 +303,7 @@ export class DeviceCommandService {
             this.options.mdvrRtmpPath ?? 'live/md300',
             params.channel,
             commandCode === 'AB4' ? 'playback' : 'live',
+            imei,
           ),
         ),
       };

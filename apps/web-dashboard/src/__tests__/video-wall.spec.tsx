@@ -366,7 +366,7 @@ const mdvrMockChannel = vi.hoisted(() => ({
 }));
 
 /** Second logical channel on the SAME device/IMEI — each camera has its own
- * RTMP key (live/md300_<N>); both may be live, with AB2 dials serialised per IMEI. */
+ * RTMP key (live/md300_<id>_<N>); both may be live, with AB2 dials serialised per IMEI. */
 const mdvrMockChannel2 = vi.hoisted(() => ({
   ...mdvrMockChannel,
   id: 'ch-mdvr-2',
@@ -482,8 +482,8 @@ describe('VideoWallPage with a real MEITRACK_MDVR channel (auto-fill → tile)',
         .map((call) => (call[1] as { params?: { uploadUrl?: string } })?.params?.uploadUrl);
       expect(urls).toEqual(
         expect.arrayContaining([
-          expect.stringMatching(/\/live\/md300$/),
-          expect.stringMatching(/\/live\/md300_2$/),
+          expect.stringMatching(/\/live\/md300_6152$/),
+          expect.stringMatching(/\/live\/md300_6152_2$/),
         ]),
       );
     });
@@ -707,16 +707,16 @@ describe('mapMediaChannel wire shape', () => {
     expect(ch.sourceLabel).toBe('IMEI 867191086416152');
   });
 
-  it('gives each camera its own key and keeps the IMEI out of it (AB2,Error)', async () => {
+  it('gives every device and camera its own short key (last 4 IMEI digits)', async () => {
     const { mdvrRtmpUploadUrl, mdvrHlsUrl, mdvrUrlsFromRtmp } = await import('@/api/video.api');
     const imei = '867191086416152';
     const other = '862221085937323';
-    expect(mdvrRtmpUploadUrl(imei)).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300$/);
-    expect(mdvrHlsUrl(imei)).toContain('/media-hls/live/md300/index.m3u8');
-    expect(mdvrRtmpUploadUrl(imei, 2)).toMatch(/\/live\/md300_2$/);
-    expect(mdvrHlsUrl(imei, 2)).toContain('/media-hls/live/md300_2/index.m3u8');
+    expect(mdvrRtmpUploadUrl(imei)).toMatch(/^rtmp:\/\/[^/]+:1935\/live\/md300_6152$/);
+    expect(mdvrHlsUrl(imei)).toContain('/media-hls/live/md300_6152/index.m3u8');
+    expect(mdvrRtmpUploadUrl(imei, 2)).toMatch(/\/live\/md300_6152_2$/);
+    expect(mdvrHlsUrl(imei, 2)).toContain('/media-hls/live/md300_6152_2/index.m3u8');
     expect(mdvrHlsUrl(imei, 2)).not.toBe(mdvrHlsUrl(imei, 1));
-    expect(mdvrHlsUrl(imei)).toBe(mdvrHlsUrl(other));
+    expect(mdvrHlsUrl(imei)).not.toBe(mdvrHlsUrl(other));
     const resolved = mdvrUrlsFromRtmp('rtmp://203.0.113.10:1935/live/md300_2');
     expect(resolved?.hls).toContain('/media-hls/live/md300_2/index.m3u8');
     expect(resolved?.ingest).toContain('/media-hls-ingest/live/md300_2/index.m3u8');
@@ -725,7 +725,7 @@ describe('mapMediaChannel wire shape', () => {
   it('probes raw ingest HLS (no _web rewrite) so a live publisher is not sent a second AB2', async () => {
     const { mdvrIngestHlsUrl, mdvrHlsUrl } = await import('@/api/video.api');
     expect(mdvrIngestHlsUrl('867191086416152', 2)).toContain(
-      '/media-hls-ingest/live/md300_2/index.m3u8',
+      '/media-hls-ingest/live/md300_6152_2/index.m3u8',
     );
     expect(mdvrIngestHlsUrl('867191086416152', 2)).not.toBe(mdvrHlsUrl('867191086416152', 2));
   });
@@ -737,12 +737,12 @@ describe('mapMediaChannel wire shape', () => {
     // AB4 publishes the SD-card clip to `<camera key>/pb` (verified on a live
     // MD300). Pointing the player at the live key instead plays the LIVE
     // camera while the recording streams into a path nobody reads.
-    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300_2\/pb$/);
+    expect(mdvrPlaybackRtmpUrl('867191086416152', 2)).toMatch(/\/live\/md300_6152_2\/pb$/);
     expect(mdvrPlaybackHlsUrl('867191086416152', 1)).toContain(
-      '/media-hls/live/md300/pb/index.m3u8',
+      '/media-hls/live/md300_6152/pb/index.m3u8',
     );
     expect(mdvrPlaybackHlsUrl('867191086416152', 2)).toContain(
-      '/media-hls/live/md300_2/pb/index.m3u8',
+      '/media-hls/live/md300_6152_2/pb/index.m3u8',
     );
     expect(mdvrPlaybackHlsUrl('867191086416152', 1)).not.toBe(mdvrHlsUrl('867191086416152', 1));
     expect(toMdvrBcdTime(Date.UTC(2026, 8, 4, 11, 30, 5))).toBe('260904113005');
