@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ALARM_PARAMETER_EVENTS,
   composeAlarmLinkSettCommands,
+  composeBulkAlarmSmsCommands,
   defaultLinkSett,
   loadCachedLinkSett,
   loadSettMap,
@@ -143,5 +144,24 @@ describe('snapshot cache', () => {
     expect(loadCachedLinkSett('dev-1', ev).alarmHead).toBe('SpeedX');
     const map = loadSettMap('dev-1');
     expect(map.get(19)?.alarmHead).toBe('SpeedX');
+  });
+});
+
+describe('bulk alarm SMS', () => {
+  it('emits one B99 SMS ADD per unique number with all event codes', () => {
+    const cmds = composeBulkAlarmSmsCommands(['0912', ' 0912 ', '0935', ''], [19, 1, 1], true);
+    expect(cmds).toHaveLength(2);
+    expect(cmds[0]?.params).toEqual({
+      target: '0',
+      phone: '0912',
+      operation: '2',
+      eventCodes: '1,19',
+    });
+  });
+
+  it('uses DEL when disabling and nothing without numbers or events', () => {
+    expect(composeBulkAlarmSmsCommands(['0912'], [1], false)[0]?.params.operation).toBe('3');
+    expect(composeBulkAlarmSmsCommands([], [1], true)).toEqual([]);
+    expect(composeBulkAlarmSmsCommands(['0912'], [], true)).toEqual([]);
   });
 });

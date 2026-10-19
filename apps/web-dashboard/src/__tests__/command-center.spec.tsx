@@ -220,7 +220,8 @@ describe('CommandCenterPage', () => {
     expect(screen.getByRole('heading', { name: /event settings/i })).toBeInTheDocument();
     expect(screen.getByTestId('alarm-link-sett-19')).toBeInTheDocument();
     expect(screen.getByTestId('alarm-link-sett-16')).toBeInTheDocument();
-    expect(screen.getByText(/input 8 inactive/i)).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /input 8 inactive/i })).toBeInTheDocument();
+    expect(screen.getByTestId('alarm-sms-settings')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('alarm-link-sett-19'));
     expect(screen.getByTestId('alarm-link-sett-apply')).toBeInTheDocument();

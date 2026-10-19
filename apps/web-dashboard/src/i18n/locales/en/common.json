@@ -2455,6 +2455,13 @@
       "history": "History"
     },
     "parameter": {
+      "smsTitle": "SMS on alarm",
+      "smsHint": "The device SIM texts these numbers whenever a selected alarm fires. The SIM needs credit and GSM signal; GPRS reporting to the server is not affected.",
+      "smsEnable": "Enable SMS",
+      "smsDisable": "Remove SMS",
+      "smsApplied": "Alarm SMS settings queued on the device.",
+      "smsRemoved": "Alarm SMS removal queued on the device.",
+      "smsNothingToSend": "Enter at least one phone number and select at least one event.",
       "meitrackOnly": "On-device Parameter is available for Meitrack devices. Choose the Meitrack protocol (or open a Meitrack unit).",
       "intro": "On-device Alarm Parameter (Meitrack). Mirrors the vendor app Event settings / Link Sett flow.",
       "eventSettings": "Event settings",
