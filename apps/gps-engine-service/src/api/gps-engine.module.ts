@@ -57,6 +57,7 @@ import {
   GEOFENCE_STATE_REPOSITORY,
   GPS_ENGINE_CONFIG,
   KAFKA_CONSUMER,
+  LAST_CAN_MEMORY,
   POSITION_ANALYTICS_REPOSITORY,
   POSITION_CACHE,
   POSITION_PIPELINE,
@@ -154,6 +155,11 @@ export class GpsEngineModule {
             new RedisPositionCache(redis, config.GPS_REPORT_INTERVAL_SECONDS),
         },
         {
+          provide: LAST_CAN_MEMORY,
+          inject: [REDIS_TOKEN],
+          useFactory: (redis: Redis) => new LastCanMemory(redis),
+        },
+        {
           provide: DEVICE_STATUS_CACHE,
           inject: [REDIS_TOKEN],
           useFactory: (redis: Redis) => new RedisDeviceStatusCache(redis),
@@ -203,7 +209,7 @@ export class GpsEngineModule {
             DEVICE_STATUS_REPOSITORY,
             METRICS_TOKEN,
             GEOFENCE_EVALUATOR,
-            REDIS_TOKEN,
+            LAST_CAN_MEMORY,
           ],
           useFactory: (
             cfg: GpsEngineConfig,
@@ -214,7 +220,7 @@ export class GpsEngineModule {
             deviceStatus: DeviceStatusRepository,
             metrics: TelemetryMetrics,
             geofenceEvaluator: GeofenceEvaluator,
-            redis: Redis,
+            lastCan: LastCanMemory,
           ) =>
             new PositionPipeline({
               config: cfg,
@@ -225,7 +231,7 @@ export class GpsEngineModule {
               deviceStatus,
               metrics,
               geofenceEvaluator,
-              lastCan: new LastCanMemory(redis),
+              lastCan,
             }),
         },
         {

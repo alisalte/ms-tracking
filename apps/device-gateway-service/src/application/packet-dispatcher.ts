@@ -29,6 +29,7 @@ import { buildCceCacheAck } from '../infrastructure/adapters/meitrack/meitrack.d
 import { PhotoAssembler } from '../infrastructure/adapters/meitrack/meitrack.photo-assembler.js';
 import type { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/kafka-producer.js';
 import type { ProtocolAdapter } from '../infrastructure/protocol/protocol-adapter.js';
+import type { CanSnapshotStore } from '../infrastructure/storage/can-snapshot-store.js';
 import type { RawPacketStorage } from '../infrastructure/storage/raw-packet-storage.js';
 import type { AuthResolver } from './auth-resolver.js';
 import type { CommandDispatcher } from './command-dispatcher.js';
@@ -52,6 +53,8 @@ export interface PacketDispatcherDeps {
   readonly rawStorage: RawPacketStorage;
   /** Optional — flush held AB2 once the MDVR GPRS session authenticates. */
   readonly commandDispatcher?: CommandDispatcher;
+  /** Optional — keeps CAN from CCE records that are not positions (no GPS fix). */
+  readonly canStore?: CanSnapshotStore;
 }
 
 export class PacketDispatcher {
@@ -204,6 +207,21 @@ export class PacketDispatcher {
       const cce = normalized.telemetry?.cce;
       if (isCceSnapshot(cce)) {
         this.logger.log(formatCceRecordLog(normalized.serialOrImei, normalized.type, cce));
+        // A POSITION carries its CAN through gps-engine; anything else (no GPS
+        // fix, heartbeat, driver alarm without a fix) would lose it here.
+        if (
+          normalized.type !== 'POSITION' &&
+          cce.can.present &&
+          session.tenantId &&
+          session.vehicleId
+        ) {
+          await this.deps.canStore?.remember(
+            session.tenantId,
+            session.vehicleId,
+            normalized.timestamp,
+            cce.can as unknown as Record<string, unknown>,
+          );
+        }
       }
 
       // Stage 5: publish (06 §8). Fail-closed invariant enforced by canPublish().

@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { PositionEvent } from '../domain/position-event.js';
 import { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
+import type { LatestPosition } from '../infrastructure/persistence/position.repository.js';
 
 class FakeRedis {
   public store = new Map<string, string>();
@@ -10,6 +11,9 @@ class FakeRedis {
   }
   async get(key: string): Promise<string | null> {
     return this.store.get(key) ?? null;
+  }
+  async mget(...keys: string[]): Promise<Array<string | null>> {
+    return keys.map((k) => this.store.get(k) ?? null);
   }
 }
 
@@ -70,5 +74,46 @@ describe('LastCanMemory', () => {
     };
     const e = event('2026-10-19T10:01:00Z', { present: false, ids: [] });
     expect(await new LastCanMemory(broken as never).apply(e)).toBe(e);
+  });
+});
+
+describe('LastCanMemory.attachLatest', () => {
+  const latest = (
+    can: Record<string, unknown>,
+    lastCan?: Record<string, unknown>,
+  ): LatestPosition =>
+    ({
+      vehicleId: 'veh-1',
+      tenantId: 'ten-1',
+      cce: { event: 35, paramIds: [], params: {}, can, ...(lastCan ? { lastCan } : {}) },
+    }) as unknown as LatestPosition;
+
+  it('attaches a reading the gateway stored for a record without a fix', async () => {
+    const redis = new FakeRedis();
+    redis.store.set(
+      'tenant:ten-1:vehicle:veh-1:can',
+      JSON.stringify({ seenAt: '2026-10-19T10:00:00.000Z', can: { present: true, rpm: 800 } }),
+    );
+    const [out] = await new LastCanMemory(redis as never).attachLatest([
+      latest({ present: false, ids: [] }),
+    ]);
+    expect(out?.cce).toMatchObject({ lastCan: { seenAt: '2026-10-19T10:00:00.000Z', rpm: 800 } });
+  });
+
+  it('keeps a newer lastCan already on the record and ignores records that have CAN', async () => {
+    const redis = new FakeRedis();
+    redis.store.set(
+      'tenant:ten-1:vehicle:veh-1:can',
+      JSON.stringify({ seenAt: '2026-10-19T10:00:00.000Z', can: { present: true, rpm: 800 } }),
+    );
+    const memory = new LastCanMemory(redis as never);
+    const newer = latest(
+      { present: false, ids: [] },
+      { seenAt: '2026-10-19T10:05:00.000Z', rpm: 900 },
+    );
+    const withCan = latest({ present: true, ids: ['0x99'] });
+    const [a, b] = await memory.attachLatest([newer, withCan]);
+    expect(a).toBe(newer);
+    expect(b).toBe(withCan);
   });
 });

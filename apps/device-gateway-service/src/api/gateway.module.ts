@@ -58,7 +58,11 @@ import {
   HttpDeviceRegistry,
   RegistryInvalidationSubscriber,
 } from '../infrastructure/registry/index.js';
-import { RawPacketStorage, SessionRedisStore } from '../infrastructure/storage/index.js';
+import {
+  CanSnapshotStore,
+  RawPacketStorage,
+  SessionRedisStore,
+} from '../infrastructure/storage/index.js';
 import {
   TcpListener,
   TcpServer,
@@ -223,6 +227,11 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
             redisStore: SessionRedisStore,
           ) => new CommandDispatcher(sessions, adapters, kafka, redisStore),
         },
+        {
+          provide: 'GATEWAY_CAN_STORE',
+          inject: [REDIS_TOKEN],
+          useFactory: (redis: Redis) => new CanSnapshotStore(redis),
+        },
         // Packet dispatcher (after command dispatcher so held AB2 can flush on auth).
         {
           provide: PACKET_DISPATCHER,
@@ -232,6 +241,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
             KAFKA_PRODUCER,
             'GATEWAY_RAW_STORAGE',
             COMMAND_DISPATCHER,
+            'GATEWAY_CAN_STORE',
           ],
           useFactory: (
             authResolver: AuthResolver,
@@ -239,6 +249,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
             kafka: DeviceGatewayKafkaProducer,
             raw: RawPacketStorage,
             commands: CommandDispatcher,
+            canStore: CanSnapshotStore,
           ) =>
             new PacketDispatcher({
               authResolver,
@@ -246,6 +257,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
               kafka,
               rawStorage: raw,
               commandDispatcher: commands,
+              canStore,
             }),
         },
         // Kafka command.request consumer — broadcast to all instances; only
