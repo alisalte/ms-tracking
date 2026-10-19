@@ -201,6 +201,12 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
 
 /* ── MapLibre integration (light + dark aware) ─────────────────────────── */
 
+/* Spatial-analytics popups — the colored ranges are an SVG overlay at z-index 1
+   inside the map; without this the popup opens behind it. */
+.fv-analytics-popup {
+  z-index: 20;
+}
+
 /* Vehicle hover popups — the default MapLibre chrome is light-only; pair it
    with the app's dark surfaces. Meta line styling replaces the old inline
    hex so the dark override below can win. */
@@ -249,12 +255,12 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
   cursor: pointer;
   z-index: 6;
 }
-.fv-tracking-map[data-zoom-tier='far'] .fv-vehicle-marker,
-.fv-tracking-map[data-zoom-tier='far'] .fv-playback-marker {
+.fv-tracking-map[data-zoom-tier="far"] .fv-vehicle-marker,
+.fv-tracking-map[data-zoom-tier="far"] .fv-playback-marker {
   --fv-zoom-scale: 0.62;
 }
-.fv-tracking-map[data-zoom-tier='mid'] .fv-vehicle-marker,
-.fv-tracking-map[data-zoom-tier='mid'] .fv-playback-marker {
+.fv-tracking-map[data-zoom-tier="mid"] .fv-vehicle-marker,
+.fv-tracking-map[data-zoom-tier="mid"] .fv-playback-marker {
   --fv-zoom-scale: 0.82;
 }
 .fv-vehicle-marker:hover {

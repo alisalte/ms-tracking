@@ -305,7 +305,13 @@ export function AnalyticsMap({
       cooperativeGestures: false,
     });
     mapRef.current = map;
-    const popup = new Popup({ closeButton: true, maxWidth: '260px' });
+    // The colored ranges are an SVG above the tiles (z-index 1); the popup must
+    // sit above that SVG or the stop/cell details open behind the colors.
+    const popup = new Popup({
+      closeButton: true,
+      maxWidth: '260px',
+      className: 'fv-analytics-popup',
+    });
     const openTip = (lngLat: { lng: number; lat: number }, tip: string) => {
       const el = document.createElement('div');
       el.style.whiteSpace = 'pre-line';

@@ -6,9 +6,13 @@ import { AnalyticsMap } from '@/components/analytics/AnalyticsMap';
 import { i18n } from '@/i18n';
 
 const fitBounds = vi.fn();
+const popupOptions: Array<Record<string, unknown>> = [];
 
 vi.mock('maplibre-gl', () => {
   class Popup {
+    constructor(opts: Record<string, unknown>) {
+      popupOptions.push(opts);
+    }
     setLngLat() {
       return this;
     }
@@ -117,6 +121,20 @@ afterEach(() => {
 });
 
 describe('AnalyticsMap', () => {
+  it('opens details popups with the class that keeps them above the colored overlay', () => {
+    popupOptions.length = 0;
+    const { unmount } = render(
+      <I18nextProvider i18n={i18n}>
+        <AnalyticsMap
+          fitKey="popup"
+          points={[{ lat: 29.6, lng: 52.5, color: '#F79009', tip: 's' }]}
+        />
+      </I18nextProvider>,
+    );
+    expect(popupOptions[0]).toMatchObject({ className: 'fv-analytics-popup' });
+    unmount();
+  });
+
   it('frames the colored cells and paints them above the basemap', async () => {
     const { unmount } = render(
       <I18nextProvider i18n={i18n}>
