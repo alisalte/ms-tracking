@@ -7,7 +7,6 @@
  * holds for the caller's own session).
  */
 import { randomUUID } from 'node:crypto';
-// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { ALL_PERMISSIONS } from '@fleetvision/auth';
 import {
   Body,
@@ -24,7 +23,8 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import type {
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
+import {
   AssignRoleUseCase,
   ChangeUserStatusUseCase,
   CreateApiKeyUseCase,
