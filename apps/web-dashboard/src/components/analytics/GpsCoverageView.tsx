@@ -79,7 +79,7 @@ export function GpsCoverageView({ filters }: { filters: AnalyticsFilters }) {
           north: c.north,
           east: c.east,
           color: LEVEL_COLOR[c.level],
-          opacity: c.level === 'good' ? 0.35 : 0.6,
+          opacity: c.level === 'good' ? 0.55 : 0.78,
           tip: coverageTip(t, i18n.language, c),
         })),
     [cells, t, i18n.language],

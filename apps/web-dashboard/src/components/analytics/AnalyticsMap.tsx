@@ -1,25 +1,29 @@
-import { Map as MaplibreGL, Popup } from 'maplibre-gl';
-import type { GeoJSONSource, MapLayerMouseEvent, Map as MaplibreMap } from 'maplibre-gl';
 /**
  * AnalyticsMap — the shared MapLibre canvas of the spatial analytics page.
  *
- * Renders GeoJSON overlays on the shared raster basemap:
- * - `cells`   — colored grid squares (GPS coverage levels / activity), each
- *               with a plain-text tooltip shown on tap/click.
- * - `heat`    — weighted points painted as a heatmap at low zoom.
- * - `hull`    — the derived project area outline.
- * - `points`  — dots for stop hotspots / GPS-loss alarms (larger when `label`
- *               is set; the raster style has no glyphs, so ranks live in the
- *               side list).
- *
- * Sources are updated in place (`setData`) so filter changes do not rebuild
- * the map. `fitKey` changes re-frame the view on the new data.
+ * Raster basemaps are opaque and a grid square is often smaller than a pixel,
+ * so the legend colors (coverage levels, activity, project outline, stops)
+ * are painted in an SVG overlay above the tiles. GeoJSON layers stay for
+ * hit-testing. `fitKey` re-frames on the cells themselves; an animated
+ * fitBounds was getting cancelled by the resize observer and left the camera
+ * on the default city.
  */
+import { Map as MaplibreGL, Popup } from 'maplibre-gl';
+import type { GeoJSONSource, MapLayerMouseEvent, Map as MaplibreMap } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { MapSettingsPanel } from '@/components/map/MapSettingsPanel';
 import { useFollowBasemap } from '@/hooks/useBasemap';
+import {
+  type CellSample,
+  type HeatSample,
+  type LngLat,
+  type PointSample,
+  analyticsViewBounds,
+  projectAnalyticsOverlay,
+} from '@/lib/analytics-map-geo';
 import { loadPersistedBasemap, rasterMapStyle } from '@/lib/basemaps';
 import { runWhenStyleReady } from '@/lib/map-ready';
 
@@ -131,9 +135,38 @@ function pointsGeo(points: readonly MapPoint[]): GeoJSON.FeatureCollection {
   };
 }
 
+function raiseAnalyticsLayers(map: MaplibreMap): void {
+  for (const id of OVERLAY_LAYERS) {
+    if (map.getLayer(id)) map.moveLayer(id);
+  }
+  const first = OVERLAY_LAYERS.find((id) => map.getLayer(id));
+  if (first && map.getLayer('basemap')) map.moveLayer('basemap', first);
+}
+
 function ensureLayers(map: MaplibreMap) {
   for (const id of ['an-cells', 'an-heat', 'an-hull', 'an-points']) {
     if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY });
+  }
+  if (!map.getLayer('an-cells-fill')) {
+    map.addLayer({
+      id: 'an-cells-fill',
+      type: 'fill',
+      source: 'an-cells',
+      paint: {
+        'fill-color': ['to-color', ['get', 'color'], '#98A2B3'],
+        'fill-opacity': ['to-number', ['get', 'opacity'], 0.55],
+      },
+    });
+    map.addLayer({
+      id: 'an-cells-line',
+      type: 'line',
+      source: 'an-cells',
+      paint: {
+        'line-color': ['to-color', ['get', 'color'], '#98A2B3'],
+        'line-width': 1.25,
+        'line-opacity': 0.95,
+      },
+    });
   }
   if (!map.getLayer('an-heat')) {
     map.addLayer({
@@ -144,16 +177,16 @@ function ensureLayers(map: MaplibreMap) {
       paint: {
         'heatmap-weight': ['get', 'w'],
         'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 8, 1, 15, 2.5],
-        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 26, 16, 40],
-        'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0.85, 16, 0.25],
+        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 18, 13, 36, 16, 48],
+        'heatmap-opacity': 0.85,
         'heatmap-color': [
           'interpolate',
           ['linear'],
           ['heatmap-density'],
           0,
-          'rgba(70,95,251,0)',
+          'rgba(6,182,212,0)',
           0.2,
-          'rgba(70,95,251,0.45)',
+          'rgba(6,182,212,0.55)',
           0.45,
           '#06B6D4',
           0.65,
@@ -166,32 +199,22 @@ function ensureLayers(map: MaplibreMap) {
       },
     });
   }
-  if (!map.getLayer('an-cells-fill')) {
-    map.addLayer({
-      id: 'an-cells-fill',
-      type: 'fill',
-      source: 'an-cells',
-      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] },
-    });
-    map.addLayer({
-      id: 'an-cells-line',
-      type: 'line',
-      source: 'an-cells',
-      paint: { 'line-color': ['get', 'color'], 'line-width': 0.6, 'line-opacity': 0.9 },
-    });
-  }
   if (!map.getLayer('an-hull-fill')) {
     map.addLayer({
       id: 'an-hull-fill',
       type: 'fill',
       source: 'an-hull',
-      paint: { 'fill-color': '#465FFB', 'fill-opacity': 0.06 },
+      paint: { 'fill-color': '#465FFB', 'fill-opacity': 0.12 },
     });
     map.addLayer({
       id: 'an-hull-line',
       type: 'line',
       source: 'an-hull',
-      paint: { 'line-color': '#465FFB', 'line-width': 2.5, 'line-dasharray': [2, 1.5] },
+      paint: {
+        'line-color': '#465FFB',
+        'line-width': 3,
+        'line-dasharray': [2, 1.5],
+      },
     });
   }
   if (!map.getLayer('an-points')) {
@@ -200,13 +223,50 @@ function ensureLayers(map: MaplibreMap) {
       type: 'circle',
       source: 'an-points',
       paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': ['case', ['==', ['get', 'label'], ''], 6, 11],
+        'circle-color': ['to-color', ['get', 'color'], '#F79009'],
+        'circle-radius': ['case', ['==', ['get', 'label'], ''], 7, 11],
         'circle-stroke-color': '#FFFFFF',
         'circle-stroke-width': 2,
       },
     });
   }
+  raiseAnalyticsLayers(map);
+}
+
+function tipAt(
+  map: MaplibreMap,
+  lng: number,
+  lat: number,
+  points: readonly MapPoint[],
+  cells: readonly MapCell[],
+): string | null {
+  const click = map.project([lng, lat]);
+  let best: { d: number; tip: string } | null = null;
+  for (const p of points) {
+    if (!p.tip) continue;
+    const pt = map.project([p.lng, p.lat]);
+    const d = Math.hypot(pt.x - click.x, pt.y - click.y);
+    if (d <= 18 && (!best || d < best.d)) best = { d, tip: p.tip };
+  }
+  if (best) return best.tip;
+  for (const c of cells) {
+    if (!c.tip) continue;
+    const south = Math.min(c.south, c.north);
+    const north = Math.max(c.south, c.north);
+    const west = Math.min(c.west, c.east);
+    const east = Math.max(c.west, c.east);
+    if (lat >= south && lat <= north && lng >= west && lng <= east) return c.tip;
+  }
+  return null;
+}
+
+function centerInside(
+  lng: number,
+  lat: number,
+  bounds: [[number, number], [number, number]],
+): boolean {
+  const [[west, south], [east, north]] = bounds;
+  return lng >= west && lng <= east && lat >= south && lat <= north;
 }
 
 export function AnalyticsMap({
@@ -218,10 +278,19 @@ export function AnalyticsMap({
   focus,
   className = '',
 }: AnalyticsMapProps) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [canvasEl, setCanvasEl] = useState<HTMLElement | null>(null);
+  const [viewRev, setViewRev] = useState(0);
+  const fitToken = useRef(0);
+  const userMoved = useRef(false);
+  const fittedKey = useRef<string | undefined>(undefined);
+  const cellsRef = useRef(cells);
+  const pointsRef = useRef(points);
+  cellsRef.current = cells;
+  pointsRef.current = points;
   const { basemap, setBasemap } = useFollowBasemap(mapRef, OVERLAY_LAYERS, mapReady);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once by design
@@ -237,39 +306,66 @@ export function AnalyticsMap({
     });
     mapRef.current = map;
     const popup = new Popup({ closeButton: true, maxWidth: '260px' });
-    const showTip = (e: MapLayerMouseEvent) => {
-      const tip = e.features?.[0]?.properties?.tip as string | undefined;
-      if (!tip) return;
+    const openTip = (lngLat: { lng: number; lat: number }, tip: string) => {
       const el = document.createElement('div');
       el.style.whiteSpace = 'pre-line';
       el.style.fontSize = '12px';
       el.style.lineHeight = '1.6';
       el.style.color = '#1D2939';
       el.textContent = tip;
-      popup.setLngLat(e.lngLat).setDOMContent(el).addTo(map);
+      popup.setLngLat(lngLat).setDOMContent(el).addTo(map);
+    };
+    const showTip = (e: MapLayerMouseEvent) => {
+      const tip = e.features?.[0]?.properties?.tip as string | undefined;
+      if (!tip) return;
+      openTip(e.lngLat, tip);
+    };
+    const onUserMove = (e: { originalEvent?: Event }) => {
+      if (e.originalEvent) userMoved.current = true;
     };
     const onLoad = () => {
-      ensureLayers(map);
-      map.on('click', 'an-points', showTip);
-      map.on('click', 'an-cells-fill', (e) => {
-        // Points sit above cells — let the point popup win.
-        if (map.queryRenderedFeatures(e.point, { layers: ['an-points'] }).length > 0) return;
-        showTip(e);
-      });
-      for (const id of ['an-points', 'an-cells-fill']) {
-        map.on('mouseenter', id, () => {
-          map.getCanvas().style.cursor = 'pointer';
+      try {
+        ensureLayers(map);
+        map.on('click', 'an-points', showTip);
+        map.on('click', 'an-cells-fill', (e) => {
+          if (map.queryRenderedFeatures(e.point, { layers: ['an-points'] }).length > 0) return;
+          showTip(e);
         });
-        map.on('mouseleave', id, () => {
-          map.getCanvas().style.cursor = '';
-        });
+        for (const id of ['an-points', 'an-cells-fill']) {
+          map.on('mouseenter', id, () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', id, () => {
+            map.getCanvas().style.cursor = '';
+          });
+        }
+      } catch {
+        // Style can still project. The SVG overlay does not need the GL layers.
       }
+      // GL fills sit under the raster on some basemaps, so a click may not hit
+      // a layer. Fall back to the same geometry the SVG is drawing.
+      map.on('click', (e) => {
+        try {
+          const layers = ['an-points', 'an-cells-fill'].filter((id) => map.getLayer(id));
+          if (layers.length > 0) {
+            const rendered = map.queryRenderedFeatures(e.point, { layers });
+            if (rendered.some((f) => f.properties?.tip)) return;
+          }
+        } catch {
+          // Layer query can throw before the style has those layers.
+        }
+        const tip = tipAt(map, e.lngLat.lng, e.lngLat.lat, pointsRef.current, cellsRef.current);
+        if (tip) openTip(e.lngLat, tip);
+      });
       map.resize();
+      setCanvasEl(map.getCanvasContainer());
       setMapReady(true);
     };
-    // The style is enough for overlays — do not wait for every basemap tile
-    // (`load`), which never completes when the tile server is unreachable.
     runWhenStyleReady(map, onLoad);
+    map.on('dragstart', onUserMove);
+    map.on('zoomstart', onUserMove);
+    map.on('rotatestart', onUserMove);
+    map.on('pitchstart', onUserMove);
 
     const ro =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.resize()) : undefined;
@@ -280,64 +376,210 @@ export function AnalyticsMap({
       map.remove();
       mapRef.current = null;
       setMapReady(false);
+      setCanvasEl(null);
     };
   }, []);
 
-  // Push data into the sources.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    // `mapReady` means the overlay sources exist; GeoJSON `setData` does not
-    // need the basemap tiles to finish (gating on `loaded()` stalled here).
-    ensureLayers(map);
-    (map.getSource('an-cells') as GeoJSONSource).setData(cellsGeo(cells));
-    (map.getSource('an-heat') as GeoJSONSource).setData(heatGeo(heat));
-    (map.getSource('an-hull') as GeoJSONSource).setData(hullGeo(hull));
-    (map.getSource('an-points') as GeoJSONSource).setData(pointsGeo(points));
+    let frame = 0;
+    const bump = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setViewRev((n) => n + 1);
+      });
+    };
+    map.on('move', bump);
+    map.on('resize', bump);
+    bump();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      map.off('move', bump);
+      map.off('resize', bump);
+    };
+  }, [mapReady]);
+
+  // Push data into the sources. SVG reads the same props, so a GL miss still
+  // leaves the colored ranges on screen.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    try {
+      ensureLayers(map);
+      (map.getSource('an-cells') as GeoJSONSource).setData(cellsGeo(cells));
+      (map.getSource('an-heat') as GeoJSONSource).setData(heatGeo(heat));
+      (map.getSource('an-hull') as GeoJSONSource).setData(hullGeo(hull));
+      (map.getSource('an-points') as GeoJSONSource).setData(pointsGeo(points));
+      raiseAnalyticsLayers(map);
+      map.triggerRepaint();
+    } catch {
+      // Overlay below still paints from the React props.
+    }
   }, [cells, heat, hull, points, mapReady]);
 
-  // Frame the data when the dataset changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-frame only on fitKey
+  // Frame the data. Duration 0: an animated fit was cancelled by resize()
+  // and by the basemap helper's jumpTo, which left the default city on screen.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    let minLat = Number.POSITIVE_INFINITY;
-    let minLng = Number.POSITIVE_INFINITY;
-    let maxLat = Number.NEGATIVE_INFINITY;
-    let maxLng = Number.NEGATIVE_INFINITY;
-    const take = (lat: number, lng: number) => {
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      minLng = Math.min(minLng, lng);
-      maxLng = Math.max(maxLng, lng);
-    };
-    if (hull.length >= 3) for (const p of hull) take(p.lat, p.lng);
-    else {
-      for (const c of cells) {
-        take(c.south, c.west);
-        take(c.north, c.east);
+    if (fittedKey.current === fitKey && userMoved.current) return;
+    userMoved.current = false;
+    fittedKey.current = fitKey;
+    const token = ++fitToken.current;
+    const bounds = analyticsViewBounds({ cells, heat, hull, points });
+    if (!bounds) return;
+
+    const apply = (attempt: number) => {
+      if (fitToken.current !== token || userMoved.current) return;
+      const live = mapRef.current;
+      const el = containerRef.current;
+      if (!live || !el) return;
+      live.resize();
+      if ((el.clientWidth < 32 || el.clientHeight < 32) && attempt < 40) {
+        requestAnimationFrame(() => apply(attempt + 1));
+        return;
       }
-      for (const p of points) take(p.lat, p.lng);
-    }
-    if (!Number.isFinite(minLat)) return;
-    map.fitBounds(
-      [
-        [minLng, minLat],
-        [maxLng, maxLat],
-      ],
-      { padding: 40, maxZoom: 15, duration: 500 },
-    );
-  }, [fitKey, mapReady]);
+      live.stop();
+      live.fitBounds(bounds, {
+        padding: { top: 36, bottom: 72, left: 36, right: 48 },
+        maxZoom: 15,
+        duration: 0,
+      });
+      setViewRev((n) => n + 1);
+    };
+
+    const frame = requestAnimationFrame(() => apply(0));
+    // Basemap swaps call jumpTo up to ~200ms after ready and undo the fit.
+    const followUp = window.setTimeout(() => {
+      if (fitToken.current !== token || userMoved.current) return;
+      const live = mapRef.current;
+      if (!live) return;
+      const c = live.getCenter();
+      if (!centerInside(c.lng, c.lat, bounds)) apply(0);
+    }, 400);
+
+    return () => {
+      fitToken.current += 1;
+      cancelAnimationFrame(frame);
+      window.clearTimeout(followUp);
+    };
+  }, [fitKey, mapReady, cells, heat, hull, points]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !focus) return;
-    map.flyTo({ center: [focus.lng, focus.lat], zoom: Math.max(map.getZoom(), 15), duration: 700 });
+    fitToken.current += 1;
+    userMoved.current = true;
+    map.stop();
+    map.flyTo({
+      center: [focus.lng, focus.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 0,
+    });
   }, [focus, mapReady]);
 
+  const overlay =
+    mapReady && canvasEl
+      ? projectAnalyticsOverlay(
+          {
+            cells: cells as readonly CellSample[],
+            heat: heat as readonly HeatSample[],
+            hull: hull as readonly LngLat[],
+            points: points as readonly PointSample[],
+          },
+          (lng, lat) => {
+            const p = mapRef.current?.project([lng, lat]);
+            return { x: p?.x ?? Number.NaN, y: p?.y ?? Number.NaN };
+          },
+          {
+            w: mapRef.current?.getContainer().clientWidth ?? 0,
+            h: mapRef.current?.getContainer().clientHeight ?? 0,
+          },
+        )
+      : null;
   return (
     <div className={`relative h-full w-full overflow-hidden ${className}`}>
-      <div ref={containerRef} className="h-full w-full" />
+      <div ref={containerRef} className="h-full w-full" data-testid="analytics-map" />
+      {canvasEl && overlay
+        ? createPortal(
+            <svg
+              data-testid="analytics-map-overlay"
+              data-rev={viewRev}
+              aria-hidden
+              width={overlay.w}
+              height={overlay.h}
+              viewBox={`0 0 ${overlay.w} ${overlay.h}`}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                zIndex: 1,
+                width: overlay.w,
+                height: overlay.h,
+                pointerEvents: 'none',
+                overflow: 'visible',
+              }}
+            >
+              <title>{t('spatial.title')}</title>
+              {overlay.cells.map((cell) => (
+                <polygon
+                  key={`${cell.color}|${cell.opacity}|${cell.points}`}
+                  points={cell.points}
+                  fill={cell.color}
+                  fillOpacity={cell.opacity}
+                  stroke="#ffffff"
+                  strokeWidth={1.25}
+                  strokeOpacity={0.9}
+                />
+              ))}
+              {overlay.heat.map((dot) => (
+                <circle
+                  key={`h-${dot.x}-${dot.y}`}
+                  cx={dot.x}
+                  cy={dot.y}
+                  r={dot.r}
+                  fill={dot.color}
+                  fillOpacity={0.85}
+                  stroke="#ffffff"
+                  strokeWidth={1.5}
+                />
+              ))}
+              {overlay.hull ? (
+                <g>
+                  <polygon
+                    points={overlay.hull}
+                    fill="rgba(70,95,251,0.14)"
+                    stroke="#ffffff"
+                    strokeWidth={6}
+                    strokeLinejoin="round"
+                  />
+                  <polygon
+                    points={overlay.hull}
+                    fill="none"
+                    stroke="#465FFB"
+                    strokeWidth={2.5}
+                    strokeDasharray="8 6"
+                    strokeLinejoin="round"
+                  />
+                </g>
+              ) : null}
+              {overlay.points.map((dot) => (
+                <circle
+                  key={`p-${dot.x}-${dot.y}-${dot.color}`}
+                  cx={dot.x}
+                  cy={dot.y}
+                  r={dot.r}
+                  fill={dot.color}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                />
+              ))}
+            </svg>,
+            canvasEl,
+          )
+        : null}
       <MapSettingsPanel basemap={basemap} onBasemapChange={setBasemap} placement="corner" />
     </div>
   );

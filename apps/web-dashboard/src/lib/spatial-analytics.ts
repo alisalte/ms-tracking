@@ -210,3 +210,35 @@ export function movementInsights(data: MovementResponse): MovementInsights {
 export function hoursOf(sec: number): number {
   return Math.round((sec / 3600) * 10) / 10;
 }
+
+/**
+ * Share of the busiest cell, log-scaled so one hotspot does not wash the rest
+ * of the grid out to the quiet color. 0 = no activity, 1 = the busiest cell.
+ */
+export function activityShare(weight: number, maxWeight: number): number {
+  if (!(weight > 0) || !(maxWeight > 0)) return 0;
+  return Math.min(1, Math.log1p(weight) / Math.log1p(maxWeight));
+}
+
+/**
+ * Movement-legend ramp: quiet cyan (`#06B6D4`) → amber → busy red (`#F04438`).
+ * `t` is 0..1 (see `activityShare`).
+ */
+export function activityColor(t: number): string {
+  const x = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  const stops: Array<[number, [number, number, number]]> = [
+    [0, [6, 182, 212]],
+    [0.5, [253, 176, 34]],
+    [1, [240, 68, 56]],
+  ];
+  let i = 0;
+  while (i < stops.length - 2 && x > (stops[i + 1]?.[0] ?? 1)) i++;
+  const left = stops[i] ?? stops[0];
+  const right = stops[i + 1] ?? stops[stops.length - 1];
+  if (!left || !right) return 'rgb(6, 182, 212)';
+  const [t0, c0] = left;
+  const [t1, c1] = right;
+  const u = t1 === t0 ? 0 : (x - t0) / (t1 - t0);
+  const ch = (a: number, b: number) => Math.round(a + (b - a) * u);
+  return `rgb(${ch(c0[0], c1[0])}, ${ch(c0[1], c1[1])}, ${ch(c0[2], c1[2])})`;
+}

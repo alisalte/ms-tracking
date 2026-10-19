@@ -20,10 +20,10 @@ import { EChart } from '@/components/dashboard/EChart';
 import { Card, CardHeader, EmptyState, Skeleton } from '@/components/tailwind-ui';
 import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
 import { formatNumber } from '@/lib/format-number';
-import { hoursOf, movementInsights } from '@/lib/spatial-analytics';
+import { activityColor, activityShare, hoursOf, movementInsights } from '@/lib/spatial-analytics';
 import { chart } from '@/theme/palette';
 
-import { AnalyticsMap, type MapHeatPoint, type MapPoint } from './AnalyticsMap';
+import { AnalyticsMap, type MapCell, type MapPoint } from './AnalyticsMap';
 import { StatCard } from './StatCard';
 
 /** Postgres DOW (0 = Sunday) → a localized short weekday name. */
@@ -56,15 +56,33 @@ export function MovementPatternsView({ filters }: { filters: AnalyticsFilters })
   const data = movement.data;
   const insights = useMemo(() => (data ? movementInsights(data) : null), [data]);
 
-  const heat = useMemo<MapHeatPoint[]>(
-    () =>
-      (data?.cells ?? []).map((c) => ({
-        lat: c.lat,
-        lng: c.lng,
-        weight: c.movingSec + c.stoppedSec || c.points,
-      })),
-    [data],
-  );
+  const mapCells = useMemo<MapCell[]>(() => {
+    const rows = data?.cells ?? [];
+    let max = 0;
+    const weights = rows.map((c) => {
+      const w = c.movingSec + c.stoppedSec || c.points;
+      max = Math.max(max, w);
+      return w;
+    });
+    return rows.map((c, i) => {
+      const share = activityShare(weights[i] ?? 0, max);
+      return {
+        south: c.south,
+        west: c.west,
+        north: c.north,
+        east: c.east,
+        color: activityColor(share),
+        opacity: 0.45 + share * 0.4,
+        tip: [
+          t('spatial.movement.drivingHours', { n: n(hoursOf(c.movingSec), 1) }),
+          t('spatial.movement.stopHours', { n: n(hoursOf(c.stoppedSec), 1) }),
+          c.vehicles > 0 ? t('spatial.movement.stopVehicles', { n: n(c.vehicles) }) : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      };
+    });
+  }, [data, t, n]);
   const stopPoints = useMemo<MapPoint[]>(
     () =>
       (data?.stopHotspots ?? []).map((c, i) => ({
@@ -251,7 +269,7 @@ export function MovementPatternsView({ filters }: { filters: AnalyticsFilters })
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <Card flush className="relative h-[360px] overflow-hidden sm:h-[480px] lg:h-[560px]">
           <AnalyticsMap
-            heat={heat}
+            cells={mapCells}
             hull={data?.area.hull ?? []}
             points={stopPoints}
             fitKey={`${filters.preset}|${filters.vehicleId ?? ''}|${filters.cell}|${data?.cells.length ?? 0}`}
