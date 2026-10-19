@@ -85,6 +85,10 @@ vi.mock('@/api/command.api', () => ({
     mutateAsync: issueMutate,
     isPending: false,
   }),
+  useEnablePlatformFtpUpload: () => ({
+    mutateAsync: vi.fn(async () => []),
+    isPending: false,
+  }),
   fetchDeviceCommand: vi.fn(async (id: string) => ({
     id,
     status: 'ACKED',

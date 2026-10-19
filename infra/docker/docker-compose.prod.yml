@@ -41,7 +41,10 @@ services:
     pull_policy: always
     build: !reset
     image: ${IMAGE_REGISTRY}/fleet-management-service:${IMAGE_TAG}
-    ports: !override []
+    # Only the FTP alarm-photo receiver is public (the API goes through nginx).
+    ports: !override
+      - "${FLEET_FTP_PORT:-21}:2121"
+      - "${FLEET_FTP_PASV_PORTS:-30000-30009}:${FLEET_FTP_PASV_PORTS:-30000-30009}"
     environment:
       ENVIRONMENT: production
 

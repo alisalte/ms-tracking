@@ -2551,6 +2551,8 @@
         "ftpUser": "FTP username",
         "ftpPassword": "FTP password",
         "ftpPath": "FTP path",
+        "platformFtp": "Send alarm photos to this platform (FTP)",
+        "platformFtpQueued": "B64 queued: the unit will upload its alarm photos to the platform FTP receiver.",
         "applied": "Media settings queued on the device.",
         "volumeInvalid": "Speaker volume must be between 0 and 100.",
         "ftpHostRequired": "FTP host is required when upload mode is on.",

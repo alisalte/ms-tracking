@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCommandHistory, useIssueCommands } from '@/api/command.api';
+import { useCommandHistory, useEnablePlatformFtpUpload, useIssueCommands } from '@/api/command.api';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { Alert, Button, Input, Select } from '@/components/tailwind-ui';
 import { useMdvrLiveResolution } from '@/hooks/useMdvrLiveResolution';
@@ -40,6 +40,7 @@ export function DeviceParameterMediaPanel({
   const { t } = useTranslation();
   const toast = useToast();
   const sendMutation = useIssueCommands();
+  const platformFtp = useEnablePlatformFtpUpload();
   const cacheDeviceId = deviceIds[0] ?? '';
   const singleDevice = deviceIds.length === 1;
 
@@ -219,6 +220,21 @@ export function DeviceParameterMediaPanel({
     );
   }
 
+  const enablePlatformFtp = async () => {
+    try {
+      await platformFtp.mutateAsync(deviceIds);
+      patch({ ftpMode: '1' });
+      toast.success(
+        t('commands.parameter.media.platformFtpQueued', {
+          defaultValue:
+            'B64 queued: the unit will upload its alarm photos to the platform FTP receiver.',
+        }),
+      );
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
   const ftpFieldsDisabled = sett.ftpMode !== '1';
 
   return (
@@ -343,7 +359,19 @@ export function DeviceParameterMediaPanel({
         />
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void enablePlatformFtp()}
+          disabled={disabled || deviceIds.length === 0}
+          loading={platformFtp.isPending}
+          data-testid="device-parameter-media-platform-ftp"
+        >
+          {t('commands.parameter.media.platformFtp', {
+            defaultValue: 'Send alarm photos to this platform (FTP)',
+          })}
+        </Button>
         <Button
           type="button"
           onClick={() => void apply()}
