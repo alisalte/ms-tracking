@@ -27,6 +27,7 @@ import { PositionPipeline } from '../application/position-pipeline.js';
 import { SignalBus } from '../application/signal-bus.js';
 import { TripEngine } from '../application/trip-engine.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
+import { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
 import { RedisDeviceStatusCache } from '../infrastructure/cache/redis-device-status-cache.js';
 import { RedisFsmCache } from '../infrastructure/cache/redis-fsm-cache.js';
 import { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
@@ -56,6 +57,7 @@ import {
   GEOFENCE_STATE_REPOSITORY,
   GPS_ENGINE_CONFIG,
   KAFKA_CONSUMER,
+  LAST_CAN_MEMORY,
   POSITION_ANALYTICS_REPOSITORY,
   POSITION_CACHE,
   POSITION_PIPELINE,
@@ -153,6 +155,11 @@ export class GpsEngineModule {
             new RedisPositionCache(redis, config.GPS_REPORT_INTERVAL_SECONDS),
         },
         {
+          provide: LAST_CAN_MEMORY,
+          inject: [REDIS_TOKEN],
+          useFactory: (redis: Redis) => new LastCanMemory(redis),
+        },
+        {
           provide: DEVICE_STATUS_CACHE,
           inject: [REDIS_TOKEN],
           useFactory: (redis: Redis) => new RedisDeviceStatusCache(redis),
@@ -202,6 +209,7 @@ export class GpsEngineModule {
             DEVICE_STATUS_REPOSITORY,
             METRICS_TOKEN,
             GEOFENCE_EVALUATOR,
+            LAST_CAN_MEMORY,
           ],
           useFactory: (
             cfg: GpsEngineConfig,
@@ -212,6 +220,7 @@ export class GpsEngineModule {
             deviceStatus: DeviceStatusRepository,
             metrics: TelemetryMetrics,
             geofenceEvaluator: GeofenceEvaluator,
+            lastCan: LastCanMemory,
           ) =>
             new PositionPipeline({
               config: cfg,
@@ -222,6 +231,7 @@ export class GpsEngineModule {
               deviceStatus,
               metrics,
               geofenceEvaluator,
+              lastCan,
             }),
         },
         {

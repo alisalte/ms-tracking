@@ -472,6 +472,7 @@
       "can": "داده CAN",
       "canUnknown": "—",
       "canAbsent": "در این بسته نیست",
+      "canLast": "آخرین مقدار: {{value}} ({{time}})",
       "canFuel": "سوخت {{pct}}٪",
       "canPedal": "پدال {{pct}}٪",
       "canCoolant": "آب {{temp}}°",

@@ -17,12 +17,30 @@ import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability
  * Sprint I §29/§30: preset XOR from/to (both → 400), custom range bounded by
  * HISTORY_MAX_RANGE_DAYS (default 31 — the documented Sprint F bound).
  */
-import { Controller, Get, HttpException, HttpStatus, Inject, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Optional,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { historyWindowErrorMessage, parseHistoryWindow } from '../application/history-window.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
+import type { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
-import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
-import { GPS_ENGINE_CONFIG, POSITION_CACHE, POSITION_REPOSITORY } from './tokens.js';
+import type {
+  LatestPosition,
+  PositionRepository,
+} from '../infrastructure/persistence/position.repository.js';
+import {
+  GPS_ENGINE_CONFIG,
+  LAST_CAN_MEMORY,
+  POSITION_CACHE,
+  POSITION_REPOSITORY,
+} from './tokens.js';
 
 /** Parse a finite coordinate query param or throw 400. */
 function parseCoord(name: string, value: string | undefined): number {
@@ -40,7 +58,13 @@ export class PositionsController {
     @Inject(POSITION_REPOSITORY) private readonly repo: PositionRepository,
     @Inject(GPS_ENGINE_CONFIG) private readonly config: GpsEngineConfig,
     @Inject(METRICS_TOKEN) private readonly metrics: TelemetryMetrics,
+    @Optional() @Inject(LAST_CAN_MEMORY) private readonly lastCan?: LastCanMemory,
   ) {}
+
+  /** Add the remembered CAN reading to CAN-less records (no-op without the memory). */
+  private async withLastCan<T extends LatestPosition>(positions: readonly T[]): Promise<T[]> {
+    return this.lastCan ? this.lastCan.attachLatest(positions) : [...positions];
+  }
 
   /**
    * Latest position PER VEHICLE for the caller's tenant (Sprint E live-map
@@ -52,7 +76,7 @@ export class PositionsController {
   public async latestForTenant(@CurrentTenant() tenantId: string, @Query('limit') limit?: string) {
     const parsed = limit ? Number.parseInt(limit, 10) : 500;
     const max = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 2000) : 500;
-    return this.repo.findLatestForTenant(tenantId, max);
+    return this.withLastCan(await this.repo.findLatestForTenant(tenantId, max));
   }
 
   /**
@@ -112,12 +136,12 @@ export class PositionsController {
   @RequirePermissions('tracking.read')
   public async latest(@Param('vehicleId') vehicleId: string, @CurrentTenant() tenantId: string) {
     const cached = await this.cache.getLatest(tenantId, vehicleId);
-    if (cached) return cached;
+    if (cached) return (await this.withLastCan([cached]))[0];
     const fromDb = await this.repo.findLatest(tenantId, vehicleId);
     if (!fromDb) {
       throw new HttpException('No position found for this vehicle.', HttpStatus.NOT_FOUND);
     }
-    return fromDb;
+    return (await this.withLastCan([fromDb]))[0];
   }
 
   /**

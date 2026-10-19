@@ -11,3 +11,4 @@ export {
   type RawRetentionSink,
   type RawPacketStorageOptions,
 } from './raw-packet-storage.js';
+export { CanSnapshotStore } from './can-snapshot-store.js';

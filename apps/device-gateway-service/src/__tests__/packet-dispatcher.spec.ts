@@ -365,3 +365,69 @@ describe('PacketDispatcher — fail-closed pipeline (06 §8, §6.1)', () => {
     );
   });
 });
+
+describe('PacketDispatcher — CAN from records that are not positions', () => {
+  const cce = (present: boolean) => ({
+    event: 31,
+    paramIds: ['0x99'],
+    params: {},
+    can: present ? { present: true, ids: ['0x99'], rpm: 1200 } : { present: false, ids: [] },
+    status: {},
+  });
+  const message = (type: 'LOGIN' | 'TELEMETRY' | 'POSITION', telemetry?: Record<string, unknown>) =>
+    new DeviceMessage({
+      messageId: `m-${type}`,
+      deviceId: '',
+      serialOrImei: 'imei-1',
+      tenantId: '',
+      protocolId: 'stub',
+      type,
+      timestamp: NOW,
+      ingestedAt: NOW,
+      rawSize: 2,
+      checksum: 'abc',
+      direction: 'INBOUND',
+      ...(telemetry ? { telemetry } : {}),
+    });
+
+  async function run(msgs: DeviceMessage[]) {
+    const remembered: unknown[][] = [];
+    const { deps } = buildDeps();
+    const dispatcher = new PacketDispatcher({
+      ...deps,
+      authResolver: new FixedAuthResolver({
+        ok: true,
+        device: {
+          deviceId: 'dev-1',
+          tenantId: 'tenant-1',
+          status: 'ACTIVE',
+          pairedVehicleId: 'veh-1',
+        },
+      } as AuthOutcome) as unknown as AuthResolver,
+      canStore: {
+        remember: async (...args: unknown[]) => {
+          remembered.push(args);
+        },
+      } as never,
+    });
+    await dispatcher.dispatch(newSession(), fakeAdapter(msgs), rawPacket());
+    return remembered;
+  }
+
+  it('stores CAN from a TELEMETRY record (no GPS fix) against the paired vehicle', async () => {
+    const remembered = await run([
+      message('LOGIN'),
+      message('TELEMETRY', { command: 'CCE', cce: cce(true) }),
+    ]);
+    expect(remembered).toHaveLength(1);
+    expect(remembered[0]?.slice(0, 2)).toEqual(['tenant-1', 'veh-1']);
+    expect(remembered[0]?.[3]).toMatchObject({ present: true, rpm: 1200 });
+  });
+
+  it('does not store for a POSITION (gps-engine handles it) or a record without CAN', async () => {
+    expect(await run([message('LOGIN'), message('POSITION', { cce: cce(true) })])).toHaveLength(0);
+    expect(
+      await run([message('LOGIN'), message('TELEMETRY', { command: 'CCE', cce: cce(false) })]),
+    ).toHaveLength(0);
+  });
+});
