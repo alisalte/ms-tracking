@@ -77,6 +77,25 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     FLEET_EVIDENCE_PHOTO_MAX_EDGE: z.coerce.number().int().min(0).default(640),
     /** JPEG quality of stored alarm photos. */
     FLEET_EVIDENCE_PHOTO_QUALITY: z.coerce.number().int().min(1).max(100).default(50),
+
+    // --- FTP alarm-photo receiver (MDVR B64, protocol V2.0 §3.45). ---
+    /** Secret the per-device FTP passwords derive from. Empty disables the receiver. */
+    FLEET_FTP_SECRET: z.string().default(''),
+    /** Port the receiver listens on inside the container. */
+    FLEET_FTP_PORT: z.coerce.number().int().min(1).max(65535).default(2121),
+    /** Host/port sent to the unit in B64. Host defaults to MDVR_PUBLIC_HOST. */
+    FLEET_FTP_PUBLIC_HOST: z.string().default(''),
+    FLEET_FTP_PUBLIC_PORT: z.coerce.number().int().min(1).max(65535).default(21),
+    /** Passive data ports (inclusive, `from-to`) — must be published 1:1. */
+    FLEET_FTP_PASV_PORTS: z
+      .string()
+      .regex(/^\d+-\d+$/)
+      .default('30000-30009'),
+    FLEET_FTP_MAX_FILE_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .default(5 * 1024 * 1024),
   }),
 );
 

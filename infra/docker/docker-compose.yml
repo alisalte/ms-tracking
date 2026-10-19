@@ -265,8 +265,16 @@ services:
       MDVR_PUBLIC_PORT: ${MDVR_VIDEO_PORT:-6182}
       MDVR_RTMP_PORT: ${MDVR_RTMP_PORT:-1935}
       MDVR_RTMP_PATH: ${MDVR_RTMP_PATH:-live/md300}
+      # FTP alarm-photo receiver: units upload event snapshots here after B64.
+      # Empty FLEET_FTP_SECRET disables it. Host defaults to MDVR_PUBLIC_HOST.
+      FLEET_FTP_SECRET: ${FLEET_FTP_SECRET:-}
+      FLEET_FTP_PUBLIC_HOST: ${FLEET_FTP_PUBLIC_HOST:-}
+      FLEET_FTP_PUBLIC_PORT: ${FLEET_FTP_PORT:-21}
+      FLEET_FTP_PASV_PORTS: ${FLEET_FTP_PASV_PORTS:-30000-30009}
     ports:
       - "${FLEET_MGMT_PORT:-3006}:3006"
+      - "${FLEET_FTP_PORT:-21}:2121"
+      - "${FLEET_FTP_PASV_PORTS:-30000-30009}:${FLEET_FTP_PASV_PORTS:-30000-30009}"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3006/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s

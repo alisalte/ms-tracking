@@ -214,6 +214,30 @@ export class EvidenceCaptureRepository {
     });
   }
 
+  /** Unfinished rows on this device whose photo name starts with `stem` (`20261019055951_CH1`). */
+  public async markPhotoReadyByStem(
+    tenantId: string,
+    deviceId: string,
+    stem: string,
+    photoBytes: Buffer,
+    contentType: string,
+  ): Promise<number> {
+    const pattern = `${stem.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    return withTenantContext(this.knex, tenantId, async (trx) =>
+      trx('notification.alarm_evidence')
+        .where({ tenant_id: tenantId, device_id: deviceId })
+        .whereRaw("lower(photo_name) like ? escape '\\'", [pattern])
+        .whereIn('status', ['PENDING', 'FETCHING', 'PHOTO_FAILED'])
+        .update({
+          status: 'PHOTO_READY',
+          photo_bytes: photoBytes,
+          photo_content_type: contentType,
+          error: null,
+          updated_at: trx.fn.now(),
+        }),
+    );
+  }
+
   /** Every unfinished evidence row on this device waiting for `photoName`. */
   public async markPhotoReadyByName(
     tenantId: string,

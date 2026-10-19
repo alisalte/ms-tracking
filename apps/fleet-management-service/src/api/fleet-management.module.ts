@@ -15,6 +15,7 @@ import { DeviceCommandService } from '../application/device-command.service.js';
 import { DeviceService } from '../application/device.service.js';
 import { EvidenceCaptureWorker } from '../application/evidence-capture.worker.js';
 import { FleetService } from '../application/fleet.service.js';
+import { FtpPhotoReceiver } from '../application/ftp-photo-receiver.js';
 import { HaulRouteService } from '../application/haul-route.service.js';
 import { PlatformTenantAssetsService } from '../application/platform-tenant-assets.service.js';
 import { SummaryService } from '../application/summary.service.js';
@@ -37,6 +38,7 @@ import {
   DeviceCommandIssuesController,
   DeviceCommandsController,
 } from './device-commands.controller.js';
+import { DeviceFtpPhotoController } from './device-ftp-photo.controller.js';
 import { DevicesController } from './devices.controller.js';
 import { FleetsController } from './fleets.controller.js';
 import { HaulRoutesController } from './haul-routes.controller.js';
@@ -57,6 +59,7 @@ import {
   EVIDENCE_CAPTURE_WORKER,
   FLEET_MANAGEMENT_CONFIG,
   FLEET_SERVICE,
+  FTP_PHOTO_RECEIVER,
   HAUL_ROUTE_SERVICE,
   PLATFORM_TENANT_ASSETS_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
@@ -316,6 +319,29 @@ export class FleetManagementModule {
               batchSize: cfg.FLEET_EVIDENCE_WORKER_BATCH_SIZE,
             }),
         },
+        // FTP alarm-photo receiver (B64 uploads) + per-device provisioning.
+        {
+          provide: FTP_PHOTO_RECEIVER,
+          inject: [
+            FLEET_MANAGEMENT_CONFIG,
+            DEVICE_REPOSITORY,
+            EVIDENCE_CAPTURE_REPOSITORY,
+            DEVICE_COMMAND_SERVICE,
+          ],
+          useFactory: async (
+            cfg: FleetManagementConfig,
+            devices: DeviceRepository,
+            evidence: EvidenceCaptureRepository,
+            commands: DeviceCommandService,
+          ) => {
+            const host = cfg.FLEET_FTP_PUBLIC_HOST
+              ? cfg.FLEET_FTP_PUBLIC_HOST
+              : cfg.FLEET_FTP_SECRET
+                ? await resolveMdvrPublicHost(cfg.MDVR_PUBLIC_HOST)
+                : '';
+            return new FtpPhotoReceiver(cfg, host, devices, evidence, commands);
+          },
+        },
       ],
       controllers: [
         FleetsController,
@@ -327,6 +353,7 @@ export class FleetManagementModule {
         SummaryController,
         DeviceCommandsController,
         DeviceCommandIssuesController,
+        DeviceFtpPhotoController,
       ],
     };
   }

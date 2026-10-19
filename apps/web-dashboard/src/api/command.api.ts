@@ -156,6 +156,31 @@ export function useSendDeviceCommand(deviceId: string | null) {
  * existing per-device POST; two or more go through POST /device-commands/bulk
  * (partial success: queued + failed).
  */
+/**
+ * POST /devices/:id/ftp-photo-upload — the platform sends B64 with its own FTP
+ * receiver and the unit's credentials, so alarm photos upload by themselves.
+ */
+export function useEnablePlatformFtpUpload() {
+  const qc = useQueryClient();
+  return useMutation<DeviceCommandRecord[], Error, string[]>({
+    mutationFn: async (deviceIds) => {
+      const ids = [...new Set(deviceIds)];
+      if (ids.length === 0) return Promise.reject(new Error('No device selected.'));
+      return Promise.all(
+        ids.map((id) =>
+          apiPost<Record<string, never>, DeviceCommandRecord>(
+            `/devices/${id}/ftp-photo-upload`,
+            {},
+          ),
+        ),
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.commands.all });
+    },
+  });
+}
+
 export function useIssueCommands() {
   const qc = useQueryClient();
   return useMutation<BulkCommandResult, Error, BulkSendCommandPayload>({
