@@ -14,7 +14,11 @@
 # re-encodes each camera to H.264 on `<path>_web` so Linux Chrome can play it;
 # nginx maps /media-hls/live/md300[_N] → that transcoded path.
 
-logLevel: info
+# TEMPORARY: debug while diagnosing the MD300 RTMP handshake. Devices open
+# :1935 and close with `i/o timeout` before "is publishing"; info level does
+# not show which handshake step stalls. Set back to `info` once diagnosed —
+# debug logs every HLS muxer poll and grows quickly.
+logLevel: debug
 
 # MD300 camera 1 often takes >10s after TCP connect to finish the RTMP
 # handshake (camera 2 is typically faster). The default 10s readTimeout
