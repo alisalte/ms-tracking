@@ -117,6 +117,25 @@ docker compose --project-name fleetvision \
 
 ---
 
+### Network MTU
+
+Compose networks use `DOCKER_NETWORK_MTU` (default **1400**, the MTU of the
+current server NIC). If it is larger than the host MTU, MD300 RTMP pushes to
+:1935 connect and then die with `i/o timeout`: the first handshake segment is
+too big for the path. Check with `ip link show` and set the variable in
+`/opt/fleetvision/.env` if the host differs.
+
+Docker does not change an existing network's MTU. After changing it, recreate
+the network once (short downtime):
+
+```bash
+docker compose --project-name fleetvision -f infra/docker/docker-compose.yml \
+  -f infra/docker/docker-compose.prod.yml --env-file /opt/fleetvision/.env down
+# then deploy as usual (deploy-remote.sh / CD)
+```
+
+---
+
 ## 4. Day-to-day
 
 1. Merge to `main` → CI verify → images pushed to GHCR.

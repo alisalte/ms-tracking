@@ -751,6 +751,16 @@ services:
       timeout: 5s
       retries: 5
 
+# The server NIC (ens192) is MTU 1400, but compose networks default to 1500
+# (the daemon `mtu` setting only covers docker0). MediaMTX then advertised a
+# 1460-byte MSS to MD300 units; their first RTMP handshake segment did not fit
+# the 1400 path, was dropped, and every :1935 connection closed with
+# `i/o timeout` before "is publishing". Keep this at or below the host MTU.
+networks:
+  default:
+    driver_opts:
+      com.docker.network.driver.mtu: ${DOCKER_NETWORK_MTU:-1400}
+
 volumes:
   # Pinned names so compose project/dir changes do not create a second empty volume.
   postgres-data:
