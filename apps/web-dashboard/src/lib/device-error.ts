@@ -104,5 +104,36 @@ export function commandReply(
     };
   }
   const response = (row.responseText ?? '').trim();
+  const storedDays = describeStoredDays(t, response);
+  if (storedDays) return { text: storedDays, raw: response, isError: false };
   return { text: response || '—', raw: null, isError: false };
+}
+
+const STORED_MONTH = /^(\d{4}-\d{2}) video:([\d,]+|-) alarm:([\d,]+|-)$/;
+
+/**
+ * AA4 stored-days reply as the gateway renders it
+ * (`AA4,2026-10 video:17,18,19 alarm:19; …` or `AA4,none`) → one sentence
+ * per month. Anything else returns null and is shown verbatim.
+ */
+function describeStoredDays(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  response: string,
+): string | null {
+  if (!/^AA4,/i.test(response)) return null;
+  const body = response.slice(4).trim();
+  if (body === 'none') return t('commands.storedDays.none');
+  const parts = body.split(';').map((p) => STORED_MONTH.exec(p.trim()));
+  if (parts.length === 0 || parts.some((m) => !m)) return null;
+  const days = (v: string) =>
+    v === '-' ? t('commands.storedDays.noDays') : v.split(',').join(t('commands.storedDays.sep'));
+  return parts
+    .map((m) =>
+      t('commands.storedDays.month', {
+        month: m?.[1],
+        video: days(m?.[2] ?? '-'),
+        alarm: days(m?.[3] ?? '-'),
+      }),
+    )
+    .join(' | ');
 }

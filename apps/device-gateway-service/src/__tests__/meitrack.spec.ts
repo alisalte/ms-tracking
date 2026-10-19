@@ -302,6 +302,56 @@ describe('MeitrackAdapter.decode', () => {
     expect(msg.telemetry?.response).toBe(reply);
   });
 
+  it('decodes the AA4 stored-days reply from the protocol appendix (4.11)', () => {
+    // $$A36,866758042050233,AA4,<20 04><00 00 00 3F><00 00 00 1C>*E0\r\n
+    const frame = Buffer.from(
+      '2424413336 2C 383636373538303432303530323333 2C 414134 2C 2004 0000003F 0000001C 2A 4530 0D0A'.replace(
+        / /g,
+        '',
+      ),
+      'hex',
+    );
+    const r = new ByteReader();
+    r.append(frame);
+    const msg = adapter.decode(unwrap(adapter.frame(r, NOW)))[0];
+    if (!msg) throw new Error('decode produced no message');
+    expect(msg.type).toBe('COMMAND_ACK');
+    expect(msg.telemetry?.command).toBe('AA4');
+    expect(msg.telemetry?.response).toBe('2020-04 video:25,26,27,28,29,30 alarm:27,28,29');
+  });
+
+  it('decodes a multi-month AA4 reply and an empty card', () => {
+    const decode = (body: Buffer) => {
+      const head = Buffer.from(`,${IMEI},AA4,`, 'latin1');
+      const length = head.length + body.length + 5;
+      const flag = Buffer.from(`$$A${String(length).padStart(4, '0')}`, 'latin1');
+      const region = Buffer.concat([flag, head, body, Buffer.from('*')]);
+      const r = new ByteReader();
+      r.append(Buffer.concat([region, Buffer.from(`${meitrackChecksum(region)}\r\n`)]));
+      return adapter.decode(unwrap(adapter.frame(r, NOW)))[0];
+    };
+    const rec = (yy: number, mm: number, video: number, alarm: number) => {
+      const b = Buffer.alloc(10);
+      b[0] = yy;
+      b[1] = mm;
+      b.writeUInt32LE(video >>> 0, 2);
+      b.writeUInt32LE(alarm >>> 0, 6);
+      return b;
+    };
+    const two = decode(
+      Buffer.concat([rec(0x26, 0x09, 1, 0), rec(0x26, 0x10, (1 << 16) | (1 << 18), 1 << 18)]),
+    );
+    expect(two?.telemetry?.response).toBe('2026-09 video:1 alarm:-; 2026-10 video:17,19 alarm:19');
+    expect(decode(Buffer.alloc(0))?.telemetry?.response).toBe('none');
+  });
+
+  it('keeps a text AA4 error reply on the ordinary ack path', () => {
+    const r = new ByteReader();
+    r.append(meitrackFrame(`${IMEI},AA4,FFF5`));
+    const msg = adapter.decode(unwrap(adapter.frame(r, NOW)))[0];
+    expect(msg?.telemetry?.response).toBe('FFF5');
+  });
+
   it('decodes a D01 photo list into parsed filenames', () => {
     const frame = meitrackFrame(`${IMEI},D01,1,0,photo1.jpg|photo2.jpg|`);
     const r = new ByteReader();

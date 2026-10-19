@@ -2722,6 +2722,12 @@
       "bulkHint": "Command history is shown when a single device is selected. {{count}} devices will receive the next command.",
       "sentTo": "Devices",
       "sentToCount": "Sent to {{count}} devices"
+    },
+    "storedDays": {
+      "none": "No video is stored on the card.",
+      "noDays": "none",
+      "sep": ", ",
+      "month": "{{month}}: video on days {{video}} · alarm video on {{alarm}}"
     }
   },
   "maintenance": {
