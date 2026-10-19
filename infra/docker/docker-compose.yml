@@ -104,6 +104,9 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # A reassembled D00 alarm photo rides one COMMAND_ACK message as base64.
+      KAFKA_MESSAGE_MAX_BYTES: 5242880
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 5242880
     ports:
       - "${KAFKA_PORT:-9092}:9092"
     healthcheck:

@@ -13,6 +13,12 @@ describe('shouldKeepPendingForListPayload', () => {
     expect(shouldKeepPendingForListPayload('AB2', 'OK', false)).toBe(false);
     expect(shouldKeepPendingForListPayload('AB8', 'FFF5', false)).toBe(false);
   });
+
+  it('holds D00 on a bare OK until the photo arrives, but fails it on FFF5', () => {
+    expect(shouldKeepPendingForListPayload('D00', 'OK', false)).toBe(true);
+    expect(shouldKeepPendingForListPayload('D00', 'OK', true)).toBe(false);
+    expect(shouldKeepPendingForListPayload('D00', 'FFF5', false)).toBe(false);
+  });
 });
 
 describe('isDeviceErrorResponse', () => {

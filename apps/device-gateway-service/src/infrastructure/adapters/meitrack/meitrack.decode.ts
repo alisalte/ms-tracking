@@ -114,9 +114,13 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
       return decodeTracking(raw, frame.fields);
     case 'D00':
       // Photo chunk (D00 download response) — raw JPEG bytes (or hex text).
+      // A short reply (`D00,FFF5` = no such file, `D00,OK`) is a command ack,
+      // not a chunk — decoding it as an empty chunk left the D00 stuck SENT.
+      if (!isPhotoPacketHeader(frame.fields)) return [decodeCommandAck(raw, frame.fields)];
       return [decodePhotoChunk(raw, frame.fields)];
     case 'D01':
-      // Photo filename listing (D01 response).
+      // Photo filename listing (D01 response); `D01,FFF5` = empty card.
+      if (!isPhotoPacketHeader(frame.fields)) return [decodeCommandAck(raw, frame.fields)];
       return [decodePhotoList(raw, frame.fields)];
     default:
       // Command-family code (AAC, D82, A##, B##, C##, D##, E##, F##) → ack.
@@ -273,6 +277,18 @@ function decodePhotoChunk(raw: RawPacket, fields: readonly string[]): DeviceMess
       chunkBytes: chunk.length,
     },
   });
+}
+
+/**
+ * D00 chunks are `imei,D00,<name>,<total>,<index>,<data>` and D01 pages are
+ * `imei,D01,<total>,<index>,<names>`; anything else is a status reply.
+ */
+function isPhotoPacketHeader(fields: readonly string[]): boolean {
+  const numeric = (v: string | undefined) => v !== undefined && /^\d+$/.test(v);
+  if (fields[1]?.startsWith('D00')) {
+    return fields.length >= 6 && numeric(fields[3]) && numeric(fields[4]);
+  }
+  return fields.length >= 4 && numeric(fields[2]) && numeric(fields[3]);
 }
 
 /**
