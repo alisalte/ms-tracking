@@ -234,9 +234,12 @@ export function useMdvrResources() {
     const collected: MdvrResource[] = [];
     const errors: string[] = [];
     const logicalChannel = ch.logicalChannel ?? 1;
+    let ab8Answered = false;
 
     try {
       const rows = await queryAb8(ch, fromMs, toMs, '0', cancelled, 0);
+      ab8Answered = true;
+      mdvrLog(`AB8 listed ${rows.length} file(s)`);
       collected.push(...rows.filter((r) => r.channel === 0 || r.channel === logicalChannel));
     } catch (err) {
       if (cancelled() || (err instanceof Error && err.message === 'cancelled')) return;
@@ -253,7 +256,9 @@ export function useMdvrResources() {
       if (cancelled() || (err instanceof Error && err.message === 'cancelled')) return;
       const message = listFailureMessage(err);
       mdvrLog('D01 failed:', message);
-      errors.push(message);
+      // D01 only supplies JPEG names. When AB8 answered, a unit refusing D01
+      // (`FFFE`) must not turn a valid (even empty) video catalog into an error.
+      if (!ab8Answered) errors.push(message);
     }
     if (cancelled()) return;
 
