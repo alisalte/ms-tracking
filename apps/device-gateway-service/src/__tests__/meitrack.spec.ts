@@ -288,6 +288,20 @@ describe('MeitrackAdapter.decode', () => {
     expect(Buffer.from(msg.telemetry?.chunkBase64 as string, 'base64').equals(data)).toBe(true);
   });
 
+  it.each([
+    ['D00', 'FFF5'],
+    ['D00', 'OK'],
+    ['D01', 'FFF5'],
+  ])('decodes a short %s,%s reply as a command ack, not a photo packet', (code, reply) => {
+    const r = new ByteReader();
+    r.append(meitrackFrame(`${IMEI},${code},${reply}`));
+    const msg = adapter.decode(unwrap(adapter.frame(r, NOW)))[0];
+    if (!msg) throw new Error('decode produced no message');
+    expect(msg.type).toBe('COMMAND_ACK');
+    expect(msg.telemetry?.command).toBe(code);
+    expect(msg.telemetry?.response).toBe(reply);
+  });
+
   it('decodes a D01 photo list into parsed filenames', () => {
     const frame = meitrackFrame(`${IMEI},D01,1,0,photo1.jpg|photo2.jpg|`);
     const r = new ByteReader();

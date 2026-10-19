@@ -46,9 +46,10 @@ interface CommandEventEnvelope {
 }
 
 /**
- * AB8/D01 often echo `OK` before the binary/name list. Marking ACKED on that
- * first OK drops the real list (latestPendingByCode finds nothing). Keep the
- * row pending until `resources` / `photoNames` arrive.
+ * AB8/D01 often echo `OK` before the binary/name list, and D00 before its JPEG
+ * chunks. Marking ACKED on that first OK drops the real payload
+ * (latestPendingByCode finds nothing). Keep the row pending until
+ * `resources` / `photoNames` / the photo arrive.
  */
 export function shouldKeepPendingForListPayload(
   code: string,
@@ -56,7 +57,7 @@ export function shouldKeepPendingForListPayload(
   hasList: boolean,
 ): boolean {
   if (hasList) return false;
-  if (code !== 'AB8' && code !== 'D01') return false;
+  if (code !== 'AB8' && code !== 'D01' && code !== 'D00') return false;
   return /^ok$/i.test(payload.trim());
 }
 
@@ -231,7 +232,9 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
       shouldKeepPendingForListPayload(
         code,
         payload,
-        Array.isArray(resources) || Array.isArray(photoNamesEarly),
+        Array.isArray(resources) ||
+          Array.isArray(photoNamesEarly) ||
+          typeof env.telemetry?.photoBase64 === 'string',
       )
     ) {
       return;

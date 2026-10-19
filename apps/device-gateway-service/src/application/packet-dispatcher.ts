@@ -287,7 +287,14 @@ export class PacketDispatcher {
     if (!this.deps.kafka) return;
     await this.deps.kafka.publish(msg);
     const photoAck = this.assemblePhotoAck(msg);
-    if (photoAck) await this.deps.kafka.publish(photoAck);
+    if (photoAck) {
+      try {
+        await this.deps.kafka.publish(photoAck);
+      } catch (err) {
+        // Never let a too-large photo drop the device's connection.
+        this.logger.warn(`D00 photo ack publish failed: ${(err as Error).message}`);
+      }
+    }
   }
 
   /**
@@ -299,11 +306,19 @@ export class PacketDispatcher {
     const filename = typeof msg.telemetry?.filename === 'string' ? msg.telemetry.filename : '';
     const chunkBase64 =
       typeof msg.telemetry?.chunkBase64 === 'string' ? msg.telemetry.chunkBase64 : '';
-    if (!filename || !chunkBase64) return null;
+    if (!filename || !chunkBase64) {
+      this.logger.warn(`D00 chunk without data dropped (${filename || 'no filename'})`);
+      return null;
+    }
+    const totalPackets = Number(msg.telemetry?.totalPackets ?? 0);
+    const packetIndex = Number(msg.telemetry?.packetIndex ?? 0);
+    if (packetIndex <= 1) {
+      this.logger.log(`D00 photo ${filename}: chunk ${packetIndex}/${totalPackets} received`);
+    }
     const result = this.photos.feed({
       filename: `${msg.serialOrImei}::${filename}`,
-      totalPackets: Number(msg.telemetry?.totalPackets ?? 0),
-      packetIndex: Number(msg.telemetry?.packetIndex ?? 0),
+      totalPackets,
+      packetIndex,
       chunkBase64,
     });
     if (result.status !== 'complete') return null;
