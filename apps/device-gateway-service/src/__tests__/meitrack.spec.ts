@@ -269,6 +269,25 @@ describe('MeitrackAdapter.decode', () => {
     );
   });
 
+  it('decodes a D00 chunk carrying raw JPEG bytes (commas included)', () => {
+    const data = Buffer.from([0xff, 0xd8, 0x2c, 0x2a, 0x00, 0x2c, 0xff, 0xd9]);
+    const head = Buffer.from(`,${IMEI},D00,20261019055951_CH1_dca.jpg,7,2,`, 'latin1');
+    const length = head.length + data.length + 5;
+    const flag = Buffer.from(`$$A${String(length).padStart(4, '0')}`, 'latin1');
+    const region = Buffer.concat([flag, head, data, Buffer.from('*')]);
+    const frame = Buffer.concat([region, Buffer.from(`${meitrackChecksum(region)}\r\n`)]);
+    const r = new ByteReader();
+    r.append(frame);
+    const raw = unwrap(adapter.frame(r, NOW));
+    const msg = adapter.decode(raw)[0];
+    if (!msg) throw new Error('decode produced no message');
+    expect(msg.type).toBe('PHOTO');
+    expect(msg.telemetry?.filename).toBe('20261019055951_CH1_dca.jpg');
+    expect(msg.telemetry?.totalPackets).toBe(7);
+    expect(msg.telemetry?.packetIndex).toBe(2);
+    expect(Buffer.from(msg.telemetry?.chunkBase64 as string, 'base64').equals(data)).toBe(true);
+  });
+
   it('decodes a D01 photo list into parsed filenames', () => {
     const frame = meitrackFrame(`${IMEI},D01,1,0,photo1.jpg|photo2.jpg|`);
     const r = new ByteReader();

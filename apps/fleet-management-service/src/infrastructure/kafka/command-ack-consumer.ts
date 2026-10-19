@@ -17,6 +17,7 @@
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { type Consumer, type EachMessagePayload, Kafka } from 'kafkajs';
 import type { FleetManagementConfig } from '../../config/fleet-management.config.js';
+import { compressEvidencePhoto } from '../media/evidence-photo-compressor.js';
 import type { DeviceCommandRepository } from '../persistence/device-command.repository.js';
 import type { EvidenceCaptureRepository } from '../persistence/evidence-capture.repository.js';
 
@@ -254,15 +255,17 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
       await this.commands.markAcked(tenantId, pending.id, JSON.stringify({ photoNames }));
       return;
     }
-    const photoBase64 = env.telemetry?.photoBase64;
-    if (typeof photoBase64 === 'string' && photoBase64.length > 0) {
+    const rawPhotoBase64 = env.telemetry?.photoBase64;
+    if (typeof rawPhotoBase64 === 'string' && rawPhotoBase64.length > 0) {
+      const photo = await this.compressPhoto(Buffer.from(rawPhotoBase64, 'base64'));
+      const photoBase64 = photo.toString('base64');
       await this.commands.markAcked(
         tenantId,
         pending.id,
         JSON.stringify({
           filename: typeof env.telemetry?.filename === 'string' ? env.telemetry.filename : '',
           photoBase64,
-          byteLength: env.telemetry?.byteLength ?? 0,
+          byteLength: photo.length,
         }),
       );
       await this.completeEvidencePhoto(
@@ -291,6 +294,18 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
         await this.evidence?.markFailedByCommandId(pending.id, `DEVICE_ERROR:${payload}`);
       }
     }
+  }
+
+  /** Scale the D00 JPEG down before it is stored on the command and evidence rows. */
+  private async compressPhoto(bytes: Buffer): Promise<Buffer> {
+    const out = await compressEvidencePhoto(bytes, {
+      maxEdge: this.config.FLEET_EVIDENCE_PHOTO_MAX_EDGE ?? 640,
+      quality: this.config.FLEET_EVIDENCE_PHOTO_QUALITY ?? 50,
+    });
+    if (out !== bytes) {
+      this.logger.log(`D00 photo compressed ${bytes.length} → ${out.length} bytes`);
+    }
+    return out;
   }
 
   /**
