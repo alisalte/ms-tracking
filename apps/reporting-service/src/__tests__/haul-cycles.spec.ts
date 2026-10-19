@@ -2,7 +2,9 @@ import { describe, expect, it } from '@jest/globals';
 import {
   type Zone,
   detectHaulCycles,
+  shiftDayWindow,
   shiftKey,
+  shiftSlot,
   summarizeHauls,
   zoneContains,
 } from '../domain/haul-cycles.js';
@@ -73,7 +75,8 @@ describe('haul cycles', () => {
       travelSec: 15 * 60,
     });
     expect(cycles[0]?.distanceM).toBeGreaterThan(1000);
-    expect(cycles[0]?.shift).toBe('2026-06-01 06:00');
+    expect(cycles[0]?.shift).toBe('2026-06-01#1');
+    expect(cycles[0]?.driverSource).toBe('ASSIGNMENT');
     const summary = summarizeHauls(cycles);
     expect(summary.byDriverShift[0]).toMatchObject({ driverName: 'Ali', services: 1 });
     expect(summary.byShovel).toEqual([{ shovelId: 'shovel-1', loads: 1 }]);
@@ -142,7 +145,159 @@ describe('haul cycles', () => {
   });
 
   it('labels a night shift that crosses midnight', () => {
-    expect(shiftKey(at('2026-06-02T01:00:00Z'), 18, 12, 'UTC')).toBe('2026-06-01 18:00');
+    expect(shiftKey(at('2026-06-02T01:00:00Z'), 18, 12, 'UTC')).toBe('2026-06-01#1');
     expect(shiftKey(at('2026-06-01T12:00:00Z'), 18, 12, 'UTC')).toBe('off-shift');
+  });
+
+  it('splits the work day into two back-to-back shifts', () => {
+    expect(shiftSlot(at('2026-06-01T07:00:00Z'), 6, 12, 'UTC', 2)).toEqual({
+      key: '2026-06-01#1',
+      date: '2026-06-01',
+      no: 1,
+    });
+    expect(shiftSlot(at('2026-06-01T20:00:00Z'), 6, 12, 'UTC', 2)).toEqual({
+      key: '2026-06-01#2',
+      date: '2026-06-01',
+      no: 2,
+    });
+    // 03:00 next morning is still the night shift of June 1.
+    expect(shiftKey(at('2026-06-02T03:00:00Z'), 6, 12, 'UTC', 2)).toBe('2026-06-01#2');
+    expect(shiftKey(at('2026-06-02T06:00:00Z'), 6, 12, 'UTC', 2)).toBe('2026-06-02#1');
+    // Two 8 h shifts leave a gap from 22:00 to 06:00.
+    expect(shiftKey(at('2026-06-01T23:00:00Z'), 6, 8, 'UTC', 2)).toBe('off-shift');
+    // Tehran is UTC+03:30: 03:00Z is 06:30 local, the day shift.
+    expect(shiftKey(at('2026-06-01T03:00:00Z'), 6, 12, 'Asia/Tehran', 2)).toBe('2026-06-01#1');
+  });
+
+  it('credits the rostered driver of each shift on the same truck', () => {
+    const load = (enter: string, leave: string, dump: string) => [
+      { at: at(enter), lat: 35.005, lng: 51.005 },
+      { at: at(leave), lat: 35.03, lng: 51.03 },
+      { at: at(dump), lat: 35.055, lng: 51.055 },
+    ];
+    const { cycles } = detectHaulCycles({
+      trucks: ['truck-1'],
+      shovels: [],
+      tracks: new Map([
+        [
+          'truck-1',
+          [
+            ...load('2026-06-01T08:00:00Z', '2026-06-01T08:10:00Z', '2026-06-01T08:30:00Z'),
+            ...load('2026-06-01T20:00:00Z', '2026-06-01T20:10:00Z', '2026-06-01T20:30:00Z'),
+            ...load('2026-06-02T02:00:00Z', '2026-06-02T02:10:00Z', '2026-06-02T02:30:00Z'),
+          ],
+        ],
+      ]),
+      origin,
+      destination,
+      // The assignment history still points at the day driver for the whole day.
+      drivers: [
+        {
+          vehicleId: 'truck-1',
+          driverId: 'drv-day',
+          driverName: 'Day',
+          startedAt: at('2026-06-01T00:00:00Z'),
+          endedAt: null,
+        },
+      ],
+      rosters: new Map([
+        [
+          'truck-1',
+          [
+            { driverId: 'drv-day', driverName: 'Day' },
+            { driverId: 'drv-night', driverName: 'Night' },
+          ],
+        ],
+      ]),
+      shiftStartHour: 6,
+      shiftDurationHours: 12,
+      shiftCount: 2,
+      timeZone: 'UTC',
+    });
+    expect(cycles.map((c) => [c.driverName, c.shift, c.driverSource])).toEqual([
+      ['Day', '2026-06-01#1', 'ROSTER'],
+      ['Night', '2026-06-01#2', 'ROSTER'],
+      ['Night', '2026-06-01#2', 'ROSTER'],
+    ]);
+    const summary = summarizeHauls(cycles);
+    expect(summary.byShift).toEqual([
+      expect.objectContaining({ shift: '2026-06-01#1', services: 1, trucks: 1, drivers: 1 }),
+      expect.objectContaining({ shift: '2026-06-01#2', services: 2, trucks: 1, withoutDriver: 0 }),
+    ]);
+    expect(summary.byDriverShift.map((r) => [r.driverName, r.services, r.vehicleIds])).toEqual([
+      ['Day', 1, ['truck-1']],
+      ['Night', 2, ['truck-1']],
+    ]);
+  });
+
+  it('counts a service when the truck jumps from the origin straight into the destination', () => {
+    const { cycles, open } = detectHaulCycles({
+      trucks: ['truck-1'],
+      shovels: [],
+      tracks: new Map([
+        [
+          'truck-1',
+          [
+            { at: at('2026-06-01T06:00:00Z'), lat: 35.005, lng: 51.005 },
+            { at: at('2026-06-01T06:10:00Z'), lat: 35.006, lng: 51.006 },
+            { at: at('2026-06-01T06:30:00Z'), lat: 35.055, lng: 51.055 },
+          ],
+        ],
+      ]),
+      origin,
+      destination,
+      drivers: [],
+      shiftStartHour: 6,
+      shiftDurationHours: 12,
+      timeZone: 'UTC',
+    });
+    expect(open).toEqual([]);
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]).toMatchObject({ loadDwellSec: 600, travelSec: 1200 });
+  });
+
+  it('keeps the loading clock through a short step outside the origin', () => {
+    const { cycles } = detectHaulCycles({
+      trucks: ['truck-1'],
+      shovels: [],
+      tracks: new Map([
+        [
+          'truck-1',
+          [
+            { at: at('2026-06-01T06:00:00Z'), lat: 35.005, lng: 51.005 },
+            { at: at('2026-06-01T06:05:00Z'), lat: 35.0101, lng: 51.005 },
+            { at: at('2026-06-01T06:06:00Z'), lat: 35.009, lng: 51.005 },
+            { at: at('2026-06-01T06:10:00Z'), lat: 35.03, lng: 51.03 },
+            { at: at('2026-06-01T06:20:00Z'), lat: 35.055, lng: 51.055 },
+          ],
+        ],
+      ]),
+      origin,
+      destination,
+      drivers: [],
+      shiftStartHour: 6,
+      shiftDurationHours: 12,
+      timeZone: 'UTC',
+    });
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]?.originEnteredAt).toEqual(at('2026-06-01T06:00:00Z'));
+    expect(cycles[0]?.loadDwellSec).toBe(600);
+  });
+
+  it('aligns report presets to the work day, not UTC midnight', () => {
+    // 2026-06-02 01:00 Tehran is still the night shift of June 1.
+    const now = at('2026-06-01T21:30:00Z');
+    expect(shiftDayWindow('today', 6, 'Asia/Tehran', now)).toEqual({
+      from: at('2026-06-01T02:30:00Z'),
+      to: now,
+    });
+    expect(shiftDayWindow('yesterday', 6, 'Asia/Tehran', now)).toEqual({
+      from: at('2026-05-31T02:30:00Z'),
+      to: at('2026-06-01T02:30:00Z'),
+    });
+    expect(shiftDayWindow('7d', 6, 'UTC', at('2026-06-08T10:00:00Z'))?.from).toEqual(
+      at('2026-06-02T06:00:00Z'),
+    );
+    expect(shiftDayWindow('bogus', 6, 'UTC', now)).toBeNull();
   });
 });
