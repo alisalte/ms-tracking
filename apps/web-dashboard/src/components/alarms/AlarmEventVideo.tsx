@@ -6,12 +6,13 @@
  * evidence window and the other cameras on the same MDVR.
  */
 import { Download } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button, Spinner } from '@/components/tailwind-ui';
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { useMdvrPlayback } from '@/components/video/useMdvrPlayback';
+import { findAlarmRecording } from '@/components/video/useMdvrResources';
 import type { CameraChannel } from '@/types/video.types';
 
 interface AlarmEventVideoProps {
@@ -21,6 +22,8 @@ interface AlarmEventVideoProps {
   fallbackFromMs?: number;
   fallbackToMs?: number;
   fallbackChannels?: CameraChannel[];
+  /** Alarm instant: when every AB4 gets FFF5, the card's AB8 listing is searched around it. */
+  raisedAtMs?: number;
   onDownload: (hlsUrl: string) => void;
 }
 
@@ -39,10 +42,13 @@ export function AlarmEventVideo({
   fallbackFromMs,
   fallbackToMs,
   fallbackChannels,
+  raisedAtMs,
   onDownload,
 }: AlarmEventVideoProps) {
   const { t } = useTranslation();
   const playback = useMdvrPlayback();
+  const [searching, setSearching] = useState(false);
+  const [notOnCard, setNotOnCard] = useState(false);
   const startRef = useRef(playback.start);
   const stopRef = useRef(playback.stop);
   startRef.current = playback.start;
@@ -67,6 +73,7 @@ export function AlarmEventVideo({
       attempts.push({ ch: extra, from: nearbyFrom, to: nearbyTo });
     }
 
+    setNotOnCard(false);
     void (async () => {
       for (const attempt of attempts) {
         if (cancelled) return;
@@ -75,18 +82,40 @@ export function AlarmEventVideo({
         const ok = await startRef.current(attempt.ch, attempt.from, attempt.to, '3');
         if (cancelled || ok) return;
       }
+      // Every guessed window was FFF5. Ask the card what it recorded instead
+      // (it may index video on local time while naming photos in UTC).
+      if (raisedAtMs == null || !Number.isFinite(raisedAtMs)) return;
+      setSearching(true);
+      try {
+        const cameras = [channel, ...(fallbackChannels ?? []).filter((c) => c.id !== channel.id)];
+        const found = await findAlarmRecording(cameras, raisedAtMs, () => cancelled);
+        if (cancelled) return;
+        if (!found) {
+          setNotOnCard(true);
+          return;
+        }
+        await startRef.current(found.channel, found.fromMs, found.toMs, '3');
+      } catch {
+        /* the playback error already explains the failure */
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
     })();
 
     return () => {
       cancelled = true;
       void stopRef.current();
     };
-  }, [channel, fromMs, toMs, fallbackFromMs, fallbackToMs, fallbackChannels]);
+  }, [channel, fromMs, toMs, fallbackFromMs, fallbackToMs, fallbackChannels, raisedAtMs]);
 
-  const busy = playback.status === 'starting' || playback.status === 'waiting';
-  const errorMessage = isNoFile(playback.error)
-    ? t('alarms.detail.videoMissing')
-    : t('alarms.detail.videoError', { message: playback.error ?? '' });
+  const busy = searching || playback.status === 'starting' || playback.status === 'waiting';
+  const errorMessage = notOnCard
+    ? t('alarms.detail.videoNotOnCard', {
+        defaultValue: 'The SD card has no recording within 4 hours of this alarm.',
+      })
+    : isNoFile(playback.error)
+      ? t('alarms.detail.videoMissing')
+      : t('alarms.detail.videoError', { message: playback.error ?? '' });
 
   return (
     <div className="overflow-hidden rounded-lg bg-gray-950">
@@ -107,7 +136,7 @@ export function AlarmEventVideo({
             <span className="ms-2">{t('alarms.detail.loadingVideo')}</span>
           </div>
         ) : null}
-        {playback.status === 'error' ? (
+        {!busy && (notOnCard || playback.status === 'error') ? (
           <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs text-warning-200">
             {errorMessage}
           </div>

@@ -20,7 +20,11 @@ import {
   toMdvrBcdTime,
 } from '@/api/video.api';
 import { isMdvrChannel } from '@/components/video/useStreamSession';
-import { parseMdvrEventPhotoName } from '@/lib/alarm-evidence';
+import {
+  matchEventPhotoName,
+  parseMdvrEventPhotoName,
+  pickAlarmRecording,
+} from '@/lib/alarm-evidence';
 import type { DeviceCommandRecord } from '@/types/command.types';
 import type { CameraChannel } from '@/types/video.types';
 
@@ -321,6 +325,59 @@ export async function listMdvrEvidence(
 
   const empty = videos.length === 0 && photos.length === 0;
   return { videos, photos, error: empty ? (errors[0] ?? null) : null };
+}
+
+/** Hours either side of an alarm listed when its exact AB4 window had no file. */
+const ALARM_RECORDING_SEARCH_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * The SD-card video that recorded an alarm, found from the card's own AB8
+ * listing instead of a guessed time. ±4 h covers a unit that indexes video on
+ * its local clock (UTC+3:30) while naming photos in UTC.
+ */
+export async function findAlarmRecording(
+  channels: CameraChannel[],
+  raisedAtMs: number,
+  isCancelled: () => boolean,
+): Promise<{ channel: CameraChannel; fromMs: number; toMs: number } | null> {
+  for (const ch of channels) {
+    if (isCancelled()) return null;
+    const listed = await listMdvrEvidence(
+      [ch],
+      raisedAtMs - ALARM_RECORDING_SEARCH_MS,
+      raisedAtMs + ALARM_RECORDING_SEARCH_MS,
+      false,
+      isCancelled,
+    );
+    mdvrLog(
+      `alarm recording search cam=${ch.logicalChannel ?? 1}: ${listed.videos.length} video file(s)`,
+    );
+    const pick = pickAlarmRecording(listed.videos, raisedAtMs);
+    if (pick) return { channel: pick.clip.channel, fromMs: pick.fromMs, toMs: pick.toMs };
+  }
+  return null;
+}
+
+/**
+ * D00 an event snapshot, falling back to the card's D01 listing when the name
+ * the alarm reported is not what the card stores.
+ */
+export async function fetchEventPhoto(
+  deviceId: string,
+  filename: string,
+  isCancelled: () => boolean,
+): Promise<{ blob: Blob; filename: string }> {
+  try {
+    return await fetchMdvrPhoto(deviceId, filename, isCancelled);
+  } catch (err) {
+    if (isCancelled()) throw err;
+    mdvrLog(`D00 for ${filename} failed — looking it up in the D01 listing:`, err);
+    const names = await queryD01(deviceId, isCancelled);
+    const match = matchEventPhotoName(names, filename);
+    mdvrLog(`D01 listed ${names.length} photo(s); match=${match ?? 'none'}`);
+    if (!match || match === filename) throw err;
+    return fetchMdvrPhoto(deviceId, match, isCancelled);
+  }
 }
 
 /** D00 named-file download — used for DMS event snapshots (`photoName`). */

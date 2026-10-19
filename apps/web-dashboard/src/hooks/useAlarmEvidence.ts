@@ -11,7 +11,7 @@ import { useChannels } from '@/api/video.api';
 import {
   type AlarmMdvrClip,
   type MdvrResourceStatus,
-  fetchMdvrPhoto,
+  fetchEventPhoto,
   listMdvrEvidence,
 } from '@/components/video/useMdvrResources';
 import {
@@ -173,7 +173,7 @@ export function useAlarmEvidence(alarm: Alarm) {
       }
       if (!gotPhoto && eventMode && eventPhotoName && deviceId) {
         try {
-          const photo = await fetchMdvrPhoto(deviceId, eventPhotoName, cancelled);
+          const photo = await fetchEventPhoto(deviceId, eventPhotoName, cancelled);
           if (cancelled()) return;
           setPhotoBlob(photo.blob);
           gotPhoto = true;

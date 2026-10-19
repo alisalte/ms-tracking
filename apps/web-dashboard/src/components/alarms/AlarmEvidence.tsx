@@ -209,6 +209,7 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
                 fallbackFromMs={evidence.window?.fromMs}
                 fallbackToMs={evidence.window?.toMs}
                 fallbackChannels={evidence.mdvrChannels}
+                raisedAtMs={new Date(alarm.raisedAt).getTime()}
                 onDownload={downloadVideo}
               />
             ) : (

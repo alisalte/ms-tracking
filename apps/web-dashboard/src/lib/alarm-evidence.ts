@@ -366,3 +366,100 @@ export function evidenceChannelForPhoto(
   }
   return channels[0];
 }
+
+/** Furthest a listed clip may start from the alarm and still count as its recording. */
+const RECORDING_MATCH_MS = 10 * 60_000;
+/** Longest stretch of a nearby (non-overlapping) file played for an alarm. */
+const RECORDING_MAX_PLAY_MS = 60_000;
+
+/**
+ * Alarm instant on each clock the SD card may use. The photo name is UTC, but
+ * an AB4 for that UTC window can still get FFF5 when the unit indexes video on
+ * its local clock (Iran: UTC+3:30), so both are tried against the listing.
+ */
+export function deviceClockCandidates(raisedAtMs: number): number[] {
+  const local = -new Date(raisedAtMs).getTimezoneOffset() * 60_000;
+  return local === 0 ? [raisedAtMs] : [raisedAtMs, raisedAtMs + local];
+}
+
+export interface AlarmRecordingPick<T> {
+  clip: T;
+  /** AB4 window on the clock the card listed the file with. */
+  fromMs: number;
+  toMs: number;
+}
+
+/**
+ * Pick the AB8-listed video that recorded the alarm.
+ *
+ * A file whose span contains the alarm (on any candidate clock) wins, and the
+ * usual event window around the alarm is requested, clamped to that file. Otherwise the nearest file that
+ * starts within 10 minutes is played from its start. Null when the card has
+ * nothing near the alarm — the operator is told so instead of a silent FFF5.
+ */
+export function pickAlarmRecording<
+  T extends { resource: { startTime: string; endTime: string; avType: number } },
+>(clips: readonly T[], raisedAtMs: number): AlarmRecordingPick<T> | null {
+  const targets = deviceClockCandidates(raisedAtMs);
+  let nearest: { clip: T; startMs: number; endMs: number; distance: number } | null = null;
+  for (const clip of clips) {
+    if (mdvrResourceKind(clip.resource.avType) === 'photo') continue;
+    const startMs = fromMdvrBcdTime(clip.resource.startTime);
+    let endMs = fromMdvrBcdTime(clip.resource.endTime);
+    if (!Number.isFinite(startMs)) continue;
+    if (!Number.isFinite(endMs) || endMs <= startMs) endMs = startMs + 1_000;
+    for (const t of targets) {
+      if (t >= startMs && t <= endMs) {
+        return {
+          clip,
+          fromMs: Math.max(startMs, t - EVENT_VIDEO_PRE_MS),
+          toMs: Math.min(endMs, t + EVENT_VIDEO_POST_MS),
+        };
+      }
+      const distance = Math.min(Math.abs(startMs - t), Math.abs(endMs - t));
+      if (distance <= RECORDING_MATCH_MS && (!nearest || distance < nearest.distance)) {
+        nearest = { clip, startMs, endMs, distance };
+      }
+    }
+  }
+  if (!nearest) return null;
+  return {
+    clip: nearest.clip,
+    fromMs: nearest.startMs,
+    toMs: Math.min(nearest.endMs, nearest.startMs + RECORDING_MAX_PLAY_MS),
+  };
+}
+
+/**
+ * The name the SD card lists for an event snapshot.
+ *
+ * D00 needs the card's exact name. The alarm reports `20261019055951_CH1_dca.jpg`;
+ * the D01 listing may carry a folder, other case, or a few seconds' different
+ * stamp. Match exact basename first, then the same 14-digit stamp, then the
+ * same channel + tag with the closest stamp (±10 s).
+ */
+export function matchEventPhotoName(names: readonly string[], wanted: string): string | null {
+  const base = (name: string) => (name.split(/[/\\]/).pop() ?? name).trim().toLowerCase();
+  const target = base(wanted);
+  if (!target) return null;
+  const exact = names.find((name) => base(name) === target);
+  if (exact) return exact;
+  const parse = (name: string) => {
+    const m = /^(\d{12,14})(_.*)$/.exec(base(name));
+    if (!m?.[1] || !m[2]) return null;
+    const digits = m[1].length === 14 ? m[1].slice(2) : m[1];
+    return { ms: fromMdvrBcdTime(digits), stamp: m[1], rest: m[2] };
+  };
+  const want = parse(wanted);
+  if (!want) return null;
+  const sameStamp = names.find((name) => parse(name)?.stamp === want.stamp);
+  if (sameStamp) return sameStamp;
+  let best: { name: string; delta: number } | null = null;
+  for (const name of names) {
+    const got = parse(name);
+    if (!got || got.rest !== want.rest) continue;
+    const delta = Math.abs(got.ms - want.ms);
+    if (delta <= 10_000 && (!best || delta < best.delta)) best = { name, delta };
+  }
+  return best?.name ?? null;
+}

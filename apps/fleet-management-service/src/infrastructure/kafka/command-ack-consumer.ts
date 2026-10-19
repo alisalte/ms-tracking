@@ -212,7 +212,16 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
     }
     if (!code) return;
 
-    const pending = await this.commands.latestPendingByCode(tenantId, deviceId, code);
+    const replyFilename =
+      code === 'D00' && typeof env.telemetry?.filename === 'string'
+        ? env.telemetry.filename
+        : undefined;
+    const pending = await this.commands.latestPendingByCode(
+      tenantId,
+      deviceId,
+      code,
+      replyFilename,
+    );
     if (!pending) return; // already terminal or unknown — nothing to do.
 
     const resources = env.telemetry?.resources;
@@ -256,7 +265,13 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
           byteLength: env.telemetry?.byteLength ?? 0,
         }),
       );
-      await this.completeEvidencePhoto(pending.id, photoBase64, env.telemetry?.filename);
+      await this.completeEvidencePhoto(
+        pending.id,
+        photoBase64,
+        env.telemetry?.filename,
+        tenantId,
+        deviceId,
+      );
       return;
     }
 
@@ -278,23 +293,35 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
     }
   }
 
+  /**
+   * Store a downloaded snapshot on every evidence row waiting for it. The row
+   * whose own D00 was answered matches by command id; rows for the same file
+   * on this device (the alarm page's D00, or a repeat alarm) match by name.
+   */
   private async completeEvidencePhoto(
     commandId: string,
     photoBase64: string,
     filename: unknown,
+    tenantId: string,
+    deviceId: string,
   ): Promise<void> {
     if (!this.evidence) return;
     try {
-      const job = await this.evidence.findByCommandId(commandId);
-      if (!job) return;
       const bytes = Buffer.from(photoBase64, 'base64');
-      await this.evidence.markPhotoReady(
-        job.tenantId,
-        job.id,
-        bytes,
-        'image/jpeg',
-        typeof filename === 'string' && filename ? filename : job.photoName,
-      );
+      const name = typeof filename === 'string' && filename ? filename : null;
+      const job = await this.evidence.findByCommandId(commandId);
+      if (job) {
+        await this.evidence.markPhotoReady(
+          job.tenantId,
+          job.id,
+          bytes,
+          'image/jpeg',
+          name ?? job.photoName,
+        );
+      }
+      if (name) {
+        await this.evidence.markPhotoReadyByName(tenantId, deviceId, name, bytes, 'image/jpeg');
+      }
     } catch (err) {
       this.logger.warn(`Evidence photo store failed: ${(err as Error).message}`);
     }
