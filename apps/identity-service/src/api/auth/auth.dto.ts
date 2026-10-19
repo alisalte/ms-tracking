@@ -7,7 +7,8 @@ import { z } from 'zod';
 
 export const loginSchema = z.object({
   // Email or username. Mailboxes are stored lowercase; usernames are matched
-  // case-insensitively inside the tenant named by X-Tenant-Id.
+  // case-insensitively. X-Tenant-Id is optional: when it is omitted the
+  // account is resolved platform-wide and the tenant comes from that user.
   email: z.string().trim().toLowerCase().min(1).max(254),
   password: z.string().min(1),
 });

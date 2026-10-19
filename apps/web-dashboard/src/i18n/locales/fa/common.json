@@ -6,7 +6,7 @@
     "password": "رمز عبور",
     "tenantId": "سازمان",
     "loggingIn": "در حال ورود...",
-    "signInSubtitle": "وارد فضای کاری ناوگان خود شوید",
+    "signInSubtitle": "با ایمیل یا نام کاربری وارد شوید",
     "rememberDevice": "این دستگاه را به خاطر بسپار",
     "forgotPassword": "رمز عبور را فراموش کرده‌اید؟",
     "noAccount": "حساب کاربری ندارید؟",
@@ -41,7 +41,7 @@
       "digitLabel": "رقم {{n}}"
     },
     "errors": {
-      "invalidCredentials": "ایمیل یا رمز عبور نامعتبر است",
+      "invalidCredentials": "ایمیل، نام کاربری یا رمز عبور نامعتبر است",
       "networkError": "اتصال به سرور ممکن نیست"
     },
     "tenantIdHelp": "نام سازمان را دقیقاً همان‌طور که ساخته شده وارد کنید (مثلاً شرکت سامان یا FleetVision)",
@@ -2038,6 +2038,7 @@
       "activate": "فعال‌سازی",
       "deactivate": "غیرفعال‌سازی",
       "colName": "نام",
+      "colUsername": "نام کاربری",
       "colRole": "نقش",
       "colMfa": "دومرحله‌ای",
       "noRole": "بدون نقش",
@@ -2770,6 +2771,9 @@
   "validation": {
     "tenantId": {
       "required": "شناسه مستأجر الزامی است"
+    },
+    "identifier": {
+      "required": "ایمیل یا نام کاربری الزامی است"
     },
     "email": {
       "required": "ایمیل الزامی است",

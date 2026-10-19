@@ -25,7 +25,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const existingTenant = config.headers.get('X-Tenant-Id') as string | null;
   if (existingTenant && needsPercentEncode(existingTenant)) {
     config.headers.set('X-Tenant-Id', encodeURIComponent(existingTenant));
-  } else if (!existingTenant) {
+  } else if (!existingTenant && !isLogin) {
     const tenant = session?.tenantId;
     if (tenant) {
       config.headers.set(

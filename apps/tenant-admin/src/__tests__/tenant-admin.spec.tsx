@@ -107,14 +107,16 @@ describe('tenant-admin access gate', () => {
 });
 
 describe('login form', () => {
-  it('renders organisation, email and password fields', () => {
+  it('renders identifier and password without an organisation field', () => {
     render(
       <MemoryRouter>
         <LoginPage />
       </MemoryRouter>,
     );
     expect(screen.getByTestId('login-form')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('FleetVision')).toBeInTheDocument();
+    expect(screen.getByLabelText(/ایمیل یا نام کاربری|Email or username/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/رمز عبور|Password/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/نام سازمان|Organisation name/)).not.toBeInTheDocument();
   });
 });
 
@@ -181,7 +183,9 @@ describe('tenant detail tabs', () => {
       'true',
     );
     expect(screen.getByRole('button', { name: /ایجاد کاربر|Create user/i })).toBeInTheDocument();
-    expect(screen.getByText(/نام سازمان را دقیقاً «FleetVision»/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/ایمیل یا نام کاربری را وارد کنید|email or username/i),
+    ).toBeInTheDocument();
   });
 
   it('stores the new user mailbox in lowercase and shows how to sign in', async () => {

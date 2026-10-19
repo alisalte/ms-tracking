@@ -35,8 +35,7 @@ function bellLocator(page: import('@playwright/test').Page) {
 
 async function login(page: import('@playwright/test').Page) {
   await page.goto('/login');
-  await page.getByLabel(/organization|tenant/i).fill(TENANT);
-  await page.getByLabel(/email/i).fill(EMAIL);
+  await page.getByLabel(/email|username/i).fill(EMAIL);
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: /sign in|log in|login/i }).click();
   await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });

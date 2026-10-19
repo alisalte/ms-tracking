@@ -6,7 +6,7 @@
   "auth": {
     "login": "Sign in",
     "hero": "Set rental prices, issue invoices, and see the books.",
-    "hint": "Use the platform (seed) organisation. Tenant-admin of that org can manage all tenants.",
+    "hint": "Sign in with email or username. This account manages every tenant in one place.",
     "tenant": "Organisation name",
     "email": "Email",
     "identifier": "Email or username",
@@ -124,7 +124,7 @@
     "suspendUser": "Suspend",
     "activateUser": "Activate",
     "submitUser": "Create user",
-    "userCreated": "User created. On the fleet dashboard, sign in with organization “{{tenant}}”, email {{email}}, or username {{username}}.",
+    "userCreated": "User created. On the fleet dashboard, sign in with email {{email}} or username {{username}}.",
     "licenseKey": "License key",
     "licenseStatus": "License status",
     "daysLeft": "{{count}} days left",
@@ -222,7 +222,7 @@
   },
   "access": {
     "hint": "Roles and permissions for this organisation are set here. System roles stay fixed. A custom role can receive any catalog permission except the wildcard.",
-    "loginHint": "This user signs in on the fleet dashboard. Enter the organization name exactly as “{{tenant}}”, then this user's email or username.",
+    "loginHint": "This user signs in on the fleet dashboard with their email or username.",
     "rolesTitle": "Roles",
     "createRole": "Create role",
     "roleName": "Role name",

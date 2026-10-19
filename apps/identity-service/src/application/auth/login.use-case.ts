@@ -42,7 +42,8 @@ import {
 export interface LoginInput {
   readonly email: string;
   readonly password: string;
-  readonly tenantId: string;
+  /** Set when the client sent X-Tenant-Id. Omitted means resolve the account platform-wide. */
+  readonly tenantId: string | null;
   readonly ipAddress: string | null;
   readonly userAgent: string | null;
   readonly correlationId?: string;
@@ -97,12 +98,14 @@ export class LoginUseCase {
       }
     }
 
-    // 2. Look up the user within the tenant (email, then username).
+    // 2. Email or username. A tenant header scopes the lookup; without one the
+    // account (and therefore its tenant) is resolved platform-wide.
     const user = await this.findLoginUser(input.tenantId, input.email);
     if (!user) {
       // No user — but still consume time to avoid an oracle.
       throw new InvalidCredentialsError();
     }
+    const tenantId = user.tenantId;
 
     // 3. Rate-limit per user + lockout check.
     const userHits = await this.rateLimiter.hitLoginUser(user.id as string);
@@ -113,16 +116,16 @@ export class LoginUseCase {
       throw new AccountLockedError();
     }
 
-    // 4. Tenant must be active.
-    const tenant = await this.tenants.findById(input.tenantId);
+    // 4. Tenant must be active. The id comes from the user row, never from the body.
+    const tenant = await this.tenants.findById(tenantId);
     if (!tenant || !tenant.isActive()) {
       throw new TenantNotActiveError();
     }
 
-    const concurrent = await this.sessions.countForTenant(input.tenantId);
-    const license = await this.entitlements.assertLoginAllowed(input.tenantId, concurrent);
+    const concurrent = await this.sessions.countForTenant(tenantId);
+    const license = await this.entitlements.assertLoginAllowed(tenantId, concurrent);
 
-    const ctx = buildEventContext(input.tenantId, 'user', input.correlationId);
+    const ctx = buildEventContext(tenantId, 'user', input.correlationId);
 
     // 5. Verify password.
     if (!user.passwordHash || !(await this.hasher.verify(user.passwordHash, input.password))) {
@@ -168,7 +171,7 @@ export class LoginUseCase {
     await this.users.save(user, ctx);
     await this.auth.saveFamily(
       family,
-      buildEventContext(input.tenantId, 'refresh_token_family', input.correlationId),
+      buildEventContext(tenantId, 'refresh_token_family', input.correlationId),
     );
 
     const now = Date.now();
@@ -177,7 +180,7 @@ export class LoginUseCase {
       {
         sessionId,
         userId: user.id as string,
-        tenantId: input.tenantId,
+        tenantId,
         refreshFamilyId,
         issuedAt: now,
         absoluteExpiresAt: now + ttl.absoluteSeconds * 1000,
@@ -194,7 +197,7 @@ export class LoginUseCase {
       user: {
         id: user.id as string,
         email: user.email,
-        tenantId: input.tenantId,
+        tenantId,
         tenantName: tenant.name,
         roles: claims.roles,
       },
@@ -202,12 +205,19 @@ export class LoginUseCase {
   }
 
   /**
-   * Mailbox first when the identifier contains `@`, then the tenant's username.
-   * Both comparisons are case-insensitive. A miss stays a generic credential
+   * Mailbox first when the identifier contains `@`, otherwise username.
+   * With a tenant header the search stays inside that tenant. Without one,
+   * username matches the single platform account and email matches only when
+   * exactly one user owns that mailbox. A miss stays a generic credential
    * error so this does not reveal which identifier exists.
    */
-  private async findLoginUser(tenantId: string, identifier: string): Promise<User | null> {
+  private async findLoginUser(tenantId: string | null, identifier: string): Promise<User | null> {
     const raw = identifier.trim();
+    if (!tenantId) {
+      return raw.includes('@')
+        ? this.users.findUniqueByEmail(raw)
+        : this.users.findUniqueByUsername(raw);
+    }
     if (raw.includes('@')) {
       const byEmail = await this.users.findByEmail(tenantId, raw);
       if (byEmail) return byEmail;

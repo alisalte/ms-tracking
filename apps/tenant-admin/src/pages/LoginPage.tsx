@@ -9,7 +9,6 @@ import { clearSession } from '@/lib/session';
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [tenantId, setTenantId] = useState('FleetVision');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +19,7 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await login(tenantId.trim(), email.trim().toLowerCase(), password);
+      await login(email.trim().toLowerCase(), password);
       navigate('/', { replace: true });
     } catch (err) {
       clearSession();
@@ -54,16 +53,6 @@ export function LoginPage() {
             </p>
           )}
           <label className="mt-6 block text-sm font-medium text-slate-700">
-            {t('auth.tenant')}
-            <input
-              className="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2"
-              value={tenantId}
-              onChange={(ev) => setTenantId(ev.target.value)}
-              required
-              autoComplete="organization"
-            />
-          </label>
-          <label className="mt-4 block text-sm font-medium text-slate-700">
             {t('auth.identifier')}
             <input
               type="text"

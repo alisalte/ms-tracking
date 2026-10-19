@@ -142,6 +142,12 @@ export function UsersSection({
       ),
     },
     {
+      id: 'username',
+      headerKey: 'admin.users.colUsername',
+      sortBy: (u) => u.username.toLowerCase(),
+      render: (u) => <span className="text-sm">{u.username}</span>,
+    },
+    {
       id: 'role',
       headerKey: 'admin.users.colRole',
       sortBy: (u) => u.roleName,
