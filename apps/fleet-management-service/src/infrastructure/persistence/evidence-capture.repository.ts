@@ -4,6 +4,8 @@
  */
 import { type Knex, withPlatformContext, withTenantContext } from '@fleetvision/persistence-knex';
 
+import { PHOTO_ATTACHABLE_STATUSES } from '../../domain/evidence-photo.js';
+
 export type EvidenceStatus =
   | 'PENDING'
   | 'FETCHING'
@@ -227,7 +229,7 @@ export class EvidenceCaptureRepository {
       trx('notification.alarm_evidence')
         .where({ tenant_id: tenantId, device_id: deviceId })
         .whereRaw("lower(photo_name) like ? escape '\\'", [pattern])
-        .whereIn('status', ['PENDING', 'FETCHING', 'PHOTO_FAILED'])
+        .whereIn('status', PHOTO_ATTACHABLE_STATUSES)
         .update({
           status: 'PHOTO_READY',
           photo_bytes: photoBytes,
@@ -250,7 +252,7 @@ export class EvidenceCaptureRepository {
       trx('notification.alarm_evidence')
         .where({ tenant_id: tenantId, device_id: deviceId })
         .whereRaw('lower(photo_name) = lower(?)', [photoName])
-        .whereIn('status', ['PENDING', 'FETCHING', 'PHOTO_FAILED'])
+        .whereIn('status', PHOTO_ATTACHABLE_STATUSES)
         .update({
           status: 'PHOTO_READY',
           photo_bytes: photoBytes,
