@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { type MdvrResource, fromMdvrBcdTime, useSnapshot } from '@/api/video.api';
 import { Alert, Badge, Input, Spinner } from '@/components/tailwind-ui';
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
+import { JSMpegLivePlayer } from '@/components/video/JSMpegLivePlayer';
+import { useMdvrA9dPlayback } from '@/components/video/useMdvrA9dPlayback';
 import { useMdvrPlayback } from '@/components/video/useMdvrPlayback';
 import { fetchMdvrPhoto, useMdvrResources } from '@/components/video/useMdvrResources';
 import { isMdvrChannel } from '@/components/video/useStreamSession';
@@ -105,6 +107,7 @@ export function PlaybackPanel({
   const available = useMemo(() => channels.filter((c) => c.online && c.consentGiven), [channels]);
   const hasMdvr = useMemo(() => channels.some((c) => isMdvrChannel(c)), [channels]);
   const playback = useMdvrPlayback();
+  const a9d = useMdvrA9dPlayback();
   const {
     search: searchResources,
     status: resourceStatus,
@@ -139,8 +142,12 @@ export function PlaybackPanel({
   const mdvr = isMdvrChannel(channel);
   const hasRecordingContext = channel !== null && cursorMs !== null;
   const viewingPhoto = photo.status !== 'idle';
+  const viewingA9d = a9d.status !== 'idle';
   const busy =
-    playback.status === 'starting' || resourceStatus === 'listing' || photo.status === 'loading';
+    playback.status === 'starting' ||
+    resourceStatus === 'listing' ||
+    photo.status === 'loading' ||
+    a9d.status === 'starting';
   const deepLinkApplied = useRef(false);
 
   const revokePhotoUrl = () => {
@@ -227,6 +234,7 @@ export function PlaybackPanel({
 
   const beginPlayback = (ch: CameraChannel, fromMs: number, toMs: number, avType = '0') => {
     clearPhoto();
+    if (viewingA9d) void a9d.stop();
     setFromInput(toDateInput(fromMs));
     setToInput(toDateInput(toMs));
     setPlaying(Boolean(isMdvrChannel(ch)));
@@ -243,6 +251,16 @@ export function PlaybackPanel({
   const search = () => {
     if (!rangeValid || !channel || !mdvr) return;
     void searchResources(channel, from, to);
+  };
+
+  /** Experimental A9D path: replaces any AB4 / photo view with the JSMpeg canvas. */
+  const loadA9d = () => {
+    if (!rangeValid || !channel || !mdvr) return;
+    clearPhoto();
+    setPlaying(false);
+    setCursorMs(null);
+    void playback.stop();
+    void a9d.start(channel, from, to);
   };
 
   const playResource = (r: MdvrResource) => {
@@ -302,6 +320,7 @@ export function PlaybackPanel({
     setCursorMs(null);
     clearPhoto();
     void playback.stop();
+    if (viewingA9d) void a9d.stop();
   };
 
   const canSnapshot =
@@ -318,21 +337,23 @@ export function PlaybackPanel({
     snapshot.mutate({ video: videoRef.current, channelId: channel.id });
   };
 
-  const overlay = viewingPhoto
-    ? photo.status === 'loading'
-      ? 'photo-waiting'
-      : photo.status === 'error'
-        ? 'photo-error'
-        : null
-    : !hasRecordingContext
-      ? 'select'
-      : mdvr && (playback.status === 'starting' || playback.status === 'waiting')
-        ? 'waiting'
-        : mdvr && playback.status === 'error'
-          ? 'error'
-          : mdvr && playback.status === 'ready'
-            ? null
-            : 'none';
+  const overlay = viewingA9d
+    ? null
+    : viewingPhoto
+      ? photo.status === 'loading'
+        ? 'photo-waiting'
+        : photo.status === 'error'
+          ? 'photo-error'
+          : null
+      : !hasRecordingContext
+        ? 'select'
+        : mdvr && (playback.status === 'starting' || playback.status === 'waiting')
+          ? 'waiting'
+          : mdvr && playback.status === 'error'
+            ? 'error'
+            : mdvr && playback.status === 'ready'
+              ? null
+              : 'none';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden p-1.5 md:p-2">
@@ -403,6 +424,21 @@ export function PlaybackPanel({
         >
           {t('video.playback.load', { defaultValue: 'Load' })}
         </button>
+        {mdvr && (
+          <button
+            type="button"
+            onClick={loadA9d}
+            disabled={!rangeValid || !channel || busy}
+            data-testid="playback-load-a9d"
+            title={t('video.playback.a9dHint', {
+              defaultValue:
+                'Experimental: the unit dials the media TCP port and streams the recording (A9D). Do not run live video on this unit at the same time.',
+            })}
+            className="h-7 cursor-pointer rounded-md border border-dashed border-warning-500 px-2.5 text-xs font-semibold text-warning-600 transition-colors hover:bg-warning-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-warning-500/10"
+          >
+            {t('video.playback.loadA9d', { defaultValue: 'A9D (test)' })}
+          </button>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 md:flex-row">
@@ -461,7 +497,31 @@ export function PlaybackPanel({
           className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-black dark:border-white/10"
         >
           <div className="relative min-h-0 flex-1">
-            {mdvr && playback.hlsUrl && !viewingPhoto && (
+            {viewingA9d && (
+              <div data-testid="playback-a9d-stage" className="absolute inset-0 bg-black">
+                {a9d.wsUrl && <JSMpegLivePlayer wsUrl={a9d.wsUrl} />}
+                <div className="absolute top-2 start-2 max-w-[90%] rounded bg-black/70 px-2 py-1 text-xs text-gray-200">
+                  <div className="font-semibold text-warning-500">A9D · {a9d.status}</div>
+                  {a9d.error && <div className="text-danger-500">{a9d.error}</div>}
+                  {a9d.stats ? (
+                    <div className="tabular-nums">
+                      {a9d.stats.codec ?? '—'} · {a9d.stats.packets} pkts ·{' '}
+                      {fmtBytes(a9d.stats.bytesIn) || '0 B'}
+                      {a9d.stats.producing ? ' · TS ✓' : ''}
+                    </div>
+                  ) : (
+                    a9d.status === 'waiting' && (
+                      <div>
+                        {t('video.playback.a9dWaiting', {
+                          defaultValue: 'Waiting for the unit to dial the media port…',
+                        })}
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+            {mdvr && playback.hlsUrl && !viewingPhoto && !viewingA9d && (
               <HLSLivePlayer
                 key={playback.playerKey}
                 ref={videoRef}
@@ -565,7 +625,7 @@ export function PlaybackPanel({
             <button
               type="button"
               onClick={stopAll}
-              disabled={cursorMs === null}
+              disabled={cursorMs === null && !viewingA9d}
               aria-label={t('map.playback.stop')}
               data-testid="video-playback-stop"
               className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md border border-white/15 text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
