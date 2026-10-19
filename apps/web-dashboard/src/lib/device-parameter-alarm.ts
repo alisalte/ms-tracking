@@ -135,6 +135,7 @@ const B99 = {
   OUT2: '6',
   GET: '0',
   ADD: '2',
+  DEL: '3',
 } as const;
 
 /**
@@ -280,6 +281,60 @@ export function composeAlarmLinkSettCommands(sett: AlarmLinkSett): ComposedDevic
 
 export function sendableAlarmLinkCommands(sett: AlarmLinkSett): ComposedDeviceCommand[] {
   return composeAlarmLinkSettCommands(sett).filter((c) => !c.unsupported);
+}
+
+/** Events preselected in the bulk "SMS on alarm" form (safety / theft / driver). */
+export const DEFAULT_SMS_ALARM_EVENT_CODES: readonly number[] = [
+  1, 17, 18, 19, 20, 21, 23, 24, 126,
+];
+
+/**
+ * Bulk "SMS on alarm": authorize the device SIM to text each number whenever any
+ * of the chosen events fires. One B99 (target SMS) per number carries the whole
+ * event list. `enabled=false` removes the authorization (DEL).
+ */
+export function composeBulkAlarmSmsCommands(
+  numbers: readonly string[],
+  eventCodes: readonly number[],
+  enabled: boolean,
+): ComposedDeviceCommand[] {
+  const codes = [...new Set(eventCodes)].sort((a, b) => a - b);
+  if (codes.length === 0) return [];
+  const unique = [...new Set(numbers.map((n) => n.trim()).filter(Boolean))];
+  return unique.map((num) => ({
+    commandCode: 'B99',
+    params: {
+      target: B99.SMS,
+      phone: num,
+      operation: enabled ? B99.ADD : B99.DEL,
+      eventCodes: codes.join(','),
+    },
+    label: `B99 SMS ${enabled ? '+' : '−'} ${num}`,
+  }));
+}
+
+/** Mirror a bulk SMS apply into the per-event local snapshots (drawer / table stay in sync). */
+export function cacheBulkAlarmSms(
+  deviceId: string,
+  numbers: readonly string[],
+  eventCodes: readonly number[],
+  enabled: boolean,
+): void {
+  const unique = [...new Set(numbers.map((n) => n.trim()).filter(Boolean))];
+  for (const code of new Set(eventCodes)) {
+    const ev = eventDefByCode(code);
+    if (!ev) continue;
+    const sett = cloneSett(loadCachedLinkSett(deviceId, ev));
+    for (const num of unique) {
+      if (enabled) {
+        ensurePhoneSlot(sett, num).sms = true;
+      } else {
+        const slot = sett.phones.find((p) => p.number.trim() === num);
+        if (slot) slot.sms = false;
+      }
+    }
+    saveCachedLinkSett(deviceId, sett, 'set');
+  }
 }
 
 /** Live Refresh probes (single device). B91 has no readback in catalog. */

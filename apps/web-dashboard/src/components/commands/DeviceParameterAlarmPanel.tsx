@@ -8,12 +8,25 @@ import { useTranslation } from 'react-i18next';
 import { useCommandHistory, useIssueCommands } from '@/api/command.api';
 import { AlarmLinkSettDrawer } from '@/components/commands/AlarmLinkSettDrawer';
 import { useToast } from '@/components/feedback/ToastProvider';
-import { Alert, Button, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Input,
+  TBody,
+  TD,
+  TH,
+  THead,
+  Table,
+} from '@/components/tailwind-ui';
 import {
   ALARM_PARAMETER_EVENTS,
   type AlarmLinkSett,
   type AlarmParameterEventDef,
+  DEFAULT_SMS_ALARM_EVENT_CODES,
   alarmReadbackCommands,
+  cacheBulkAlarmSms,
+  composeBulkAlarmSmsCommands,
   loadAllCachedSummaries,
   loadCachedLinkSett,
   loadSettMap,
@@ -65,6 +78,61 @@ export function DeviceParameterAlarmPanel({
   const [editing, setEditing] = useState<AlarmParameterEventDef | null>(null);
   const [draft, setDraft] = useState<AlarmLinkSett | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [smsNumbers, setSmsNumbers] = useState<string[]>(['', '', '']);
+  const [smsEvents, setSmsEvents] = useState<Set<number>>(
+    () => new Set(DEFAULT_SMS_ALARM_EVENT_CODES),
+  );
+
+  const toggleSmsEvent = (code: number, on: boolean) => {
+    setSmsEvents((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(code);
+      else next.delete(code);
+      return next;
+    });
+  };
+
+  const applySms = async (enabled: boolean) => {
+    if (deviceIds.length === 0) return;
+    const codes = [...smsEvents];
+    const cmds = composeBulkAlarmSmsCommands(smsNumbers, codes, enabled);
+    if (cmds.length === 0) {
+      toast.error(
+        t('commands.parameter.smsNothingToSend', {
+          defaultValue: 'Enter at least one phone number and select at least one event.',
+        }),
+      );
+      return;
+    }
+    try {
+      for (const [i, cmd] of cmds.entries()) {
+        setProgress(`${i + 1}/${cmds.length} ${cmd.label}`);
+        const result = await sendMutation.mutateAsync({
+          deviceIds,
+          commandCode: cmd.commandCode,
+          params: cmd.params,
+        });
+        if (result.queued.length === 0) {
+          throw new Error(result.failed[0]?.error ?? 'Command failed');
+        }
+      }
+      for (const id of deviceIds) cacheBulkAlarmSms(id, smsNumbers, codes, enabled);
+      setTick((n) => n + 1);
+      toast.success(
+        enabled
+          ? t('commands.parameter.smsApplied', {
+              defaultValue: 'Alarm SMS settings queued on the device.',
+            })
+          : t('commands.parameter.smsRemoved', {
+              defaultValue: 'Alarm SMS removal queued on the device.',
+            }),
+      );
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setProgress(null);
+    }
+  };
 
   const openLink = (ev: AlarmParameterEventDef) => {
     if (!cacheDeviceId) return;
@@ -292,6 +360,74 @@ export function DeviceParameterAlarmPanel({
             </TBody>
           </Table>
         </div>
+      )}
+
+      {!disabled && deviceIds.length > 0 && (
+        <section
+          className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 dark:border-white/10"
+          data-testid="alarm-sms-settings"
+        >
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+            {t('commands.parameter.smsTitle', { defaultValue: 'SMS on alarm' })}
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-graydark-600">
+            {t('commands.parameter.smsHint', {
+              defaultValue:
+                'The device SIM texts these numbers whenever a selected alarm fires. The SIM needs credit and GSM signal; GPRS reporting to the server is not affected.',
+            })}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {smsNumbers.map((num, idx) => (
+              <Input
+                // biome-ignore lint/suspicious/noArrayIndexKey: fixed-position phone slots never reorder
+                key={`sms-num-${idx}`}
+                value={num}
+                onChange={(e) =>
+                  setSmsNumbers((prev) => prev.map((n, i) => (i === idx ? e.target.value : n)))
+                }
+                placeholder="+98912…"
+                maxLength={16}
+                dir="ltr"
+                aria-label={`${t('commands.parameter.associatedPhone', {
+                  defaultValue: 'Associated phone',
+                })} ${idx + 1}`}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {ALARM_PARAMETER_EVENTS.map((ev) => (
+              <Checkbox
+                key={`sms-ev-${ev.code}`}
+                checked={smsEvents.has(ev.code)}
+                onChange={(e) => toggleSmsEvent(ev.code, e.target.checked)}
+                label={t(`commands.parameter.events.${ev.labelKey}`, {
+                  defaultValue: ev.defaultAlarmHead,
+                })}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void applySms(true)}
+              loading={sendMutation.isPending}
+              data-testid="alarm-sms-apply"
+            >
+              {t('commands.parameter.smsEnable', { defaultValue: 'Enable SMS' })}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => void applySms(false)}
+              disabled={sendMutation.isPending}
+              data-testid="alarm-sms-remove"
+            >
+              {t('commands.parameter.smsDisable', { defaultValue: 'Remove SMS' })}
+            </Button>
+          </div>
+        </section>
       )}
 
       <AlarmLinkSettDrawer
