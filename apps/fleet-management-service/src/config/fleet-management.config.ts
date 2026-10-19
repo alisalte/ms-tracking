@@ -73,6 +73,10 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     FLEET_EVIDENCE_WORKER_INTERVAL_MS: z.coerce.number().int().min(0).default(15_000),
     /** Max PENDING evidence jobs claimed per tick. */
     FLEET_EVIDENCE_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).default(5),
+    /** Alarm photos are scaled to this longest edge before storage. 0 keeps the original. */
+    FLEET_EVIDENCE_PHOTO_MAX_EDGE: z.coerce.number().int().min(0).default(640),
+    /** JPEG quality of stored alarm photos. */
+    FLEET_EVIDENCE_PHOTO_QUALITY: z.coerce.number().int().min(1).max(100).default(50),
   }),
 );
 
