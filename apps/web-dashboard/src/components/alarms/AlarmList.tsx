@@ -14,7 +14,9 @@ import {
   severityColor,
 } from '@/components/alarms/AlarmTypeIcon';
 import { Badge, Skeleton, TBody, TD, TH, THead, Table } from '@/components/tailwind-ui';
+import { useIsPhone } from '@/hooks/useMediaQuery';
 import { localizeAlarmCode, localizeAlarmMessage } from '@/lib/alarm-copy';
+import { explainAlarm } from '@/lib/alarm-explain';
 import { formatDate } from '@/lib/format-date';
 import type { Alarm } from '@/types/alarm.types';
 
@@ -63,6 +65,7 @@ function relative(iso: string, t: (k: string, opts?: Record<string, unknown>) =>
 
 export function AlarmList({ alarms, loading = false, selectedId, onSelect }: AlarmListProps) {
   const { t } = useTranslation();
+  const isPhone = useIsPhone();
 
   if (loading) {
     const skelKeys = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e', 'sk-f', 'sk-g', 'sk-h'];
@@ -80,6 +83,60 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
       <div className="flex justify-center py-10">
         <span className="text-sm text-gray-500 dark:text-graydark-600">{t('alarms.empty')}</span>
       </div>
+    );
+  }
+
+  // Phones: stacked cards — the 5-column table does not fit.
+  if (isPhone) {
+    return (
+      <ul className="m-0 flex list-none flex-col gap-2 p-2">
+        {alarms.map((a) => {
+          const Icon = alarmTypeIcon(a.type);
+          const isSel = a.id === selectedId;
+          return (
+            <li key={a.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(a.id)}
+                className={`flex w-full cursor-pointer gap-3 rounded-xl border p-3 text-start transition-colors ${
+                  isSel
+                    ? 'border-brand-300 bg-brand-50 dark:border-brand-500/40 dark:bg-brand-500/10'
+                    : 'border-gray-200 bg-white active:bg-gray-50 dark:border-white/10 dark:bg-white/[0.03]'
+                }`}
+              >
+                <span
+                  className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-white"
+                  style={{ background: severityColor(a.severity) }}
+                >
+                  <Icon size={17} aria-hidden />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 text-sm font-semibold text-gray-900 dark:text-white">
+                      {localizeAlarmMessage(t, a)}
+                    </span>
+                    <span className="shrink-0 text-[0.7rem] tabular-nums text-gray-500 dark:text-graydark-600">
+                      {relative(a.raisedAt, t)}
+                    </span>
+                  </span>
+                  <span className="truncate text-xs font-medium text-gray-700 dark:text-graydark-700">
+                    {a.vehicleLabel || t('alarms.list.unknownVehicle')}
+                  </span>
+                  <span className="line-clamp-2 text-xs leading-5 text-gray-500 dark:text-graydark-600">
+                    {explainAlarm(t, a).what}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <Badge color={severityBadgeColor(a.severity)} className="font-semibold">
+                      {t(`alarms.severity.${a.severity}`)}
+                    </Badge>
+                    <AlarmStatusBadge status={a.status} label={t(`alarms.status.${a.status}`)} />
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     );
   }
 
@@ -124,6 +181,9 @@ export function AlarmList({ alarms, loading = false, selectedId, onSelect }: Ala
                       </p>
                       <p className="truncate text-xs text-gray-500 dark:text-graydark-600">
                         {alarmCategoryLabel(t, a)}
+                      </p>
+                      <p className="line-clamp-2 max-w-md text-xs leading-5 whitespace-normal text-gray-500 dark:text-graydark-600">
+                        {explainAlarm(t, a).what}
                       </p>
                     </div>
                   </div>

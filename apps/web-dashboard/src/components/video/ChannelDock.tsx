@@ -25,6 +25,8 @@ interface ChannelDockProps {
   onAutoFill: () => void;
   /** Remove every camera from the wall. */
   onClearWall?: () => void;
+  /** Layout override (the phone bottom sheet makes the dock full-width). */
+  className?: string;
 }
 
 export function ChannelDock({
@@ -33,6 +35,7 @@ export function ChannelDock({
   onPick,
   onAutoFill,
   onClearWall,
+  className = 'w-[280px] min-w-[280px] border-e',
 }: ChannelDockProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -109,7 +112,9 @@ export function ChannelDock({
   const onlineDevices = useMemo(() => onlineCameraDeviceCount(channels), [channels]);
 
   return (
-    <div className="flex h-full w-[280px] min-w-[280px] flex-col overflow-hidden border-e border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300">
+    <div
+      className={`flex h-full flex-col overflow-hidden border-gray-200 bg-white dark:border-white/5 dark:bg-graydark-300 ${className}`}
+    >
       {/* Header: search + actions */}
       <div className="flex flex-col gap-2 border-b border-gray-200 p-2.5 dark:border-white/5">
         <div className="flex items-center gap-2">
@@ -199,7 +204,7 @@ export function ChannelDock({
                     type="button"
                     onClick={() => toggleGroup(key)}
                     aria-expanded={!isCollapsed}
-                    className={`flex w-full cursor-pointer items-center gap-2 border-none px-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                    className={`flex w-full cursor-pointer items-center gap-2 border-none px-2.5 py-1.5 text-start transition-colors pointer-coarse:py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 ${
                       anyOnline ? 'bg-success-500/5' : 'bg-transparent'
                     }`}
                   >
@@ -274,7 +279,7 @@ export function ChannelDock({
                           data-testid={`dock-channel-${c.id}`}
                           data-assigned={assigned ? '1' : '0'}
                           onClick={() => onPick(c)}
-                          className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1.5 text-start transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                          className={`flex w-full cursor-pointer items-center gap-2 border-none bg-transparent ps-8 pe-2.5 py-1.5 text-start transition-colors pointer-coarse:py-3 hover:bg-gray-50 dark:hover:bg-white/5 ${
                             live ? 'opacity-100' : 'opacity-50'
                           } ${assigned ? 'bg-brand-500/8 dark:bg-brand-500/10' : ''}`}
                         >

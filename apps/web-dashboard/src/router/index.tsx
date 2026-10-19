@@ -35,6 +35,9 @@ const MapPage = lazy(() => import('@/pages/MapPage').then((m) => ({ default: m.M
 const ReportsPage = lazy(() =>
   import('@/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
 );
+const SpatialAnalyticsPage = lazy(() =>
+  import('@/pages/SpatialAnalyticsPage').then((m) => ({ default: m.SpatialAnalyticsPage })),
+);
 const VideoWallPage = lazy(() =>
   import('@/pages/VideoWallPage').then((m) => ({ default: m.VideoWallPage })),
 );
@@ -124,6 +127,17 @@ export const router = createBrowserRouter([
               <LazyWrapper>
                 <RequirePermission permission={PERMISSIONS.trackingRead}>
                   <MapPage />
+                </RequirePermission>
+              </LazyWrapper>
+            ),
+          },
+          {
+            // GPS coverage heatmap + movement patterns (gps-engine analytics).
+            path: '/analytics',
+            element: (
+              <LazyWrapper>
+                <RequirePermission permission={PERMISSIONS.trackingRead}>
+                  <SpatialAnalyticsPage />
                 </RequirePermission>
               </LazyWrapper>
             ),

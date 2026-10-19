@@ -8,6 +8,10 @@
  *
  * Spotlight mode overlays a single enlarged tile with the rest as a thumbnail
  * strip (VideoPlatform §10.2.2) — useful for active monitoring on alert.
+ *
+ * `stacked` (phones): a square grid of 4+ tiles is unreadable on a phone, so
+ * tiles flow as 16:9 cards in one column (two on wider phones) inside the
+ * scrolling viewport; spotlight puts the big tile on top.
  */
 import { useMemo } from 'react';
 
@@ -34,6 +38,8 @@ interface WallGridProps {
   onTogglePin: (slot: number) => void;
   /** Remove the channel from a slot. */
   onRemove: (slot: number) => void;
+  /** Phone layout: scrollable 16:9 cards instead of a square grid. */
+  stacked?: boolean;
 }
 
 /** Grid columns/rows for a division — always a perfect square. */
@@ -51,6 +57,7 @@ export function WallGrid({
   maxLive,
   onTogglePin,
   onRemove,
+  stacked = false,
 }: WallGridProps) {
   const live = useWallRotation(tiles, maxLive, rotationOn);
   const channelById = useMemo(() => {
@@ -61,6 +68,45 @@ export function WallGrid({
 
   const cols = gridSize(division);
   const inSpotlight = spotlightSlot !== null;
+
+  if (stacked) {
+    const big = inSpotlight ? tiles.find((t) => t.slot === spotlightSlot) : undefined;
+    // Empty slots add nothing on a phone — only list assigned cameras.
+    const rest = tiles.filter((t) => t.channelId !== null && t.slot !== big?.slot);
+    return (
+      <div data-testid="wall-grid" className="flex w-full flex-col gap-2">
+        {big && (
+          <div className="aspect-video w-full">
+            <TileForSlot
+              tile={big}
+              channelById={channelById}
+              live={true}
+              pinned={true}
+              alert={alertSlot === big.slot}
+              onTogglePin={onTogglePin}
+              onRemove={onRemove}
+            />
+          </div>
+        )}
+        <div className={`grid gap-2 ${big || division > 1 ? 'min-[480px]:grid-cols-2' : ''}`}>
+          {rest.map((t) => (
+            <div key={t.slot} className="aspect-video w-full">
+              <TileForSlot
+                tile={t}
+                channelById={channelById}
+                live={live.has(t.slot) || t.pinned}
+                pinned={t.pinned}
+                alert={alertSlot === t.slot}
+                compact={Boolean(big)}
+                onTogglePin={onTogglePin}
+                onRemove={onRemove}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   // Spotlight layout: one big tile + a thumbnail column of the rest.
   if (inSpotlight) {

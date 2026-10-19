@@ -8,6 +8,7 @@ import {
   Map as MapIcon,
   MapPin,
   Navigation,
+  Radar,
   Scale,
   Settings,
   ShieldCheck,
@@ -63,6 +64,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'map', path: '/map', icon: MapIcon, permission: PERMISSIONS.trackingRead },
       { key: 'trips', path: '/trips', icon: Navigation, permission: PERMISSIONS.trackingRead },
+      {
+        key: 'spatialAnalytics',
+        path: '/analytics',
+        icon: Radar,
+        permission: PERMISSIONS.trackingRead,
+      },
     ],
   },
   {
