@@ -134,7 +134,7 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
       let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
       const attachNative = () => {
-        mdvrLog(`attaching native HLS (Safari) to ${hlsUrl}`);
+        mdvrLog(`attaching native HLS (no MSE) to ${hlsUrl}`);
         video.src = hlsUrl;
         video.addEventListener(
           'loadedmetadata',
@@ -212,9 +212,13 @@ export const HLSLivePlayer = forwardRef<HTMLVideoElement, HLSLivePlayerProps>(
       mdvrLog(`waiting for playlist to become available: ${hlsUrl}`);
       void waitForPlaylist(hlsUrl, ac.signal, requireGapFree).then((ok) => {
         if (!ok || destroyed) return;
-        if (video.canPlayType('application/vnd.apple.mpegurl')) attachNative();
-        else if (Hls.isSupported()) attachHls();
-        else mdvrLog('neither native HLS nor hls.js is supported in this browser.');
+        // hls.js first. Chrome now reports native HLS support, but its native
+        // player cannot parse MediaMTX's low-latency playlist (EXT-X-GAP →
+        // gap.mp4 404, DEMUXER_ERROR_COULD_NOT_PARSE), so the wall stayed black
+        // while the stream was live. Native is only for browsers without MSE.
+        if (Hls.isSupported()) attachHls();
+        else if (video.canPlayType('application/vnd.apple.mpegurl')) attachNative();
+        else mdvrLog('neither hls.js nor native HLS is supported in this browser.');
       });
 
       return () => {
