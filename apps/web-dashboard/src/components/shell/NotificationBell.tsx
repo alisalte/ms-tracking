@@ -26,6 +26,7 @@ import {
   localizeNotificationKind,
   notificationVehicleName,
 } from '@/lib/alarm-copy';
+import { explainNotification } from '@/lib/alarm-explain';
 import { relativeTime } from '@/lib/relative-time';
 
 export function NotificationBell() {
@@ -76,7 +77,7 @@ export function NotificationBell() {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40 cursor-default"
           />
-          <div className="absolute end-0 z-50 mt-1.5 w-90 max-w-[92vw] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-graydark-300">
+          <div className="fixed inset-x-2 top-16 z-50 overflow-hidden sm:absolute sm:inset-x-auto sm:end-0 sm:top-auto sm:mt-1.5 sm:w-[26rem] rounded-xl border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-graydark-300">
             <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
               <p className="text-sm font-bold text-gray-800 dark:text-white">
                 {t('notifications.title', { defaultValue: 'Notifications' })}
@@ -104,11 +105,12 @@ export function NotificationBell() {
                 {t('notifications.empty', { defaultValue: 'No notifications' })}
               </p>
             ) : (
-              <ul className="fv-scroll m-0 max-h-90 list-none overflow-y-auto p-0">
-                {items.slice(0, 10).map((n) => {
+              <ul className="fv-scroll m-0 max-h-[min(32rem,calc(100dvh-11rem))] list-none divide-y divide-gray-100 overflow-y-auto p-0 dark:divide-white/5">
+                {items.slice(0, 20).map((n) => {
                   const vehicle = notificationVehicleName(n, vehicleCaptionOf(n.vehicleId));
                   const reason = localizeNotificationBody(t, n);
                   const typeLabel = localizeNotificationKind(t, n);
+                  const plain = explainNotification(t, n).what;
                   return (
                     <li key={n.id}>
                       <button
@@ -151,6 +153,9 @@ export function NotificationBell() {
                             {reason}
                           </span>
                         ) : null}
+                        <span className="line-clamp-2 w-full text-xs leading-5 text-gray-600 dark:text-graydark-700">
+                          {plain}
+                        </span>
                         {n.createdAt ? (
                           <span className="w-full text-[11px] text-gray-400 dark:text-graydark-500">
                             {relativeTime(n.createdAt, t)}

@@ -82,7 +82,12 @@ export class PositionRepository {
         ignition_on: event.ignitionOn,
         quality: QUALITY_CODE[event.quality],
         metadata: this.knex.raw('?::jsonb', [
-          JSON.stringify({ protocolId: event.protocolId, ...(event.metadata ?? {}) }),
+          JSON.stringify({
+            protocolId: event.protocolId,
+            // Satellites feed the GPS-coverage heatmap (no dedicated column).
+            ...(event.satellites !== null ? { satellites: event.satellites } : {}),
+            ...(event.metadata ?? {}),
+          }),
         ]),
       })
       .onConflict(['event_id', 'captured_at'])

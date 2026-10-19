@@ -29,7 +29,7 @@ export function Header({ onMobileMenu }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-gray-200/80 bg-white/92 ps-2.5 pe-4 shadow-sm shadow-gray-900/[0.03] backdrop-blur-xl dark:border-white/8 dark:bg-graydark-200/90 dark:shadow-black/15">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-1 border-b sm:h-16 sm:gap-2 border-gray-200/80 bg-white/92 ps-1.5 pe-2 shadow-sm sm:ps-2.5 sm:pe-4 shadow-gray-900/[0.03] backdrop-blur-xl dark:border-white/8 dark:bg-graydark-200/90 dark:shadow-black/15">
       {/* Mobile hamburger */}
       <IconButton
         variant="ghost"
@@ -66,7 +66,9 @@ export function Header({ onMobileMenu }: HeaderProps) {
         </IconButton>
 
         <ThemeSwitcher />
-        <AppsMenu />
+        <div className="hidden sm:block">
+          <AppsMenu />
+        </div>
         <LanguageMenu />
         <UserMenu />
       </div>

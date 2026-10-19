@@ -75,7 +75,10 @@
     "notifications": "Notifications",
     "events": "Events",
     "secureConsole": "Secure ops console",
-    "consoleReady": "Console ready"
+    "consoleReady": "Console ready",
+    "spatialAnalytics": "Location analytics",
+    "more": "More",
+    "home": "Home"
   },
   "common": {
     "search": "Search...",
@@ -879,6 +882,12 @@
         "system": "System",
         "custom": "Custom"
       }
+    },
+    "mobile": {
+      "cameras": "Cameras",
+      "closeCameras": "Close camera list",
+      "more": "More options",
+      "tapToAdd": "Tap “Cameras” to add a camera"
     }
   },
   "notifications": {
@@ -1004,17 +1013,17 @@
     },
     "codes": {
       "SOS": "SOS / panic",
-      "LOW_BATTERY": "Low battery",
-      "LOW_POWER": "Low external power",
+      "LOW_BATTERY": "Tracker battery low",
+      "LOW_POWER": "Vehicle battery low",
       "OVERSPEED": "Overspeed",
       "GEOFENCE_ENTER": "Geofence entry",
       "GEOFENCE_EXIT": "Geofence exit",
       "POWER_RESTORED": "Power restored",
-      "POWER_CUT": "Power cut",
+      "POWER_CUT": "Tracker power cut",
       "GPS_SIGNAL_LOST": "GPS signal lost",
       "GPS_RECOVERED": "GPS recovered",
       "TOW": "Tow / unauthorized movement",
-      "JAMMING": "GPS jamming",
+      "JAMMING": "Signal jamming",
       "TEMPERATURE_HIGH": "High temperature",
       "TEMPERATURE_LOW": "Low temperature",
       "FUEL_FULL": "Fuel full",
@@ -1024,7 +1033,7 @@
       "FUEL_FILLING": "Fuel filling",
       "CORNERING": "Harsh cornering",
       "DRIVING_BEHAVIOR": "Harsh driving",
-      "ADAS_DMS_ALARM": "Driver / ADAS alert",
+      "ADAS_DMS_ALARM": "Driver-assist camera alert",
       "BRAKING": "Harsh braking",
       "ACCELERATION": "Harsh acceleration",
       "FATIGUE_DRIVING": "Fatigue driving",
@@ -1065,7 +1074,7 @@
       "ADAS_UFCW": "Urban forward collision warning",
       "ADAS_LDW_LEFT": "Left lane departure",
       "ADAS_LDW_RIGHT": "Right lane departure",
-      "ADAS_HMW": "Headway warning",
+      "ADAS_HMW": "Too close to the vehicle ahead",
       "ADAS_TTC1": "Time-to-collision 1",
       "ADAS_TTC2": "Time-to-collision 2",
       "ADAS_DISTANCE_DETECTION": "Distance detection",
@@ -1085,9 +1094,9 @@
       "INPUT_6_INACTIVE": "Input 6 inactive",
       "INPUT_7_INACTIVE": "Input 7 inactive",
       "INPUT_8_INACTIVE": "Input 8 inactive",
-      "ENTER_SLEEP": "Device entered sleep",
-      "EXIT_SLEEP": "Device left sleep",
-      "GPS_ANTENNA_CUT": "GPS antenna cut",
+      "ENTER_SLEEP": "Tracker went to power-saving mode",
+      "EXIT_SLEEP": "Tracker woke from power-saving mode",
+      "GPS_ANTENNA_CUT": "GPS antenna disconnected",
       "DEVICE_REBOOT": "Device rebooted",
       "TRACK_BY_DISTANCE": "Track by distance",
       "REPLY_CURRENT": "Location reply",
@@ -1098,7 +1107,7 @@
       "DEVICE_OFFLINE": "Tracker connection lost",
       "DEVICE_ONLINE": "Tracker connection restored",
       "FACE_ID_ALARM": "Face ID alarm",
-      "unknown": "Unknown device event — code {{code}}"
+      "unknown": "Unlisted tracker event (code {{code}})"
     },
     "messages": {
       "overspeed": "Speed {{speed}} km/h (limit {{limit}} km/h)",
@@ -1230,6 +1239,200 @@
     "toast": {
       "acked": "Alarm acknowledged",
       "resolved": "Alarm resolved"
+    },
+    "explain": {
+      "whatTitle": "What happened?",
+      "actionTitle": "What should I do?",
+      "sos": {
+        "what": "The driver pressed the emergency (SOS) button and is asking for help.",
+        "action": "Call the driver right away. If there is no answer, check the live location and send help."
+      },
+      "overspeed": {
+        "what": "The vehicle drove faster than the allowed speed.",
+        "action": "Remind the driver of the speed limit. Repeated cases should be reviewed with the driver."
+      },
+      "speedOk": {
+        "what": "The vehicle slowed down and is back within the speed limit.",
+        "action": "No action needed — this closes the previous speeding alert."
+      },
+      "geofenceEnter": {
+        "what": "The vehicle entered one of the defined areas (geofence).",
+        "action": "Check that the vehicle is supposed to be in this area at this time."
+      },
+      "geofenceExit": {
+        "what": "The vehicle left one of the defined areas (geofence).",
+        "action": "If the vehicle should stay inside this area, contact the driver."
+      },
+      "geofence": {
+        "what": "The vehicle crossed the border of a defined area (geofence).",
+        "action": "Open the map to see which area it was and whether that is expected."
+      },
+      "offline": {
+        "what": "The tracker stopped sending data, so the vehicle is not visible right now.",
+        "action": "Usually this is weak mobile coverage or the vehicle being switched off. If it lasts long, check the tracker power and SIM card."
+      },
+      "online": {
+        "what": "The tracker is connected again and sending data.",
+        "action": "No action needed."
+      },
+      "gpsLost": {
+        "what": "The tracker cannot see the satellites, so its location may be wrong or frozen. This often happens in tunnels, covered parking, deep valleys or near tall structures.",
+        "action": "If it happens in the same place again and again, see the “GPS coverage” map. If it happens everywhere, check the GPS antenna."
+      },
+      "gpsBack": {
+        "what": "The tracker sees the satellites again and the location is accurate.",
+        "action": "No action needed."
+      },
+      "antennaCut": {
+        "what": "The GPS antenna is disconnected or cut, so the location cannot be tracked.",
+        "action": "This can be tampering. Inspect the antenna and its cable as soon as possible."
+      },
+      "jamming": {
+        "what": "Something is blocking the GPS / mobile signal (jamming). This is often deliberate.",
+        "action": "Treat it as a possible theft or tampering attempt: contact the driver and watch the vehicle closely."
+      },
+      "powerCut": {
+        "what": "The tracker lost its main power from the vehicle and is running on its backup battery.",
+        "action": "Check whether the power cable was disconnected. If nobody did it on purpose, it may be tampering."
+      },
+      "powerBack": {
+        "what": "The tracker gets power from the vehicle again.",
+        "action": "No action needed."
+      },
+      "lowPower": {
+        "what": "The vehicle battery voltage is low.",
+        "action": "Have the vehicle battery and charging system checked so it does not fail to start."
+      },
+      "lowBattery": {
+        "what": "The tracker backup battery is almost empty.",
+        "action": "Make sure the tracker is connected to vehicle power so the battery can recharge."
+      },
+      "tow": {
+        "what": "The vehicle moved while the engine was off — it may be towed or carried.",
+        "action": "If this was not planned, call the driver immediately and follow the vehicle on the map."
+      },
+      "crash": {
+        "what": "A strong impact was detected — possibly an accident.",
+        "action": "Call the driver immediately. If there is no answer, send help to the location."
+      },
+      "harshDriving": {
+        "what": "The driver braked, accelerated or turned too sharply.",
+        "action": "Occasional cases are normal. If it repeats, talk to the driver about safer driving."
+      },
+      "fatigue": {
+        "what": "The driver camera saw signs of tiredness (closed eyes, yawning or drowsiness).",
+        "action": "Contact the driver and ask them to stop and rest. Tired driving is very dangerous."
+      },
+      "phone": {
+        "what": "The driver camera saw the driver using a phone while driving.",
+        "action": "Remind the driver that phone use while driving is not allowed."
+      },
+      "smoking": {
+        "what": "The driver camera saw the driver smoking.",
+        "action": "Remind the driver of the no-smoking rule if it applies to this vehicle."
+      },
+      "distraction": {
+        "what": "The driver camera saw that the driver was not looking at the road.",
+        "action": "Check the photo or video. If it repeats, talk to the driver."
+      },
+      "driverAbsent": {
+        "what": "The driver camera cannot see a driver in the seat, or the driver is not recognized.",
+        "action": "Check who is driving the vehicle right now."
+      },
+      "cameraBlocked": {
+        "what": "The driver camera is covered or blocked.",
+        "action": "Ask the driver to uncover the camera. Covering it on purpose is a violation."
+      },
+      "tooClose": {
+        "what": "The front camera warned that the vehicle got too close to the vehicle or person ahead.",
+        "action": "Remind the driver to keep a safe distance."
+      },
+      "laneDeparture": {
+        "what": "The vehicle drifted out of its lane without signaling.",
+        "action": "This can be a sign of tiredness or distraction. Check with the driver if it repeats."
+      },
+      "blindSpot": {
+        "what": "Something was in the vehicle blind spot while it moved.",
+        "action": "Check the video if available. No action is needed for a single event."
+      },
+      "videoLoss": {
+        "what": "One of the vehicle cameras stopped sending picture.",
+        "action": "Check the camera cable and connection at the next service."
+      },
+      "videoBack": {
+        "what": "The camera picture is back.",
+        "action": "No action needed."
+      },
+      "storage": {
+        "what": "There is a problem with the video recorder memory (full or faulty).",
+        "action": "Videos may not be saved. Have the memory card checked or replaced."
+      },
+      "ignitionOn": {
+        "what": "The engine was switched on.",
+        "action": "No action needed unless the vehicle should not be used now."
+      },
+      "ignitionOff": {
+        "what": "The engine was switched off.",
+        "action": "No action needed."
+      },
+      "idle": {
+        "what": "The vehicle stood still for a long time with the engine running.",
+        "action": "Idling wastes fuel. Ask the driver to switch off the engine while waiting."
+      },
+      "parking": {
+        "what": "The vehicle has been parked longer than expected.",
+        "action": "Check whether the vehicle is waiting for work or has a problem."
+      },
+      "fuelTheft": {
+        "what": "The fuel level dropped suddenly — fuel may have been taken.",
+        "action": "Check the place and time of the drop and talk to the driver."
+      },
+      "fuelLow": {
+        "what": "The fuel tank is nearly empty.",
+        "action": "Ask the driver to refuel soon."
+      },
+      "fuelFill": {
+        "what": "The vehicle was refueled.",
+        "action": "No action needed."
+      },
+      "temperature": {
+        "what": "The temperature sensor reading is outside the allowed range.",
+        "action": "If the vehicle carries temperature-sensitive cargo, contact the driver now."
+      },
+      "sleep": {
+        "what": "The tracker switched to (or woke from) power-saving mode because the vehicle is parked.",
+        "action": "This is normal — no action needed."
+      },
+      "reboot": {
+        "what": "The tracker restarted.",
+        "action": "One restart is normal. If it restarts often, check its power supply."
+      },
+      "motion": {
+        "what": "The vehicle started moving or came to a stop.",
+        "action": "No action needed — this is a status update."
+      },
+      "maintenance": {
+        "what": "The vehicle is due for service.",
+        "action": "Book the service so the vehicle does not break down."
+      },
+      "trip": {
+        "what": "A trip started, ended, or took longer than planned.",
+        "action": "Open the trip to see the route and times."
+      },
+      "routine": {
+        "what": "A routine location report from the tracker.",
+        "action": "No action needed."
+      },
+      "generic": {
+        "what": "The tracker reported an event for this vehicle.",
+        "action": "Open the details and the map to see what happened around this time."
+      }
+    },
+    "urgency": {
+      "critical": "Urgent — act now",
+      "major": "Important — check soon",
+      "minor": "Worth a look",
+      "info": "For your information"
     }
   },
   "assets": {
@@ -2794,5 +2997,127 @@
     "unknownDevice": "The device refused the command with a code we do not recognise.",
     "unknown": "The command failed.",
     "code": "Device code: {{code}}"
+  },
+  "spatial": {
+    "title": "Location analytics",
+    "subtitle": "See where your project has good or weak GPS signal, and how and when your vehicles move.",
+    "tabs": {
+      "coverage": "GPS coverage",
+      "movement": "Movement patterns"
+    },
+    "range": {
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days"
+    },
+    "filters": {
+      "range": "Time range",
+      "vehicle": "Vehicle",
+      "allVehicles": "All vehicles",
+      "cell": "Grid size",
+      "cellOption": "Squares of {{n}} m"
+    },
+    "coverage": {
+      "level": {
+        "good": "Good signal",
+        "fair": "Weak signal",
+        "poor": "Very weak / lost",
+        "none": "No data"
+      },
+      "score": "score {{score}}/100",
+      "tip": {
+        "points": "Location reports: {{n}}",
+        "satellites": "Average satellites in view: {{n}}",
+        "weak": "Reports with weak or no GPS: {{n}}",
+        "gaps": "Times the vehicle disappeared here: {{n}}",
+        "alarms": "GPS-lost alerts here: {{n}}",
+        "vehicles": "Vehicles that passed here: {{n}}"
+      },
+      "short": {
+        "loss": "{{n}} signal losses",
+        "sats": "{{n}} satellites",
+        "vehicles": "{{n}} vehicles"
+      },
+      "kpi": {
+        "good": "Good signal area",
+        "goodHint": "{{n}} squares with clean GPS",
+        "fair": "Weak spots",
+        "fairHint": "Location sometimes inaccurate",
+        "poor": "Dead zones",
+        "poorHint": "Signal often lost here",
+        "loss": "Signal losses",
+        "lossHint": "{{alarms}} alerts · {{gaps}} silent gaps"
+      },
+      "alarmTip": "GPS signal lost here",
+      "legendAlarm": "GPS-lost alert",
+      "whatTitle": "What does this map show?",
+      "summary": "In {{share}}% of the places your vehicles drove, GPS signal was good. {{poor}} squares are dead zones where the signal is often lost, and {{fair}} squares have weak signal.",
+      "howTo": "Each square is one piece of ground. Green = good signal, yellow = sometimes inaccurate, red = signal is often lost. Red dots are “GPS lost” alerts. Tap a square for details.",
+      "worstTitle": "Weakest places",
+      "noWorst": "No weak spots found in this period. 👍",
+      "emptyTitle": "No location data yet",
+      "emptyHelp": "No vehicle reported a location in this period. Try a longer time range or another vehicle."
+    },
+    "movement": {
+      "hoursUnit": "hours",
+      "driving": "Driving",
+      "stopped": "Stopped",
+      "drivingHours": "{{n}} h driving",
+      "km": "{{n}} km",
+      "km2": "{{n}} km²",
+      "h": "{{n}} h",
+      "kph": "{{n}} km/h",
+      "kpi": {
+        "area": "Project area",
+        "areaHint": "Where 95% of the work happens",
+        "vehicles": "Active vehicles",
+        "vehiclesHint": "of {{n}} vehicles with data",
+        "distance": "Total distance",
+        "distanceHint": "{{n}} hours of driving",
+        "utilization": "Time spent driving",
+        "utilizationHint": "{{n}} hours stopped with tracker on"
+      },
+      "legend": {
+        "area": "Project area",
+        "heat": "Busy places",
+        "stops": "Main stops"
+      },
+      "stopTip": "Stop place #{{rank}}\n{{hours}} hours of stopping\n{{vehicles}} vehicles stopped here",
+      "findingsTitle": "Key findings",
+      "find": {
+        "area": "Your vehicles work in an area of about {{area}} km² (this area holds {{share}}% of all activity).",
+        "peak": "The busiest driving time is between {{from}}:00 and {{to}}:00.",
+        "quiet": "The quietest working hour is around {{hour}}:00.",
+        "day": "{{day}} is the busiest day of the week.",
+        "utilLow": "Vehicles drive only {{n}}% of the time the tracker is on — they wait a lot. Check the stop places below.",
+        "utilMid": "Vehicles drive {{n}}% of the time the tracker is on.",
+        "utilHigh": "Vehicles drive {{n}}% of the time the tracker is on — the fleet is heavily used.",
+        "stop": "The busiest stop place gathered {{hours}} hours of waiting."
+      },
+      "stopsTitle": "Where vehicles wait the most",
+      "stopHours": "{{n}} hours of stopping",
+      "stopVehicles": "{{n}} vehicles",
+      "noStops": "No stops in this period.",
+      "byHourTitle": "Driving and stopping by hour of day",
+      "weekTitle": "When vehicles drive (day × hour)",
+      "vehiclesTitle": "Each vehicle at a glance",
+      "col": {
+        "vehicle": "Vehicle",
+        "distance": "Distance",
+        "driving": "Driving",
+        "stopped": "Stopped",
+        "utilization": "Driving share",
+        "avgSpeed": "Avg. speed",
+        "maxSpeed": "Top speed",
+        "days": "Active days",
+        "range": "Ground covered"
+      },
+      "emptyTitle": "No movement in this period",
+      "emptyHelp": "No vehicle reported a location in this period. Try a longer time range or another vehicle.",
+      "unit": {
+        "km2": "km²",
+        "km": "km"
+      }
+    }
   }
 }

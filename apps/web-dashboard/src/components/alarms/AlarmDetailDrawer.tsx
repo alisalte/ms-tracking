@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router';
 import { useAlarmDetail, useTransitionAlarm } from '@/api/alarm.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { AlarmEvidence } from '@/components/alarms/AlarmEvidence';
+import { AlarmExplainBox } from '@/components/alarms/AlarmExplainBox';
 import { AlarmStatusBadge } from '@/components/alarms/AlarmStatusBadge';
 import { alarmTypeIcon, severityBg } from '@/components/alarms/AlarmTypeIcon';
 import { useToast } from '@/components/feedback/ToastProvider';
@@ -38,6 +39,7 @@ import {
   localizeSourceEventType,
 } from '@/lib/alarm-copy';
 import { hasAlarmCoordinates } from '@/lib/alarm-evidence';
+import { explainAlarm, urgencyLevel, urgencyText } from '@/lib/alarm-explain';
 import { formatDateTime } from '@/lib/format-date';
 import type { Alarm } from '@/types/alarm.types';
 
@@ -148,6 +150,12 @@ function AlarmDetailContent({
 
   return (
     <div className="flex flex-col gap-5">
+      <AlarmExplainBox
+        explanation={explainAlarm(t, alarm)}
+        urgency={urgencyText(t, alarm.severity)}
+        urgencyLevel={urgencyLevel(alarm.severity)}
+      />
+
       {/* Meta grid */}
       <div className="flex flex-col gap-2">
         <DetailRow

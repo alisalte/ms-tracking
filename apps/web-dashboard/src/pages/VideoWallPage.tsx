@@ -14,14 +14,18 @@
  *
  * Keyboard: `f` toggles whole-wall fullscreen; `1..6` pick the division
  * presets (wall view only). Shortcuts are ignored while typing in inputs.
+ *
+ * Phones: the channel dock becomes a bottom sheet (opened from the toolbar's
+ * "Cameras" button and closed after a pick), tiles stack in a scrollable
+ * column, and fewer streams play at once to spare mobile data.
  */
-import { Camera, History, LayoutGrid, ScanLine, Settings } from 'lucide-react';
+import { Camera, History, LayoutGrid, ScanLine, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useChannels, useSaveWall, useVideoWalls } from '@/api/video.api';
-import { Button } from '@/components/tailwind-ui';
+import { Button, IconButton } from '@/components/tailwind-ui';
 import { CamerasPanel } from '@/components/video/CamerasPanel';
 import { ChannelDock } from '@/components/video/ChannelDock';
 import { DeviceConfigWizard } from '@/components/video/DeviceConfigWizard';
@@ -30,12 +34,16 @@ import { PlaybackPanel } from '@/components/video/PlaybackPanel';
 import { WallGrid } from '@/components/video/WallGrid';
 import { WallToolbar } from '@/components/video/WallToolbar';
 import { isMdvrChannel, stealMdvrLive } from '@/components/video/useStreamSession';
+import { useIsPhone } from '@/hooks/useMediaQuery';
 import { toggleFullscreen } from '@/lib/video-stream';
 import { emptyTiles } from '@/mock/video-data';
 import { MAX_LIVE_TILES, WALL_DIVISIONS } from '@/types/video.types';
 import type { CameraChannel, VideoWall, WallDivision, WallTile } from '@/types/video.types';
 
 type ViewTab = 'wall' | 'cameras' | 'playback' | 'calibrate';
+
+/** Concurrent live streams on a phone (cellular data + small decoder budget). */
+const PHONE_MAX_LIVE = 4;
 
 const VIEW_TABS: readonly ViewTab[] = ['wall', 'cameras', 'playback', 'calibrate'];
 
@@ -57,6 +65,8 @@ export function VideoWallPage() {
   const channels = channelsData ?? [];
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const isPhone = useIsPhone();
+  const [dockOpen, setDockOpen] = useState(false);
 
   const [tab, setTab] = useState<ViewTab>(() => {
     const v = params.get('view');
@@ -110,6 +120,7 @@ export function VideoWallPage() {
   // If it's already on the wall, nudge that camera to (re)send AB2.
   const pickChannel = useCallback((channel: CameraChannel) => {
     setTab('wall');
+    setDockOpen(false);
     if (channel.imei && channel.logicalChannel) {
       stealMdvrLive(channel.imei, channel.logicalChannel);
     }
@@ -273,12 +284,13 @@ export function VideoWallPage() {
     }
     return ids;
   }, [tiles]);
+  const liveBudget = isPhone ? PHONE_MAX_LIVE : MAX_LIVE_TILES;
   const liveCount = useMemo(() => {
     const pinned = tiles.filter((t) => t.pinned && t.channelId !== null).length;
-    const budget = Math.max(0, MAX_LIVE_TILES - pinned);
+    const budget = Math.max(0, liveBudget - pinned);
     const nonPinnedAssigned = tiles.filter((t) => t.channelId !== null && !t.pinned).length;
     return pinned + Math.min(budget, nonPinnedAssigned);
-  }, [tiles]);
+  }, [tiles, liveBudget]);
 
   const empty = assignedCount === 0;
 
@@ -308,11 +320,11 @@ export function VideoWallPage() {
   return (
     <div className="absolute inset-0 flex flex-col bg-gray-50 dark:bg-graydark-200">
       {/* View tabs */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-graydark-300">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-2 py-2 sm:px-3 dark:border-white/5 dark:bg-graydark-300">
         <div
           role="tablist"
           aria-label={t('video.title')}
-          className="flex items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-white/5"
+          className="fv-scroll flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1 dark:bg-white/5"
         >
           {tabs.map(({ id, label, icon }) => (
             <button
@@ -321,28 +333,40 @@ export function VideoWallPage() {
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-none px-3 py-1.5 text-sm font-semibold transition-colors ${
+              aria-label={label}
+              className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border-none px-2.5 py-1.5 text-sm font-semibold transition-colors sm:px-3 ${
                 tab === id
                   ? 'bg-white text-gray-900 shadow-sm dark:bg-graydark-300 dark:text-white'
                   : 'bg-transparent text-gray-500 hover:text-gray-800 dark:text-graydark-600 dark:hover:text-white'
               }`}
             >
               {icon}
-              {label}
+              {/* Phones: only the active tab keeps its text label. */}
+              <span className={tab === id ? '' : 'hidden sm:inline'}>{label}</span>
             </button>
           ))}
         </div>
-        <span className="hidden text-xs text-gray-400 sm:inline dark:text-graydark-600">
+        <span className="hidden text-xs text-gray-400 lg:inline dark:text-graydark-600">
           {t('video.keyboardHint', { defaultValue: 'F: fullscreen · 1-6: layout' })}
         </span>
-        <Button
-          size="sm"
-          variant="secondary"
-          leftIcon={<Settings size={14} aria-hidden />}
-          onClick={() => setSetupOpen(true)}
-        >
-          {t('video.setup.open')}
-        </Button>
+        {isPhone ? (
+          <IconButton
+            size="sm"
+            aria-label={t('video.setup.open')}
+            onClick={() => setSetupOpen(true)}
+          >
+            <Settings size={17} />
+          </IconButton>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            leftIcon={<Settings size={14} aria-hidden />}
+            onClick={() => setSetupOpen(true)}
+          >
+            {t('video.setup.open')}
+          </Button>
+        )}
       </div>
 
       {tab === 'wall' && (
@@ -357,30 +381,46 @@ export function VideoWallPage() {
             onToggleRotation={() => setRotationOn((v) => !v)}
             liveCount={liveCount}
             assignedCount={assignedCount}
-            maxLive={MAX_LIVE_TILES}
+            maxLive={liveBudget}
             walls={wallsData}
             wallsLoading={wallsLoading}
             onLoadWall={loadWall}
             onSaveWall={saveCurrentWall}
             onSimulateAlert={simulateAlert}
             onClearWall={clearWall}
+            compact={isPhone}
+            onOpenCameras={isPhone ? () => setDockOpen(true) : undefined}
           />
           <div className="flex min-h-0 flex-1">
-            <ChannelDock
-              channels={channels}
-              assignedIds={assignedIds}
-              onPick={pickChannel}
-              onAutoFill={autoFill}
-              onClearWall={clearWall}
-            />
-            <div ref={viewportRef} className="min-h-0 min-w-0 flex-1 p-2">
+            {!isPhone && (
+              <ChannelDock
+                channels={channels}
+                assignedIds={assignedIds}
+                onPick={pickChannel}
+                onAutoFill={autoFill}
+                onClearWall={clearWall}
+              />
+            )}
+            <div
+              ref={viewportRef}
+              className={`min-h-0 min-w-0 flex-1 p-2 ${isPhone ? 'fv-scroll overflow-y-auto' : ''}`}
+            >
               {empty ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2">
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
                   <LayoutGrid size={48} className="text-gray-600" aria-hidden />
                   <p className="text-sm text-gray-500 dark:text-graydark-600">{t('video.empty')}</p>
                   <p className="text-xs text-gray-400 dark:text-graydark-600">
-                    {t('video.emptyHelp')}
+                    {isPhone ? t('video.mobile.tapToAdd') : t('video.emptyHelp')}
                   </p>
+                  {isPhone && (
+                    <Button
+                      size="sm"
+                      leftIcon={<Camera size={14} aria-hidden />}
+                      onClick={() => setDockOpen(true)}
+                    >
+                      {t('video.mobile.cameras')}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <WallGrid
@@ -390,12 +430,63 @@ export function VideoWallPage() {
                   spotlightSlot={spotlightSlot}
                   alertSlot={alertSlot}
                   rotationOn={rotationOn}
+                  maxLive={liveBudget}
+                  stacked={isPhone}
                   onTogglePin={togglePin}
                   onRemove={removeTile}
                 />
               )}
             </div>
           </div>
+
+          {/* Phones: the channel dock as a bottom sheet. */}
+          {isPhone && dockOpen && (
+            <div className="fixed inset-0 z-50 flex flex-col justify-end" role="presentation">
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('video.mobile.closeCameras')}
+                className="absolute inset-0 cursor-default border-none bg-gray-900/55"
+                onClick={() => setDockOpen(false)}
+              />
+              <div
+                // biome-ignore lint/a11y/useSemanticElements: controlled bottom sheet; native <dialog> has no React open API
+                role="dialog"
+                aria-modal="true"
+                aria-label={t('video.mobile.cameras')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setDockOpen(false);
+                }}
+                className="relative flex h-[78dvh] flex-col overflow-hidden rounded-t-2xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl dark:bg-graydark-300"
+              >
+                <div className="flex items-center justify-between gap-2 ps-4 pe-1.5 pt-1.5">
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-10 rounded-full bg-gray-300 dark:bg-white/20"
+                  />
+                  <IconButton
+                    size="sm"
+                    variant="ghost"
+                    aria-label={t('video.mobile.closeCameras')}
+                    onClick={() => setDockOpen(false)}
+                  >
+                    <X size={18} />
+                  </IconButton>
+                </div>
+                <ChannelDock
+                  channels={channels}
+                  assignedIds={assignedIds}
+                  onPick={pickChannel}
+                  onAutoFill={() => {
+                    autoFill();
+                    setDockOpen(false);
+                  }}
+                  onClearWall={clearWall}
+                  className="min-h-0 w-full flex-1"
+                />
+              </div>
+            </div>
+          )}
         </>
       )}
 

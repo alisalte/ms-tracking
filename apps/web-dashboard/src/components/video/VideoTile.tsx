@@ -271,7 +271,7 @@ export function VideoTile({
             <Dropdown
               aria-label={mdvrTile ? t('video.resolution.label') : t('video.tile.quality')}
               trigger={<Settings2 size={15} aria-hidden />}
-              triggerClassName="inline-flex size-[26px] items-center justify-center rounded-md bg-black/40 text-gray-200 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 cursor-pointer border-none"
+              triggerClassName="inline-flex size-[26px] pointer-coarse:size-8 items-center justify-center rounded-md bg-black/40 text-gray-200 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 cursor-pointer border-none"
             >
               {mdvrTile
                 ? MDVR_RESOLUTIONS.map((r) => (
@@ -430,7 +430,7 @@ function TileControl({
         aria-label={title}
         disabled={disabled}
         onClick={onClick}
-        className={`inline-flex size-[26px] cursor-pointer items-center justify-center rounded-md border-none bg-black/40 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`inline-flex size-[26px] pointer-coarse:size-8 cursor-pointer items-center justify-center rounded-md border-none bg-black/40 transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${
           active ? 'text-brand-400' : 'text-gray-200'
         }`}
       >

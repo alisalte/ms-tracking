@@ -36,11 +36,13 @@ import { TrackingEventProducer } from '../infrastructure/kafka/tracking-event-pr
 import { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
 import { GeofenceDefinitionsRepository } from '../infrastructure/persistence/geofence-definitions.repository.js';
 import { GeofenceStateRepository } from '../infrastructure/persistence/geofence-state.repository.js';
+import { PositionAnalyticsRepository } from '../infrastructure/persistence/position-analytics.repository.js';
 import { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import { TripRepository } from '../infrastructure/persistence/trip.repository.js';
 import { DeviceStaleSweeper } from '../infrastructure/scheduling/device-stale-sweeper.js';
 import { RealtimeGateway } from '../infrastructure/websocket/realtime.gateway.js';
 import { AdminController } from './admin.controller.js';
+import { AnalyticsController } from './analytics.controller.js';
 import { DeviceStatusController } from './device-status.controller.js';
 import { PositionsController } from './positions.controller.js';
 import {
@@ -54,6 +56,7 @@ import {
   GEOFENCE_STATE_REPOSITORY,
   GPS_ENGINE_CONFIG,
   KAFKA_CONSUMER,
+  POSITION_ANALYTICS_REPOSITORY,
   POSITION_CACHE,
   POSITION_PIPELINE,
   POSITION_REPOSITORY,
@@ -91,6 +94,11 @@ export class GpsEngineModule {
           provide: POSITION_REPOSITORY,
           inject: [KNEX_TOKEN],
           useFactory: (knex: unknown) => new PositionRepository(knex as never),
+        },
+        {
+          provide: POSITION_ANALYTICS_REPOSITORY,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new PositionAnalyticsRepository(knex as never),
         },
         {
           provide: DEVICE_STATUS_REPOSITORY,
@@ -319,7 +327,13 @@ export class GpsEngineModule {
         DeviceStatusController,
         AdminController,
       ],
-      controllers: [PositionsController, TripsController, DeviceStatusController, AdminController],
+      controllers: [
+        AnalyticsController,
+        PositionsController,
+        TripsController,
+        DeviceStatusController,
+        AdminController,
+      ],
       exports: [KAFKA_CONSUMER, EXTRA_READINESS_INDICATORS],
     };
   }

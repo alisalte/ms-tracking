@@ -90,7 +90,7 @@ describe('localizeAlarmMessage', () => {
         detail: '',
         code: 'ENTER_SLEEP',
       }),
-    ).toMatch(/خواب/);
+    ).toMatch(/کم‌مصرف/);
     expect(
       localizeAlarmMessage(t, {
         type: 'ignition',
@@ -159,7 +159,7 @@ describe('localizeAlarmMessage', () => {
       title: 'Prolonged idle: TRK-1',
       body: 'Vehicle TRK-1 has been idling for 22 min.',
     });
-    expect(idle).toContain('کارکرد بیهوده');
+    expect(idle).toContain('موتور روشن');
     expect(idle).toContain('22 min');
   });
 });

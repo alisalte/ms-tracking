@@ -25,6 +25,7 @@ import {
   useNotificationsPage,
   useUpdatePreferences,
 } from '@/api/notification.api';
+import { AlarmExplainBox } from '@/components/alarms/AlarmExplainBox';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Button, Card, Input, PageHeader, Spinner, Tooltip } from '@/components/tailwind-ui';
 import { useVehicleCaptionOf } from '@/hooks/useVehicleCaptionOf';
@@ -35,6 +36,7 @@ import {
   localizeNotificationTitle,
   notificationVehicleName,
 } from '@/lib/alarm-copy';
+import { explainNotification, urgencyLevel, urgencyText } from '@/lib/alarm-explain';
 import { formatDateTime } from '@/lib/format-date';
 import { relativeTime } from '@/lib/relative-time';
 import type { Notification, NotificationChannel } from '@/types/notification.types';
@@ -295,6 +297,9 @@ export function NotificationCenterPage() {
                           {localizeNotificationKind(t, n)}
                         </span>
                       </span>
+                      <span className="line-clamp-2 text-xs leading-5 text-gray-600 dark:text-graydark-700">
+                        {explainNotification(t, n).what}
+                      </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-xs">
                         <span className="min-w-0 truncate text-gray-500 dark:text-graydark-600">
                           {localizeNotificationBody(t, n)}
@@ -390,6 +395,11 @@ function NotificationDetailContent({
       <p className="text-sm text-gray-500 dark:text-graydark-600">
         {localizeNotificationBody(t, notification)}
       </p>
+      <AlarmExplainBox
+        explanation={explainNotification(t, notification)}
+        urgency={urgencyText(t, notification.severity)}
+        urgencyLevel={urgencyLevel(notification.severity)}
+      />
       {vehicleLabel ? (
         <p className="text-sm font-medium text-gray-800 dark:text-white">{vehicleLabel}</p>
       ) : null}

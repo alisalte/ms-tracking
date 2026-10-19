@@ -5,11 +5,26 @@
  * spotlight toggle, whole-wall fullscreen, round-robin rotation toggle, the
  * live-cap indicator, the saved-wall loader, and a "simulate alert pop-in"
  * demo button (10 §9.3 alert-driven pop-in).
+ *
+ * `compact` (phones): a "Cameras" button opens the channel sheet, only the
+ * 1/4/9 layouts are offered, and the secondary controls fold behind "More".
  */
-import { AlertTriangle, Eraser, LayoutGrid, Maximize, Pause, Pin, Play, Save } from 'lucide-react';
+import {
+  AlertTriangle,
+  Camera,
+  Eraser,
+  LayoutGrid,
+  Maximize,
+  MoreHorizontal,
+  Pause,
+  Pin,
+  Play,
+  Save,
+} from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { IconButton, Tooltip } from '@/components/tailwind-ui';
+import { Button, IconButton, Tooltip } from '@/components/tailwind-ui';
 import { useMdvrLiveResolution } from '@/hooks/useMdvrLiveResolution';
 import type { VideoWall, WallDivision } from '@/types/video.types';
 import { WALL_DIVISIONS } from '@/types/video.types';
@@ -47,7 +62,14 @@ interface WallToolbarProps {
   onSimulateAlert: () => void;
   /** Remove every camera from the wall. */
   onClearWall?: () => void;
+  /** Phone layout: fewer layouts + secondary controls behind "More". */
+  compact?: boolean;
+  /** Phone layout: open the channel sheet. */
+  onOpenCameras?: () => void;
 }
+
+/** Layouts that still show a usable picture on a phone screen. */
+const PHONE_DIVISIONS: readonly WallDivision[] = [1, 4, 9];
 
 export function WallToolbar({
   division,
@@ -66,37 +88,16 @@ export function WallToolbar({
   onSaveWall,
   onSimulateAlert,
   onClearWall,
+  compact = false,
+  onOpenCameras,
 }: WallToolbarProps) {
   const { t } = useTranslation();
   const [resolution, setResolution] = useMdvrLiveResolution();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const divisions = compact ? PHONE_DIVISIONS : WALL_DIVISIONS;
 
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-graydark-300">
-      <h1 className="me-1 text-base font-bold text-gray-900 dark:text-white">{t('video.title')}</h1>
-
-      {/* Division presets */}
-      <fieldset
-        aria-label={t('video.toolbar.divisions', { defaultValue: 'Grid layout' })}
-        className="flex items-center overflow-hidden rounded-lg border border-gray-300 dark:border-white/10"
-      >
-        {WALL_DIVISIONS.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => onDivisionChange(d)}
-            aria-pressed={division === d}
-            className={`min-w-11 cursor-pointer border-none px-2 py-1.5 text-sm font-semibold transition-colors ${
-              division === d
-                ? 'bg-brand-500 text-white'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5'
-            }`}
-          >
-            {d}
-          </button>
-        ))}
-      </fieldset>
-
-      {/* Live-cap indicator */}
+  const liveIndicator = (
+    <>
       <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-gray-300 px-2.5 text-xs font-semibold text-gray-600 dark:border-white/10 dark:text-graydark-700">
         <LayoutGrid size={13} aria-hidden />
         {liveCount} / {assignedCount} {t('video.toolbar.live')}
@@ -108,7 +109,13 @@ export function WallToolbar({
           </span>
         </Tooltip>
       )}
+    </>
+  );
 
+  // On phones the live counter moves into the "More" row to keep one line.
+  const secondary = (
+    <>
+      {compact && liveIndicator}
       <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-graydark-700">
         <span>{t('video.resolution.label')}</span>
         <select
@@ -226,6 +233,62 @@ export function WallToolbar({
           </IconButton>
         </Tooltip>
       </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-graydark-300">
+      {!compact && (
+        <h1 className="me-1 text-base font-bold text-gray-900 dark:text-white">
+          {t('video.title')}
+        </h1>
+      )}
+      {onOpenCameras && (
+        <Button size="sm" leftIcon={<Camera size={14} aria-hidden />} onClick={onOpenCameras}>
+          {t('video.mobile.cameras')}
+        </Button>
+      )}
+
+      {/* Division presets */}
+      <fieldset
+        aria-label={t('video.toolbar.divisions', { defaultValue: 'Grid layout' })}
+        className="flex items-center overflow-hidden rounded-lg border border-gray-300 dark:border-white/10"
+      >
+        {divisions.map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => onDivisionChange(d)}
+            aria-pressed={division === d}
+            className={`min-w-11 cursor-pointer border-none px-2 py-1.5 text-sm font-semibold transition-colors ${
+              division === d
+                ? 'bg-brand-500 text-white'
+                : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5'
+            }`}
+          >
+            {d}
+          </button>
+        ))}
+      </fieldset>
+
+      {!compact && liveIndicator}
+
+      {compact ? (
+        <IconButton
+          size="sm"
+          variant={moreOpen ? 'solid' : 'ghost'}
+          aria-label={t('video.mobile.more')}
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((v) => !v)}
+        >
+          <MoreHorizontal size={18} />
+        </IconButton>
+      ) : (
+        secondary
+      )}
+      {compact && moreOpen && (
+        <div className="flex w-full flex-wrap items-center gap-2">{secondary}</div>
+      )}
     </div>
   );
 }
