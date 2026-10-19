@@ -40,6 +40,14 @@ describe('coverage scoring', () => {
     expect(coverageScore({ ...base, lossAlarms: 4 })).toBeLessThan(coverageScore(base));
   });
 
+  it('caps the score by the worst single vehicle so clean traffic cannot hide a dead spot', () => {
+    const busy = { ...clean, points: 1008, weakPoints: 8 };
+    expect(coverageScore(busy)).toBeGreaterThanOrEqual(99);
+    const withWorst = { ...busy, worstVehicleScore: 40 };
+    expect(coverageScore(withWorst)).toBe(40);
+    expect(coverageLevel(withWorst)).toBe('poor');
+  });
+
   it('reports a gap-only cell (no fixes) as none', () => {
     expect(coverageLevel({ ...clean, points: 0, satPoints: 0, gaps: 2 })).toBe('none');
   });

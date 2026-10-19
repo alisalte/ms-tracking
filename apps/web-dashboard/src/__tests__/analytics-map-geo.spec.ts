@@ -123,3 +123,34 @@ describe('activity color ramp', () => {
     expect(activityShare(10, 10)).toBe(1);
   });
 });
+
+describe('analyticsViewBounds outliers', () => {
+  const cluster = Array.from({ length: 60 }, (_, i) => ({
+    south: 35.7 + (i % 10) * 0.002,
+    north: 35.7 + (i % 10) * 0.002 + 0.002,
+    west: 51.4 + Math.floor(i / 10) * 0.002,
+    east: 51.4 + Math.floor(i / 10) * 0.002 + 0.002,
+  }));
+
+  it('ignores a stray far-away cell and alarm when there are many items', () => {
+    const bounds = analyticsViewBounds({
+      cells: [...cluster, { south: 29.0, west: 52.0, north: 29.002, east: 52.002 }],
+      points: [{ lat: 40, lng: 45 }],
+    });
+    expect(bounds?.[0][1]).toBeGreaterThan(35.6);
+    expect(bounds?.[1][1]).toBeLessThan(35.8);
+    expect(bounds?.[0][0]).toBeGreaterThan(51.3);
+    expect(bounds?.[1][0]).toBeLessThan(51.5);
+  });
+
+  it('keeps every item when the set is small', () => {
+    const bounds = analyticsViewBounds({
+      cells: [
+        { south: 35.7, west: 51.4, north: 35.702, east: 51.402 },
+        { south: 29.0, west: 52.0, north: 29.002, east: 52.002 },
+      ],
+    });
+    expect(bounds?.[0][1]).toBe(29.0);
+    expect(bounds?.[1][1]).toBe(35.702);
+  });
+});

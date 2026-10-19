@@ -52,6 +52,8 @@ export interface CoverageCell extends CellBounds {
   level: CoverageLevel;
   /** GPS-loss alarms that fell in this cell (merged client-side). */
   lossAlarms?: number;
+  /** Lowest score any single vehicle had here — busy clean traffic must not mask it. */
+  worstVehicleScore?: number | null;
 }
 
 export interface GpsCoverageResponse {

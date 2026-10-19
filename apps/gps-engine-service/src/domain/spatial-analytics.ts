@@ -59,6 +59,11 @@ export interface CoverageCounters {
   readonly gaps: number;
   /** GPS-loss alarms raised in the cell (merged in by the client or caller). */
   readonly lossAlarms?: number;
+  /**
+   * Lowest score any single vehicle had in the cell. A cell is only as good as
+   * its worst-served vehicle, so busy clean traffic cannot mask a dead spot.
+   */
+  readonly worstVehicleScore?: number | null;
 }
 
 export type CoverageLevel = 'good' | 'fair' | 'poor' | 'none';
@@ -74,8 +79,9 @@ export function coverageScore(c: CoverageCounters): number {
   const total = c.points + gaps;
   if (total <= 0) return 0;
   const penalty = c.weakPoints * 0.6 + c.noFixPoints * 1 + c.lowQualityPoints * 0.8 + gaps * 3;
-  const score = 100 * (1 - Math.min(1, penalty / total));
-  return Math.round(score);
+  const score = Math.round(100 * (1 - Math.min(1, penalty / total)));
+  const worst = c.worstVehicleScore;
+  return worst === null || worst === undefined ? score : Math.min(score, worst);
 }
 
 /** Bucket a cell into the legend classes the heatmap paints. */

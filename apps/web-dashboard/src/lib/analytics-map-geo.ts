@@ -117,18 +117,6 @@ function separated(a: Acc, b: Acc): boolean {
   );
 }
 
-function accumulateCells(acc: Acc, cells: readonly CellBounds[]): void {
-  for (const c of cells) {
-    const south = Math.min(c.south, c.north);
-    const north = Math.max(c.south, c.north);
-    const west = Math.min(c.west, c.east);
-    const east = Math.max(c.west, c.east);
-    if (north - south > MAX_CELL_DEG || east - west > MAX_CELL_DEG) continue;
-    take(acc, south, west);
-    take(acc, north, east);
-  }
-}
-
 /**
  * Camera bounds for the analytics map. Cells, heat and points are the data
  * the operator came to see. A hull that does not overlap them (bad ring, or a
@@ -142,15 +130,69 @@ export function analyticsViewBounds(input: {
   points?: readonly LngLat[];
 }): LngLatBoundsTuple | null {
   const data = blank();
-  accumulateCells(data, input.cells ?? []);
-  for (const p of input.heat ?? []) take(data, p.lat, p.lng);
-  for (const p of input.points ?? []) take(data, p.lat, p.lng);
+  const boxes = collectBoxes(input);
+  const kept = trimOutliers(boxes);
+  for (const b of kept) {
+    take(data, b.south, b.west);
+    take(data, b.north, b.east);
+  }
 
   const hull = blank();
   for (const p of input.hull ?? []) take(hull, p.lat, p.lng);
 
   if (data.n > 0 && separated(data, hull)) return toBounds(data);
   return toBounds(union(data, hull));
+}
+
+/** Items below this count are framed exactly — there is nothing to call an outlier. */
+const TRIM_MIN_ITEMS = 20;
+/** Share of items ignored at each end of each axis when framing a large set. */
+const TRIM_TAIL = 0.02;
+
+/** Every drawable item as a lat/lng box (cells keep their extent, dots are zero-size). */
+function collectBoxes(input: {
+  cells?: readonly CellBounds[];
+  heat?: readonly LngLat[];
+  points?: readonly LngLat[];
+}): CellBounds[] {
+  const out: CellBounds[] = [];
+  for (const c of input.cells ?? []) {
+    const south = Math.min(c.south, c.north);
+    const north = Math.max(c.south, c.north);
+    const west = Math.min(c.west, c.east);
+    const east = Math.max(c.west, c.east);
+    if (north - south > MAX_CELL_DEG || east - west > MAX_CELL_DEG) continue;
+    if (![south, north].every(validLat) || ![west, east].every(validLng)) continue;
+    out.push({ south, west, north, east });
+  }
+  for (const p of [...(input.heat ?? []), ...(input.points ?? [])]) {
+    if (!validLat(p.lat) || !validLng(p.lng)) continue;
+    out.push({ south: p.lat, north: p.lat, west: p.lng, east: p.lng });
+  }
+  return out;
+}
+
+/**
+ * A few stray items (a GPS spike cell, a loss alarm logged at a bad position)
+ * must not decide the zoom: the camera would sit zoomed far out over empty land.
+ * With enough items, ignore the outermost 2% on each side of each axis.
+ */
+function trimOutliers(boxes: readonly CellBounds[]): readonly CellBounds[] {
+  if (boxes.length < TRIM_MIN_ITEMS) return boxes;
+  const quantile = (sorted: number[], q: number) =>
+    sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))] ?? 0;
+  const lats = boxes.map((b) => (b.south + b.north) / 2).sort((a, b) => a - b);
+  const lngs = boxes.map((b) => (b.west + b.east) / 2).sort((a, b) => a - b);
+  const loLat = quantile(lats, TRIM_TAIL);
+  const hiLat = quantile(lats, 1 - TRIM_TAIL);
+  const loLng = quantile(lngs, TRIM_TAIL);
+  const hiLng = quantile(lngs, 1 - TRIM_TAIL);
+  const kept = boxes.filter((b) => {
+    const lat = (b.south + b.north) / 2;
+    const lng = (b.west + b.east) / 2;
+    return lat >= loLat && lat <= hiLat && lng >= loLng && lng <= hiLng;
+  });
+  return kept.length > 0 ? kept : boxes;
 }
 
 /** Grow a screen rect so a sub-pixel grid square stays visible. */
