@@ -87,3 +87,33 @@ describe('commandReply', () => {
     expect(commandReply(t, { responseText: null, error: null }).text).toBe('—');
   });
 });
+
+describe('commandReply — AA4 stored days', () => {
+  const t = (key: string, o?: Record<string, unknown>) => {
+    if (key === 'commands.storedDays.month') return `${o?.month}: ${o?.video} / ${o?.alarm}`;
+    if (key === 'commands.storedDays.sep') return ', ';
+    if (key === 'commands.storedDays.noDays') return 'none';
+    return key;
+  };
+
+  it('turns the gateway summary into one sentence per month and keeps the raw reply', () => {
+    const raw = 'AA4,2026-09 video:1 alarm:-; 2026-10 video:17,18,19 alarm:19';
+    expect(commandReply(t, { responseText: raw, error: null })).toEqual({
+      text: '2026-09: 1 / none | 2026-10: 17, 18, 19 / 19',
+      raw,
+      isError: false,
+    });
+  });
+
+  it('names an empty card', () => {
+    expect(commandReply(t, { responseText: 'AA4,none', error: null }).text).toBe(
+      'commands.storedDays.none',
+    );
+  });
+
+  it('shows an unrecognised AA4 payload verbatim', () => {
+    expect(commandReply(t, { responseText: 'AA4,\u0001garbled', error: null }).text).toBe(
+      'AA4,\u0001garbled',
+    );
+  });
+});

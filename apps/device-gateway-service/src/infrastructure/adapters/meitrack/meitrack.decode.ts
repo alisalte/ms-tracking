@@ -106,6 +106,8 @@ export function decodeMeitrack(raw: RawPacket): readonly DeviceMessage[] {
   if (isAb8Reply(raw.payload)) {
     return [decodeAb8(raw)];
   }
+  const aa4 = aa4ReplyBody(raw.payload);
+  if (aa4) return [decodeAa4(raw, aa4)];
 
   const frame = parseFrame(raw.payload);
 
@@ -458,6 +460,77 @@ function isAb8Reply(payload: Buffer): boolean {
   const body = payload.subarray(thirdComma + 1, star);
   if (body.length >= 2 && body[0] === 0x4f && body[1] === 0x4b) return false; // ASCII AB8,OK
   return body.length >= 12;
+}
+
+/** One AA4 month record: YYMM (2 BCD bytes) + video-day and alarm-day bitmaps (LE DWORDs). */
+const AA4_RECORD_BYTES = 10;
+
+function bcdByte(b: number): number | null {
+  const hi = b >> 4;
+  const lo = b & 0x0f;
+  return hi > 9 || lo > 9 ? null : hi * 10 + lo;
+}
+
+/**
+ * Binary body of an AA4 stored-days reply (MDVR GPRS Protocol V2.0 §3.26 /
+ * appendix 4.11): `<imei>,AA4,` + N × 10-byte records. Text replies
+ * (`AA4,FFF5`) return null and take the ordinary command-ack path.
+ */
+function aa4ReplyBody(payload: Buffer): Buffer | null {
+  const head = payload.subarray(0, Math.min(payload.length, 80)).toString('binary');
+  const firstComma = head.indexOf(',');
+  const secondComma = head.indexOf(',', firstComma + 1);
+  const thirdComma = head.indexOf(',', secondComma + 1);
+  if (firstComma === -1 || secondComma === -1 || thirdComma === -1) return null;
+  if (head.substring(secondComma + 1, thirdComma) !== 'AA4') return null;
+  const star = payload.length - 5; // '*' of the *<cc>\r\n tail
+  if (payload[star] !== 0x2a || star < thirdComma + 1) return null;
+  const body = payload.subarray(thirdComma + 1, star);
+  if (body.length % AA4_RECORD_BYTES !== 0) return null;
+  for (let i = 0; i < body.length; i += AA4_RECORD_BYTES) {
+    const month = bcdByte(body[i + 1] ?? 0xff);
+    if (bcdByte(body[i] ?? 0xff) === null || month === null || month < 1 || month > 12) return null;
+  }
+  return Buffer.from(body);
+}
+
+function bitmapDays(flags: number): number[] {
+  const days: number[] = [];
+  for (let bit = 0; bit < 31; bit++) if ((flags >>> bit) & 1) days.push(bit + 1);
+  return days;
+}
+
+/**
+ * AA4 → COMMAND_ACK whose `response` reads `2026-10 video:17,18,19 alarm:19`
+ * (`; `-joined per month, `none` when the card holds no video). Bit 0 of each
+ * little-endian bitmap is the 1st of the month (appendix 4.11: 00 00 00 3F
+ * = days 25–30).
+ */
+function decodeAa4(raw: RawPacket, body: Buffer): DeviceMessage {
+  const imei = raw.payload.toString('ascii').split(',')[1] ?? '';
+  const months: { month: string; videoDays: number[]; alarmDays: number[] }[] = [];
+  for (let i = 0; i < body.length; i += AA4_RECORD_BYTES) {
+    const yy = bcdByte(body[i] ?? 0) ?? 0;
+    const mm = bcdByte(body[i + 1] ?? 0) ?? 0;
+    months.push({
+      month: `${2000 + yy}-${String(mm).padStart(2, '0')}`,
+      videoDays: bitmapDays(body.readUInt32LE(i + 2)),
+      alarmDays: bitmapDays(body.readUInt32LE(i + 6)),
+    });
+  }
+  const list = (days: number[]) => (days.length > 0 ? days.join(',') : '-');
+  const response =
+    months.length === 0
+      ? 'none'
+      : months
+          .map((m) => `${m.month} video:${list(m.videoDays)} alarm:${list(m.alarmDays)}`)
+          .join('; ');
+  return message(raw, {
+    type: 'COMMAND_ACK',
+    serialOrImei: imei,
+    timestamp: raw.receivedAt,
+    telemetry: { command: 'AA4', response, storedMonths: months },
+  });
 }
 
 const AB8_FILE_BYTES = 30;
