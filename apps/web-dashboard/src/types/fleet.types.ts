@@ -116,6 +116,8 @@ export interface CceRecord {
   paramIds: string[];
   params: Record<string, string>;
   can: CceCan & Record<string, unknown>;
+  /** Last CAN reading the server saw when this packet carried none. */
+  lastCan?: CceCan & { seenAt: string };
   /** Scaled non-CAN IDs (CCE ID Protocol V1.0). Absent on records stored before it. */
   status?: CceStatus & Record<string, unknown>;
 }

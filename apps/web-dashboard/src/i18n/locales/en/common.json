@@ -472,6 +472,7 @@
       "can": "CAN data",
       "canUnknown": "—",
       "canAbsent": "Not in this packet",
+      "canLast": "last: {{value}} ({{time}})",
       "canFuel": "fuel {{pct}}%",
       "canPedal": "pedal {{pct}}%",
       "canCoolant": "coolant {{temp}}°",

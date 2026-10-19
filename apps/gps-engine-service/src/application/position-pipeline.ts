@@ -37,6 +37,7 @@ import { Logger } from '@nestjs/common';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
 import type { PositionEvent } from '../domain/position-event.js';
 import { validatePosition } from '../domain/quality.js';
+import type { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
 import type { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
 import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
@@ -57,6 +58,8 @@ export interface PositionPipelineDeps {
   readonly metrics?: TelemetryMetrics | null;
   /** Sprint I — geofence ENTER/EXIT/DWELL evaluator (optional in tests). */
   readonly geofenceEvaluator?: GeofenceEvaluator | null;
+  /** Keeps the last CAN reading across CCE records that carry none (optional in tests). */
+  readonly lastCan?: LastCanMemory | null;
 }
 
 export class PositionPipeline {
@@ -83,7 +86,7 @@ export class PositionPipeline {
       this.logger.debug(`Rejected position ${event.messageId}: ${result.reason}`);
       return;
     }
-    const validated = event.withQuality(result.quality);
+    let validated = event.withQuality(result.quality);
     if (result.quality === 'STALE') {
       this.metrics?.positions.inc({ result: 'stale' });
     } else {
@@ -98,6 +101,10 @@ export class PositionPipeline {
       this.logger.debug(`Deduped position ${validated.messageId}.`);
       return;
     }
+
+    // 2.5 CAN memory — remember CAN from this record, or carry the last reading
+    //     onto a record that has none (best-effort, never throws).
+    if (this.deps.lastCan) validated = await this.deps.lastCan.apply(validated);
 
     // 3. Persist (idempotent on the composite event PK). Failures bubble to the
     //    consumer for bounded retry + DLQ (Sprint D §15) — never silent loss.

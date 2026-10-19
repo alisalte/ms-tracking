@@ -71,3 +71,15 @@ describe('formatDeviceFact', () => {
     );
   });
 });
+
+describe('formatCanFact — remembered reading', () => {
+  it('shows the last CAN reading when this packet has none', () => {
+    const cce: CceRecord = {
+      ...record({ present: false, ids: [] }),
+      lastCan: { present: true, ids: ['0x99'], rpm: 1200, seenAt: '2026-10-19T10:00:00.000Z' },
+    };
+    const tl = (key: string, opts?: Record<string, unknown>) =>
+      key === 'map.popup.canLast' ? `last ${opts?.value}` : t(key, opts);
+    expect(formatCanFact(cce, tl)).toBe('last 1200 rpm');
+  });
+});

@@ -27,6 +27,7 @@ import { PositionPipeline } from '../application/position-pipeline.js';
 import { SignalBus } from '../application/signal-bus.js';
 import { TripEngine } from '../application/trip-engine.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
+import { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
 import { RedisDeviceStatusCache } from '../infrastructure/cache/redis-device-status-cache.js';
 import { RedisFsmCache } from '../infrastructure/cache/redis-fsm-cache.js';
 import { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
@@ -202,6 +203,7 @@ export class GpsEngineModule {
             DEVICE_STATUS_REPOSITORY,
             METRICS_TOKEN,
             GEOFENCE_EVALUATOR,
+            REDIS_TOKEN,
           ],
           useFactory: (
             cfg: GpsEngineConfig,
@@ -212,6 +214,7 @@ export class GpsEngineModule {
             deviceStatus: DeviceStatusRepository,
             metrics: TelemetryMetrics,
             geofenceEvaluator: GeofenceEvaluator,
+            redis: Redis,
           ) =>
             new PositionPipeline({
               config: cfg,
@@ -222,6 +225,7 @@ export class GpsEngineModule {
               deviceStatus,
               metrics,
               geofenceEvaluator,
+              lastCan: new LastCanMemory(redis),
             }),
         },
         {

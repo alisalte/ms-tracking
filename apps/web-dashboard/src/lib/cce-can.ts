@@ -1,16 +1,10 @@
-import type { CceRecord } from '@/types/fleet.types';
+import type { CceCan, CceRecord } from '@/types/fleet.types';
 
-/**
- * One CAN line for the map popup.
- * Missing record → unknown. `can.present === false` → the packet was stored and had no CAN.
- */
-export function formatCanFact(
-  cce: CceRecord | null | undefined,
+/** Scaled CAN fields of one reading, joined for the popup; null when none are set. */
+function canParts(
+  can: CceCan,
   t: (key: string, opts?: Record<string, unknown>) => string,
-): string {
-  if (!cce) return t('map.popup.canUnknown');
-  if (!cce.can.present) return t('map.popup.canAbsent');
-  const can = cce.can;
+): string | null {
   const parts: string[] = [];
   if (typeof can.rpm === 'number') parts.push(`${can.rpm} rpm`);
   if (typeof can.fuelLevelPct === 'number') {
@@ -28,8 +22,32 @@ export function formatCanFact(
   if (typeof can.engineHours === 'number') {
     parts.push(t('map.popup.canHours', { hours: can.engineHours }));
   }
-  if (parts.length === 0) return can.ids.join(' ');
+  if (parts.length === 0) return can.ids.length > 0 ? can.ids.join(' ') : null;
   return parts.join(' · ');
+}
+
+/**
+ * One CAN line for the map popup.
+ * Missing record → unknown. A packet without CAN falls back to the last reading
+ * the server remembered (`lastCan`), with the time it was received.
+ */
+export function formatCanFact(
+  cce: CceRecord | null | undefined,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (!cce) return t('map.popup.canUnknown');
+  if (cce.can.present) return canParts(cce.can, t) ?? t('map.popup.canUnknown');
+  const last = cce.lastCan;
+  const lastParts = last ? canParts(last, t) : null;
+  if (last && lastParts) {
+    return t('map.popup.canLast', { value: lastParts, time: formatSeenAt(last.seenAt) });
+  }
+  return t('map.popup.canAbsent');
+}
+
+function formatSeenAt(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
 /**
