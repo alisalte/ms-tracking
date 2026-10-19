@@ -3,15 +3,30 @@
  *
  *   GET    /api/v1/haul-routes
  *   POST   /api/v1/haul-routes
+ *   PATCH  /api/v1/haul-routes/:id           — name, places, shifts
+ *   DELETE /api/v1/haul-routes/:id           — archive (reports stop listing it)
  *   GET    /api/v1/haul-routes/:id/members
  *   PUT    /api/v1/haul-routes/:id/members
  */
 import { CurrentUser, RequirePermissions } from '@fleetvision/auth';
 import type { AuthenticatedContext } from '@fleetvision/auth';
-import { Body, Controller, Get, Inject, Param, Post, Put, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Req,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
-import type { HaulRouteService } from '../application/haul-route.service.js';
+import type { HaulMemberInput, HaulRouteService } from '../application/haul-route.service.js';
 import { actorFrom } from './shared/actor.js';
 import { ZodValidationPipe } from './shared/zod-validation.pipe.js';
 import { HAUL_ROUTE_SERVICE } from './tokens.js';
@@ -22,7 +37,10 @@ const createSchema = z.object({
   destinationGeofenceId: z.string().uuid(),
   shiftStartHour: z.coerce.number().int().min(0).max(23).optional(),
   shiftDurationHours: z.coerce.number().int().min(1).max(24).optional(),
+  shiftCount: z.coerce.number().int().min(1).max(4).optional(),
 });
+
+const updateSchema = createSchema.partial();
 
 const membersSchema = z.object({
   members: z
@@ -30,6 +48,8 @@ const membersSchema = z.object({
       z.object({
         deviceId: z.string().uuid(),
         role: z.enum(['TRUCK', 'SHOVEL']),
+        /** Element `n - 1` is the driver of shift `n`. */
+        shiftDrivers: z.array(z.string().uuid().nullable()).max(4).optional(),
       }),
     )
     .max(500),
@@ -55,12 +75,34 @@ export class HaulRoutesController {
     return { data: await this.routes.create(actorFrom(auth, req), body as never) };
   }
 
+  @Patch(':id')
+  @RequirePermissions('fleet.write')
+  public async update(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(updateSchema)) body: unknown,
+  ) {
+    return { data: await this.routes.update(actorFrom(auth, req), id, body as never) };
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @RequirePermissions('fleet.write')
+  public async archive(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.routes.archive(actorFrom(auth, req), id);
+  }
+
   @Get(':id/members')
   @RequirePermissions('fleet.read')
   public async members(
     @CurrentUser() auth: AuthenticatedContext,
     @Req() req: Request,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return { data: await this.routes.members(actorFrom(auth, req), id) };
   }
@@ -70,11 +112,10 @@ export class HaulRoutesController {
   public async setMembers(
     @CurrentUser() auth: AuthenticatedContext,
     @Req() req: Request,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(membersSchema)) body: unknown,
   ) {
-    const members = (body as { members: Array<{ deviceId: string; role: 'TRUCK' | 'SHOVEL' }> })
-      .members;
+    const members = (body as { members: HaulMemberInput[] }).members;
     return { data: await this.routes.setMembers(actorFrom(auth, req), id, members) };
   }
 }

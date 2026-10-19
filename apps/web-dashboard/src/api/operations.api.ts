@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { apiGet, apiGetRaw, apiPost, apiPut } from './client';
+import { apiDeleteNoContent, apiGet, apiGetRaw, apiPatch, apiPost, apiPut } from './client';
 
 export type ReportPreset = 'today' | 'yesterday' | '7d' | '30d';
 
@@ -43,7 +43,18 @@ export interface HaulRoute {
   destinationGeofenceId: string;
   shiftStartHour: number;
   shiftDurationHours: number;
+  /** Back-to-back shifts in one work day (two by default). */
+  shiftCount: number;
   status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export interface HaulRouteInput {
+  name: string;
+  originGeofenceId: string;
+  destinationGeofenceId: string;
+  shiftStartHour: number;
+  shiftDurationHours: number;
+  shiftCount: number;
 }
 
 export interface HaulMember {
@@ -51,6 +62,14 @@ export interface HaulMember {
   deviceId: string;
   role: 'TRUCK' | 'SHOVEL';
   imei: string | null;
+  /** Element `n - 1` is the driver of shift `n`. */
+  shiftDrivers: Array<string | null>;
+}
+
+export interface HaulMemberInput {
+  deviceId: string;
+  role: 'TRUCK' | 'SHOVEL';
+  shiftDrivers?: Array<string | null>;
 }
 
 export interface HaulCycleRow {
@@ -60,6 +79,7 @@ export interface HaulCycleRow {
   shovelLabel: string | null;
   driverId: string | null;
   driverName: string | null;
+  driverSource: 'ROSTER' | 'ASSIGNMENT' | null;
   originEnteredAt: string;
   originLeftAt: string;
   destinationEnteredAt: string;
@@ -68,6 +88,21 @@ export interface HaulCycleRow {
   durationSec: number;
   distanceKm: number;
   shift: string;
+  shiftDate: string | null;
+  shiftNo: number;
+}
+
+export interface HaulShiftRow {
+  shift: string;
+  shiftDate: string | null;
+  shiftNo: number;
+  services: number;
+  distanceKm: number;
+  durationSec: number;
+  loadDwellSec: number;
+  trucks: number;
+  drivers: number;
+  withoutDriver: number;
 }
 
 export interface HaulCycleReport {
@@ -76,6 +111,7 @@ export interface HaulCycleReport {
     name: string;
     shiftStartHour: number;
     shiftDurationHours: number;
+    shiftCount: number;
     timeZone: string;
   };
   from: string;
@@ -95,10 +131,14 @@ export interface HaulCycleReport {
     driverId: string;
     driverName: string;
     shift: string;
+    shiftDate: string | null;
+    shiftNo: number;
+    vehicleNames: string[];
     services: number;
     distanceKm: number;
     durationSec: number;
   }>;
+  byShift: HaulShiftRow[];
   byShovel: Array<{ shovelId: string; shovelLabel: string; loads: number }>;
   openHauls: Array<{
     vehicleId: string;
@@ -142,13 +182,27 @@ export function useHaulCycles(routeId: string | null, preset: ReportPreset) {
 export function useCreateHaulRoute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: {
-      name: string;
-      originGeofenceId: string;
-      destinationGeofenceId: string;
-      shiftStartHour: number;
-      shiftDurationHours: number;
-    }) => apiPost<typeof body, HaulRoute>('/haul-routes', body),
+    mutationFn: (body: HaulRouteInput) => apiPost<HaulRouteInput, HaulRoute>('/haul-routes', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['haul-routes'] }),
+  });
+}
+
+export function useUpdateHaulRoute(routeId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<HaulRouteInput>) =>
+      apiPatch<Partial<HaulRouteInput>, HaulRoute>(`/haul-routes/${routeId}`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['haul-routes'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports', 'haul-cycles', routeId] });
+    },
+  });
+}
+
+export function useArchiveHaulRoute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (routeId: string) => apiDeleteNoContent(`/haul-routes/${routeId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['haul-routes'] }),
   });
 }
@@ -156,12 +210,13 @@ export function useCreateHaulRoute() {
 export function useSetHaulMembers(routeId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (members: Array<{ deviceId: string; role: 'TRUCK' | 'SHOVEL' }>) =>
-      apiPut<{ members: Array<{ deviceId: string; role: 'TRUCK' | 'SHOVEL' }> }, HaulMember[]>(
-        `/haul-routes/${routeId}/members`,
-        { members },
-      ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['haul-routes', routeId, 'members'] }),
+    mutationFn: (members: HaulMemberInput[]) =>
+      apiPut<{ members: HaulMemberInput[] }, HaulMember[]>(`/haul-routes/${routeId}/members`, {
+        members,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['haul-routes', routeId, 'members'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports', 'haul-cycles', routeId] });
+    },
   });
 }
