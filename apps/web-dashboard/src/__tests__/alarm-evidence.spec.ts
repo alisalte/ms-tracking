@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { fromMdvrBcdTime, parseMdvrPhotoAck, toMdvrBcdTime } from '@/api/video.api';
 import {
@@ -8,11 +8,14 @@ import {
   alarmEventPhotoName,
   alarmEventVideoWindow,
   alarmEvidenceWindow,
+  deviceClockCandidates,
   hasAlarmCoordinates,
   isAlarmEventMedia,
   isDmsAlarm,
+  matchEventPhotoName,
   mdvrChannelsForVehicle,
   parseMdvrEventPhotoName,
+  pickAlarmRecording,
   selectAlarmEventClips,
 } from '@/lib/alarm-evidence';
 import type { CameraChannel } from '@/types/video.types';
@@ -308,5 +311,78 @@ describe('mdvrChannelsForVehicle', () => {
       },
     ] as CameraChannel[];
     expect(mdvrChannelsForVehicle(channels, 'veh-1').map((c) => c.id)).toEqual(['a']);
+  });
+});
+
+describe('pickAlarmRecording', () => {
+  const clip = (startTime: string, endTime: string, avType = 2) => ({
+    resource: { startTime, endTime, avType },
+  });
+  // Alarm 2026-10-19 05:59:51 UTC (the D00 photo stamp in the field log).
+  const raised = Date.UTC(2026, 9, 19, 5, 59, 51);
+
+  it('picks the file that contains the alarm on the UTC clock', () => {
+    const pick = pickAlarmRecording(
+      [clip('261019055000', '261019055500'), clip('261019055500', '261019060500')],
+      raised,
+    );
+    expect(pick?.clip.resource.startTime).toBe('261019055500');
+    expect(pick?.fromMs).toBeLessThanOrEqual(raised);
+    expect(pick?.toMs).toBeGreaterThan(raised);
+  });
+
+  it('finds a file indexed on the local clock (Iran, UTC+3:30) when the UTC window is FFF5', () => {
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-210);
+    try {
+      expect(deviceClockCandidates(raised)).toEqual([raised, raised + 210 * 60_000]);
+      // The card lists the same moment as 09:29:51 local.
+      const pick = pickAlarmRecording([clip('261019092500', '261019093500')], raised);
+      expect(pick?.clip.resource.startTime).toBe('261019092500');
+      expect(pick?.fromMs).toBeLessThanOrEqual(Date.UTC(2026, 9, 19, 9, 29, 51));
+      expect(pick?.toMs).toBeGreaterThan(Date.UTC(2026, 9, 19, 9, 29, 51));
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('ignores photos and files far from the alarm', () => {
+    expect(
+      pickAlarmRecording(
+        [clip('261019055900', '261019060000', 4), clip('261019010000', '261019011000')],
+        raised,
+      ),
+    ).toBeNull();
+  });
+
+  it('plays the start of the nearest file within 10 minutes', () => {
+    const pick = pickAlarmRecording([clip('261019060500', '261019061500')], raised);
+    expect(pick?.fromMs).toBe(Date.UTC(2026, 9, 19, 6, 5, 0));
+    expect(pick?.toMs).toBe(Date.UTC(2026, 9, 19, 6, 6, 0));
+  });
+});
+
+describe('matchEventPhotoName', () => {
+  const wanted = '20261019055951_CH1_dca.jpg';
+
+  it('prefers the exact basename (with a folder or other case)', () => {
+    expect(matchEventPhotoName(['/sd/PIC/20261019055951_ch1_DCA.JPG', 'other.jpg'], wanted)).toBe(
+      '/sd/PIC/20261019055951_ch1_DCA.JPG',
+    );
+  });
+
+  it('falls back to the same stamp, then the closest stamp with the same tag', () => {
+    expect(matchEventPhotoName(['20261019055951_CH1_x.jpg'], wanted)).toBe(
+      '20261019055951_CH1_x.jpg',
+    );
+    expect(
+      matchEventPhotoName(
+        ['20261019055944_CH1_dca.jpg', '20261019055953_CH1_dca.jpg', '20261019055953_CH2_dca.jpg'],
+        wanted,
+      ),
+    ).toBe('20261019055953_CH1_dca.jpg');
+  });
+
+  it('returns null when nothing on the card is that snapshot', () => {
+    expect(matchEventPhotoName(['20261019070000_CH1_dca.jpg', 'snap1.jpg'], wanted)).toBeNull();
   });
 });

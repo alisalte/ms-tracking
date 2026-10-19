@@ -1198,6 +1198,7 @@
       "downloadVideo": "Download video",
       "photoError": "Could not download the event photo — {{message}}",
       "videoMissing": "No recording on the SD card for this alarm time. Try nearby recordings, or open Playback.",
+      "videoNotOnCard": "The SD card has no recording within 4 hours of this alarm.",
       "videoError": "Could not play the event video — {{message}}",
       "searchingRecordings": "Asking the device for recordings…",
       "noCamera": "No camera is bound to this vehicle.",

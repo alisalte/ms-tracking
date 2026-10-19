@@ -154,21 +154,25 @@ export class EvidenceCaptureRepository {
 
   public async markFailed(tenantId: string, id: string, error: string): Promise<void> {
     await withTenantContext(this.knex, tenantId, async (trx) => {
-      await trx('notification.alarm_evidence').where({ tenant_id: tenantId, id }).update({
-        status: 'PHOTO_FAILED',
-        error: error.slice(0, 2000),
-        updated_at: trx.fn.now(),
-      });
+      await trx('notification.alarm_evidence')
+        .where({ tenant_id: tenantId, id })
+        .update({
+          status: 'PHOTO_FAILED',
+          error: error.slice(0, 2000),
+          updated_at: trx.fn.now(),
+        });
     });
   }
 
   public async markVideoFailed(tenantId: string, id: string, error: string): Promise<void> {
     await withTenantContext(this.knex, tenantId, async (trx) => {
-      await trx('notification.alarm_evidence').where({ tenant_id: tenantId, id }).update({
-        video_status: 'FAILED',
-        error: error.slice(0, 2000),
-        updated_at: trx.fn.now(),
-      });
+      await trx('notification.alarm_evidence')
+        .where({ tenant_id: tenantId, id })
+        .update({
+          video_status: 'FAILED',
+          error: error.slice(0, 2000),
+          updated_at: trx.fn.now(),
+        });
     });
   }
 
@@ -210,6 +214,29 @@ export class EvidenceCaptureRepository {
     });
   }
 
+  /** Every unfinished evidence row on this device waiting for `photoName`. */
+  public async markPhotoReadyByName(
+    tenantId: string,
+    deviceId: string,
+    photoName: string,
+    photoBytes: Buffer,
+    contentType: string,
+  ): Promise<number> {
+    return withTenantContext(this.knex, tenantId, async (trx) =>
+      trx('notification.alarm_evidence')
+        .where({ tenant_id: tenantId, device_id: deviceId })
+        .whereRaw('lower(photo_name) = lower(?)', [photoName])
+        .whereIn('status', ['PENDING', 'FETCHING', 'PHOTO_FAILED'])
+        .update({
+          status: 'PHOTO_READY',
+          photo_bytes: photoBytes,
+          photo_content_type: contentType,
+          error: null,
+          updated_at: trx.fn.now(),
+        }),
+    );
+  }
+
   public async markVideoReady(tenantId: string, id: string): Promise<void> {
     await withTenantContext(this.knex, tenantId, async (trx) => {
       await trx('notification.alarm_evidence').where({ tenant_id: tenantId, id }).update({
@@ -229,11 +256,13 @@ export class EvidenceCaptureRepository {
           updated_at: trx.fn.now(),
         });
       if (photo > 0) return;
-      await trx('notification.alarm_evidence').where({ video_command_id: commandId }).update({
-        video_status: 'FAILED',
-        error: error.slice(0, 2000),
-        updated_at: trx.fn.now(),
-      });
+      await trx('notification.alarm_evidence')
+        .where({ video_command_id: commandId })
+        .update({
+          video_status: 'FAILED',
+          error: error.slice(0, 2000),
+          updated_at: trx.fn.now(),
+        });
     });
   }
 }

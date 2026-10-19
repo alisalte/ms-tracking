@@ -167,20 +167,34 @@ export class DeviceCommandRepository {
    * The Meitrack D82 reply carries no command id, only the code (§1.1), so the
    * consumer matches the most recent QUEUED/SENT row for that device+code.
    */
+  /**
+   * Newest QUEUED/SENT command of this code. With `filename`, the D00 for that
+   * file wins: the evidence worker and the alarm page both send D00, and
+   * several alarms can be pending at once, so "newest D00" attached a photo to
+   * the wrong command and left the evidence row FETCHING forever.
+   */
   public async latestPendingByCode(
     tenantId: string,
     deviceId: string,
     commandCode: string,
+    filename?: string,
   ): Promise<DeviceCommandRow | null> {
-    const row = await this.knex
-      .withSchema(SCHEMA)
-      .from(TABLE)
-      .whereRaw('tenant_id = ?::uuid', [tenantId])
-      .whereRaw('device_id = ?::uuid', [deviceId])
-      .where('command_code', commandCode)
-      .whereIn('status', ['QUEUED', 'SENT'])
-      .orderBy('issued_at', 'desc')
-      .first();
+    const pending = () =>
+      this.knex
+        .withSchema(SCHEMA)
+        .from(TABLE)
+        .whereRaw('tenant_id = ?::uuid', [tenantId])
+        .whereRaw('device_id = ?::uuid', [deviceId])
+        .where('command_code', commandCode)
+        .whereIn('status', ['QUEUED', 'SENT'])
+        .orderBy('issued_at', 'desc');
+    if (filename) {
+      const named = await pending()
+        .whereRaw("lower(params->>'filename') = lower(?)", [filename])
+        .first();
+      if (named) return named as DeviceCommandRow;
+    }
+    const row = await pending().first();
     return (row as DeviceCommandRow | undefined) ?? null;
   }
 
