@@ -2064,7 +2064,8 @@
         "active": "User activated",
         "suspended": "User suspended",
         "deactivated": "User deactivated"
-      }
+      },
+      "managedInTenantAdmin": "Creating and editing users, their roles and status is done in tenant management. This list is read-only."
     },
     "roles": {
       "managedInTenantAdmin": "Roles and permissions are managed in tenant administration for each organisation.",
@@ -2195,7 +2196,8 @@
       "reset": "Reset",
       "unsaved": "You have unsaved changes",
       "toastSaved": "Settings saved",
-      "saveFailed": "Saving failed — your changes were not applied. Please try again."
+      "saveFailed": "Saving failed — your changes were not applied. Please try again.",
+      "managedInTenantAdmin": "Organisation settings are edited in tenant management. This page is read-only."
     },
     "audit": {
       "allActions": "All actions",
@@ -2274,7 +2276,8 @@
       "toastCreated": "API key created",
       "toastRevoked": "API key revoked",
       "confirmRevokeTitle": "Revoke API key?",
-      "confirmRevokeMessage": "Calls using this key will fail immediately. This cannot be undone."
+      "confirmRevokeMessage": "Calls using this key will fail immediately. This cannot be undone.",
+      "managedInTenantAdmin": "API keys are issued and revoked in tenant management. This list is read-only."
     },
     "billing": {
       "subscription": "Subscription",

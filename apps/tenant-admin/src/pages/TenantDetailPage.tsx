@@ -16,7 +16,9 @@ import {
 import { EmptyState } from '@/components/EmptyState';
 import { QuotaMeterCard } from '@/components/QuotaMeter';
 import { TenantAccessPanel } from '@/components/TenantAccessPanel';
+import { TenantApiKeysPanel } from '@/components/TenantApiKeysPanel';
 import { TenantFleetsPanel } from '@/components/TenantFleetsPanel';
+import { TenantSettingsPanel } from '@/components/TenantSettingsPanel';
 import { PLAN_CODES, bytesToGib, gibToBytes, isoDateOnly } from '@/lib/license';
 import { formatMoney } from '@/lib/money';
 
@@ -50,9 +52,9 @@ export function TenantDetailPage() {
     void reload();
   }, [id]);
 
-  const [tab, setTab] = useState<'overview' | 'rates' | 'invoices' | 'fleets' | 'access'>(
-    'overview',
-  );
+  const [tab, setTab] = useState<
+    'overview' | 'rates' | 'invoices' | 'fleets' | 'access' | 'apikeys' | 'settings'
+  >('overview');
 
   if (!id) return null;
   const license = tenant?.license;
@@ -62,6 +64,8 @@ export function TenantDetailPage() {
     { id: 'invoices' as const, label: t('detail.tabInvoices') },
     { id: 'fleets' as const, label: t('detail.tabFleets') },
     { id: 'access' as const, label: t('detail.tabAccess') },
+    { id: 'apikeys' as const, label: t('detail.tabApiKeys') },
+    { id: 'settings' as const, label: t('detail.tabSettings') },
   ];
 
   return (
@@ -265,6 +269,8 @@ export function TenantDetailPage() {
       {tab === 'fleets' && <TenantFleetsPanel tenantId={id} />}
 
       {tab === 'access' && <TenantAccessPanel tenantId={id} tenantName={tenant?.name ?? ''} />}
+      {tab === 'apikeys' && <TenantApiKeysPanel tenantId={id} />}
+      {tab === 'settings' && <TenantSettingsPanel tenantId={id} />}
     </div>
   );
 }

@@ -7,10 +7,14 @@
  * holds for the caller's own session).
  */
 import { randomUUID } from 'node:crypto';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
+import { ALL_PERMISSIONS } from '@fleetvision/auth';
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Param,
@@ -20,17 +24,21 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
-import {
+import type {
   AssignRoleUseCase,
   ChangeUserStatusUseCase,
+  CreateApiKeyUseCase,
   CreateTenantAccessUseCase,
   ProvisionTenantUseCase,
+  RevokeApiKeyUseCase,
   TenantEntitlementUseCase,
   TenantLifecycleUseCase,
+  UpdateUserUseCase,
 } from '../../application/index.js';
 import { Role, type Tenant } from '../../domain/index.js';
 import { tenantSettingsPatchSchema } from '../../domain/tenant-settings.js';
+// biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
+import { ApiKeyRepository } from '../../infrastructure/persistence/api-key.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
 import { RoleRepository } from '../../infrastructure/persistence/role.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime.
@@ -41,6 +49,7 @@ import { TenantRepository } from '../../infrastructure/persistence/tenant.reposi
 import { UserRepository } from '../../infrastructure/persistence/user.repository.js';
 import {
   changeUserStatusSchema,
+  createApiKeySchema,
   createTenantAccessSchema,
   provisionTenantSchema,
   putTenantLicenseSchema,
@@ -68,6 +77,10 @@ export class TenantsController {
     private readonly users: UserRepository,
     private readonly roles: RoleRepository,
     private readonly assignRole: AssignRoleUseCase,
+    private readonly updateUserUseCase: UpdateUserUseCase,
+    private readonly createApiKey: CreateApiKeyUseCase,
+    private readonly revokeApiKey: RevokeApiKeyUseCase,
+    private readonly apiKeys: ApiKeyRepository,
   ) {}
 
   /** Provision a new tenant + first admin (platform SaaS-Ops). */
@@ -297,6 +310,109 @@ export class TenantsController {
         status: user.status,
       },
     };
+  }
+
+  /** Edit a user's login e-mail (display name is not persisted by identity yet). */
+  @Put('tenants/:id/users/:userId')
+  @RequirePermissions('billing.tenant.manage')
+  public async updateUser(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() body: { email?: string },
+  ) {
+    await this.requireTenant(id);
+    const user = await this.updateUserUseCase.execute({
+      tenantId: id,
+      userId,
+      email: body.email,
+    });
+    return {
+      data: {
+        id: user.id as string,
+        tenant_id: user.tenantId,
+        email: user.email,
+        username: user.username,
+        status: user.status,
+        display_name: user.displayName,
+      },
+    };
+  }
+
+  /** Organisation settings (locale, timezone, units, retention) of a target tenant. */
+  @Get('tenants/:id/settings')
+  @RequirePermissions('billing.tenant.manage')
+  public async getTenantSettings(@Param('id') id: string) {
+    const settings = await this.tenants.readSettings(id);
+    if (!settings) throw new HttpException('Tenant not found', HttpStatus.NOT_FOUND);
+    return { data: settings };
+  }
+
+  @Put('tenants/:id/settings')
+  @RequirePermissions('billing.tenant.manage')
+  public async putTenantSettings(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tenantSettingsPatchSchema))
+    body: import('../../domain/tenant-settings.js').TenantSettingsPatch,
+  ) {
+    const settings = await this.tenants.saveSettings(id, body);
+    if (!settings) throw new HttpException('Tenant not found', HttpStatus.NOT_FOUND);
+    return { data: settings };
+  }
+
+  @Get('tenants/:id/api-keys')
+  @RequirePermissions('billing.tenant.manage')
+  public async listApiKeys(@Param('id') id: string) {
+    await this.requireTenant(id);
+    const keys = await this.apiKeys.list(id);
+    return {
+      data: keys.map((k) => ({
+        id: k.id as string,
+        name: k.name,
+        key_prefix: k.keyPrefix,
+        scopes: k.scopes,
+        status: k.status,
+        expires_at: k.expiresAt,
+        last_used_at: k.lastUsedAt,
+      })),
+    };
+  }
+
+  /** Issue an API key for a tenant. The plaintext is returned once. */
+  @Post('tenants/:id/api-keys')
+  @RequirePermissions('billing.tenant.manage')
+  public async createTenantApiKey(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(createApiKeySchema))
+    body: import('../auth/auth.dto.js').CreateApiKeyDto,
+  ) {
+    await this.requireTenant(id);
+    const known = new Set<string>(ALL_PERMISSIONS);
+    for (const scope of body.scopes) {
+      if (!known.has(scope)) {
+        throw new HttpException(`Unknown scope: ${scope}`, HttpStatus.BAD_REQUEST);
+      }
+    }
+    const created = await this.createApiKey.execute({
+      tenantId: id,
+      name: body.name,
+      scopes: body.scopes,
+      assignedUserId: body.assigned_user_id ?? undefined,
+      expiresAt: body.expires_at ? new Date(body.expires_at) : null,
+    });
+    return {
+      data: { id: created.id, key: created.plaintext, key_prefix: created.keyPrefix },
+    };
+  }
+
+  @Delete('tenants/:id/api-keys/:keyId')
+  @HttpCode(204)
+  @RequirePermissions('billing.tenant.manage')
+  public async revokeTenantApiKey(
+    @Param('id') id: string,
+    @Param('keyId') keyId: string,
+  ): Promise<void> {
+    await this.requireTenant(id);
+    await this.revokeApiKey.execute(id, keyId);
   }
 
   @Post('tenants/:id/suspend')
