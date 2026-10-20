@@ -47,6 +47,34 @@ function mdvrLog(...args: unknown[]): void {
   console.log('[MDVR:AB8]', ...args);
 }
 
+function mdvrWarn(...args: unknown[]): void {
+  // eslint-disable-next-line no-console
+  console.warn('[MDVR:AB8]', ...args);
+}
+
+function tally<T>(rows: readonly T[], key: (row: T) => string | number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    const k = String(key(row));
+    out[k] = (out[k] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** Browser zone vs the unit's UTC+3:30 — the usual reason a window finds no files. */
+function describeClock(clock: MdvrClock, fromMs: number, toMs: number): string {
+  const offsetMin = -new Date(fromMs).getTimezoneOffset();
+  const sign = offsetMin >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMin);
+  const browserTz = `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return (
+    `clock=${clock} browserTz=${zone} (${browserTz}) ` +
+    `window=${new Date(fromMs).toISOString()}→${new Date(toMs).toISOString()} ` +
+    `sentBCD=${toMdvrBcdTime(fromMs, clock)}–${toMdvrBcdTime(toMs, clock)}`
+  );
+}
+
 function isNoFileError(rec: DeviceCommandRecord): boolean {
   return /FFF5/i.test(`${rec.error ?? ''} ${rec.responseText ?? ''}`);
 }
@@ -93,9 +121,13 @@ async function queryAb8(
   channel = 0,
   clock: MdvrClock = 'utc',
 ): Promise<MdvrResource[]> {
-  mdvrLog(
-    `AB8 avType=${avType} cam=${channel} ${toMdvrBcdTime(fromMs, clock)}–${toMdvrBcdTime(toMs, clock)}`,
-  );
+  mdvrLog(`AB8 → avType=${avType} cam=${channel} ${describeClock(clock, fromMs, toMs)}`);
+  if (clock === 'local' && Math.round(-new Date(fromMs).getTimezoneOffset()) !== 210) {
+    mdvrWarn(
+      'browser timezone is not UTC+03:30 but playback uses the browser clock — ' +
+        'the unit may be asked for the wrong hours (set VITE_MDVR_PLAYBACK_CLOCK=utc to test the other clock).',
+    );
+  }
   const queued = await apiPost<Record<string, unknown>, DeviceCommandRecord>(
     `/devices/${ch.deviceId}/commands`,
     {
@@ -111,15 +143,55 @@ async function queryAb8(
       },
     },
   );
+  mdvrLog(`AB8 queued id=${queued.id} status=${queued.status}`);
+  const startedAt = Date.now();
   const done = await waitForAb8(queued.id, isCancelled);
+  mdvrLog(
+    `AB8 reply id=${queued.id} status=${done.status} after ${Date.now() - startedAt}ms ` +
+      `error=${done.error ?? '-'} response=${String(done.responseText ?? '').slice(0, 160)}`,
+  );
   if (done.status !== 'ACKED') {
     if (isNoFileError(done)) {
-      mdvrLog(`AB8 avType=${avType} empty (FFF5)`);
+      mdvrLog(
+        `AB8 avType=${avType} empty (FFF5): the unit reports NO file in this window — check the clock/timezone line above, or that the SD card has recordings for these hours.`,
+      );
       return [];
     }
+    mdvrWarn(`AB8 not ACKED (${done.status}) — unit/gateway problem, not a filter problem.`);
     throw new Error(done.error ?? done.responseText ?? `AB8 ${done.status}`);
   }
-  return parseMdvrResourceAck(done.responseText);
+  const rows = parseMdvrResourceAck(done.responseText);
+  try {
+    const meta = JSON.parse(done.responseText ?? '{}') as {
+      resources?: unknown[];
+      allPack?: number;
+      curPack?: number;
+      allFileNum?: number;
+    };
+    const rawCount = Array.isArray(meta.resources) ? meta.resources.length : 0;
+    mdvrLog(
+      `AB8 parsed: packets=${meta.curPack ?? '?'}/${meta.allPack ?? '?'} ` +
+        `unitReportsTotalFiles=${meta.allFileNum ?? '?'} rowsInReply=${rawCount} rowsParsed=${rows.length}`,
+    );
+    if (rawCount !== rows.length) {
+      mdvrWarn(
+        `${rawCount - rows.length} row(s) dropped while parsing (start/end time is not 12 digits).`,
+      );
+    }
+    if ((meta.allPack ?? 1) > (meta.curPack ?? 1)) {
+      mdvrWarn(
+        `list is incomplete: got ${meta.curPack}/${meta.allPack} packets — narrow the window or check the gateway.`,
+      );
+    }
+    if ((meta.allFileNum ?? 0) > rows.length) {
+      mdvrWarn(
+        `unit reports ${meta.allFileNum} file(s) but only ${rows.length} reached the UI (list truncated).`,
+      );
+    }
+  } catch {
+    /* diagnostics only */
+  }
+  return rows;
 }
 
 async function queryD01Page(
@@ -245,7 +317,17 @@ export function useMdvrResources() {
       const rows = await queryAb8(ch, fromMs, toMs, '0', cancelled, 0, MDVR_PLAYBACK_CLOCK);
       ab8Answered = true;
       mdvrLog(`AB8 listed ${rows.length} file(s)`);
-      collected.push(...rows.filter((r) => r.channel === 0 || r.channel === logicalChannel));
+      const kept = rows.filter((r) => r.channel === 0 || r.channel === logicalChannel);
+      mdvrLog(
+        `AB8 channel filter: selected cam=${logicalChannel}; unit rows by channel=${JSON.stringify(tally(rows, (r) => r.channel))}; ` +
+          `by avType=${JSON.stringify(tally(rows, (r) => r.avType))}; kept=${kept.length} dropped=${rows.length - kept.length}`,
+      );
+      if (rows.length > 0 && kept.length === 0) {
+        mdvrWarn(
+          `the unit returned ${rows.length} file(s) but none for camera ${logicalChannel} — channel numbering mismatch (see "unit rows by channel" above).`,
+        );
+      }
+      collected.push(...kept);
     } catch (err) {
       if (cancelled() || (err instanceof Error && err.message === 'cancelled')) return;
       const message = listFailureMessage(err);
@@ -273,6 +355,17 @@ export function useMdvrResources() {
       photoNames,
       { logicalChannel: ch.logicalChannel ?? 1, fromMs, toMs },
     );
+    mdvrLog(
+      `search result: ${nextVideos.length} video(s), ${nextPhotos.length} photo(s), ` +
+        `errors=${errors.length ? errors.join(' | ') : 'none'}, ab8Answered=${ab8Answered}, d01Names=${photoNames.length}`,
+    );
+    if (ab8Answered && nextVideos.length === 0) {
+      mdvrWarn(
+        'no VIDEO to show. Read the lines above: FFF5 → unit has nothing in that window (clock/timezone); ' +
+          '"none for camera" → channel mismatch; "list is incomplete" → missing AB8 packets; ' +
+          'AB8 listed 0 without FFF5 → unit returned an empty list.',
+      );
+    }
     setVideos(nextVideos);
     setPhotos(nextPhotos);
     if (nextVideos.length === 0 && nextPhotos.length === 0 && errors.length > 0) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
+  Ab8PacketCollector,
   isDeviceErrorResponse,
   shouldKeepPendingForListPayload,
 } from '../infrastructure/kafka/command-ack-consumer.js';
@@ -32,5 +33,33 @@ describe('isDeviceErrorResponse', () => {
     expect(isDeviceErrorResponse('Error')).toBe(true);
     expect(isDeviceErrorResponse('FFF5')).toBe(true);
     expect(isDeviceErrorResponse('NOT SUPPORT')).toBe(true);
+  });
+});
+
+describe('Ab8PacketCollector', () => {
+  const pkt = (curPack: number, allPack: number, files: number[]) => ({
+    resources: files,
+    allPack,
+    curPack,
+    allFileNum: 5,
+  });
+
+  it('waits for every packet and merges them in order', () => {
+    const c = new Ab8PacketCollector();
+    expect(c.add('cmd', pkt(2, 3, [3, 4]))).toBeNull();
+    expect(c.add('cmd', pkt(1, 3, [1, 2]))).toBeNull();
+    const merged = c.add('cmd', pkt(3, 3, [5]));
+    expect(merged?.resources).toEqual([1, 2, 3, 4, 5]);
+    expect(merged?.receivedPacks).toBe(3);
+  });
+
+  it('ignores a repeated packet and returns the partial list on take()', () => {
+    const c = new Ab8PacketCollector();
+    c.add('cmd', pkt(1, 3, [1, 2]));
+    c.add('cmd', pkt(1, 3, [1, 2]));
+    const partial = c.take('cmd');
+    expect(partial?.resources).toEqual([1, 2]);
+    expect(partial?.allPack).toBe(3);
+    expect(c.take('cmd')).toBeNull();
   });
 });
