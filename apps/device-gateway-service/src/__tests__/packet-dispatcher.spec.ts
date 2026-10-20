@@ -176,6 +176,39 @@ describe('PacketDispatcher — fail-closed pipeline (06 §8, §6.1)', () => {
     expect(kafka.published[0]?.type).toBe('POSITION');
   });
 
+  it('a failed Kafka publish does not discard the other messages of the same packet', async () => {
+    const { deps, kafka } = buildDeps();
+    const failOn = 'm-fail';
+    kafka.publish = async (m: DeviceMessage) => {
+      if (m.messageId === failOn) throw new Error('broker unavailable');
+      kafka.published.push(m);
+    };
+    const dispatcher = new PacketDispatcher(deps);
+    const session = newSession();
+    const mk = (messageId: string, type: 'ALARM' | 'POSITION') =>
+      new DeviceMessage({
+        messageId,
+        deviceId: '',
+        serialOrImei: 'imei-1',
+        tenantId: '',
+        protocolId: 'meitrack',
+        type,
+        timestamp: NOW,
+        ingestedAt: NOW,
+        rawSize: 2,
+        checksum: 'abc',
+        direction: 'INBOUND',
+      });
+    await expect(
+      dispatcher.dispatch(
+        session,
+        fakeAdapter([mk('m-a', 'POSITION'), mk(failOn, 'ALARM'), mk('m-b', 'POSITION')]),
+        rawPacket(),
+      ),
+    ).rejects.toThrow(/1 of 3 message\(s\) not published: broker unavailable/);
+    expect(kafka.published.map((m) => m.messageId)).toEqual(['m-a', 'm-b']);
+  });
+
   it('implicit login fails closed when the embedded IMEI is unknown', async () => {
     const { deps, kafka } = buildDeps();
     const dispatcher = new PacketDispatcher(deps);

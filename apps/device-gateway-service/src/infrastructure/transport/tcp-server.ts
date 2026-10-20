@@ -37,8 +37,9 @@ export interface TcpConnectionContext {
 
 /**
  * Callback the application wires: receives framed raw packets off the socket and
- * runs them through the dispatcher. Returning false signals back-pressure (the
- * read loop pauses); the connection remains open.
+ * runs them through the dispatcher. Returning false means the session was closed
+ * and the read loop must stop; a failed dispatch of one frame returns true so the
+ * frames behind it are still processed.
  */
 export type TcpPacketHandler = (ctx: TcpConnectionContext, packet: Buffer) => Promise<boolean>;
 
@@ -148,6 +149,10 @@ export class TcpListener implements OnApplicationShutdown {
       socket.destroy();
     };
 
+    // Drains are chained per connection: a second 'data' event arriving while a
+    // dispatch is awaiting Kafka must wait its turn, otherwise two loops race on
+    // the same reader and frames reach Kafka out of order.
+    let draining: Promise<void> = Promise.resolve();
     let loggedFirstBytes = false;
     socket.on('data', (chunk: Buffer) => {
       if (!loggedFirstBytes) {
@@ -159,8 +164,9 @@ export class TcpListener implements OnApplicationShutdown {
         );
       }
       reader.append(chunk);
-      // Drain all complete frames in the buffer before yielding to the event loop.
-      this.drainFrames(reader, ctx).catch((err) => onError?.(ctx, err as Error));
+      draining = draining
+        .then(() => this.drainFrames(reader, ctx))
+        .catch((err) => onError?.(ctx, err as Error));
     });
 
     socket.on('timeout', () => {
@@ -178,10 +184,13 @@ export class TcpListener implements OnApplicationShutdown {
 
   private async drainFrames(reader: ByteReader, ctx: TcpConnectionContext): Promise<void> {
     const { adapter } = ctx;
-    // Frame up to a bounded number of packets per data event to avoid starving
-    // other sockets under a large multi-frame burst.
-    const MAX_PER_DRAIN = 64;
-    for (let i = 0; i < MAX_PER_DRAIN; i++) {
+    // Yield to the event loop every YIELD_EVERY frames so a large multi-frame
+    // burst (a unit flushing its offline backlog) cannot starve other sockets.
+    // The loop itself only ends on NEED_MORE: stopping after a fixed number of
+    // frames left the tail of the burst in the reader until the device happened
+    // to send again — and lost it outright if the socket closed first.
+    const YIELD_EVERY = 64;
+    for (let i = 1; ; i++) {
       const framed = adapter.frame(reader, new Date());
       if (framed === NEED_MORE) {
         // Reset the idle timer: we received bytes even if no complete frame yet.
@@ -193,9 +202,10 @@ export class TcpListener implements OnApplicationShutdown {
       ctx.socket.setTimeout(this.options.idleTimeoutMs);
       const ok = await this.options.onPacket(ctx, Buffer.from(framed.payload));
       if (!ok) {
-        // Back-pressure: stop draining this event; the dispatcher will resume.
+        // The handler closed the session — nothing further may be dispatched.
         return;
       }
+      if (i % YIELD_EVERY === 0) await new Promise<void>((resolve) => setImmediate(resolve));
     }
   }
 }

@@ -191,12 +191,18 @@ export class SessionManager {
     }
     let displaced = false;
     if (this.redisStore && session.tenantId && session.deviceId) {
-      const result = await this.redisStore.upsertSnapshot(
-        session.toSnapshot(),
-        this.ttlFor(session.transport),
-        this.instanceId,
-      );
-      displaced = result.displaced;
+      try {
+        const result = await this.redisStore.upsertSnapshot(
+          session.toSnapshot(),
+          this.ttlFor(session.transport),
+          this.instanceId,
+        );
+        displaced = result.displaced;
+      } catch (err) {
+        // Best-effort like refreshGlobal: a Redis blip at login must not abort
+        // the dispatch and drop the very first packet of the session.
+        this.logger.warn(`session snapshot upsert failed: ${(err as Error).message}`);
+      }
     }
     await this.emitLifecycle(session, 'AUTHENTICATED', null);
     return { displaced };

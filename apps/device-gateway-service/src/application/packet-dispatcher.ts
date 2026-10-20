@@ -93,6 +93,21 @@ export class PacketDispatcher {
 
     let authenticated = false;
     let published = 0;
+    // A packet can decode to several messages (CCE cache dumps, event + position).
+    // One failed Kafka publish must not discard the siblings behind it, so
+    // failures are collected and raised once the whole packet has been tried.
+    const failures: Error[] = [];
+    const publishOne = async (m: DeviceMessage): Promise<void> => {
+      try {
+        await this.publish(m, session, raw);
+        published++;
+      } catch (err) {
+        failures.push(err as Error);
+        this.logger.warn(
+          `Publish failed session=${session.id} type=${m.type} message=${m.messageId}: ${(err as Error).message}`,
+        );
+      }
+    };
 
     const frameLog = formatCceFrameLog(raw.payload);
     if (frameLog) this.logger.log(frameLog);
@@ -132,8 +147,7 @@ export class PacketDispatcher {
         authenticated = true;
         // LOGIN itself is published (telemetry.device.raw — 06 §11.5) now that we
         // are AUTHENTICATED. Re-stamp the identity onto the message.
-        await this.publish(this.bindIdentity(msg, session), session, raw);
-        published++;
+        await publishOne(this.bindIdentity(msg, session));
         continue;
       }
 
@@ -225,8 +239,7 @@ export class PacketDispatcher {
       }
 
       // Stage 5: publish (06 §8). Fail-closed invariant enforced by canPublish().
-      await this.publish(normalized, session, raw);
-      published++;
+      await publishOne(normalized);
     }
 
     // Drain AB2/AB3 held while the socket was down. Not only on the login
@@ -234,6 +247,14 @@ export class PacketDispatcher {
     // out on the next frame, otherwise it sits QUEUED until the unit redials.
     if (session.deviceId && session.canDispatchCommand()) {
       await this.deps.commandDispatcher?.flushHeld(session.deviceId);
+    }
+
+    // Surface the failure to the caller. The CCE cache ack below is skipped on
+    // purpose: an un-acked MDVR keeps the records and resends them.
+    if (failures.length > 0) {
+      throw new Error(
+        `${failures.length} of ${failures.length + published} message(s) not published: ${failures[0]?.message}`,
+      );
     }
 
     if (adapter.id === 'meitrack' && session.canPublish()) {
