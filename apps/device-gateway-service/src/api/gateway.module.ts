@@ -493,8 +493,9 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
         return false;
       }
     } catch (err) {
+      // One frame failing (Kafka down, bad decode) must not strand the frames
+      // queued behind it in the reader — each is independent.
       this.logger.warn(`Dispatch error: ${(err as Error).message}`);
-      return false;
     }
     return true;
   }
