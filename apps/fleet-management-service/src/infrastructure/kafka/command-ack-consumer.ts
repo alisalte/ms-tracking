@@ -72,12 +72,65 @@ export function isDeviceErrorResponse(payload: string): boolean {
   return false;
 }
 
+/** Longest we wait for the remaining AB8 packets once the first one has arrived. */
+const AB8_PACKET_WAIT_MS = 8_000;
+
+export interface Ab8Packet {
+  readonly resources: readonly unknown[];
+  readonly allPack: number;
+  readonly curPack: number;
+  readonly allFileNum: number;
+}
+
+export interface Ab8Merged {
+  readonly resources: unknown[];
+  readonly allPack: number;
+  readonly receivedPacks: number;
+  readonly allFileNum: number;
+}
+
+/**
+ * AB8 lists longer than one packet arrive as `allPack` replies. The first
+ * reply used to mark the command ACKED, so every later packet found no pending
+ * row and was dropped (an SD card with many clips showed a truncated list).
+ * Collect the packets per command and only complete once all have arrived.
+ */
+export class Ab8PacketCollector {
+  private readonly sessions = new Map<string, Map<number, Ab8Packet>>();
+
+  /** Add a packet; returns the merged list once every packet has arrived, else null. */
+  public add(commandId: string, packet: Ab8Packet): Ab8Merged | null {
+    const packs = this.sessions.get(commandId) ?? new Map<number, Ab8Packet>();
+    packs.set(packet.curPack, packet);
+    this.sessions.set(commandId, packs);
+    if (packs.size < packet.allPack) return null;
+    return this.take(commandId);
+  }
+
+  /** Remove and merge whatever has arrived for the command (also used on timeout). */
+  public take(commandId: string): Ab8Merged | null {
+    const packs = this.sessions.get(commandId);
+    this.sessions.delete(commandId);
+    if (!packs || packs.size === 0) return null;
+    const ordered = [...packs.values()].sort((a, b) => a.curPack - b.curPack);
+    const first = ordered[0] as Ab8Packet;
+    return {
+      resources: ordered.flatMap((p) => [...p.resources]),
+      allPack: Math.max(...ordered.map((p) => p.allPack)),
+      receivedPacks: ordered.length,
+      allFileNum: first.allFileNum,
+    };
+  }
+}
+
 export class CommandAckConsumer implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger('CommandAckConsumer');
   private consumer: Consumer | null = null;
   private started = false;
   private shutDown = false;
   private startAttempts = 0;
+  private readonly ab8 = new Ab8PacketCollector();
+  private readonly ab8Timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly config: FleetManagementConfig,
@@ -241,16 +294,27 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
     }
 
     if (Array.isArray(resources)) {
-      await this.commands.markAcked(
-        tenantId,
-        pending.id,
-        JSON.stringify({
-          resources,
-          allPack: env.telemetry?.allPack ?? 1,
-          curPack: env.telemetry?.curPack ?? 1,
-          allFileNum: env.telemetry?.allFileNum ?? resources.length,
-        }),
+      const allPack = env.telemetry?.allPack ?? 1;
+      const curPack = env.telemetry?.curPack ?? 1;
+      const allFileNum = env.telemetry?.allFileNum ?? resources.length;
+      this.logger.log(
+        `AB8 packet ${curPack}/${allPack} device=${deviceId} files=${resources.length} total=${allFileNum}`,
       );
+      if (allPack > 1) {
+        const merged = this.ab8.add(pending.id, { resources, allPack, curPack, allFileNum });
+        if (!merged) {
+          this.armAb8Flush(tenantId, pending.id);
+          return;
+        }
+        await this.completeAb8(tenantId, pending.id, merged);
+        return;
+      }
+      await this.completeAb8(tenantId, pending.id, {
+        resources,
+        allPack,
+        receivedPacks: 1,
+        allFileNum,
+      });
       return;
     }
     const photoNames = env.telemetry?.photoNames;
@@ -297,6 +361,45 @@ export class CommandAckConsumer implements OnApplicationBootstrap, OnApplication
         await this.evidence?.markFailedByCommandId(pending.id, `DEVICE_ERROR:${payload}`);
       }
     }
+  }
+
+  /** Complete a multi-packet AB8 with what arrived if the rest never shows up. */
+  private armAb8Flush(tenantId: string, commandId: string): void {
+    if (this.ab8Timers.has(commandId)) return;
+    const timer = setTimeout(() => {
+      this.ab8Timers.delete(commandId);
+      const merged = this.ab8.take(commandId);
+      if (!merged) return;
+      this.logger.warn(
+        `AB8 command=${commandId}: only ${merged.receivedPacks}/${merged.allPack} packets arrived — completing with a partial list.`,
+      );
+      void this.completeAb8(tenantId, commandId, merged).catch((err: Error) =>
+        this.logger.warn(`AB8 partial completion failed: ${err.message}`),
+      );
+    }, AB8_PACKET_WAIT_MS);
+    timer.unref?.();
+    this.ab8Timers.set(commandId, timer);
+  }
+
+  private async completeAb8(tenantId: string, commandId: string, merged: Ab8Merged): Promise<void> {
+    const timer = this.ab8Timers.get(commandId);
+    if (timer) {
+      clearTimeout(timer);
+      this.ab8Timers.delete(commandId);
+    }
+    this.logger.log(
+      `AB8 command=${commandId} complete: ${merged.resources.length} file(s) from ${merged.receivedPacks}/${merged.allPack} packet(s)`,
+    );
+    await this.commands.markAcked(
+      tenantId,
+      commandId,
+      JSON.stringify({
+        resources: merged.resources,
+        allPack: merged.allPack,
+        curPack: merged.receivedPacks,
+        allFileNum: merged.allFileNum,
+      }),
+    );
   }
 
   /** Scale the D00 JPEG down before it is stored on the command and evidence rows. */
