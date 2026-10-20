@@ -20,7 +20,7 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MdvrResource, fromMdvrBcdTime, useSnapshot } from '@/api/video.api';
+import { MDVR_PLAYBACK_CLOCK, type MdvrResource, fromMdvrBcdTime, useSnapshot } from '@/api/video.api';
 import { Alert, Badge, Input, Spinner } from '@/components/tailwind-ui';
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { JSMpegLivePlayer } from '@/components/video/JSMpegLivePlayer';
@@ -68,8 +68,8 @@ function fmtBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 function clipWindow(r: MdvrResource): { fromMs: number; toMs: number } | null {
-  const fromMs = fromMdvrBcdTime(r.startTime);
-  let toMs = fromMdvrBcdTime(r.endTime);
+  const fromMs = fromMdvrBcdTime(r.startTime, MDVR_PLAYBACK_CLOCK);
+  let toMs = fromMdvrBcdTime(r.endTime, MDVR_PLAYBACK_CLOCK);
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
   if (toMs <= fromMs) toMs = fromMs + 1_000;
   return { fromMs, toMs };
@@ -239,7 +239,7 @@ export function PlaybackPanel({
     setToInput(toDateInput(toMs));
     setPlaying(Boolean(isMdvrChannel(ch)));
     setCursorMs(fromMs);
-    if (isMdvrChannel(ch)) void playback.start(ch, fromMs, toMs, avType);
+    if (isMdvrChannel(ch)) void playback.start(ch, fromMs, toMs, avType, MDVR_PLAYBACK_CLOCK);
     else void playback.stop();
   };
 

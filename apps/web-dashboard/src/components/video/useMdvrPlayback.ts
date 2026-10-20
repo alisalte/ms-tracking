@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiPost } from '@/api/client';
 import {
+  type MdvrClock,
   mdvrPlaybackHlsUrl,
   mdvrPlaybackRtmpUrl,
   mdvrRtmpUploadUrl,
@@ -56,6 +57,7 @@ export function useMdvrPlayback() {
   const [error, setError] = useState<string | null>(null);
   const genRef = useRef(0);
   const channelRef = useRef<CameraChannel | null>(null);
+  const clockRef = useRef<MdvrClock>('utc');
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusRef = useRef<MdvrPlaybackStatus>('idle');
   channelRef.current = channel;
@@ -122,7 +124,14 @@ export function useMdvrPlayback() {
   }, [endDevice, clearWaitTimer]);
 
   const start = useCallback(
-    async (ch: CameraChannel, fromMs: number, toMs: number, avType = '0') => {
+    async (
+      ch: CameraChannel,
+      fromMs: number,
+      toMs: number,
+      avType = '0',
+      clock: MdvrClock = 'utc',
+    ) => {
+      clockRef.current = clock;
       const gen = ++genRef.current;
       clearWaitTimer();
       setChannel(ch);
@@ -147,7 +156,7 @@ export function useMdvrPlayback() {
       const url = mdvrPlaybackRtmpUrl(ch.imei, logicalChannel);
       setStatus('starting');
       mdvrLog(
-        `AB4 start device=${ch.deviceId} cam=${logicalChannel} ${toMdvrBcdTime(fromMs)}–${toMdvrBcdTime(toMs)} url=${url}`,
+        `AB4 start device=${ch.deviceId} cam=${logicalChannel} ${toMdvrBcdTime(fromMs, clock)}–${toMdvrBcdTime(toMs, clock)} url=${url}`,
       );
       let advertised = url;
       try {
@@ -161,8 +170,8 @@ export function useMdvrPlayback() {
               avType,
               streamType: '0',
               capType: '0',
-              startTime: toMdvrBcdTime(fromMs),
-              endTime: toMdvrBcdTime(toMs),
+              startTime: toMdvrBcdTime(fromMs, clock),
+              endTime: toMdvrBcdTime(toMs, clock),
             },
           },
         );
@@ -199,7 +208,7 @@ export function useMdvrPlayback() {
   const seekDevice = useCallback(async (ms: number) => {
     const ch = channelRef.current;
     if (!ch?.deviceId || !isMdvrChannel(ch)) return;
-    const dragPoint = toMdvrBcdTime(ms);
+    const dragPoint = toMdvrBcdTime(ms, clockRef.current);
     mdvrLog(`AB5 drag → device=${ch.deviceId} ${dragPoint}`);
     try {
       await apiPost(`/devices/${ch.deviceId}/commands`, {

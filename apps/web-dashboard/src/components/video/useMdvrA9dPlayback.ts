@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiPost } from '@/api/client';
-import { toMdvrBcdTime } from '@/api/video.api';
+import { MDVR_PLAYBACK_CLOCK, toMdvrBcdTime } from '@/api/video.api';
 import { isMdvrChannel } from '@/components/video/useStreamSession';
 import type { DeviceCommandRecord } from '@/types/command.types';
 import type { CameraChannel } from '@/types/video.types';
@@ -48,7 +48,7 @@ export function mdvrStreamerWsUrl(imei: string): string {
 
 async function fetchStreamStats(imei: string): Promise<A9dStreamStats | null> {
   const res = await fetch(`/api/v1/media-live/status/${encodeURIComponent(imei)}`);
-  if (!res.ok) return null;
+  if (!res.ok || res.status === 204) return null; // 204: unit has not dialed in yet
   return (await res.json()) as A9dStreamStats;
 }
 
@@ -114,8 +114,8 @@ export function useMdvrA9dPlayback() {
       // Loopback is rewritten to MDVR_PUBLIC_HOST by fleet-management.
       const server = import.meta.env.VITE_MDVR_PUBLIC_HOST || window.location.hostname;
       const tcpPort = Number(import.meta.env.VITE_MDVR_VIDEO_PORT ?? DEFAULT_MEDIA_TCP_PORT);
-      const startTime = toMdvrBcdTime(fromMs);
-      const endTime = toMdvrBcdTime(toMs);
+      const startTime = toMdvrBcdTime(fromMs, MDVR_PLAYBACK_CLOCK);
+      const endTime = toMdvrBcdTime(toMs, MDVR_PLAYBACK_CLOCK);
       a9dLog(
         `A9D start device=${ch.deviceId} imei=${imei} cam=${channel} ${startTime}–${endTime} → ${server}:${tcpPort}`,
       );

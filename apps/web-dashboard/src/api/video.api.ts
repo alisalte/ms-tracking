@@ -375,33 +375,48 @@ export function mdvrPlaybackHlsUrl(imei?: string, logicalChannel = 1): string {
 }
 
 /**
- * Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS on the device clock.
+ * Which wall clock a BCD timestamp is written in.
  *
- * MD300 event files are stamped in UTC (a JPEG named `20261018121349_…` is
- * the same instant as `raisedAt` `2026-10-18T12:13:49Z`). Sending the
- * operator's local wall clock — Iran is UTC+3:30 — asks for 15:43 and the
- * unit answers FFF5 (no file). This matches `toMdvrBcdUtc` on the server.
+ * MD300 photo names and alarm events are stamped in UTC, but the unit indexes
+ * its recorded VIDEO in local time (UTC+3:30 in Iran): asking AB8/AB4/A9D for a
+ * UTC window returns no files (FFF5 / empty list). Manual playback therefore
+ * uses `MDVR_PLAYBACK_CLOCK`; alarm evidence keeps the UTC default.
  */
-export function toMdvrBcdTime(ms: number): string {
+export type MdvrClock = 'utc' | 'local';
+
+/** Clock for manual SD-card playback (AB8 / AB4 / AB5 / A9D). */
+export const MDVR_PLAYBACK_CLOCK: MdvrClock =
+  import.meta.env.VITE_MDVR_PLAYBACK_CLOCK === 'utc' ? 'utc' : 'local';
+
+/** Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS on the given device clock (default UTC). */
+export function toMdvrBcdTime(ms: number, clock: MdvrClock = 'utc'): string {
   const d = new Date(ms);
   if (!Number.isFinite(d.getTime())) return '000000000000';
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${String(d.getUTCFullYear()).slice(-2)}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+  const utc = clock === 'utc';
+  const yy = utc ? d.getUTCFullYear() : d.getFullYear();
+  const mo = (utc ? d.getUTCMonth() : d.getMonth()) + 1;
+  const dd = utc ? d.getUTCDate() : d.getDate();
+  const hh = utc ? d.getUTCHours() : d.getHours();
+  const mi = utc ? d.getUTCMinutes() : d.getMinutes();
+  const ss = utc ? d.getUTCSeconds() : d.getSeconds();
+  return `${String(yy).slice(-2)}${pad(mo)}${pad(dd)}${pad(hh)}${pad(mi)}${pad(ss)}`;
 }
 
-/** Inverse of `toMdvrBcdTime` — 12-digit device BCD (UTC) → epoch ms. */
-export function fromMdvrBcdTime(bcd: string): number {
+/** Inverse of `toMdvrBcdTime` — 12-digit device BCD → epoch ms. */
+export function fromMdvrBcdTime(bcd: string, clock: MdvrClock = 'utc'): number {
   const s = String(bcd).replace(/\D/g, '').padStart(12, '0').slice(0, 12);
   const yy = Number(s.slice(0, 2));
   const year = yy >= 70 ? 1900 + yy : 2000 + yy;
-  return Date.UTC(
+  const parts = [
     year,
     Number(s.slice(2, 4)) - 1,
     Number(s.slice(4, 6)),
     Number(s.slice(6, 8)),
     Number(s.slice(8, 10)),
     Number(s.slice(10, 12)),
-  );
+  ] as const;
+  return clock === 'utc' ? Date.UTC(...parts) : new Date(...parts).getTime();
 }
 
 /** One MDVR SD-card file from an AB8 resource-list ACK. */
