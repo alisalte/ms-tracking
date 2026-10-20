@@ -48,7 +48,7 @@ export function mdvrStreamerWsUrl(imei: string): string {
 
 async function fetchStreamStats(imei: string): Promise<A9dStreamStats | null> {
   const res = await fetch(`/api/v1/media-live/status/${encodeURIComponent(imei)}`);
-  if (!res.ok) return null;
+  if (!res.ok || res.status === 204) return null; // 204: unit has not dialed in yet
   return (await res.json()) as A9dStreamStats;
 }
 
