@@ -9,6 +9,8 @@
  *   POST   /fleet/drivers/:id/assign-vehicle      { vehicle_id }
  *   POST   /fleet/drivers/:id/unassign-vehicle    204
  *   GET    /fleet/drivers/:id/assignments         (?from&to ISO) → assignment history
+ *   GET    /fleet/vehicles/:id/behavior-score     vehicle-centric behavior score + per-driver split
+ *   GET    /fleet/vehicles/:id/behavior-events    behavior events recorded on the vehicle
  *
  * The wire from Nest (class JSON) is camelCase; writes use the Zod DTO's
  * snake_case. Cursor pagination is followed to exhaustion like the other
@@ -231,6 +233,8 @@ export interface DriverBehaviorEvent {
   type: string;
   severity: string;
   vehicleId: string;
+  /** Driver assigned at `raisedAt`; null when nobody was assigned to the vehicle. */
+  driverId: string | null;
   raisedAt: string;
   sourceAlarmId: string | null;
 }
@@ -264,6 +268,7 @@ function mapBehaviorEvent(raw: Record<string, unknown>): DriverBehaviorEvent {
     type: String(raw.type ?? ''),
     severity: String(raw.severity ?? ''),
     vehicleId: String(raw.vehicleId ?? raw.vehicle_id ?? ''),
+    driverId: asStr(raw.driverId ?? raw.driver_id),
     raisedAt: asStr(raw.raisedAt ?? raw.raised_at) ?? '',
     sourceAlarmId: asStr(raw.sourceAlarmId ?? raw.source_alarm_id),
   };
@@ -359,6 +364,117 @@ export function useDriverBehaviorRanking(options?: { enabled?: boolean }) {
     queryKey: queryKeys.assets.driverBehaviorRanking(),
     queryFn: fetchDriverBehaviorRanking,
     enabled: options?.enabled ?? true,
+  });
+}
+
+/** One driver's share of the behavior events recorded on a vehicle. */
+export interface VehicleBehaviorDriver {
+  driverId: string;
+  firstName: string;
+  lastName: string;
+  score: number;
+  eventCount: number;
+  harshBrakeCount: number;
+  rapidAccelCount: number;
+  speedViolationCount: number;
+  excessiveIdleCount: number;
+}
+
+/** Vehicle-centric behavior: scored over every event the car raised, split per driver. */
+export interface VehicleBehavior {
+  vehicleId: string;
+  periodStart: string;
+  periodEnd: string;
+  score: number;
+  harshBrakeCount: number;
+  rapidAccelCount: number;
+  speedViolationCount: number;
+  excessiveIdleCount: number;
+  eventCount: number;
+  /** Events raised while no driver was assigned to the vehicle. */
+  unattributedCount: number;
+  previousScore: number | null;
+  delta: number | null;
+  needsAttention: boolean;
+  drivers: VehicleBehaviorDriver[];
+}
+
+function mapVehicleBehaviorDriver(raw: Record<string, unknown>): VehicleBehaviorDriver {
+  return {
+    driverId: String(raw.driverId ?? raw.driver_id ?? ''),
+    firstName: String(raw.firstName ?? raw.first_name ?? ''),
+    lastName: String(raw.lastName ?? raw.last_name ?? ''),
+    score: Number(raw.score ?? 0),
+    eventCount: Number(raw.eventCount ?? raw.event_count ?? 0),
+    harshBrakeCount: Number(raw.harshBrake ?? raw.harshBrakeCount ?? 0),
+    rapidAccelCount: Number(raw.rapidAccel ?? raw.rapidAccelCount ?? 0),
+    speedViolationCount: Number(raw.speedViolation ?? raw.speedViolationCount ?? 0),
+    excessiveIdleCount: Number(raw.excessiveIdle ?? raw.excessiveIdleCount ?? 0),
+  };
+}
+
+function mapVehicleBehavior(
+  raw: Record<string, unknown> | null | undefined,
+): VehicleBehavior | null {
+  if (!raw || raw.score == null) return null;
+  const drivers = Array.isArray(raw.drivers) ? (raw.drivers as Record<string, unknown>[]) : [];
+  return {
+    vehicleId: String(raw.vehicleId ?? raw.vehicle_id ?? ''),
+    periodStart: asStr(raw.periodStart ?? raw.period_start) ?? '',
+    periodEnd: asStr(raw.periodEnd ?? raw.period_end) ?? '',
+    score: Number(raw.score),
+    harshBrakeCount: Number(raw.harshBrake ?? raw.harshBrakeCount ?? 0),
+    rapidAccelCount: Number(raw.rapidAccel ?? raw.rapidAccelCount ?? 0),
+    speedViolationCount: Number(raw.speedViolation ?? raw.speedViolationCount ?? 0),
+    excessiveIdleCount: Number(raw.excessiveIdle ?? raw.excessiveIdleCount ?? 0),
+    eventCount: Number(raw.eventCount ?? raw.event_count ?? 0),
+    unattributedCount: Number(raw.unattributedCount ?? raw.unattributed_count ?? 0),
+    previousScore: raw.previousScore == null ? null : Number(raw.previousScore),
+    delta: raw.delta == null ? null : Number(raw.delta),
+    needsAttention: Boolean(raw.needsAttention ?? raw.needs_attention),
+    drivers: drivers.map(mapVehicleBehaviorDriver),
+  };
+}
+
+async function fetchVehicleBehavior(id: string): Promise<VehicleBehavior | null> {
+  if (shouldUseMock()) return resolveMock(null);
+  return withMockFallback(
+    async () =>
+      mapVehicleBehavior(
+        await apiGet<Record<string, unknown> | null>(`/fleet/vehicles/${id}/behavior-score`),
+      ),
+    async () => null,
+  );
+}
+
+async function fetchVehicleBehaviorEvents(id: string): Promise<DriverBehaviorEvent[]> {
+  if (shouldUseMock()) return resolveMock([]);
+  return withMockFallback(
+    async () => {
+      const rows = await apiGet<Record<string, unknown>[]>(`/fleet/vehicles/${id}/behavior-events`);
+      return (rows ?? []).map(mapBehaviorEvent);
+    },
+    async () => [],
+  );
+}
+
+export function useVehicleBehavior(id: string | null) {
+  return useQuery({
+    queryKey: id
+      ? queryKeys.assets.vehicleBehavior(id)
+      : ['assets', 'vehicle', 'behavior-score', 'none'],
+    queryFn: () => fetchVehicleBehavior(id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useVehicleBehaviorEvents(id: string | null) {
+  return useQuery({
+    queryKey: id
+      ? queryKeys.assets.vehicleBehaviorEvents(id)
+      : ['assets', 'vehicle', 'behavior-events', 'none'],
+    queryFn: () => fetchVehicleBehaviorEvents(id as string),
+    enabled: Boolean(id),
   });
 }
 

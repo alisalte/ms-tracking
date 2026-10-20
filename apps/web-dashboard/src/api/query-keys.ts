@@ -58,6 +58,10 @@ export const queryKeys = {
     driverBehaviorEvents: (id: string) =>
       [...queryKeys.assets.all, 'driver', id, 'behavior-events'] as const,
     driverBehaviorRanking: () => [...queryKeys.assets.all, 'driver', 'behavior-ranking'] as const,
+    vehicleBehavior: (id: string) =>
+      [...queryKeys.assets.all, 'vehicle', id, 'behavior-score'] as const,
+    vehicleBehaviorEvents: (id: string) =>
+      [...queryKeys.assets.all, 'vehicle', id, 'behavior-events'] as const,
     devices: () => [...queryKeys.assets.all, 'devices'] as const,
     deviceDetail: (id: string) => [...queryKeys.assets.all, 'device', id] as const,
     groups: () => [...queryKeys.assets.all, 'groups'] as const,

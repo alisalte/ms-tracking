@@ -1500,7 +1500,18 @@
       "colFleet": "Fleet",
       "colVin": "VIN",
       "colStatus": "Status",
-      "emptyDescription": "No vehicles yet — register a vehicle to see it here."
+      "emptyDescription": "No vehicles yet — register a vehicle to see it here.",
+      "behavior": "Driving behavior",
+      "behaviorHint": "Safety score for this vehicle over the last 30 days (higher is safer). Counts every behavior alarm the vehicle raised, split by who was assigned at the time.",
+      "behaviorUnavailable": "Behavior data is unavailable right now.",
+      "behaviorNoEvents": "No behavior events in this period.",
+      "behaviorDrivers": "Drivers",
+      "behaviorUnattributed": "No driver assigned",
+      "behaviorUnattributedCount_one": "{{count}} event happened while no driver was assigned.",
+      "behaviorUnattributedCount_other": "{{count}} events happened while no driver was assigned.",
+      "behaviorEventCount_one": "{{count}} event",
+      "behaviorEventCount_other": "{{count}} events",
+      "behaviorEventsEmpty": "No behavior events recorded on this vehicle in this period."
     },
     "device": {
       "notFound": "Device not found.",

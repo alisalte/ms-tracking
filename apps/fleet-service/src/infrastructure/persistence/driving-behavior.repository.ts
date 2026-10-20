@@ -159,6 +159,23 @@ export class DrivingBehaviorRepository {
     });
   }
 
+  /** All events on a vehicle in the window — attributed to a driver or not. */
+  public async listEventsForVehicle(
+    tenantId: string,
+    vehicleId: string,
+    from: Date,
+    to: Date,
+  ): Promise<DrivingEventRecord[]> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const rows = (await trx<DrivingEventRow>('fleet.driving_events')
+        .where({ tenant_id: tenantId, vehicle_id: vehicleId })
+        .andWhere('raised_at', '>=', from)
+        .andWhere('raised_at', '<=', to)
+        .orderBy('raised_at', 'desc')) as DrivingEventRow[];
+      return rows.map((r) => this.toEvent(r));
+    });
+  }
+
   public async countAttributedForDriver(
     tenantId: string,
     driverId: string,
