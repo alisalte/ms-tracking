@@ -52,6 +52,7 @@ import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { queryKeys } from '@/api/query-keys';
 import { registerDefaultMdvrChannels } from '@/api/video.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
+import { VehicleBehaviorPanel } from '@/components/assets/VehicleBehaviorPanel';
 import {
   deviceProtocolColor,
   deviceStatusColor,
@@ -592,6 +593,14 @@ function VehicleDetailDrawer({
                   </div>
                 </PermissionGate>
               </Section>
+
+              {/* Behavior analysis — contains driver names, so gated like the driver view. */}
+              <PermissionGate requires={PERMISSIONS.driverRead}>
+                <Divider />
+                <Section label={t('assets.vehicle.behavior')}>
+                  <VehicleBehaviorPanel vehicleId={vehicleId} drivers={drivers} />
+                </Section>
+              </PermissionGate>
 
               <Divider />
               <Section label={t('assets.vehicle.updatedAt')}>

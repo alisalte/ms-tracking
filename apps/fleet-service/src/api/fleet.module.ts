@@ -1,5 +1,5 @@
 /**
- * FleetModule — wires driver + business-trip repositories, controllers.
+ * FleetModule — wires driver + business-trip + vehicle-behavior repositories, controllers.
  *
  * HTTP auth is AuthModule.forRoot (global CompositeAuthGuard + PermissionsGuard).
  * Do not add jwtAuthGuardProvider() here: that factory requires TOKEN_VERIFIER,
@@ -17,6 +17,7 @@ import { DrivingBehaviorRepository } from '../infrastructure/persistence/driving
 import { BusinessTripRepository } from '../infrastructure/persistence/business-trip.repository.js';
 import { BusinessTripsController } from './business-trips.controller.js';
 import { DriversController } from './drivers.controller.js';
+import { VehicleBehaviorController } from './vehicle-behavior.controller.js';
 
 @Module({})
 export class FleetModule {
@@ -55,7 +56,7 @@ export class FleetModule {
           useFactory: (knex: Knex) => new BusinessTripRepository(knex),
         },
       ],
-      controllers: [DriversController, BusinessTripsController],
+      controllers: [DriversController, VehicleBehaviorController, BusinessTripsController],
     };
   }
 }

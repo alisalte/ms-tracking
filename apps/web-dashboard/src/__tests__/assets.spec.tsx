@@ -237,6 +237,8 @@ vi.mock('@/api/driver.api', () => {
     useDriverAssignments: () => ok([]),
     useDriverBehaviorScore: () => ok(null),
     useDriverBehaviorEvents: () => ok([]),
+    useVehicleBehavior: () => ok(null),
+    useVehicleBehaviorEvents: () => ok([]),
     useCreateDriver: mutation,
     useUpdateDriver: mutation,
     useDeactivateDriver: mutation,

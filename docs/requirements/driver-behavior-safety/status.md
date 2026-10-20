@@ -33,6 +33,7 @@ Stakeholder requested Phase 1 → Driver Behavior. Critical open questions locke
 
 ## Changelog
 
+- 2026-10-20: Vehicle-centric behavior view — `GET /api/v1/fleet/vehicles/:id/behavior-score|behavior-events` (score over all events on the car incl. unattributed, per-driver split, delta vs prior period) + vehicle drawer panel.
 - 2026-09-09: Sprint 2 ranking + drawer delta + attention badge implemented.
 - 2026-09-09: Requirements Approved for Sprint 1; events + Driver Score implemented.
 - 2026-09-08: Draft SRS created from three-sprint backlog (Hard Brake → ML Risk Prediction).
