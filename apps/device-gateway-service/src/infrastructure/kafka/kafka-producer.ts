@@ -75,6 +75,17 @@ const DEFAULT_RETRY: KafkaProducerRetryOptions = {
   maxRetryIntervalMs: 30_000,
 };
 
+/** Minimum gap between topic-creation attempts (they hit the controller). */
+const ENSURE_TOPICS_MIN_INTERVAL_MS = 30_000;
+
+function isUnknownTopic(err: unknown): boolean {
+  const e = err as { type?: string; message?: string };
+  return (
+    e?.type === 'UNKNOWN_TOPIC_OR_PARTITION' ||
+    /does not host this topic-partition/i.test(e?.message ?? '')
+  );
+}
+
 export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
   private readonly logger = new Logger('DeviceGatewayKafkaProducer');
   private readonly kafka: Kafka;
@@ -84,6 +95,8 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
   private connecting: Promise<Producer> | null = null;
   private connected = false;
   private shutDown = false;
+  private ensuring: Promise<void> | null = null;
+  private lastEnsureAt = 0;
 
   constructor(private readonly options: KafkaProducerOptions) {
     this.retry = { ...DEFAULT_RETRY, ...options.retry };
@@ -119,6 +132,7 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
   }
 
   private async doConnect(): Promise<Producer> {
+    await this.ensureTopics();
     const producer = this.kafka.producer({
       idempotent: true,
       allowAutoTopicCreation: false,
@@ -138,6 +152,56 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
     this.connected = true;
     this.logger.log('Kafka producer connected.');
     return producer;
+  }
+
+  /**
+   * Create any gateway topic that does not exist yet. The producer runs with
+   * `allowAutoTopicCreation: false`, and some topics have no consumer that would
+   * create them as a side effect (nothing subscribes to `telemetry.device.raw`),
+   * so every LOGIN / TELEMETRY / heartbeat / PHOTO publish failed with
+   * "This server does not host this topic-partition". Existing topics are left
+   * untouched (partition count stays whoever created them chose). Best-effort:
+   * a failure is logged and the next connect / unknown-topic error retries.
+   */
+  private async ensureTopics(): Promise<void> {
+    if (this.ensuring) return this.ensuring;
+    const now = Date.now();
+    if (now - this.lastEnsureAt < ENSURE_TOPICS_MIN_INTERVAL_MS) return;
+    this.lastEnsureAt = now;
+    this.ensuring = (async () => {
+      const wanted = [...new Set(Object.values(this.options.topics))];
+      const admin = this.kafka.admin();
+      try {
+        await admin.connect();
+        const existing = new Set(await admin.listTopics());
+        const missing = wanted.filter((t) => !existing.has(t));
+        if (missing.length === 0) return;
+        await admin.createTopics({
+          topics: missing.map((topic) => ({ topic })),
+          waitForLeaders: true,
+        });
+        this.logger.log(`Created missing Kafka topics: ${missing.join(', ')}.`);
+      } catch (err) {
+        this.logger.warn(`Could not ensure Kafka topics: ${(err as Error).message}`);
+      } finally {
+        await admin.disconnect().catch(() => {});
+      }
+    })().finally(() => {
+      this.ensuring = null;
+    });
+    return this.ensuring;
+  }
+
+  /** producer.send that creates a missing topic and retries once on UNKNOWN_TOPIC_OR_PARTITION. */
+  private async send(producer: Producer, topic: string, messages: Message[]): Promise<void> {
+    try {
+      await producer.send({ topic, messages });
+    } catch (err) {
+      if (!isUnknownTopic(err)) throw err;
+      this.lastEnsureAt = 0;
+      await this.ensureTopics();
+      await producer.send({ topic, messages });
+    }
   }
 
   /** True iff the producer has an active connection (readiness / metrics). */
@@ -166,10 +230,7 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
       },
     };
     try {
-      await producer.send({
-        topic,
-        messages: [record],
-      });
+      await this.send(producer, topic, [record]);
       this.metrics?.kafkaProduced.inc({ topic: topicKey, result: 'ok' });
     } catch (err) {
       this.metrics?.kafkaProduced.inc({ topic: topicKey, result: 'error' });
@@ -192,27 +253,24 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
   }): Promise<void> {
     const producer = await this.connect();
     try {
-      await producer.send({
-        topic: this.options.topics.session,
-        messages: [
-          {
-            key: event.deviceId ?? event.sessionId,
-            value: JSON.stringify({
-              specversion: '1.0',
-              type: 'telemetry.session.lifecycle.v1',
-              time: event.at.toISOString(),
-              id: event.sessionId,
-              correlationId: event.sessionId,
-              sessionId: event.sessionId,
-              deviceId: event.deviceId,
-              tenantId: event.tenantId,
-              state: event.state,
-              reason: event.reason,
-              protocolId: event.protocolId,
-            }),
-          },
-        ],
-      });
+      await this.send(producer, this.options.topics.session, [
+        {
+          key: event.deviceId ?? event.sessionId,
+          value: JSON.stringify({
+            specversion: '1.0',
+            type: 'telemetry.session.lifecycle.v1',
+            time: event.at.toISOString(),
+            id: event.sessionId,
+            correlationId: event.sessionId,
+            sessionId: event.sessionId,
+            deviceId: event.deviceId,
+            tenantId: event.tenantId,
+            state: event.state,
+            reason: event.reason,
+            protocolId: event.protocolId,
+          }),
+        },
+      ]);
       this.metrics?.kafkaProduced.inc({ topic: 'session', result: 'ok' });
     } catch (err) {
       this.metrics?.kafkaProduced.inc({ topic: 'session', result: 'error' });
@@ -239,41 +297,38 @@ export class DeviceGatewayKafkaProducer implements OnApplicationShutdown {
   }): Promise<void> {
     const producer = await this.connect();
     try {
-      await producer.send({
-        topic: this.options.topics.commandAck,
-        messages: [
-          {
-            key: event.deviceId,
-            value: JSON.stringify({
-              specversion: '1.0',
-              type:
-                event.result === 'SENT'
-                  ? 'telemetry.command.sent.v1'
-                  : 'telemetry.command.rejected.v1',
-              time: new Date().toISOString(),
-              id: event.commandId,
-              correlationId: event.commandId,
-              commandId: event.commandId,
-              deviceId: event.deviceId,
-              tenantId: event.tenantId,
-              protocolId: event.protocolId,
-              commandCode: event.commandCode,
-              result: event.result,
-              reason: event.reason,
-            }),
-            headers: {
-              'event-type':
-                event.result === 'SENT'
-                  ? 'telemetry.command.sent.v1'
-                  : 'telemetry.command.rejected.v1',
-              'message-id': event.commandId,
-              'tenant-id': event.tenantId ?? '',
-              'protocol-id': event.protocolId,
-              'device-id': event.deviceId,
-            },
+      await this.send(producer, this.options.topics.commandAck, [
+        {
+          key: event.deviceId,
+          value: JSON.stringify({
+            specversion: '1.0',
+            type:
+              event.result === 'SENT'
+                ? 'telemetry.command.sent.v1'
+                : 'telemetry.command.rejected.v1',
+            time: new Date().toISOString(),
+            id: event.commandId,
+            correlationId: event.commandId,
+            commandId: event.commandId,
+            deviceId: event.deviceId,
+            tenantId: event.tenantId,
+            protocolId: event.protocolId,
+            commandCode: event.commandCode,
+            result: event.result,
+            reason: event.reason,
+          }),
+          headers: {
+            'event-type':
+              event.result === 'SENT'
+                ? 'telemetry.command.sent.v1'
+                : 'telemetry.command.rejected.v1',
+            'message-id': event.commandId,
+            'tenant-id': event.tenantId ?? '',
+            'protocol-id': event.protocolId,
+            'device-id': event.deviceId,
           },
-        ],
-      });
+        },
+      ]);
       this.metrics?.kafkaProduced.inc({ topic: 'commandAck', result: 'ok' });
     } catch (err) {
       this.metrics?.kafkaProduced.inc({ topic: 'commandAck', result: 'error' });
