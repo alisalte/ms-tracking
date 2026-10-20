@@ -11,6 +11,8 @@ import { useCallback, useRef, useState } from 'react';
 import { apiPost } from '@/api/client';
 import { fetchDeviceCommand } from '@/api/command.api';
 import {
+  MDVR_PLAYBACK_CLOCK,
+  type MdvrClock,
   type MdvrResource,
   fromMdvrBcdTime,
   mdvrResourceKind,
@@ -89,8 +91,11 @@ async function queryAb8(
   avType: string,
   isCancelled: () => boolean,
   channel = 0,
+  clock: MdvrClock = 'utc',
 ): Promise<MdvrResource[]> {
-  mdvrLog(`AB8 avType=${avType} cam=${channel} ${toMdvrBcdTime(fromMs)}–${toMdvrBcdTime(toMs)}`);
+  mdvrLog(
+    `AB8 avType=${avType} cam=${channel} ${toMdvrBcdTime(fromMs, clock)}–${toMdvrBcdTime(toMs, clock)}`,
+  );
   const queued = await apiPost<Record<string, unknown>, DeviceCommandRecord>(
     `/devices/${ch.deviceId}/commands`,
     {
@@ -98,8 +103,8 @@ async function queryAb8(
       ttlSec: LIST_TTL_SEC,
       params: {
         channel,
-        startTime: toMdvrBcdTime(fromMs),
-        endTime: toMdvrBcdTime(toMs),
+        startTime: toMdvrBcdTime(fromMs, clock),
+        endTime: toMdvrBcdTime(toMs, clock),
         avType,
         streamType: '0',
         capType: '0',
@@ -237,7 +242,7 @@ export function useMdvrResources() {
     let ab8Answered = false;
 
     try {
-      const rows = await queryAb8(ch, fromMs, toMs, '0', cancelled, 0);
+      const rows = await queryAb8(ch, fromMs, toMs, '0', cancelled, 0, MDVR_PLAYBACK_CLOCK);
       ab8Answered = true;
       mdvrLog(`AB8 listed ${rows.length} file(s)`);
       collected.push(...rows.filter((r) => r.channel === 0 || r.channel === logicalChannel));
