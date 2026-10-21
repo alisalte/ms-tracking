@@ -167,6 +167,7 @@ const vehicleSchema = z.object({
     .refine((v) => v === '' || isValidEngineHours(v), {
       message: 'validation.vehicle.engineHoursInvalid',
     }),
+  machineType: z.string(),
 });
 
 /** Device create — IMEI is the immutable global identity: 15 digits + Luhn. */
@@ -227,6 +228,7 @@ const driverSchema = z.object({
   licenseExpires: z.string(),
   licenseCountry: optionalText(64, 'validation.driver.licenseCountryTooLong'),
   assignedVehicleId: z.string(),
+  assignedShift: z.string(),
 });
 
 function schemaFor(entity: AssetTab, isEdit: boolean) {
@@ -338,6 +340,10 @@ export function AssetFormDrawer({
           .replace(/,/g, '');
         const odometerKm = odoRaw === '' ? undefined : Number(odoRaw);
         const engineHours = hoursRaw === '' ? undefined : Number(hoursRaw);
+        const machineType =
+          values.machineType === 'TRUCK' || values.machineType === 'SHOVEL'
+            ? values.machineType
+            : undefined;
         const payload: CreateVehiclePayload = {
           fleetId: String(values.fleetId),
           name: String(values.name),
@@ -346,6 +352,7 @@ export function AssetFormDrawer({
           ...(values.vin ? { vin: String(values.vin).toUpperCase() } : {}),
           ...(odometerKm !== undefined ? { odometerKm } : {}),
           ...(engineHours !== undefined ? { engineHours } : {}),
+          ...(machineType ? { machineType } : {}),
         };
         if (isEdit && record) {
           await updateVehicle.mutateAsync({
@@ -354,6 +361,7 @@ export function AssetFormDrawer({
               ...payload,
               odometerKm: odometerKm ?? null,
               engineHours: engineHours ?? null,
+              machineType: machineType ?? null,
             },
           });
         } else {
@@ -373,6 +381,9 @@ export function AssetFormDrawer({
           ...(values.licenseExpires ? { licenseExpires: String(values.licenseExpires) } : {}),
           ...(values.licenseCountry ? { licenseCountry: String(values.licenseCountry) } : {}),
           ...(assigned ? { assignedVehicleId: assigned } : {}),
+          ...(assigned && values.assignedShift
+            ? { assignedShift: Number(values.assignedShift) }
+            : {}),
         };
         if (isEdit && record) {
           const changes: UpdateDriverPayload = {
@@ -621,6 +632,21 @@ function VehicleFields({ control, errors, fleets, t }: FieldProps & { fleets: Fl
           t={t}
         />
       </div>
+      <FieldSelect
+        control={control}
+        name="machineType"
+        label={t('assets.vehicle.machineType')}
+        placeholder={t('assets.vehicle.machineTypeNone')}
+        options={[
+          { value: 'TRUCK', label: t('assets.vehicle.machineTypes.TRUCK') },
+          { value: 'SHOVEL', label: t('assets.vehicle.machineTypes.SHOVEL') },
+        ]}
+        optional
+        t={t}
+      />
+      <p className="-mt-2 text-xs text-gray-500 dark:text-graydark-600">
+        {t('assets.vehicle.machineTypeHint')}
+      </p>
     </>
   );
 }
@@ -813,6 +839,21 @@ function DriverFields({ control, errors, vehicles, t }: FieldProps & { vehicles:
         error={errors.assignedVehicleId as FieldError | undefined}
         t={t}
       />
+      <FieldSelect
+        control={control}
+        name="assignedShift"
+        label={t('assets.driver.assignedShift')}
+        placeholder={t('assets.driver.anyShift')}
+        options={[1, 2, 3, 4].map((n) => ({
+          value: String(n),
+          label: t('assets.driver.shiftN', { n }),
+        }))}
+        optional
+        t={t}
+      />
+      <p className="-mt-2 text-xs text-gray-500 dark:text-graydark-600">
+        {t('assets.driver.shiftHint')}
+      </p>
     </>
   );
 }
@@ -934,6 +975,7 @@ function buildDefaults(
         vin: v.vin ?? '',
         odometerKm: v.odometerKm != null ? String(v.odometerKm) : '',
         engineHours: v.engineHours != null ? String(v.engineHours) : '',
+        machineType: v.machineType ?? '',
       };
     }
     if (entity === 'drivers') {
@@ -950,6 +992,7 @@ function buildDefaults(
         licenseExpires: datetimeToDateInput(d.licenseExpires),
         licenseCountry: d.licenseCountry ?? '',
         assignedVehicleId: d.assignedVehicleId ?? '',
+        assignedShift: d.assignedShift != null ? String(d.assignedShift) : '',
       };
     }
     const d = record as Device;
@@ -964,7 +1007,16 @@ function buildDefaults(
   // Create defaults.
   if (entity === 'fleets') return { name: '', code: '', description: '' };
   if (entity === 'vehicles')
-    return { fleetId: '', name: '', code: '', plate: '', vin: '', odometerKm: '', engineHours: '' };
+    return {
+      fleetId: '',
+      name: '',
+      code: '',
+      plate: '',
+      vin: '',
+      odometerKm: '',
+      engineHours: '',
+      machineType: '',
+    };
   if (entity === 'drivers') {
     return {
       firstName: '',
@@ -978,6 +1030,7 @@ function buildDefaults(
       licenseExpires: '',
       licenseCountry: '',
       assignedVehicleId: '',
+      assignedShift: '',
     };
   }
   return { imei: '', serialNumber: '', manufacturer: '', model: '', protocol: 'gt06' };

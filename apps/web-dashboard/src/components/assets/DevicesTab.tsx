@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { deviceProtocolColor, deviceStatusColor } from '@/components/assets/asset-meta';
-import { driverDisplayName, driverOnVehicle } from '@/components/assets/driver-join';
+import { driverLabelsOnVehicle } from '@/components/assets/driver-join';
 import {
   Badge,
   DataTable,
@@ -103,8 +103,9 @@ export function DevicesTab({
   }, [vehicles, fleets]);
 
   const driverName = useMemo(
-    () => (vehicleId: string | null) => driverDisplayName(driverOnVehicle(drivers, vehicleId)),
-    [drivers],
+    () => (vehicleId: string | null) =>
+      driverLabelsOnVehicle(drivers, vehicleId, (n) => t('assets.driver.shiftN', { n })),
+    [drivers, t],
   );
 
   const filtered = useMemo(() => {

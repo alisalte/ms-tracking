@@ -71,6 +71,7 @@ function vehicle(over: Partial<VehicleRecord> = {}): VehicleRecord {
     vin: null,
     odometerKm: 10,
     engineHours: null,
+    machineType: null,
     status: 'ACTIVE',
     version: 2,
     createdAt: new Date('2026-01-01T00:00:00Z'),

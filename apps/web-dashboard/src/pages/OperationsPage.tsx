@@ -4,33 +4,51 @@
  * Device activity answers when a machine started sending positions, how much
  * data arrived, how long it was offline, and how far it travelled. A haul
  * route names an origin, a destination, the shifts of the work day (two by
- * default), and the trucks and shovels on that service. Each truck carries a
- * per-shift driver roster, since two shifts drive the same truck. Each
- * origin → destination pass is one service for the truck, the driver of that
- * shift, and the shovel that was loading.
+ * default), and the trucks and shovels on that service. The machine type
+ * (truck / shovel) is defined once on the vehicle and the driver of each
+ * shift comes from the driver assignment on the vehicle; a route can still
+ * override either. Each origin → destination pass is one service for the
+ * truck, the driver of that shift, and the shovel that was loading.
+ *
+ * Every report takes a ready-made or custom date range and can be exported
+ * to Excel; the period section rolls services up per day, week or month.
  */
-import { type FormEvent, useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDevices } from '@/api/asset.api';
-import { useDrivers } from '@/api/driver.api';
+import { useDevices, useVehicles } from '@/api/asset.api';
+import { driverFullName, useDrivers } from '@/api/driver.api';
+import { getApiErrorMessage } from '@/api/errors';
 import { useGeofences } from '@/api/geofence.api';
 import {
   type HaulRoute,
-  type ReportPreset,
+  type MachineRole,
+  type OperationsRange,
+  type PeriodCalendar,
+  type PeriodGranularity,
   useArchiveHaulRoute,
   useCreateHaulRoute,
   useDeviceActivity,
   useHaulCycles,
   useHaulMembers,
+  useHaulPeriods,
   useHaulRoutes,
   useSetHaulMembers,
   useUpdateHaulRoute,
 } from '@/api/operations.api';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
-import { PageHeader } from '@/components/tailwind-ui';
-
-const PRESETS: ReportPreset[] = ['today', 'yesterday', '7d', '30d'];
+import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
+import { Button, PageHeader, SegmentedControl } from '@/components/tailwind-ui';
+import {
+  activitySheets,
+  downloadWorkbook,
+  formatWorkDay,
+  haulSheets,
+  hoursOf,
+  periodLabel,
+  periodSheets,
+} from '@/lib/operations-export';
 
 function hours(sec: number | null): string {
   if (sec === null) return '—';
@@ -62,7 +80,7 @@ function maxShifts(durationHours: number): number {
 
 export function OperationsPage() {
   const { t, i18n } = useTranslation();
-  const [preset, setPreset] = useState<ReportPreset>('today');
+  const [range, setRange] = useState<OperationsRange>({ preset: 'today' });
   const [routeId, setRouteId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [originId, setOriginId] = useState('');
@@ -70,19 +88,20 @@ export function OperationsPage() {
   const [shiftStart, setShiftStart] = useState(6);
   const [shiftHours, setShiftHours] = useState(12);
   const [shiftCount, setShiftCount] = useState(2);
-  const [roles, setRoles] = useState<Record<string, '' | 'TRUCK' | 'SHOVEL'>>({});
+  const [roles, setRoles] = useState<Record<string, '' | MachineRole>>({});
   const [rosters, setRosters] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
 
-  const activity = useDeviceActivity(preset);
+  const activity = useDeviceActivity(range);
   const routes = useHaulRoutes();
   const geofences = useGeofences();
   const devices = useDevices();
+  const vehicles = useVehicles();
   const drivers = useDrivers();
   const members = useHaulMembers(routeId);
-  const cycles = useHaulCycles(routeId, preset);
+  const cycles = useHaulCycles(routeId, range);
   const createRoute = useCreateHaulRoute();
   const saveMembers = useSetHaulMembers(routeId);
   const archiveRoute = useArchiveHaulRoute();
@@ -93,7 +112,7 @@ export function OperationsPage() {
   useEffect(() => {
     if (!members.data) return;
     setRoles((prev) => {
-      const next: Record<string, '' | 'TRUCK' | 'SHOVEL'> = {};
+      const next: Record<string, '' | MachineRole> = {};
       for (const member of members.data ?? []) next[member.deviceId] = member.role;
       const prevKeys = Object.keys(prev);
       const nextKeys = Object.keys(next);
@@ -120,14 +139,58 @@ export function OperationsPage() {
   const units = (devices.data ?? []).filter((device) => device.status !== 'DECOMMISSIONED');
   const activeDrivers = (drivers.data ?? []).filter((driver) => driver.status === 'ACTIVE');
   const createTooLong = shiftCount * shiftHours > 24;
+  const [exporting, setExporting] = useState(false);
+
+  // The machine type lives on the vehicle, so a device's role follows the
+  // vehicle it is bound to without being picked again on every route.
+  const typeOfDevice = useMemo(() => {
+    const byVehicle = new Map((vehicles.data ?? []).map((v) => [v.id, v.machineType]));
+    return new Map(
+      (devices.data ?? []).map((device) => [
+        device.id,
+        (device.vehicleId ? byVehicle.get(device.vehicleId) : null) ?? null,
+      ]),
+    );
+  }, [vehicles.data, devices.data]);
+
+  // Drivers assigned on the vehicle, by shift: the default roster of a truck.
+  const assignedByVehicle = useMemo(() => {
+    const out = new Map<string, Map<number | 'any', string>>();
+    for (const driver of drivers.data ?? []) {
+      if (!driver.assignedVehicleId || driver.status !== 'ACTIVE') continue;
+      const slots = out.get(driver.assignedVehicleId) ?? new Map<number | 'any', string>();
+      slots.set(driver.assignedShift ?? 'any', driverFullName(driver));
+      out.set(driver.assignedVehicleId, slots);
+    }
+    return out;
+  }, [drivers.data]);
+
+  const assignedDriverName = (deviceId: string, shiftNo: number): string | null => {
+    const vehicleId = (devices.data ?? []).find((d) => d.id === deviceId)?.vehicleId;
+    const slots = vehicleId ? assignedByVehicle.get(vehicleId) : undefined;
+    return slots?.get(shiftNo) ?? slots?.get('any') ?? null;
+  };
+
+  const exportExcel = (build: () => Parameters<typeof downloadWorkbook>[0], name: string) => {
+    setExporting(true);
+    setFormError(null);
+    try {
+      const sheets = build();
+      if (sheets.every((sheet) => sheet.rows.length <= 1)) {
+        setNotice(t('operations.exportEmpty'));
+        return;
+      }
+      downloadWorkbook(sheets, name);
+    } catch (err) {
+      setFormError(getApiErrorMessage(err) ?? t('operations.exportFailed'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const shiftLabel = (row: { shift: string; shiftDate: string | null; shiftNo: number }) => {
     if (row.shift === 'off-shift' || !row.shiftDate) return t('operations.offShift');
-    const day = new Date(`${row.shiftDate}T12:00:00Z`);
-    const date = Number.isNaN(day.getTime())
-      ? row.shiftDate
-      : day.toLocaleDateString(i18n.language === 'fa' ? 'fa-IR' : 'en-GB', { timeZone: 'UTC' });
-    return `${date} · ${t('operations.shiftN', { n: row.shiftNo })}`;
+    return `${formatWorkDay(row.shiftDate, i18n.language)} · ${t('operations.shiftN', { n: row.shiftNo })}`;
   };
 
   const onCreate = async (event: FormEvent) => {
@@ -160,8 +223,7 @@ export function OperationsPage() {
     setNotice(null);
     const assigned = Object.entries(roles)
       .filter(
-        (entry): entry is [string, 'TRUCK' | 'SHOVEL'] =>
-          entry[1] === 'TRUCK' || entry[1] === 'SHOVEL',
+        (entry): entry is [string, MachineRole] => entry[1] === 'TRUCK' || entry[1] === 'SHOVEL',
       )
       .map(([deviceId, role]) => ({
         deviceId,
@@ -204,26 +266,31 @@ export function OperationsPage() {
     <div className="flex flex-col gap-6" data-testid="operations-page">
       <PageHeader title={t('operations.title')} description={t('operations.subtitle')} />
 
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              preset === value
-                ? 'bg-brand-500 text-white'
-                : 'bg-white text-slate-700 ring-1 ring-slate-200'
-            }`}
-            onClick={() => setPreset(value)}
-          >
-            {t(`operations.preset.${value}`)}
-          </button>
-        ))}
-        <p className="basis-full text-xs text-slate-500">{t('operations.presetHint')}</p>
+      <div className="flex flex-col gap-2" data-testid="operations-range">
+        <ReportRangePicker range={range} onChange={setRange} />
+        <p className="text-xs text-slate-500">{t('operations.presetHint')}</p>
       </div>
 
       <section className="rounded-xl border border-stone-200 bg-white p-4">
-        <h2 className="text-sm font-semibold">{t('operations.activityTitle')}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">{t('operations.activityTitle')}</h2>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Download size={14} />}
+            disabled={exporting || !activity.data}
+            data-testid="export-activity"
+            onClick={() =>
+              activity.data &&
+              exportExcel(
+                () => activitySheets(activity.data, t, i18n.language),
+                t('operations.sheetActivity'),
+              )
+            }
+          >
+            {exporting ? t('operations.exporting') : t('operations.exportExcel')}
+          </Button>
+        </div>
         <p className="mt-1 text-sm text-slate-600">{t('operations.activityHint')}</p>
         {activity.isError && (
           <p className="mt-3 text-sm text-red-700">{t('operations.loadFailed')}</p>
@@ -404,52 +471,119 @@ export function OperationsPage() {
 
         {routeId && (
           <div className="mt-4">
-            <h3 className="text-sm font-semibold">{t('operations.members')}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">{t('operations.members')}</h3>
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="add-typed-machines"
+                onClick={() => {
+                  const next = { ...roles };
+                  let added = 0;
+                  for (const device of units) {
+                    const type = typeOfDevice.get(device.id);
+                    if (type && !next[device.id]) {
+                      next[device.id] = type;
+                      added += 1;
+                    }
+                  }
+                  setRoles(next);
+                  setNotice(t('operations.addAllTypedDone', { count: added }));
+                }}
+              >
+                {t('operations.addAllTyped')}
+              </Button>
+            </div>
             <p className="mt-1 text-sm text-slate-600">{t('operations.membersHint')}</p>
             <p className="mt-1 text-sm text-slate-600">{t('operations.rosterHint')}</p>
             <ul className="mt-2 flex flex-col gap-2">
-              {units.map((device) => (
-                <li key={device.id} className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-mono">{device.imei}</span>
-                  <select
-                    aria-label={device.imei}
-                    className="rounded-lg border border-slate-300 px-2 py-1"
-                    value={roles[device.id] ?? ''}
-                    onChange={(event) =>
-                      setRoles((prev) => ({
-                        ...prev,
-                        [device.id]: event.target.value as '' | 'TRUCK' | 'SHOVEL',
-                      }))
-                    }
-                  >
-                    <option value="">{t('operations.roleNone')}</option>
-                    <option value="TRUCK">{t('operations.roleTruck')}</option>
-                    <option value="SHOVEL">{t('operations.roleShovel')}</option>
-                  </select>
-                  {roles[device.id] === 'TRUCK' &&
-                    Array.from({ length: routeShifts }, (_, index) => (
-                      <select
-                        // biome-ignore lint/suspicious/noArrayIndexKey: shift slots are positional
-                        key={index}
-                        aria-label={`${device.imei} ${t('operations.shiftN', { n: index + 1 })}`}
-                        data-testid={`roster-${device.id}-${index + 1}`}
-                        className="rounded-lg border border-slate-300 px-2 py-1"
-                        value={rosters[device.id]?.[index] ?? ''}
-                        onChange={(event) => setRosterDriver(device.id, index, event.target.value)}
-                      >
-                        <option value="">
-                          {t('operations.shiftN', { n: index + 1 })}: {t('operations.pickDriver')}
-                        </option>
-                        {activeDrivers.map((driver) => (
-                          <option key={driver.id} value={driver.id}>
-                            {t('operations.shiftN', { n: index + 1 })}: {driver.firstName}{' '}
-                            {driver.lastName}
-                          </option>
-                        ))}
-                      </select>
-                    ))}
-                </li>
-              ))}
+              {units.map((device) => {
+                const type = typeOfDevice.get(device.id) ?? null;
+                const role = roles[device.id] ?? '';
+                return (
+                  <li key={device.id} className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-mono">{device.imei}</span>
+                    {type ? (
+                      <>
+                        <label className="inline-flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            aria-label={device.imei}
+                            data-testid={`member-${device.id}`}
+                            checked={role !== ''}
+                            onChange={(event) =>
+                              setRoles((prev) => ({
+                                ...prev,
+                                [device.id]: event.target.checked ? type : '',
+                              }))
+                            }
+                          />
+                          {t('operations.inService')}
+                        </label>
+                        <span
+                          className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                          title={t('operations.machineTypeFromVehicle')}
+                        >
+                          {t(`assets.vehicle.machineTypes.${type}`)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <select
+                          aria-label={device.imei}
+                          className="rounded-lg border border-slate-300 px-2 py-1"
+                          value={role}
+                          onChange={(event) =>
+                            setRoles((prev) => ({
+                              ...prev,
+                              [device.id]: event.target.value as '' | MachineRole,
+                            }))
+                          }
+                        >
+                          <option value="">{t('operations.roleNone')}</option>
+                          <option value="TRUCK">{t('operations.roleTruck')}</option>
+                          <option value="SHOVEL">{t('operations.roleShovel')}</option>
+                        </select>
+                        {device.vehicleId && (
+                          <span className="text-xs text-amber-800">
+                            {t('operations.machineTypeMissing')}
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {role === 'TRUCK' &&
+                      Array.from({ length: routeShifts }, (_, index) => {
+                        const assigned = assignedDriverName(device.id, index + 1);
+                        return (
+                          <select
+                            // biome-ignore lint/suspicious/noArrayIndexKey: shift slots are positional
+                            key={index}
+                            aria-label={`${device.imei} ${t('operations.shiftN', { n: index + 1 })}`}
+                            data-testid={`roster-${device.id}-${index + 1}`}
+                            className="rounded-lg border border-slate-300 px-2 py-1"
+                            value={rosters[device.id]?.[index] ?? ''}
+                            onChange={(event) =>
+                              setRosterDriver(device.id, index, event.target.value)
+                            }
+                          >
+                            <option value="">
+                              {t('operations.shiftN', { n: index + 1 })}:{' '}
+                              {assigned
+                                ? t('operations.assignedDriverHint', { name: assigned })
+                                : t('operations.noAssignedDriver')}
+                            </option>
+                            {activeDrivers.map((driver) => (
+                              <option key={driver.id} value={driver.id}>
+                                {t('operations.shiftN', { n: index + 1 })}: {driver.firstName}{' '}
+                                {driver.lastName}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })}
+                  </li>
+                );
+              })}
             </ul>
             <button
               type="button"
@@ -464,11 +598,29 @@ export function OperationsPage() {
 
         {cycles.data && (
           <div className="mt-6 flex flex-col gap-4" data-testid="haul-results">
-            <p className="text-sm text-slate-700">
-              {t('operations.services')}: {cycles.data.services} · {t('operations.colDistance')}:{' '}
-              {cycles.data.distanceKm} km
-              {cycles.data.truncated ? ` · ${t('operations.truncated')}` : ''}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-700">
+                {t('operations.services')}: {cycles.data.services} · {t('operations.colDistance')}:{' '}
+                {cycles.data.distanceKm} km
+                {cycles.data.truncated ? ` · ${t('operations.truncated')}` : ''}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                leftIcon={<Download size={14} />}
+                disabled={exporting}
+                data-testid="export-haul"
+                onClick={() =>
+                  cycles.data &&
+                  exportExcel(
+                    () => haulSheets(cycles.data, t, i18n.language),
+                    cycles.data.route.name,
+                  )
+                }
+              >
+                {exporting ? t('operations.exporting') : t('operations.exportExcel')}
+              </Button>
+            </div>
             <div className="overflow-x-auto" data-testid="haul-by-shift">
               <h3 className="text-sm font-semibold">{t('operations.byShift')}</h3>
               <table className="mt-2 w-full text-sm">
@@ -607,6 +759,18 @@ export function OperationsPage() {
           </div>
         )}
       </section>
+
+      <PeriodsSection
+        routeId={routeId}
+        range={range}
+        exporting={exporting}
+        onExport={(report) =>
+          exportExcel(
+            () => periodSheets(report, t, i18n.language),
+            `${report.route.name}-${report.granularity}`,
+          )
+        }
+      />
 
       <ConfirmDialog
         open={confirmArchive}
@@ -792,5 +956,172 @@ function CycleTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+const GRANULARITIES: PeriodGranularity[] = ['daily', 'weekly', 'monthly'];
+const CALENDARS: PeriodCalendar[] = ['jalali', 'gregorian'];
+
+/** Services rolled up per day, week or month for the selected route. */
+function PeriodsSection({
+  routeId,
+  range,
+  exporting,
+  onExport,
+}: {
+  routeId: string | null;
+  range: OperationsRange;
+  exporting: boolean;
+  onExport: (report: NonNullable<ReturnType<typeof useHaulPeriods>['data']>) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const [granularity, setGranularity] = useState<PeriodGranularity>('daily');
+  const [calendar, setCalendar] = useState<PeriodCalendar>('jalali');
+  const report = useHaulPeriods(routeId, range, granularity, calendar);
+  const data = report.data;
+  const label = (row: { key: string; from: string; to: string }) =>
+    periodLabel(row, granularity, calendar, i18n.language);
+  const labels = new Map((data?.periods ?? []).map((row) => [row.key, label(row)]));
+
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-4" data-testid="haul-periods">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{t('operations.periodsTitle')}</h2>
+        <Button
+          size="sm"
+          variant="outline"
+          leftIcon={<Download size={14} />}
+          disabled={exporting || !data}
+          data-testid="export-periods"
+          onClick={() => data && onExport(data)}
+        >
+          {exporting ? t('operations.exporting') : t('operations.exportExcel')}
+        </Button>
+      </div>
+      <p className="mt-1 text-sm text-slate-600">{t('operations.periodsHint')}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <SegmentedControl
+          aria-label={t('operations.periodsTitle')}
+          size="sm"
+          value={granularity}
+          onChange={setGranularity}
+          options={GRANULARITIES.map((value) => ({
+            value,
+            label: t(`operations.granularity.${value}`),
+          }))}
+        />
+        {granularity === 'monthly' && (
+          <SegmentedControl
+            aria-label={t('operations.calendar.jalali')}
+            size="sm"
+            value={calendar}
+            onChange={setCalendar}
+            options={CALENDARS.map((value) => ({
+              value,
+              label: t(`operations.calendar.${value}`),
+            }))}
+          />
+        )}
+      </div>
+      {!routeId && (
+        <p className="mt-3 text-sm text-slate-600">{t('operations.periodsPickRoute')}</p>
+      )}
+      {report.isError && (
+        <p className="mt-3 text-sm text-red-700">{getApiErrorMessage(report.error)}</p>
+      )}
+      {data?.truncated && (
+        <p className="mt-3 text-sm text-amber-800">{t('operations.truncated')}</p>
+      )}
+      {data && (
+        <div className="mt-3 flex flex-col gap-4">
+          <div className="overflow-x-auto" data-testid="haul-period-table">
+            <table className="w-full text-sm">
+              <thead className="text-start text-slate-500">
+                <tr>
+                  <th className="px-2 py-2 font-medium">{t('operations.colPeriod')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colServices')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colDistance')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colLoad')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colHours')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colTrucks')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colDrivers')}</th>
+                  <th className="px-2 py-2 font-medium">{t('operations.colWithoutDriver')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.periods.map((row) => (
+                  <tr key={row.key} className="border-t border-slate-100">
+                    <td className="px-2 py-2">{label(row)}</td>
+                    <td className="px-2 py-2">{row.services}</td>
+                    <td className="px-2 py-2">{row.distanceKm}</td>
+                    <td className="px-2 py-2">{hoursOf(row.loadDwellSec)}</td>
+                    <td className="px-2 py-2">{hoursOf(row.durationSec)}</td>
+                    <td className="px-2 py-2">{row.trucks}</td>
+                    <td className="px-2 py-2">{row.drivers}</td>
+                    <td className={`px-2 py-2 ${row.withoutDriver > 0 ? 'text-amber-800' : ''}`}>
+                      {row.withoutDriver}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-300 font-semibold">
+                  <td className="px-2 py-2">{t('operations.colPeriodTotal')}</td>
+                  <td className="px-2 py-2">{data.services}</td>
+                  <td className="px-2 py-2">{data.distanceKm}</td>
+                  <td className="px-2 py-2">
+                    {hoursOf(data.periods.reduce((sum, row) => sum + row.loadDwellSec, 0))}
+                  </td>
+                  <td className="px-2 py-2">
+                    {hoursOf(data.periods.reduce((sum, row) => sum + row.durationSec, 0))}
+                  </td>
+                  <td colSpan={3} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {data.details.length === 0 ? (
+            <p className="text-sm text-slate-600">{t('operations.periodsEmpty')}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <h3 className="text-sm font-semibold">{t('operations.detailTitle')}</h3>
+              <table className="mt-2 w-full text-sm" data-testid="haul-period-details">
+                <thead className="text-start text-slate-500">
+                  <tr>
+                    <th className="px-2 py-2 font-medium">{t('operations.colPeriod')}</th>
+                    <th className="px-2 py-2 font-medium">{t('operations.colVehicle')}</th>
+                    <th className="px-2 py-2 font-medium">{t('operations.colShift')}</th>
+                    <th className="px-2 py-2 font-medium">{t('operations.colDriver')}</th>
+                    <th className="px-2 py-2 font-medium">{t('operations.colServices')}</th>
+                    <th className="px-2 py-2 font-medium">{t('operations.colDistance')}</th>
+                    <th className="px-2 py-2 font-medium">{t('operations.colHours')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.details.map((row) => (
+                    <tr
+                      key={`${row.period}|${row.vehicleId}|${row.shiftNo}|${row.driverId ?? ''}`}
+                      className="border-t border-slate-100"
+                    >
+                      <td className="px-2 py-2">{labels.get(row.period) ?? row.period}</td>
+                      <td className="px-2 py-2">{row.vehicleName}</td>
+                      <td className="px-2 py-2">
+                        {row.shiftNo > 0
+                          ? t('operations.shiftN', { n: row.shiftNo })
+                          : t('operations.offShift')}
+                      </td>
+                      <td className="px-2 py-2">{row.driverName ?? '—'}</td>
+                      <td className="px-2 py-2">{row.services}</td>
+                      <td className="px-2 py-2">{row.distanceKm}</td>
+                      <td className="px-2 py-2">{hoursOf(row.durationSec)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

@@ -11,14 +11,23 @@
 import type { Knex } from '@fleetvision/persistence-knex';
 import {
   type DriverInterval,
+  type HaulCycle,
+  type OpenHaul,
   type RosterDriver,
   type TrackSample,
   type Zone,
   detectHaulCycles,
+  localDate,
   maxShiftCount,
   shiftDayWindow,
   summarizeHauls,
 } from '../domain/haul-cycles.js';
+import {
+  PERIOD_CALENDARS,
+  PERIOD_GRANULARITIES,
+  periodsBetween,
+  summarizePeriods,
+} from '../domain/haul-periods.js';
 import {
   type ReportWindow,
   parseReportWindow,
@@ -26,7 +35,13 @@ import {
 } from '../domain/report-window.js';
 import { ReportInputError, type ReportQueryBase } from './report.service.js';
 
-const POSITION_CAP = 60_000;
+/**
+ * Positions are read one machine at a time, so the cap guards a single track
+ * (about 90 days at one fix a minute, a month at one every ten seconds) and
+ * not the whole fleet: a longer range or a bigger fleet only costs more
+ * queries, never a silently incomplete count.
+ */
+const TRACK_POSITION_CAP = 250_000;
 const TIME_ZONE = 'Asia/Tehran';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -87,6 +102,60 @@ interface DriverRow {
   driver_name: string;
   started_at: Date | string;
   ended_at: Date | string | null;
+  shift_no: number | null;
+}
+
+interface ZoneBounds {
+  readonly minLat: number;
+  readonly maxLat: number;
+  readonly minLng: number;
+  readonly maxLng: number;
+}
+
+/** Bounding box of a zone with a small margin, for pre-filtering positions in SQL. */
+export function zoneBounds(zone: Zone): ZoneBounds {
+  const margin = 0.001;
+  if (zone.kind === 'circle' && zone.lat !== undefined && zone.lng !== undefined) {
+    const dLat = (zone.radiusM ?? 0) / 111_320;
+    const dLng = dLat / Math.max(0.01, Math.cos((zone.lat * Math.PI) / 180));
+    return {
+      minLat: zone.lat - dLat - margin,
+      maxLat: zone.lat + dLat + margin,
+      minLng: zone.lng - dLng - margin,
+      maxLng: zone.lng + dLng + margin,
+    };
+  }
+  const ring = zone.ring ?? [];
+  const lngs = ring.map((pair) => pair[0]);
+  const lats = ring.map((pair) => pair[1]);
+  return {
+    minLat: Math.min(...lats) - margin,
+    maxLat: Math.max(...lats) + margin,
+    minLng: Math.min(...lngs) - margin,
+    maxLng: Math.max(...lngs) + margin,
+  };
+}
+
+interface HaulComputation {
+  readonly route: RouteRow;
+  readonly shiftCount: number;
+  readonly window: ReportWindow;
+  readonly detected: ReturnType<typeof detectHaulCycles>;
+  readonly truncated: boolean;
+  readonly vehicleName: ReadonlyMap<string, string>;
+  readonly shovelLabel: ReadonlyMap<string, string>;
+  readonly unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }>;
+}
+
+function parseOption<T extends string>(
+  value: string | undefined,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  const v = value?.trim();
+  if (!v) return fallback;
+  if ((allowed as readonly string[]).includes(v)) return v as T;
+  throw new ReportInputError(`must be one of ${allowed.join('|')}`, 'INVALID_FILTER');
 }
 
 export class OperationsReportService {
@@ -129,6 +198,84 @@ export class OperationsReportService {
   }
 
   public async haulCycles(tenantId: string, routeId: string | undefined, input: ReportQueryBase) {
+    const haul = await this.computeHaul(tenantId, routeId, input);
+    return this.formatHaul(haul);
+  }
+
+  /** Services rolled up per day, week or month, with the vehicle / shift / driver split. */
+  public async haulPeriods(
+    tenantId: string,
+    routeId: string | undefined,
+    input: ReportQueryBase & { granularity?: string; calendar?: string },
+  ) {
+    const granularity = parseOption(input.granularity, PERIOD_GRANULARITIES, 'daily');
+    const calendar = parseOption(input.calendar, PERIOD_CALENDARS, 'jalali');
+    const haul = await this.computeHaul(tenantId, routeId, input);
+    const periods = periodsBetween(
+      localDate(haul.window.from, TIME_ZONE),
+      localDate(new Date(haul.window.to.getTime() - 1), TIME_ZONE),
+      granularity,
+      calendar,
+    );
+    const rolled = summarizePeriods(
+      haul.detected.cycles,
+      periods,
+      (cycle) => cycle.shiftDate ?? localDate(cycle.originEnteredAt, TIME_ZONE),
+      granularity,
+      calendar,
+    );
+    return {
+      route: this.routeInfo(haul),
+      from: haul.window.from.toISOString(),
+      to: haul.window.to.toISOString(),
+      granularity,
+      calendar,
+      truncated: haul.truncated,
+      services: haul.detected.cycles.length,
+      distanceKm: km(haul.detected.cycles.reduce((sum, cycle) => sum + cycle.distanceM, 0)),
+      periods: rolled.periods.map((row) => ({
+        key: row.key,
+        from: row.from,
+        to: row.to,
+        services: row.services,
+        distanceKm: km(row.distanceM),
+        durationSec: row.durationSec,
+        loadDwellSec: row.loadDwellSec,
+        trucks: row.trucks,
+        drivers: row.drivers,
+        withoutDriver: row.withoutDriver,
+      })),
+      details: rolled.details.map((row) => ({
+        period: row.period,
+        vehicleId: row.vehicleId,
+        vehicleName: haul.vehicleName.get(row.vehicleId) ?? row.vehicleId,
+        shiftNo: row.shiftNo,
+        driverId: row.driverId,
+        driverName: row.driverName,
+        services: row.services,
+        distanceKm: km(row.distanceM),
+        durationSec: row.durationSec,
+        loadDwellSec: row.loadDwellSec,
+      })),
+    };
+  }
+
+  private routeInfo(haul: HaulComputation) {
+    return {
+      id: haul.route.id,
+      name: haul.route.name,
+      shiftStartHour: haul.route.shift_start_hour,
+      shiftDurationHours: haul.route.shift_duration_hours,
+      shiftCount: haul.shiftCount,
+      timeZone: TIME_ZONE,
+    };
+  }
+
+  private async computeHaul(
+    tenantId: string,
+    routeId: string | undefined,
+    input: ReportQueryBase,
+  ): Promise<HaulComputation> {
     if (!routeId || !UUID_RE.test(routeId)) {
       throw new ReportInputError('routeId must be a haul route id', 'INVALID_FILTER');
     }
@@ -144,22 +291,11 @@ export class OperationsReportService {
     const vehicleIds = [
       ...new Set(members.map((row) => row.vehicle_id).filter((id): id is string => Boolean(id))),
     ];
-    const points = await this.loadPoints(tenantId, vehicleIds, window);
     const drivers = await this.loadDrivers(tenantId, vehicleIds, window);
     const rosterIds = [
       ...new Set(members.flatMap((row) => parseUuidArray(row.shift_drivers)).filter(Boolean)),
     ] as string[];
     const driverNames = await this.loadDriverNames(tenantId, rosterIds);
-    const byVehicle = new Map<string, TrackSample[]>();
-    for (const point of points.rows) {
-      const samples = byVehicle.get(point.vehicle_id) ?? [];
-      samples.push({
-        at: asDate(point.captured_at),
-        lat: num(point.latitude),
-        lng: num(point.longitude),
-      });
-      byVehicle.set(point.vehicle_id, samples);
-    }
     const tracks = new Map<string, readonly TrackSample[]>();
     const trucks: string[] = [];
     const shovels: string[] = [];
@@ -167,6 +303,7 @@ export class OperationsReportService {
     const shovelLabel = new Map<string, string>();
     const unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }> = [];
     const rosters = new Map<string, Array<RosterDriver | null>>();
+    const shovelVehicle = new Map<string, string>();
     for (const member of members) {
       const label = member.vehicle_name ?? member.imei ?? member.device_id;
       if (member.role === 'SHOVEL') shovelLabel.set(member.device_id, member.imei ?? label);
@@ -175,10 +312,8 @@ export class OperationsReportService {
         continue;
       }
       vehicleName.set(member.vehicle_id, label);
-      const samples = byVehicle.get(member.vehicle_id) ?? [];
       if (member.role === 'TRUCK') {
         if (!trucks.includes(member.vehicle_id)) trucks.push(member.vehicle_id);
-        tracks.set(member.vehicle_id, samples);
         const roster = parseUuidArray(member.shift_drivers)
           .slice(0, shiftCount)
           .map((id) => {
@@ -188,35 +323,62 @@ export class OperationsReportService {
         if (roster.some(Boolean)) rosters.set(member.vehicle_id, roster);
       } else {
         shovels.push(member.device_id);
-        tracks.set(member.device_id, samples);
+        shovelVehicle.set(member.device_id, member.vehicle_id);
       }
     }
-    const detected = detectHaulCycles({
-      trucks,
-      shovels,
-      tracks,
-      origin,
-      destination,
-      drivers,
-      rosters,
-      shiftStartHour: route.shift_start_hour,
-      shiftDurationHours: route.shift_duration_hours,
-      shiftCount,
-      timeZone: TIME_ZONE,
-    });
-    const summary = summarizeHauls(detected.cycles);
-    return {
-      route: {
-        id: route.id,
-        name: route.name,
+    let truncated = false;
+    // A shovel only matters while it stands inside the origin, so its track is
+    // read from the origin's bounding box instead of in full.
+    const box = zoneBounds(origin);
+    for (const [deviceId, vehicleId] of shovelVehicle) {
+      const loaded = await this.loadTrack(tenantId, vehicleId, window, box);
+      truncated ||= loaded.truncated;
+      tracks.set(deviceId, loaded.samples);
+    }
+    // Trucks are detected one at a time: each service lives on a single
+    // truck's track, and only that track is held in memory at once.
+    const cycles: HaulCycle[] = [];
+    const open: OpenHaul[] = [];
+    for (const truck of trucks) {
+      const loaded = await this.loadTrack(tenantId, truck, window);
+      truncated ||= loaded.truncated;
+      const found = detectHaulCycles({
+        trucks: [truck],
+        shovels,
+        tracks: new Map([...tracks, [truck, loaded.samples]]),
+        origin,
+        destination,
+        drivers,
+        rosters,
         shiftStartHour: route.shift_start_hour,
         shiftDurationHours: route.shift_duration_hours,
         shiftCount,
         timeZone: TIME_ZONE,
-      },
+      });
+      cycles.push(...found.cycles);
+      open.push(...found.open);
+    }
+    cycles.sort((a, b) => a.originEnteredAt.getTime() - b.originEnteredAt.getTime());
+    return {
+      route,
+      shiftCount,
+      window,
+      detected: { cycles, open },
+      truncated,
+      vehicleName,
+      shovelLabel,
+      unbound,
+    };
+  }
+
+  private formatHaul(haul: HaulComputation) {
+    const { window, detected, vehicleName, shovelLabel, unbound } = haul;
+    const summary = summarizeHauls(detected.cycles);
+    return {
+      route: this.routeInfo(haul),
       from: window.from.toISOString(),
       to: window.to.toISOString(),
-      truncated: points.truncated,
+      truncated: haul.truncated,
       services: detected.cycles.length,
       distanceKm: km(detected.cycles.reduce((sum, cycle) => sum + cycle.distanceM, 0)),
       cycles: detected.cycles.map((cycle) => ({
@@ -356,26 +518,41 @@ export class OperationsReportService {
     return zoneFrom(row);
   }
 
-  private async loadPoints(
+  /** One machine's fixes in the window, oldest first, optionally inside a bounding box. */
+  private async loadTrack(
     tenantId: string,
-    vehicleIds: readonly string[],
+    vehicleId: string,
     window: ReportWindow,
-  ): Promise<{ rows: PointRow[]; truncated: boolean }> {
-    if (vehicleIds.length === 0) return { rows: [], truncated: false };
+    box?: ZoneBounds,
+  ): Promise<{ samples: TrackSample[]; truncated: boolean }> {
     const { rows } = await this.query<{ rows: PointRow[] }>((trx) =>
       trx.raw(
         `SELECT vehicle_id, captured_at, latitude, longitude
          FROM tracking.vehicle_positions
          WHERE tenant_id = ?::uuid
+           AND vehicle_id = ?::uuid
            AND quality IN (1, 3)
            AND captured_at >= ? AND captured_at < ?
-           AND vehicle_id = ANY(?::uuid[])
-         ORDER BY vehicle_id, captured_at
-         LIMIT ${POSITION_CAP}`,
-        [tenantId, window.from, window.to, vehicleIds],
+           ${box ? 'AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?' : ''}
+         ORDER BY captured_at
+         LIMIT ${TRACK_POSITION_CAP}`,
+        [
+          tenantId,
+          vehicleId,
+          window.from,
+          window.to,
+          ...(box ? [box.minLat, box.maxLat, box.minLng, box.maxLng] : []),
+        ],
       ),
     );
-    return { rows, truncated: rows.length >= POSITION_CAP };
+    return {
+      samples: rows.map((point) => ({
+        at: asDate(point.captured_at),
+        lat: num(point.latitude),
+        lng: num(point.longitude),
+      })),
+      truncated: rows.length >= TRACK_POSITION_CAP,
+    };
   }
 
   private async loadDrivers(
@@ -386,7 +563,7 @@ export class OperationsReportService {
     if (vehicleIds.length === 0) return [];
     const { rows } = await this.query<{ rows: DriverRow[] }>((trx) =>
       trx.raw(
-        `SELECT a.vehicle_id, a.driver_id, a.started_at, a.ended_at,
+        `SELECT a.vehicle_id, a.driver_id, a.started_at, a.ended_at, a.shift_no,
                 BTRIM(d.first_name || ' ' || d.last_name) AS driver_name
          FROM fleet.driver_assignments a
          JOIN fleet.drivers d ON d.id = a.driver_id AND d.tenant_id = a.tenant_id
@@ -403,6 +580,7 @@ export class OperationsReportService {
       driverName: row.driver_name,
       startedAt: asDate(row.started_at),
       endedAt: row.ended_at ? asDate(row.ended_at) : null,
+      shiftNo: row.shift_no ?? null,
     }));
   }
 

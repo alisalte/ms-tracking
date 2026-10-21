@@ -6,9 +6,26 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import type { ReportRange } from './report.api';
+
 import { apiDeleteNoContent, apiGet, apiGetRaw, apiPatch, apiPost, apiPut } from './client';
 
 export type ReportPreset = 'today' | 'yesterday' | '7d' | '30d';
+
+/** Same shape the reports page uses: a preset, or a custom from/to. */
+export type OperationsRange = ReportRange;
+
+function rangeParams(range: OperationsRange, extra: Record<string, unknown> = {}) {
+  return {
+    ...(range.preset ? { preset: range.preset } : {}),
+    ...(range.from ? { from: range.from } : {}),
+    ...(range.to ? { to: range.to } : {}),
+    ...extra,
+  };
+}
+
+export type PeriodGranularity = 'daily' | 'weekly' | 'monthly';
+export type PeriodCalendar = 'jalali' | 'gregorian';
 
 export interface DeviceActivityRow {
   deviceId: string;
@@ -57,10 +74,12 @@ export interface HaulRouteInput {
   shiftCount: number;
 }
 
+export type MachineRole = 'TRUCK' | 'SHOVEL';
+
 export interface HaulMember {
   id: string;
   deviceId: string;
-  role: 'TRUCK' | 'SHOVEL';
+  role: MachineRole;
   imei: string | null;
   /** Element `n - 1` is the driver of shift `n`. */
   shiftDrivers: Array<string | null>;
@@ -68,7 +87,8 @@ export interface HaulMember {
 
 export interface HaulMemberInput {
   deviceId: string;
-  role: 'TRUCK' | 'SHOVEL';
+  /** Left out, the server uses the machine type defined on the vehicle. */
+  role?: MachineRole;
   shiftDrivers?: Array<string | null>;
 }
 
@@ -149,10 +169,51 @@ export interface HaulCycleReport {
   unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }>;
 }
 
-export function useDeviceActivity(preset: ReportPreset) {
+export interface HaulPeriodRow {
+  /** Sort key: a date, or `YYYY-MM` for months. */
+  key: string;
+  /** First and last local work day of the period (`YYYY-MM-DD`). */
+  from: string;
+  to: string;
+  services: number;
+  distanceKm: number;
+  durationSec: number;
+  loadDwellSec: number;
+  trucks: number;
+  drivers: number;
+  withoutDriver: number;
+}
+
+export interface HaulPeriodDetail {
+  period: string;
+  vehicleId: string;
+  vehicleName: string;
+  shiftNo: number;
+  driverId: string | null;
+  driverName: string | null;
+  services: number;
+  distanceKm: number;
+  durationSec: number;
+  loadDwellSec: number;
+}
+
+export interface HaulPeriodReport {
+  route: HaulCycleReport['route'];
+  from: string;
+  to: string;
+  granularity: PeriodGranularity;
+  calendar: PeriodCalendar;
+  truncated: boolean;
+  services: number;
+  distanceKm: number;
+  periods: HaulPeriodRow[];
+  details: HaulPeriodDetail[];
+}
+
+export function useDeviceActivity(range: OperationsRange) {
   return useQuery({
-    queryKey: ['reports', 'device-activity', preset],
-    queryFn: () => apiGetRaw<DeviceActivityReport>('/reports/device-activity', { preset }),
+    queryKey: ['reports', 'device-activity', range],
+    queryFn: () => apiGetRaw<DeviceActivityReport>('/reports/device-activity', rangeParams(range)),
   });
 }
 
@@ -171,10 +232,28 @@ export function useHaulMembers(routeId: string | null) {
   });
 }
 
-export function useHaulCycles(routeId: string | null, preset: ReportPreset) {
+export function useHaulCycles(routeId: string | null, range: OperationsRange) {
   return useQuery({
-    queryKey: ['reports', 'haul-cycles', routeId, preset],
-    queryFn: () => apiGetRaw<HaulCycleReport>('/reports/haul-cycles', { routeId, preset }),
+    queryKey: ['reports', 'haul-cycles', routeId, range],
+    queryFn: () =>
+      apiGetRaw<HaulCycleReport>('/reports/haul-cycles', rangeParams(range, { routeId })),
+    enabled: Boolean(routeId),
+  });
+}
+
+export function useHaulPeriods(
+  routeId: string | null,
+  range: OperationsRange,
+  granularity: PeriodGranularity,
+  calendar: PeriodCalendar,
+) {
+  return useQuery({
+    queryKey: ['reports', 'haul-periods', routeId, range, granularity, calendar],
+    queryFn: () =>
+      apiGetRaw<HaulPeriodReport>(
+        '/reports/haul-periods',
+        rangeParams(range, { routeId, granularity, calendar }),
+      ),
     enabled: Boolean(routeId),
   });
 }

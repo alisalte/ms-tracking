@@ -5,7 +5,7 @@
  * and expanded from Excel scientific notation when it still looks like 15 digits.
  */
 import { SpreadsheetParseError, parseTabularFile, trimGrid, xlsxBlob } from '@/lib/spreadsheet';
-import type { DeviceProtocol } from '@/types/asset.types';
+import type { DeviceProtocol, MachineType } from '@/types/asset.types';
 
 export const ASSET_IMPORT_MAX_ROWS = 500;
 
@@ -20,6 +20,7 @@ export interface VehicleImportDraft {
   vin?: string;
   odometerKm?: number;
   engineHours?: number;
+  machineType?: MachineType;
 }
 
 export interface DeviceImportDraft {
@@ -46,6 +47,8 @@ export interface DriverImportDraft {
   licenseExpires?: string;
   licenseCountry?: string;
   vehicleCode?: string;
+  /** Shift (1-4) the driver covers on `vehicleCode`; omitted = every shift. */
+  shiftNo?: number;
 }
 
 export interface ImportRowIssue {
@@ -111,6 +114,11 @@ const VEHICLE_ALIASES: Record<string, keyof Omit<VehicleImportDraft, 'row'>> = {
   کانترساعت: 'engineHours',
   کارکردساعت: 'engineHours',
   کانتر: 'engineHours',
+  machinetype: 'machineType',
+  type: 'machineType',
+  نوعماشین: 'machineType',
+  نوعدستگاه: 'machineType',
+  نوع: 'machineType',
 };
 
 const DEVICE_ALIASES: Record<string, keyof Omit<DeviceImportDraft, 'row'>> = {
@@ -166,6 +174,10 @@ const DRIVER_ALIASES: Record<string, keyof Omit<DriverImportDraft, 'row'>> = {
   vehicle: 'vehicleCode',
   کدخودرو: 'vehicleCode',
   خودرو: 'vehicleCode',
+  shift: 'shiftNo',
+  shiftno: 'shiftNo',
+  شیفت: 'shiftNo',
+  شمارهشیفت: 'shiftNo',
 };
 
 function luhnValid(digits: string): boolean {
@@ -205,6 +217,29 @@ function normalizeProtocol(raw: string): DeviceProtocol | null {
   if (t === 'meitrack' || t === 'mei' || t === 'mdvr') return 'meitrack';
   if (t === 'stub') return 'stub';
   return PROTOCOLS.has(t as DeviceProtocol) ? (t as DeviceProtocol) : null;
+}
+
+/** `truck` / `کامیون` → TRUCK, `shovel` / `بیل` → SHOVEL; blank is fine, anything else is invalid. */
+export function parseMachineType(raw: string): { value?: MachineType; invalid: boolean } {
+  const t = sanitizeSpreadsheetText(raw)
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+  if (t === '') return { invalid: false };
+  if (['truck', 'dumptruck', 'کامیون', 'کمپرسی', 'دامپ'].includes(t)) {
+    return { value: 'TRUCK', invalid: false };
+  }
+  if (['shovel', 'excavator', 'loader', 'بیل', 'بیلمکانیکی', 'شافل', 'لودر'].includes(t)) {
+    return { value: 'SHOVEL', invalid: false };
+  }
+  return { invalid: true };
+}
+
+/** Shift 1-4; blank or "all" (همه) means every shift. */
+export function parseShiftNo(raw: string): { value?: number; invalid: boolean } {
+  const t = asciiDigits(raw).toLowerCase().replace(/\s+/g, '');
+  if (t === '' || t === 'all' || t === 'همه' || t === 'همهشیفتها') return { invalid: false };
+  if (!/^[1-4]$/.test(t)) return { invalid: true };
+  return { value: Number(t), invalid: false };
 }
 
 function cell(row: string[], idx: number | undefined): string {
@@ -333,6 +368,7 @@ export function parseVehicleGrid(grid: string[][]): ParsedAssetImport<VehicleImp
     const vin = optional(cell(raw, cols.vin))?.toUpperCase();
     const odo = parseNonNegNumber(cell(raw, cols.odometerKm), ODOMETER_KM_MAX);
     const hours = parseNonNegNumber(cell(raw, cols.engineHours), ENGINE_HOURS_MAX);
+    const machineType = parseMachineType(cell(raw, cols.machineType));
     if (!name) issues.push({ row, field: 'name', code: 'missingName' });
     if (!code) issues.push({ row, field: 'code', code: 'missingCode' });
     else if (!CODE_RE.test(code)) issues.push({ row, field: 'code', code: 'invalidCode' });
@@ -340,6 +376,9 @@ export function parseVehicleGrid(grid: string[][]): ParsedAssetImport<VehicleImp
     if (vin && !VIN_RE.test(vin)) issues.push({ row, field: 'vin', code: 'invalidVin' });
     if (odo.invalid) issues.push({ row, field: 'odometerKm', code: 'invalidOdometer' });
     if (hours.invalid) issues.push({ row, field: 'engineHours', code: 'invalidEngineHours' });
+    if (machineType.invalid) {
+      issues.push({ row, field: 'machineType', code: 'invalidMachineType' });
+    }
     rows.push({
       row,
       name,
@@ -349,6 +388,7 @@ export function parseVehicleGrid(grid: string[][]): ParsedAssetImport<VehicleImp
       vin,
       odometerKm: odo.value,
       engineHours: hours.value,
+      machineType: machineType.value,
     });
   });
   if (rows.length === 0 && issues.length === 0) issues.push({ row: 1, code: 'emptyFile' });
@@ -431,12 +471,14 @@ export function parseDriverGrid(grid: string[][]): ParsedAssetImport<DriverImpor
     const expires = parseSpreadsheetDate(cell(raw, cols.licenseExpires));
     const licenseCountry = optional(cell(raw, cols.licenseCountry));
     const vehicleCode = optional(cell(raw, cols.vehicleCode));
+    const shift = parseShiftNo(cell(raw, cols.shiftNo));
     if (!firstName) issues.push({ row, field: 'firstName', code: 'missingFirstName' });
     if (!lastName) issues.push({ row, field: 'lastName', code: 'missingLastName' });
     if (!licenseNumber) issues.push({ row, field: 'licenseNumber', code: 'missingLicenseNumber' });
     if (email && !EMAIL_RE.test(email)) issues.push({ row, field: 'email', code: 'invalidEmail' });
     if (issued.invalid) issues.push({ row, field: 'licenseIssued', code: 'invalidDate' });
     if (expires.invalid) issues.push({ row, field: 'licenseExpires', code: 'invalidDate' });
+    if (shift.invalid) issues.push({ row, field: 'shiftNo', code: 'invalidShift' });
     rows.push({
       row,
       firstName,
@@ -450,6 +492,7 @@ export function parseDriverGrid(grid: string[][]): ParsedAssetImport<DriverImpor
       licenseExpires: expires.value,
       licenseCountry,
       vehicleCode,
+      shiftNo: shift.value,
     });
   });
   if (rows.length === 0 && issues.length === 0) issues.push({ row: 1, code: 'emptyFile' });
@@ -472,8 +515,8 @@ export async function parseAssetImportFile(
 }
 
 const VEHICLE_TEMPLATE: string[][] = [
-  ['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours'],
-  ['Truck One', 'V001', 'NORTH', '12A345-67', 'WP0ZZZ99ZTS392124', '48210', '12500'],
+  ['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours', 'machineType'],
+  ['Truck One', 'V001', 'NORTH', '12A345-67', 'WP0ZZZ99ZTS392124', '48210', '12500', 'TRUCK'],
 ];
 
 const DEVICE_TEMPLATE: string[][] = [
@@ -494,6 +537,7 @@ const DRIVER_TEMPLATE: string[][] = [
     'licenseExpires',
     'licenseCountry',
     'vehicleCode',
+    'shift',
   ],
   [
     'Ali',
@@ -507,6 +551,7 @@ const DRIVER_TEMPLATE: string[][] = [
     '2028-01-15',
     'IR',
     'V001',
+    '1',
   ],
 ];
 

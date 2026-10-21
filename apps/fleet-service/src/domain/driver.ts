@@ -26,6 +26,8 @@ export interface DriverProps {
   licenseCountry: string | null;
   status: DriverStatus;
   assignedVehicleId: string | null;
+  /** Shift the driver covers on the assigned vehicle; null = any shift. */
+  assignedShift: number | null;
   assignedAt: Date | null;
   metadata: Record<string, unknown>;
 }
@@ -44,6 +46,7 @@ export class Driver {
   public licenseCountry: string | null;
   public status: DriverStatus;
   public assignedVehicleId: string | null;
+  public assignedShift: number | null;
   public assignedAt: Date | null;
   public metadata: Record<string, unknown>;
   public version: number;
@@ -65,13 +68,17 @@ export class Driver {
     this.licenseCountry = props.licenseCountry;
     this.status = props.status;
     this.assignedVehicleId = props.assignedVehicleId;
+    this.assignedShift = props.assignedShift;
     this.assignedAt = props.assignedAt;
     this.metadata = props.metadata;
   }
 
   public static create(
     id: string | undefined,
-    props: Omit<DriverProps, 'status' | 'assignedVehicleId' | 'assignedAt' | 'metadata'> & {
+    props: Omit<
+      DriverProps,
+      'status' | 'assignedVehicleId' | 'assignedShift' | 'assignedAt' | 'metadata'
+    > & {
       metadata?: Record<string, unknown>;
     },
   ): Driver {
@@ -79,6 +86,7 @@ export class Driver {
       ...props,
       status: 'ACTIVE',
       assignedVehicleId: null,
+      assignedShift: null,
       assignedAt: null,
       metadata: props.metadata ?? {},
     });
@@ -108,20 +116,22 @@ export class Driver {
     this.status = newStatus;
   }
 
-  /** Assign a vehicle to this driver. */
-  public assignVehicle(vehicleId: string): void {
+  /** Assign a vehicle to this driver, optionally for one shift of the work day. */
+  public assignVehicle(vehicleId: string, shiftNo: number | null = null): void {
     if (!this.isAvailable()) {
       throw new IllegalDriverTransitionError(
         `Cannot assign a vehicle to a driver in ${this.status} state.`,
       );
     }
     this.assignedVehicleId = vehicleId;
+    this.assignedShift = shiftNo;
     this.assignedAt = new Date();
   }
 
   /** Unassign the current vehicle. */
   public unassignVehicle(): void {
     this.assignedVehicleId = null;
+    this.assignedShift = null;
     this.assignedAt = null;
   }
 

@@ -1511,7 +1511,15 @@
       "behaviorUnattributedCount_other": "{{count}} events happened while no driver was assigned.",
       "behaviorEventCount_one": "{{count}} event",
       "behaviorEventCount_other": "{{count}} events",
-      "behaviorEventsEmpty": "No behavior events recorded on this vehicle in this period."
+      "behaviorEventsEmpty": "No behavior events recorded on this vehicle in this period.",
+      "machineType": "Machine type",
+      "machineTypeNone": "No type (ordinary vehicle)",
+      "machineTypeHint": "For operations and haul services: set the machine type here once so it is not chosen again on every service.",
+      "machineTypes": {
+        "TRUCK": "Truck",
+        "SHOVEL": "Shovel / excavator"
+      },
+      "colMachineType": "Machine type"
     },
     "device": {
       "notFound": "Device not found.",
@@ -1640,7 +1648,12 @@
         "INACTIVE": "Inactive",
         "SUSPENDED": "Suspended",
         "TERMINATED": "Terminated"
-      }
+      },
+      "assignedShift": "Shift",
+      "anyShift": "All shifts",
+      "shiftN": "Shift {{n}}",
+      "shiftHint": "A vehicle can have one driver per shift (for example three drivers for three shifts). Assign each driver to the vehicle for their own shift. “All shifts” means the driver covers every shift.",
+      "shiftBadge": "Shift {{n}}"
     },
     "actions": {
       "archive": "Archive",
@@ -1701,7 +1714,9 @@
         "missingLastName": "Last name is required.",
         "missingLicenseNumber": "License number is required.",
         "invalidEmail": "Email is not valid.",
-        "invalidDate": "Date must be YYYY-MM-DD (or an Excel date cell)."
+        "invalidDate": "Date must be YYYY-MM-DD (or an Excel date cell).",
+        "invalidMachineType": "Machine type must be truck or shovel.",
+        "invalidShift": "Shift must be 1 to 4 (empty means every shift)."
       }
     },
     "export": {
@@ -2996,7 +3011,7 @@
     "archiveConfirm": "Archive this service? Its reports will no longer be shown.",
     "saved": "Saved.",
     "rosterTitle": "Driver per shift",
-    "rosterHint": "Pick the driver of each shift for every truck. That shift's services are credited to this driver. Left empty, the driver assigned to the vehicle at that moment is used.",
+    "rosterHint": "The driver of each shift is read from the driver assignment on the vehicle (shifts 1–3), so you do not pick them again. Choose a driver here only when this service uses someone different; the choice here wins over the vehicle assignment.",
     "pickDriver": "From vehicle assignment",
     "byShift": "Summary by shift",
     "colTrucks": "Trucks",
@@ -3005,7 +3020,47 @@
     "colTime": "Loading started",
     "colVehicles": "Trucks",
     "fromAssignment": "from vehicle assignment",
-    "presetHint": "Ranges follow the work day (from the first shift's start) so a night shift is never split."
+    "presetHint": "The ready-made ranges follow the work day (from the first shift's start) so a night shift is never split. Choose Custom for any date and time (up to 92 days).",
+    "range": "Report range",
+    "exportExcel": "Export Excel",
+    "exporting": "Building file…",
+    "exportFailed": "The Excel file could not be built.",
+    "exportEmpty": "There is nothing to export.",
+    "sheetActivity": "Device activity",
+    "sheetSummary": "Summary",
+    "sheetByShift": "By shift",
+    "sheetByVehicle": "By machine",
+    "sheetByDriver": "By driver",
+    "sheetByShovel": "By shovel",
+    "sheetCycles": "Each service",
+    "sheetPeriods": "Periods",
+    "sheetPeriodDetails": "Period details",
+    "periodsTitle": "Daily, weekly and monthly report",
+    "periodsHint": "Services and work of the selected route per day, week (Saturday to Friday) or month. Periods with no service are listed as zero. The range can be up to 92 days.",
+    "periodsPickRoute": "Choose a service above to see its period report.",
+    "granularity": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "calendar": {
+      "jalali": "Jalali months",
+      "gregorian": "Gregorian months"
+    },
+    "colPeriod": "Period",
+    "colDays": "Days",
+    "colServices": "Services",
+    "colPeriodTotal": "Total",
+    "detailTitle": "Each period by machine, shift and driver",
+    "periodsEmpty": "No services were recorded in this range.",
+    "machineType": "Machine type",
+    "machineTypeFromVehicle": "Machine type comes from the vehicle definition",
+    "machineTypeMissing": "No machine type is set on the vehicle. Set it once in the vehicle definition, or choose it here for this service only.",
+    "inService": "On this service",
+    "addAllTyped": "Add every machine that has a type",
+    "addAllTypedDone": "{{count}} machines added. Press “Save machines” to store them.",
+    "assignedDriverHint": "Assigned: {{name}}",
+    "noAssignedDriver": "No assigned driver"
   },
   "navGroups": {
     "tracking": "Tracking",

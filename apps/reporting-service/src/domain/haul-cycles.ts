@@ -35,6 +35,8 @@ export interface DriverInterval {
   readonly driverName: string;
   readonly startedAt: Date;
   readonly endedAt: Date | null;
+  /** Shift the driver covers on the vehicle; null/absent = any shift. */
+  readonly shiftNo?: number | null;
 }
 
 export interface RosterDriver {
@@ -285,7 +287,7 @@ function buildCycle(
     input.shiftCount ?? 1,
   );
   const rostered = slot.no > 0 ? (input.rosters?.get(vehicleId)?.[slot.no - 1] ?? null) : null;
-  const assigned = rostered ? null : driverAt(input.drivers, vehicleId, enteredAt);
+  const assigned = rostered ? null : driverAt(input.drivers, vehicleId, enteredAt, slot.no);
   const driver = rostered ?? assigned;
   return {
     vehicleId,
@@ -452,19 +454,26 @@ function shovelAt(input: DetectHaulInput, enteredAt: Date, leftAt: Date): string
   return best?.id ?? null;
 }
 
+/** The driver of the shift when one is assigned to it, else the any-shift driver. */
 function driverAt(
   drivers: readonly DriverInterval[],
   vehicleId: string,
   at: Date,
+  shiftNo: number,
 ): DriverInterval | null {
   const t = at.getTime();
+  let anyShift: DriverInterval | null = null;
   for (const driver of drivers) {
     if (driver.vehicleId !== vehicleId) continue;
     if (driver.startedAt.getTime() > t) continue;
     if (driver.endedAt && driver.endedAt.getTime() < t) continue;
-    return driver;
+    if (driver.shiftNo == null) {
+      anyShift ??= driver;
+    } else if (driver.shiftNo === shiftNo) {
+      return driver;
+    }
   }
-  return null;
+  return anyShift;
 }
 
 function pathDistance(samples: readonly TrackSample[]): number {
@@ -502,6 +511,11 @@ function pointInRing(
     if (intersect) inside = !inside;
   }
   return inside;
+}
+
+/** Local calendar date (`YYYY-MM-DD`) of an instant in `timeZone`. */
+export function localDate(at: Date, timeZone: string): string {
+  return localParts(at, timeZone).date;
 }
 
 function localParts(

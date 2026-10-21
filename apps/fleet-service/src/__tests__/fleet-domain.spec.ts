@@ -4,13 +4,13 @@ import {
   shouldCloseOpenAssignment,
   shouldOpenAssignmentInterval,
 } from '../domain/driver-assignment.js';
+import { Driver } from '../domain/driver.js';
 import {
+  LOW_SCORE_ATTENTION_THRESHOLD,
   computeDriverScore,
   emptyCounts,
-  LOW_SCORE_ATTENTION_THRESHOLD,
   mapAlarmToDrivingEventType,
 } from '../domain/driving-behavior.js';
-import { Driver } from '../domain/driver.js';
 import {
   type DriverStatus,
   IllegalDriverTransitionError,
@@ -19,6 +19,7 @@ import {
   isValidDriverTransition,
   isValidTripTransition,
 } from '../domain/fleet-types.js';
+import { pickShiftDriver, shiftNoAt } from '../domain/shift-schedule.js';
 
 const TENANT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -152,7 +153,10 @@ describe('driver behavior score', () => {
 
   it('flags attention at or below threshold', () => {
     expect(LOW_SCORE_ATTENTION_THRESHOLD).toBe(70);
-    expect(computeDriverScore({ harshBrake: 6, rapidAccel: 0, speedViolation: 0, excessiveIdle: 0 }).score).toBe(70);
+    expect(
+      computeDriverScore({ harshBrake: 6, rapidAccel: 0, speedViolation: 0, excessiveIdle: 0 })
+        .score,
+    ).toBe(70);
   });
 });
 
@@ -257,5 +261,72 @@ describe('isValidTripTransition', () => {
   it('rejects COMPLETED/CANCELLED → anything', () => {
     expect(isValidTripTransition('COMPLETED', 'PLANNED' as TripStatus)).toBe(false);
     expect(isValidTripTransition('CANCELLED', 'ACTIVE' as TripStatus)).toBe(false);
+  });
+});
+
+describe('assignment history with shifts', () => {
+  it('opens another interval when the same vehicle is taken for a different shift', () => {
+    expect(shouldCloseOpenAssignment('v1', 'v1', null, 2)).toBe(true);
+    expect(shouldOpenAssignmentInterval('v1', 'v1', null, 2)).toBe(true);
+    expect(shouldOpenAssignmentInterval('v1', 'v1', 2, 2)).toBe(false);
+    expect(shouldCloseOpenAssignment('v1', null, 2, null)).toBe(true);
+  });
+
+  it('remembers the shift on the driver and clears it with the vehicle', () => {
+    const d = Driver.create(undefined, {
+      tenantId: 't1',
+      employeeId: null,
+      firstName: 'A',
+      lastName: 'B',
+      email: null,
+      phone: null,
+      licenseNumber: 'L1',
+      licenseClass: null,
+      licenseIssued: null,
+      licenseExpires: null,
+      licenseCountry: null,
+    });
+    d.assignVehicle('v1', 3);
+    expect(d.assignedShift).toBe(3);
+    d.assignVehicle('v1');
+    expect(d.assignedShift).toBeNull();
+    d.assignVehicle('v1', 2);
+    d.unassignVehicle();
+    expect(d.assignedShift).toBeNull();
+  });
+});
+
+describe('shift drivers on a vehicle', () => {
+  const schedule = { startHour: 6, durationHours: 8, shiftCount: 3, timeZone: 'UTC' };
+  const at = (iso: string) => new Date(iso);
+
+  it('finds the shift an instant belongs to', () => {
+    expect(shiftNoAt(at('2026-06-01T06:00:00Z'), schedule)).toBe(1);
+    expect(shiftNoAt(at('2026-06-01T13:59:00Z'), schedule)).toBe(1);
+    expect(shiftNoAt(at('2026-06-01T14:00:00Z'), schedule)).toBe(2);
+    expect(shiftNoAt(at('2026-06-01T23:30:00Z'), schedule)).toBe(3);
+    expect(shiftNoAt(at('2026-06-02T03:00:00Z'), schedule)).toBe(3);
+    // Two 8 h shifts leave the last 8 hours of the day uncovered.
+    expect(shiftNoAt(at('2026-06-01T23:00:00Z'), { ...schedule, shiftCount: 2 })).toBeNull();
+  });
+
+  it('credits the driver of the shift, then the any-shift driver', () => {
+    const list = [
+      { driverId: 'morning', shiftNo: 1, startedAt: at('2026-05-01T00:00:00Z') },
+      { driverId: 'night', shiftNo: 3, startedAt: at('2026-05-01T00:00:00Z') },
+      { driverId: 'all', shiftNo: null, startedAt: at('2026-04-01T00:00:00Z') },
+    ];
+    expect(pickShiftDriver(list, 3)).toBe('night');
+    expect(pickShiftDriver(list, 2)).toBe('all');
+    expect(pickShiftDriver(list.slice(0, 2), 2)).toBeNull();
+  });
+
+  it('without a schedule falls back to the latest assignment', () => {
+    const list = [
+      { driverId: 'old', shiftNo: 1, startedAt: at('2026-04-01T00:00:00Z') },
+      { driverId: 'new', shiftNo: 2, startedAt: at('2026-05-01T00:00:00Z') },
+    ];
+    expect(pickShiftDriver(list, undefined)).toBe('new');
+    expect(pickShiftDriver(list, null)).toBeNull();
   });
 });

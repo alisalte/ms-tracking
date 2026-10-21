@@ -128,6 +128,17 @@ export function VehiclesTab({
       render: (v) => <span className="tabular-nums">{formatEngineHours(v.engineHours)}</span>,
     },
     {
+      id: 'machineType',
+      headerKey: 'assets.vehicle.colMachineType',
+      sortBy: (v) => v.machineType ?? '',
+      render: (v) =>
+        v.machineType ? (
+          t(`assets.vehicle.machineTypes.${v.machineType}`)
+        ) : (
+          <span className="text-gray-400 dark:text-graydark-600">—</span>
+        ),
+    },
+    {
       id: 'status',
       headerKey: 'assets.vehicle.colStatus',
       sortBy: (v) => v.status,

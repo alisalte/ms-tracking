@@ -57,7 +57,8 @@ export interface UpdateHaulRouteInput {
 
 export interface HaulMemberInput {
   readonly deviceId: string;
-  readonly role: 'TRUCK' | 'SHOVEL';
+  /** Left out, the role is the machine type defined on the vehicle. */
+  readonly role?: 'TRUCK' | 'SHOVEL';
   readonly shiftDrivers?: ReadonlyArray<string | null>;
 }
 
@@ -222,11 +223,24 @@ export class HaulRouteService {
     const route = await this.get(ctx, routeId);
     const before = await this.members(ctx, routeId);
     const seen = new Set<string>();
-    const rosters = members.map((member) =>
+    const machineTypes = await this.machineTypes(
+      ctx,
+      members.filter((member) => !member.role).map((member) => member.deviceId),
+    );
+    const resolved = members.map((member) => {
+      const role = member.role ?? machineTypes.get(member.deviceId);
+      if (!role) {
+        throw new BadRequestException(
+          'Machine type is not set on the vehicle. Define it in the vehicle definition.',
+        );
+      }
+      return { ...member, role };
+    });
+    const rosters = resolved.map((member) =>
       member.role === 'TRUCK' ? normalizeRoster(member.shiftDrivers, route.shiftCount) : [],
     );
     const busy = new Map<string, string>();
-    for (const [index, member] of members.entries()) {
+    for (const [index, member] of resolved.entries()) {
       if (seen.has(member.deviceId)) {
         throw new ConflictException('A device can only be assigned once on a route.');
       }
@@ -257,18 +271,18 @@ export class HaulRouteService {
         .whereRaw('tenant_id = ?::uuid', [ctx.tenantId])
         .whereRaw('route_id = ?::uuid', [routeId])
         .delete();
-      const after = members.map((member, index) => ({
+      const after = resolved.map((member, index) => ({
         deviceId: member.deviceId,
         role: member.role,
         shiftDrivers: rosters[index] ?? [],
       }));
       await this.appendAudit(trx, ctx, 'haul_route.members_set', routeId, before, after);
-      if (members.length === 0) return;
+      if (resolved.length === 0) return;
       await trx
         .withSchema('fleet')
         .from('haul_members')
         .insert(
-          members.map((member, index) => ({
+          resolved.map((member, index) => ({
             tenant_id: ctx.tenantId,
             route_id: routeId,
             device_id: member.deviceId,
@@ -278,6 +292,24 @@ export class HaulRouteService {
         );
     });
     return this.members(ctx, routeId);
+  }
+
+  /** Machine type of the vehicle each device is bound to (devices without one are absent). */
+  private async machineTypes(
+    ctx: ActorContext,
+    deviceIds: readonly string[],
+  ): Promise<Map<string, 'TRUCK' | 'SHOVEL'>> {
+    if (deviceIds.length === 0) return new Map();
+    const rows = (await this.knex('fleet.vehicle_devices as vd')
+      .join('fleet.vehicles as v', 'v.id', 'vd.vehicle_id')
+      .whereRaw('vd.tenant_id = ?::uuid', [ctx.tenantId])
+      .whereIn('vd.device_id', [...deviceIds])
+      .whereNotNull('v.machine_type')
+      .select('vd.device_id', 'v.machine_type')) as Array<{
+      device_id: string;
+      machine_type: 'TRUCK' | 'SHOVEL';
+    }>;
+    return new Map(rows.map((row) => [row.device_id, row.machine_type]));
   }
 
   private async appendAudit(

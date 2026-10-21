@@ -109,6 +109,7 @@ function mockVehicles(): Vehicle[] {
     vin: null,
     odometerKm: 80_000 + i * 137,
     engineHours: i % 3 === 0 ? 4_200 + i * 11 : null,
+    machineType: null,
     status: 'ACTIVE' as VehicleStatus,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',

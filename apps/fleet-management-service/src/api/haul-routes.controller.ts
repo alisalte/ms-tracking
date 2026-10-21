@@ -47,7 +47,8 @@ const membersSchema = z.object({
     .array(
       z.object({
         deviceId: z.string().uuid(),
-        role: z.enum(['TRUCK', 'SHOVEL']),
+        /** Optional: defaults to the machine type defined on the vehicle. */
+        role: z.enum(['TRUCK', 'SHOVEL']).optional(),
         /** Element `n - 1` is the driver of shift `n`. */
         shiftDrivers: z.array(z.string().uuid().nullable()).max(4).optional(),
       }),

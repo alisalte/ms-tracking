@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildVehiclesExportGrid } from '@/lib/asset-export';
+import { buildDriversExportGrid, buildVehiclesExportGrid } from '@/lib/asset-export';
 import {
   ASSET_IMPORT_MAX_ROWS,
   buildAssetImportTemplate,
@@ -164,6 +164,70 @@ describe('parseDriverGrid', () => {
   });
 });
 
+describe('machine type and shift columns', () => {
+  it('reads the machine type of a vehicle in English and Persian', () => {
+    const parsed = parseVehicleGrid([
+      ['name', 'code', 'fleetCode', 'نوع ماشین'],
+      ['T1', 'V1', 'N', 'کامیون'],
+      ['S1', 'V2', 'N', 'Shovel'],
+      ['X', 'V3', 'N', ''],
+      ['Bad', 'V4', 'N', 'crane'],
+    ]);
+    expect(parsed.rows.map((r) => r.machineType)).toEqual([
+      'TRUCK',
+      'SHOVEL',
+      undefined,
+      undefined,
+    ]);
+    expect(parsed.issues).toEqual([{ row: 5, field: 'machineType', code: 'invalidMachineType' }]);
+  });
+
+  it('reads the shift a driver covers on the vehicle', () => {
+    const parsed = parseDriverGrid([
+      ['firstName', 'lastName', 'licenseNumber', 'vehicleCode', 'شیفت'],
+      ['A', 'A', 'L1', 'V1', '1'],
+      ['B', 'B', 'L2', 'V1', '۲'],
+      ['C', 'C', 'L3', 'V1', ''],
+      ['D', 'D', 'L4', 'V1', '7'],
+    ]);
+    expect(parsed.rows.map((r) => r.shiftNo)).toEqual([1, 2, undefined, undefined]);
+    expect(parsed.issues).toEqual([{ row: 5, field: 'shiftNo', code: 'invalidShift' }]);
+  });
+
+  it('exports the shift next to the vehicle code, ready to be imported again', () => {
+    const grid = buildDriversExportGrid(
+      [
+        {
+          id: 'd1',
+          tenantId: 't',
+          employeeId: null,
+          firstName: 'Ali',
+          lastName: 'Day',
+          email: null,
+          phone: null,
+          licenseNumber: 'L1',
+          licenseClass: null,
+          licenseIssued: null,
+          licenseExpires: null,
+          licenseCountry: null,
+          status: 'ACTIVE',
+          assignedVehicleId: 'veh-1',
+          assignedShift: 2,
+          assignedAt: null,
+          version: 1,
+        },
+      ],
+      [{ id: 'veh-1', code: 'V001' } as never],
+    );
+    const header = grid[0] ?? [];
+    expect(grid[1]?.[header.indexOf('vehicleCode')]).toBe('V001');
+    expect(grid[1]?.[header.indexOf('shift')]).toBe('2');
+    const again = parseDriverGrid(grid);
+    expect(again.issues).toEqual([]);
+    expect(again.rows[0]).toMatchObject({ vehicleCode: 'V001', shiftNo: 2 });
+  });
+});
+
 describe('vehicle Excel export', () => {
   it('uses import-compatible headers including fleetCode', () => {
     const grid = buildVehiclesExportGrid(
@@ -178,6 +242,7 @@ describe('vehicle Excel export', () => {
           vin: null,
           odometerKm: 10,
           engineHours: null,
+          machineType: null,
           status: 'ACTIVE',
           version: 1,
           createdAt: '',
@@ -206,6 +271,7 @@ describe('vehicle Excel export', () => {
       'vin',
       'odometerKm',
       'engineHours',
+      'machineType',
       'status',
     ]);
     expect(grid[1]?.[2]).toBe('NORTH');
@@ -225,6 +291,7 @@ describe('xlsx round-trip', () => {
       'vin',
       'odometerKm',
       'engineHours',
+      'machineType',
     ]);
     expect(grid[1]?.[2]).toBe('NORTH');
   });

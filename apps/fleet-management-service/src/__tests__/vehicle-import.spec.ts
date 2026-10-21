@@ -46,6 +46,7 @@ function vehicleRow(code: string): VehicleRow {
     vin: null,
     odometer_km: null,
     engine_hours: null,
+    machine_type: null,
     status: 'ACTIVE',
     version: 1,
     created_at: new Date(),

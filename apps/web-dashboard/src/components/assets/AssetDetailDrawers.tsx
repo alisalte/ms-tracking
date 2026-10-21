@@ -64,7 +64,7 @@ import {
 } from '@/components/assets/asset-meta';
 import {
   devicesOnVehicle,
-  driverOnVehicle,
+  driverLabelsOnVehicle,
   formatDeviceLabel,
 } from '@/components/assets/driver-join';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
@@ -360,7 +360,10 @@ function VehicleDetailDrawer({
     () => fleets.find((f) => f.id === vehicle?.fleetId)?.name ?? '—',
     [fleets, vehicle?.fleetId],
   );
-  const assignedDriver = useMemo(() => driverOnVehicle(drivers, vehicleId), [drivers, vehicleId]);
+  const assignedDrivers = useMemo(
+    () => driverLabelsOnVehicle(drivers, vehicleId, (n) => t('assets.driver.shiftN', { n })),
+    [drivers, vehicleId, t],
+  );
   // Assignable devices: unbound and not decommissioned. `!vehicleId` covers
   // both null and a missing field so a device still appears in the picker.
   const unboundDevices = useMemo(
@@ -476,8 +479,15 @@ function VehicleDetailDrawer({
                 <MetaRow
                   icon={<UserRound />}
                   label={t('assets.vehicle.assignedDriver')}
+                  value={assignedDrivers ?? t('map.popup.unassigned')}
+                />
+                <MetaRow
+                  icon={<Truck />}
+                  label={t('assets.vehicle.machineType')}
                   value={
-                    assignedDriver ? driverFullName(assignedDriver) : t('map.popup.unassigned')
+                    vehicle.machineType
+                      ? t(`assets.vehicle.machineTypes.${vehicle.machineType}`)
+                      : '—'
                   }
                 />
               </div>
@@ -655,9 +665,12 @@ function DeviceDetailDrawer({
     () => (device?.vehicleId ? vehicles.find((v) => v.id === device.vehicleId) : undefined),
     [vehicles, device?.vehicleId],
   );
-  const assignedDriver = useMemo(
-    () => driverOnVehicle(drivers, device?.vehicleId ?? null),
-    [drivers, device?.vehicleId],
+  const assignedDrivers = useMemo(
+    () =>
+      driverLabelsOnVehicle(drivers, device?.vehicleId ?? null, (n) =>
+        t('assets.driver.shiftN', { n }),
+      ),
+    [drivers, device?.vehicleId, t],
   );
 
   return (
@@ -719,7 +732,7 @@ function DeviceDetailDrawer({
               <MetaRow
                 icon={<UserRound />}
                 label={t('assets.device.assignedDriver')}
-                value={assignedDriver ? driverFullName(assignedDriver) : t('map.popup.unassigned')}
+                value={assignedDrivers ?? t('map.popup.unassigned')}
               />
             </Section>
 
@@ -1066,10 +1079,13 @@ function DriverDetailDrawer({
                           <span className="font-medium text-gray-800 dark:text-gray-100">
                             {label}
                           </span>
-                          {row.isCurrent && (
-                            <Badge color="success">
-                              {t('assets.driver.assignmentCurrent')}
+                          {row.shiftNo != null && (
+                            <Badge color="gray">
+                              {t('assets.driver.shiftBadge', { n: row.shiftNo })}
                             </Badge>
+                          )}
+                          {row.isCurrent && (
+                            <Badge color="success">{t('assets.driver.assignmentCurrent')}</Badge>
                           )}
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">

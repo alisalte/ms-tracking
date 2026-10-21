@@ -6,7 +6,7 @@
  *   GET    /fleet/drivers/:id
  *   PUT    /fleet/drivers/:id                     snake_case update DTO
  *   POST   /fleet/drivers/:id/deactivate          204
- *   POST   /fleet/drivers/:id/assign-vehicle      { vehicle_id }
+ *   POST   /fleet/drivers/:id/assign-vehicle      { vehicle_id, shift_no? }
  *   POST   /fleet/drivers/:id/unassign-vehicle    204
  *   GET    /fleet/drivers/:id/assignments         (?from&to ISO) → assignment history
  *   GET    /fleet/vehicles/:id/behavior-score     vehicle-centric behavior score + per-driver split
@@ -46,6 +46,11 @@ function asStr(v: unknown): string | null {
   return s.length ? s : null;
 }
 
+function asShift(v: unknown): number | null {
+  const n = Number(v);
+  return v != null && Number.isInteger(n) && n >= 1 && n <= 4 ? n : null;
+}
+
 function asStatus(v: unknown): DriverStatus {
   const s = String(v ?? 'ACTIVE').toUpperCase();
   if (s === 'INACTIVE' || s === 'SUSPENDED' || s === 'TERMINATED') return s;
@@ -69,6 +74,7 @@ export function mapDriver(raw: Record<string, unknown>): Driver {
     licenseCountry: asStr(raw.licenseCountry ?? raw.license_country),
     status: asStatus(raw.status),
     assignedVehicleId: asStr(raw.assignedVehicleId ?? raw.assigned_vehicle_id),
+    assignedShift: asShift(raw.assignedShift ?? raw.assigned_shift),
     assignedAt: asStr(raw.assignedAt ?? raw.assigned_at),
     version: Number(raw.version ?? 1),
   };
@@ -85,6 +91,8 @@ export interface DriverAssignmentInterval {
   vehicleId: string;
   startedAt: string;
   endedAt: string | null;
+  /** Shift the driver covered on the vehicle; null = any shift. */
+  shiftNo: number | null;
   changedBy: string | null;
   isCurrent: boolean;
 }
@@ -97,6 +105,7 @@ export function mapDriverAssignment(raw: Record<string, unknown>): DriverAssignm
     vehicleId: String(raw.vehicleId ?? raw.vehicle_id ?? ''),
     startedAt: asStr(raw.startedAt ?? raw.started_at) ?? '',
     endedAt,
+    shiftNo: asShift(raw.shiftNo ?? raw.shift_no),
     changedBy: asStr(raw.changedBy ?? raw.changed_by),
     isCurrent: endedAt == null || Boolean(raw.isCurrent ?? raw.is_current),
   };
@@ -478,12 +487,17 @@ export function useVehicleBehaviorEvents(id: string | null) {
   });
 }
 
-async function syncAssignment(id: string, vehicleId: string | null | undefined): Promise<void> {
+async function syncAssignment(
+  id: string,
+  vehicleId: string | null | undefined,
+  shiftNo: number | null = null,
+): Promise<void> {
   if (vehicleId === undefined) return;
   if (vehicleId) {
-    await apiPost<{ vehicle_id: string }, { id: string }>(`/fleet/drivers/${id}/assign-vehicle`, {
-      vehicle_id: vehicleId,
-    });
+    await apiPost<{ vehicle_id: string; shift_no: number | null }, { id: string }>(
+      `/fleet/drivers/${id}/assign-vehicle`,
+      { vehicle_id: vehicleId, shift_no: shiftNo },
+    );
   } else {
     await apiPostNoContent(`/fleet/drivers/${id}/unassign-vehicle`);
   }
@@ -498,7 +512,7 @@ export function useCreateDriver() {
         toWire(payload),
       );
       if (payload.assignedVehicleId) {
-        await syncAssignment(created.id, payload.assignedVehicleId);
+        await syncAssignment(created.id, payload.assignedVehicleId, payload.assignedShift ?? null);
       }
       return created;
     },
@@ -515,7 +529,7 @@ export function useUpdateDriver() {
         toWire(changes),
       );
       if (changes.assignedVehicleId !== undefined) {
-        await syncAssignment(id, changes.assignedVehicleId);
+        await syncAssignment(id, changes.assignedVehicleId, changes.assignedShift ?? null);
       }
     },
     onSuccess: (_d, { id }) => {
@@ -535,14 +549,17 @@ export function useDeactivateDriver() {
 
 export function useAssignDriverVehicle() {
   const qc = useQueryClient();
-  return useMutation<void, Error, { driverId: string; vehicleId: string }>({
-    mutationFn: ({ driverId, vehicleId }) => syncAssignment(driverId, vehicleId),
-    onSuccess: (_d, { driverId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(driverId) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.driverAssignments(driverId) });
-      qc.invalidateQueries({ queryKey: queryKeys.assets.all });
+  return useMutation<void, Error, { driverId: string; vehicleId: string; shiftNo?: number | null }>(
+    {
+      mutationFn: ({ driverId, vehicleId, shiftNo }) =>
+        syncAssignment(driverId, vehicleId, shiftNo ?? null),
+      onSuccess: (_d, { driverId }) => {
+        qc.invalidateQueries({ queryKey: queryKeys.assets.driverDetail(driverId) });
+        qc.invalidateQueries({ queryKey: queryKeys.assets.driverAssignments(driverId) });
+        qc.invalidateQueries({ queryKey: queryKeys.assets.all });
+      },
     },
-  });
+  );
 }
 
 export function useUnassignDriverVehicle() {
@@ -598,7 +615,7 @@ export function useImportDrivers() {
               });
             } else if (id) {
               try {
-                await syncAssignment(id, vehicle.id);
+                await syncAssignment(id, vehicle.id, row.shiftNo ?? null);
               } catch (err) {
                 warnings.push({ row: row.row, error: getApiErrorMessage(err) });
               }
