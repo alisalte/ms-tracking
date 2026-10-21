@@ -1,40 +1,115 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { i18n } from '@/i18n';
 import { OperationsPage } from '@/pages/OperationsPage';
 
+const rangeSeen = vi.hoisted(() => ({ activity: [] as unknown[], periods: [] as unknown[][] }));
+const downloads = vi.hoisted(() => ({ calls: [] as Array<{ blob: Blob; name: string }> }));
+
+vi.mock('@/lib/video-stream', () => ({
+  downloadBlob: (blob: Blob, name: string) => downloads.calls.push({ blob, name }),
+}));
+
 vi.mock('@/api/operations.api', () => ({
-  useDeviceActivity: () => ({
-    data: {
-      from: '2026-06-01T00:00:00Z',
-      to: '2026-06-02T00:00:00Z',
-      totalDistanceKm: 12.5,
-      silentCount: 1,
-      reportingCount: 0,
-      devices: [
-        {
-          deviceId: 'dev-1',
-          imei: '490154203237518',
-          protocol: 'meitrack',
-          status: 'ACTIVE',
-          vehicleId: null,
-          vehicleName: null,
-          vehicleCode: null,
-          plate: null,
-          startedAt: null,
-          fixes: 0,
-          lastFixAt: null,
-          offlineSec: null,
-          distanceKm: 0,
-          silent: true,
-        },
-      ],
-    },
-    isLoading: false,
-    isError: false,
-  }),
+  useHaulPeriods: (...args: unknown[]) => {
+    rangeSeen.periods.push(args);
+    return {
+      data: args[0]
+        ? {
+            route: {
+              id: 'route-1',
+              name: 'Pit to dump',
+              shiftStartHour: 6,
+              shiftDurationHours: 8,
+              shiftCount: 3,
+              timeZone: 'Asia/Tehran',
+            },
+            from: '2026-06-01T00:00:00Z',
+            to: '2026-06-03T00:00:00Z',
+            granularity: args[2],
+            calendar: args[3],
+            truncated: false,
+            services: 5,
+            distanceKm: 15,
+            periods: [
+              {
+                key: '2026-06-01',
+                from: '2026-06-01',
+                to: '2026-06-01',
+                services: 5,
+                distanceKm: 15,
+                durationSec: 7200,
+                loadDwellSec: 1800,
+                trucks: 1,
+                drivers: 2,
+                withoutDriver: 1,
+              },
+              {
+                key: '2026-06-02',
+                from: '2026-06-02',
+                to: '2026-06-02',
+                services: 0,
+                distanceKm: 0,
+                durationSec: 0,
+                loadDwellSec: 0,
+                trucks: 0,
+                drivers: 0,
+                withoutDriver: 0,
+              },
+            ],
+            details: [
+              {
+                period: '2026-06-01',
+                vehicleId: 'veh-1',
+                vehicleName: 'Truck 1',
+                shiftNo: 1,
+                driverId: 'drv-1',
+                driverName: 'Ali Day',
+                services: 5,
+                distanceKm: 15,
+                durationSec: 7200,
+                loadDwellSec: 1800,
+              },
+            ],
+          }
+        : undefined,
+      isError: false,
+    };
+  },
+  useDeviceActivity: (range: unknown) => {
+    rangeSeen.activity.push(range);
+    return {
+      data: {
+        from: '2026-06-01T00:00:00Z',
+        to: '2026-06-02T00:00:00Z',
+        totalDistanceKm: 12.5,
+        silentCount: 1,
+        reportingCount: 0,
+        devices: [
+          {
+            deviceId: 'dev-1',
+            imei: '490154203237518',
+            protocol: 'meitrack',
+            status: 'ACTIVE',
+            vehicleId: null,
+            vehicleName: null,
+            vehicleCode: null,
+            plate: null,
+            startedAt: null,
+            fixes: 0,
+            lastFixAt: null,
+            offlineSec: null,
+            distanceKm: 0,
+            silent: true,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    };
+  },
   useHaulRoutes: () => ({
     data: [
       {
@@ -124,10 +199,33 @@ vi.mock('@/api/operations.api', () => ({
 vi.mock('@/api/driver.api', () => ({
   useDrivers: () => ({
     data: [
-      { id: 'drv-1', firstName: 'Ali', lastName: 'Day', status: 'ACTIVE' },
-      { id: 'drv-2', firstName: 'Reza', lastName: 'Night', status: 'ACTIVE' },
+      {
+        id: 'drv-1',
+        firstName: 'Ali',
+        lastName: 'Day',
+        status: 'ACTIVE',
+        assignedVehicleId: 'veh-1',
+        assignedShift: 1,
+      },
+      {
+        id: 'drv-2',
+        firstName: 'Reza',
+        lastName: 'Night',
+        status: 'ACTIVE',
+        assignedVehicleId: 'veh-1',
+        assignedShift: 2,
+      },
+      {
+        id: 'drv-3',
+        firstName: 'Sam',
+        lastName: 'Third',
+        status: 'ACTIVE',
+        assignedVehicleId: 'veh-1',
+        assignedShift: 3,
+      },
     ],
   }),
+  driverFullName: (d: { firstName: string; lastName: string }) => `${d.firstName} ${d.lastName}`,
 }));
 
 vi.mock('@/api/geofence.api', () => ({
@@ -141,11 +239,26 @@ vi.mock('@/api/geofence.api', () => ({
 
 vi.mock('@/api/asset.api', () => ({
   useDevices: () => ({
-    data: [{ id: 'dev-1', imei: '490154203237518', status: 'ACTIVE', vehicleId: 'veh-1' }],
+    data: [
+      { id: 'dev-1', imei: '490154203237518', status: 'ACTIVE', vehicleId: 'veh-1' },
+      { id: 'dev-2', imei: '490154203237519', status: 'ACTIVE', vehicleId: 'veh-2' },
+    ],
+  }),
+  useVehicles: () => ({
+    data: [
+      { id: 'veh-1', name: 'Truck 1', machineType: 'TRUCK' },
+      { id: 'veh-2', name: 'Loader', machineType: null },
+    ],
   }),
 }));
 
 describe('operations page', () => {
+  beforeEach(() => {
+    rangeSeen.activity.length = 0;
+    rangeSeen.periods.length = 0;
+    downloads.calls.length = 0;
+  });
+
   it('shows a silent device and the haul form', () => {
     render(
       <I18nextProvider i18n={i18n}>
@@ -173,5 +286,66 @@ describe('operations page', () => {
     expect((screen.getByTestId('roster-dev-1-1') as HTMLSelectElement).value).toBe('drv-1');
     expect((screen.getByTestId('roster-dev-1-2') as HTMLSelectElement).value).toBe('drv-2');
     expect(screen.getByTestId('haul-by-shift').querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+
+  it('takes the machine type from the vehicle instead of asking for it on the route', () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <OperationsPage />
+      </I18nextProvider>,
+    );
+    fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
+    // dev-1 sits on a truck: a plain checkbox, no role dropdown.
+    const typed = screen.getByTestId('member-dev-1') as HTMLInputElement;
+    expect(typed.type).toBe('checkbox');
+    expect(typed.checked).toBe(true);
+    expect(screen.queryByRole('combobox', { name: '490154203237518' })).toBeNull();
+    // dev-2 has no machine type on its vehicle: the manual role picker stays as the fallback.
+    expect(screen.getByRole('combobox', { name: '490154203237519' })).toBeInTheDocument();
+    // The driver assigned to the vehicle for each shift is offered as the default.
+    const shift2 = screen.getByTestId('roster-dev-1-2') as HTMLSelectElement;
+    expect(within(shift2).getAllByRole('option')[0]?.textContent).toMatch(/Reza Night/);
+  });
+
+  it('lets the range be custom and exports the activity to Excel', () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <OperationsPage />
+      </I18nextProvider>,
+    );
+    expect(rangeSeen.activity.at(-1)).toEqual({ preset: 'today' });
+    fireEvent.click(screen.getByTestId('report-range-custom'));
+    const last = rangeSeen.activity.at(-1) as { from?: string; to?: string; preset?: string };
+    expect(last.preset).toBeUndefined();
+    expect(last.from).toBeTruthy();
+    expect(last.to).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('export-activity'));
+    expect(downloads.calls).toHaveLength(1);
+    expect(downloads.calls[0]?.name).toMatch(/\.xlsx$/);
+    expect(downloads.calls[0]?.blob.type).toMatch(/spreadsheetml/);
+  });
+
+  it('shows the daily, weekly and monthly period report and exports it', () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <OperationsPage />
+      </I18nextProvider>,
+    );
+    fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
+    const table = screen.getByTestId('haul-period-table');
+    // A quiet day is listed as zero rather than dropped.
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(screen.getByTestId('haul-period-details').querySelectorAll('tbody tr')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Weekly' }));
+    expect(rangeSeen.periods.at(-1)?.[2]).toBe('weekly');
+    fireEvent.click(screen.getByRole('radio', { name: 'Monthly' }));
+    expect(rangeSeen.periods.at(-1)?.[2]).toBe('monthly');
+    expect(rangeSeen.periods.at(-1)?.[3]).toBe('jalali');
+
+    fireEvent.click(screen.getByTestId('export-periods'));
+    expect(downloads.calls).toHaveLength(1);
+    expect(downloads.calls[0]?.name).toMatch(/Pit-to-dump-monthly-.*\.xlsx$/);
   });
 });

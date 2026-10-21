@@ -13,8 +13,8 @@ import {
 import { type Page, toCursor } from '@fleetvision/shared-kernel';
 import {
   type Driver,
-  Driver as DriverClass,
   DriverAssignment,
+  Driver as DriverClass,
   type DriverStatus,
   TenantQuotaExceededError,
   shouldCloseOpenAssignment,
@@ -36,6 +36,7 @@ export interface DriverRow {
   license_country: string | null;
   status: DriverStatus;
   assigned_vehicle_id: string | null;
+  assigned_shift: number | null;
   assigned_at: Date | null;
   metadata: Record<string, unknown> | string;
   version: number;
@@ -50,6 +51,7 @@ interface DriverAssignmentRow {
   vehicle_id: string;
   started_at: Date;
   ended_at: Date | null;
+  shift_no: number | null;
   changed_by: string | null;
 }
 
@@ -78,6 +80,7 @@ export class DriverRepository {
           license_country: driver.licenseCountry,
           status: driver.status,
           assigned_vehicle_id: driver.assignedVehicleId,
+          assigned_shift: driver.assignedShift,
           assigned_at: driver.assignedAt,
           metadata: JSON.stringify(driver.metadata),
         });
@@ -145,13 +148,24 @@ export class DriverRepository {
     opts: {
       previousVehicleId: string | null;
       nextVehicleId: string | null;
+      previousShift?: number | null;
+      nextShift?: number | null;
       changedBy: string | null;
       at?: Date;
     },
   ): Promise<void> {
     const at = opts.at ?? new Date();
+    const previousShift = opts.previousShift ?? null;
+    const nextShift = opts.nextShift ?? null;
     await withTenantContext(this.knex, driver.tenantId, async (trx) => {
-      if (shouldCloseOpenAssignment(opts.previousVehicleId, opts.nextVehicleId)) {
+      if (
+        shouldCloseOpenAssignment(
+          opts.previousVehicleId,
+          opts.nextVehicleId,
+          previousShift,
+          nextShift,
+        )
+      ) {
         await trx('fleet.driver_assignments')
           .where({
             tenant_id: driver.tenantId,
@@ -161,13 +175,21 @@ export class DriverRepository {
           .update({ ended_at: at });
       }
 
-      if (shouldOpenAssignmentInterval(opts.previousVehicleId, opts.nextVehicleId)) {
-        // Safety: close any stray open interval on the target vehicle.
+      if (
+        shouldOpenAssignmentInterval(
+          opts.previousVehicleId,
+          opts.nextVehicleId,
+          previousShift,
+          nextShift,
+        )
+      ) {
+        // Safety: close any stray open interval on the target vehicle and shift.
         await trx('fleet.driver_assignments')
           .where({
             tenant_id: driver.tenantId,
             vehicle_id: opts.nextVehicleId as string,
           })
+          .whereRaw('COALESCE(shift_no, 0) = ?', [nextShift ?? 0])
           .whereNull('ended_at')
           .update({ ended_at: at });
 
@@ -178,6 +200,7 @@ export class DriverRepository {
           vehicle_id: opts.nextVehicleId,
           started_at: at,
           ended_at: null,
+          shift_no: nextShift,
           changed_by: opts.changedBy,
         });
       }
@@ -255,14 +278,19 @@ export class DriverRepository {
     });
   }
 
-  /** Check if a vehicle is already assigned to another active driver (cross-tenant needs platform). */
+  /**
+   * Check if a vehicle already has an active driver for the given shift
+   * (null = the any-shift slot). Cross-tenant needs platform.
+   */
   public async findActiveDriverForVehicle(
     tenantId: string,
     vehicleId: string,
+    shiftNo: number | null = null,
   ): Promise<Driver | null> {
     return withPlatformContext(this.platformKnex, async (trx) => {
       const row = await trx<DriverRow>('fleet.drivers')
         .where({ tenant_id: tenantId, assigned_vehicle_id: vehicleId, status: 'ACTIVE' })
+        .whereRaw('COALESCE(assigned_shift, 0) = ?', [shiftNo ?? 0])
         .first();
       return row ? this.toDomain(row) : null;
     });
@@ -284,6 +312,7 @@ export class DriverRepository {
         license_country: driver.licenseCountry,
         status: driver.status,
         assigned_vehicle_id: driver.assignedVehicleId,
+        assigned_shift: driver.assignedShift,
         assigned_at: driver.assignedAt,
         version: this.knex.raw('version + 1'),
         updated_at: this.knex.fn.now(),
@@ -306,6 +335,7 @@ export class DriverRepository {
       licenseCountry: row.license_country,
       status: row.status,
       assignedVehicleId: row.assigned_vehicle_id,
+      assignedShift: row.assigned_shift ?? null,
       assignedAt: row.assigned_at,
       metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
     });
@@ -318,6 +348,7 @@ export class DriverRepository {
       vehicleId: row.vehicle_id,
       startedAt: row.started_at,
       endedAt: row.ended_at,
+      shiftNo: row.shift_no ?? null,
       changedBy: row.changed_by,
     });
   }

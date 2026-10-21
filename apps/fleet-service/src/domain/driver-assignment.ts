@@ -8,6 +8,8 @@ export interface DriverAssignmentProps {
   vehicleId: string;
   startedAt: Date;
   endedAt: Date | null;
+  /** Shift of the work day the driver covers on the vehicle; null = any shift. */
+  shiftNo: number | null;
   changedBy: string | null;
 }
 
@@ -18,6 +20,7 @@ export class DriverAssignment {
   public readonly vehicleId: string;
   public readonly startedAt: Date;
   public readonly endedAt: Date | null;
+  public readonly shiftNo: number | null;
   public readonly changedBy: string | null;
 
   private constructor(id: string, props: DriverAssignmentProps) {
@@ -27,6 +30,7 @@ export class DriverAssignment {
     this.vehicleId = props.vehicleId;
     this.startedAt = props.startedAt;
     this.endedAt = props.endedAt;
+    this.shiftNo = props.shiftNo;
     this.changedBy = props.changedBy;
   }
 
@@ -43,15 +47,21 @@ export class DriverAssignment {
 export function shouldOpenAssignmentInterval(
   previousVehicleId: string | null,
   nextVehicleId: string | null,
+  previousShift: number | null = null,
+  nextShift: number | null = null,
 ): boolean {
-  return nextVehicleId !== null && nextVehicleId !== previousVehicleId;
+  return (
+    nextVehicleId !== null && (nextVehicleId !== previousVehicleId || nextShift !== previousShift)
+  );
 }
 
 /** Pure helper: whether any open interval for this driver must be closed. */
 export function shouldCloseOpenAssignment(
   previousVehicleId: string | null,
   nextVehicleId: string | null,
+  previousShift: number | null = null,
+  nextShift: number | null = null,
 ): boolean {
   if (previousVehicleId === null) return false;
-  return previousVehicleId !== nextVehicleId;
+  return previousVehicleId !== nextVehicleId || previousShift !== nextShift;
 }

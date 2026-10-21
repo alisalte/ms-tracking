@@ -49,6 +49,9 @@ export type UpdateFleetPayload = CreateFleetPayload;
 /** Vehicle lifecycle status. DELETE = archive. */
 export type VehicleStatus = 'ACTIVE' | 'ARCHIVED';
 
+/** What a machine is on a mine haul route — set once on the vehicle. */
+export type MachineType = 'TRUCK' | 'SHOVEL';
+
 /** A registered vehicle (real backend contract — name/code identity, not make/model). */
 export interface Vehicle {
   id: string;
@@ -62,6 +65,8 @@ export interface Vehicle {
   odometerKm: number | null;
   /** Operator-entered hour-meter (engine hours). Null when never recorded. */
   engineHours: number | null;
+  /** Machine type for haul routes; null for ordinary vehicles. */
+  machineType: MachineType | null;
   status: VehicleStatus;
   version: number;
   createdAt: string;
@@ -80,12 +85,18 @@ export interface CreateVehiclePayload {
   odometerKm?: number;
   /** Current hour-meter (engine hours) for heavy equipment. */
   engineHours?: number;
+  /** Truck or shovel — chosen here once instead of on every haul route. */
+  machineType?: MachineType;
 }
 
 /** Update a vehicle (PATCH /vehicles/:id — full replace, name+code required). */
-export type UpdateVehiclePayload = Omit<CreateVehiclePayload, 'odometerKm' | 'engineHours'> & {
+export type UpdateVehiclePayload = Omit<
+  CreateVehiclePayload,
+  'odometerKm' | 'engineHours' | 'machineType'
+> & {
   odometerKm?: number | null;
   engineHours?: number | null;
+  machineType?: MachineType | null;
 };
 
 // ── Devices (fleet-management DeviceRecord) ──────────────────────────────────
@@ -188,6 +199,8 @@ export interface Driver {
   licenseCountry: string | null;
   status: DriverStatus;
   assignedVehicleId: string | null;
+  /** Shift (1-based) the driver covers on the vehicle; null = any shift. */
+  assignedShift: number | null;
   assignedAt: string | null;
   version: number;
 }
@@ -206,11 +219,16 @@ export interface CreateDriverPayload {
   licenseCountry?: string;
   /** Applied after create via POST /:id/assign-vehicle (not part of create DTO). */
   assignedVehicleId?: string;
+  /** Shift of the work day on that vehicle; omit for any shift. */
+  assignedShift?: number | null;
 }
 
 /** Update a driver (PUT /fleet/drivers/:id). */
-export type UpdateDriverPayload = Partial<Omit<CreateDriverPayload, 'assignedVehicleId'>> & {
+export type UpdateDriverPayload = Partial<
+  Omit<CreateDriverPayload, 'assignedVehicleId' | 'assignedShift'>
+> & {
   assignedVehicleId?: string | null;
+  assignedShift?: number | null;
 };
 
 // ── Vehicle ↔ Device binding (fleet-management) ──────────────────────────────

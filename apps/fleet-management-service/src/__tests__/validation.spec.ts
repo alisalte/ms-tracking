@@ -11,6 +11,7 @@ import {
   importVehicleRowSchema,
   importVehiclesBodySchema,
   listQuerySchema,
+  updateVehicleSchema,
 } from '../application/validation/schemas.js';
 
 /** Build a Luhn-valid 15-digit IMEI (test helper, mirrors imei.spec.ts). */
@@ -185,6 +186,27 @@ describe('validation schemas (§16, INV-I02)', () => {
       engineHours: -1,
     });
     expect(bad.success).toBe(false);
+  });
+
+  it('vehicle schemas take the machine type once and let PATCH clear it', () => {
+    const fleetId = '11111111-1111-1111-1111-111111111111';
+    expect(
+      createVehicleSchema.parse({ fleetId, name: 'T', code: 'T1', machineType: 'TRUCK' })
+        .machineType,
+    ).toBe('TRUCK');
+    expect(
+      createVehicleSchema.parse({ fleetId, name: 'T', code: 'T1' }).machineType,
+    ).toBeUndefined();
+    expect(
+      createVehicleSchema.safeParse({ fleetId, name: 'T', code: 'T1', machineType: 'CRANE' })
+        .success,
+    ).toBe(false);
+    expect(
+      updateVehicleSchema.parse({ name: 'T', code: 'T1', machineType: null }).machineType,
+    ).toBeNull();
+    expect(
+      updateVehicleSchema.parse({ name: 'T', code: 'T1', machineType: '' }).machineType,
+    ).toBeUndefined();
   });
 
   it('importVehicleRowSchema requires fleetCode instead of fleetId', () => {

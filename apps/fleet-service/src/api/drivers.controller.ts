@@ -26,10 +26,10 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { Driver } from '../domain/index.js';
-import { DriverNotFoundError, VehicleAlreadyAssignedError } from '../domain/index.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { DriverBehaviorService } from '../application/driver-behavior.service.js';
+import { Driver } from '../domain/index.js';
+import { DriverNotFoundError, VehicleAlreadyAssignedError } from '../domain/index.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { DriverRepository } from '../infrastructure/persistence/driver.repository.js';
 import {
@@ -220,11 +220,13 @@ export class DriversController {
     const driver = await this.drivers.findById(p.tenantId, params.id);
     if (!driver) throw new DriverNotFoundError();
     const previousVehicleId = driver.assignedVehicleId;
+    const previousShift = driver.assignedShift;
     driver.transitionTo('INACTIVE');
     if (previousVehicleId) driver.unassignVehicle();
     if (previousVehicleId) {
       await this.drivers.updateAndRecordAssignment(driver, {
         previousVehicleId,
+        previousShift,
         nextVehicleId: null,
         changedBy: p.userId,
       });
@@ -243,16 +245,26 @@ export class DriversController {
     const p = getPrincipal(req);
     const driver = await this.drivers.findById(p.tenantId, params.id);
     if (!driver) throw new DriverNotFoundError();
-    const existing = await this.drivers.findActiveDriverForVehicle(p.tenantId, body.vehicle_id);
+    const shiftNo = body.shift_no ?? null;
+    const existing = await this.drivers.findActiveDriverForVehicle(
+      p.tenantId,
+      body.vehicle_id,
+      shiftNo,
+    );
     if (existing && existing.id !== driver.id) throw new VehicleAlreadyAssignedError();
     const previousVehicleId = driver.assignedVehicleId;
-    driver.assignVehicle(body.vehicle_id);
+    const previousShift = driver.assignedShift;
+    driver.assignVehicle(body.vehicle_id, shiftNo);
     await this.drivers.updateAndRecordAssignment(driver, {
       previousVehicleId,
       nextVehicleId: body.vehicle_id,
+      previousShift,
+      nextShift: shiftNo,
       changedBy: p.userId,
     });
-    return { data: { id: driver.id, assigned_vehicle_id: body.vehicle_id } };
+    return {
+      data: { id: driver.id, assigned_vehicle_id: body.vehicle_id, assigned_shift: shiftNo },
+    };
   }
 
   @Post(':id/unassign-vehicle')
@@ -267,9 +279,11 @@ export class DriversController {
     if (!driver) throw new DriverNotFoundError();
     const previousVehicleId = driver.assignedVehicleId;
     if (!previousVehicleId) return;
+    const previousShift = driver.assignedShift;
     driver.unassignVehicle();
     await this.drivers.updateAndRecordAssignment(driver, {
       previousVehicleId,
+      previousShift,
       nextVehicleId: null,
       changedBy: p.userId,
     });

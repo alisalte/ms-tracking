@@ -31,6 +31,8 @@ export type UpdateDriverDto = z.infer<typeof updateDriverSchema>;
 
 export const assignVehicleSchema = z.object({
   vehicle_id: z.string().uuid(),
+  /** Shift of the work day the driver covers on the vehicle; omit for any shift. */
+  shift_no: z.number().int().min(1).max(4).nullable().optional(),
 });
 export type AssignVehicleDto = z.infer<typeof assignVehicleSchema>;
 

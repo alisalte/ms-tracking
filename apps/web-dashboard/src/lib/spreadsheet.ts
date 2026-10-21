@@ -344,13 +344,27 @@ export function serializeCsv(rows: string[][]): string {
   return `\uFEFF${rows.map((r) => r.map(esc).join(',')).join('\r\n')}\r\n`;
 }
 
-function sheetXml(rows: string[][]): string {
+export type SheetCell = string | number | null | undefined;
+
+export interface SheetSpec {
+  name: string;
+  rows: SheetCell[][];
+  /** Right-to-left sheet, for Persian reports. */
+  rtl?: boolean;
+}
+
+function sheetXml(rows: SheetCell[][], rtl = false): string {
   const rowXml = rows
     .map((row, r) => {
       const cells = row
         .map((value, c) => {
           const ref = `${colName(c)}${r + 1}`;
-          return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+          if (value === null || value === undefined || value === '') return '';
+          // Numbers stay numbers so Excel can sum and sort them.
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            return `<c r="${ref}"><v>${value}</v></c>`;
+          }
+          return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(String(value))}</t></is></c>`;
         })
         .join('');
       return `<row r="${r + 1}">${cells}</row>`;
@@ -359,23 +373,44 @@ function sheetXml(rows: string[][]): string {
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    rtl ? '<sheetViews><sheetView rightToLeft="1" workbookViewId="0"/></sheetViews>' : '',
     `<sheetData>${rowXml}</sheetData></worksheet>`,
   ].join('');
 }
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-/** Build a real .xlsx workbook (first sheet) from a table of strings. */
-export function buildXlsx(sheetName: string, rows: string[][]): Uint8Array {
-  const safeName = sheetName.replace(/[\\/?*[\]]/g, ' ').slice(0, 31) || 'Sheet1';
-  return zipStore({
+function safeSheetName(name: string, index: number, taken: Set<string>): string {
+  const base =
+    name
+      .replace(/[\\/?*[\]:]/g, ' ')
+      .trim()
+      .slice(0, 31) || `Sheet${index + 1}`;
+  let candidate = base;
+  for (let n = 2; taken.has(candidate.toLowerCase()); n += 1) {
+    const suffix = ` ${n}`;
+    candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+  }
+  taken.add(candidate.toLowerCase());
+  return candidate;
+}
+
+/** Build a real .xlsx workbook with one or more sheets. */
+export function buildXlsxWorkbook(sheets: SheetSpec[]): Uint8Array {
+  const specs = sheets.length > 0 ? sheets : [{ name: 'Sheet1', rows: [] }];
+  const taken = new Set<string>();
+  const names = specs.map((sheet, i) => safeSheetName(sheet.name, i, taken));
+  const files: Record<string, string> = {
     '[Content_Types].xml': [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
       '<Default Extension="xml" ContentType="application/xml"/>',
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
-      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
+      ...specs.map(
+        (_, i) =>
+          `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+      ),
       '</Types>',
     ].join(''),
     '_rels/.rels': [
@@ -387,16 +422,39 @@ export function buildXlsx(sheetName: string, rows: string[][]): Uint8Array {
     'xl/workbook.xml': [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
-      `<sheets><sheet name="${xmlEscape(safeName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      '<sheets>',
+      ...names.map(
+        (name, i) => `<sheet name="${xmlEscape(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`,
+      ),
+      '</sheets></workbook>',
     ].join(''),
     'xl/_rels/workbook.xml.rels': [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>',
+      ...specs.map(
+        (_, i) =>
+          `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+      ),
       '</Relationships>',
     ].join(''),
-    'xl/worksheets/sheet1.xml': sheetXml(rows),
+  };
+  specs.forEach((sheet, i) => {
+    files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(sheet.rows, sheet.rtl);
   });
+  return zipStore(files);
+}
+
+/** Build a real .xlsx workbook (first sheet) from a table of strings. */
+export function buildXlsx(sheetName: string, rows: string[][]): Uint8Array {
+  return buildXlsxWorkbook([{ name: sheetName, rows }]);
+}
+
+/** Multi-sheet `.xlsx` Blob. */
+export function xlsxWorkbookBlob(sheets: SheetSpec[]): Blob {
+  const bytes = buildXlsxWorkbook(sheets);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new Blob([copy.buffer], { type: XLSX_MIME });
 }
 
 /** `.xlsx` Blob Excel opens without a CSV format-mismatch warning. */

@@ -15,10 +15,17 @@ import {
   type TrackSample,
   type Zone,
   detectHaulCycles,
+  localDate,
   maxShiftCount,
   shiftDayWindow,
   summarizeHauls,
 } from '../domain/haul-cycles.js';
+import {
+  PERIOD_CALENDARS,
+  PERIOD_GRANULARITIES,
+  periodsBetween,
+  summarizePeriods,
+} from '../domain/haul-periods.js';
 import {
   type ReportWindow,
   parseReportWindow,
@@ -27,6 +34,8 @@ import {
 import { ReportInputError, type ReportQueryBase } from './report.service.js';
 
 const POSITION_CAP = 60_000;
+/** Daily/weekly/monthly roll-ups read longer windows than a single day's cycles. */
+const PERIOD_POSITION_CAP = 400_000;
 const TIME_ZONE = 'Asia/Tehran';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -87,6 +96,29 @@ interface DriverRow {
   driver_name: string;
   started_at: Date | string;
   ended_at: Date | string | null;
+  shift_no: number | null;
+}
+
+interface HaulComputation {
+  readonly route: RouteRow;
+  readonly shiftCount: number;
+  readonly window: ReportWindow;
+  readonly detected: ReturnType<typeof detectHaulCycles>;
+  readonly truncated: boolean;
+  readonly vehicleName: ReadonlyMap<string, string>;
+  readonly shovelLabel: ReadonlyMap<string, string>;
+  readonly unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }>;
+}
+
+function parseOption<T extends string>(
+  value: string | undefined,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  const v = value?.trim();
+  if (!v) return fallback;
+  if ((allowed as readonly string[]).includes(v)) return v as T;
+  throw new ReportInputError(`must be one of ${allowed.join('|')}`, 'INVALID_FILTER');
 }
 
 export class OperationsReportService {
@@ -129,6 +161,85 @@ export class OperationsReportService {
   }
 
   public async haulCycles(tenantId: string, routeId: string | undefined, input: ReportQueryBase) {
+    const haul = await this.computeHaul(tenantId, routeId, input, POSITION_CAP);
+    return this.formatHaul(haul);
+  }
+
+  /** Services rolled up per day, week or month, with the vehicle / shift / driver split. */
+  public async haulPeriods(
+    tenantId: string,
+    routeId: string | undefined,
+    input: ReportQueryBase & { granularity?: string; calendar?: string },
+  ) {
+    const granularity = parseOption(input.granularity, PERIOD_GRANULARITIES, 'daily');
+    const calendar = parseOption(input.calendar, PERIOD_CALENDARS, 'jalali');
+    const haul = await this.computeHaul(tenantId, routeId, input, PERIOD_POSITION_CAP);
+    const periods = periodsBetween(
+      localDate(haul.window.from, TIME_ZONE),
+      localDate(new Date(haul.window.to.getTime() - 1), TIME_ZONE),
+      granularity,
+      calendar,
+    );
+    const rolled = summarizePeriods(
+      haul.detected.cycles,
+      periods,
+      (cycle) => cycle.shiftDate ?? localDate(cycle.originEnteredAt, TIME_ZONE),
+      granularity,
+      calendar,
+    );
+    return {
+      route: this.routeInfo(haul),
+      from: haul.window.from.toISOString(),
+      to: haul.window.to.toISOString(),
+      granularity,
+      calendar,
+      truncated: haul.truncated,
+      services: haul.detected.cycles.length,
+      distanceKm: km(haul.detected.cycles.reduce((sum, cycle) => sum + cycle.distanceM, 0)),
+      periods: rolled.periods.map((row) => ({
+        key: row.key,
+        from: row.from,
+        to: row.to,
+        services: row.services,
+        distanceKm: km(row.distanceM),
+        durationSec: row.durationSec,
+        loadDwellSec: row.loadDwellSec,
+        trucks: row.trucks,
+        drivers: row.drivers,
+        withoutDriver: row.withoutDriver,
+      })),
+      details: rolled.details.map((row) => ({
+        period: row.period,
+        vehicleId: row.vehicleId,
+        vehicleName: haul.vehicleName.get(row.vehicleId) ?? row.vehicleId,
+        shiftNo: row.shiftNo,
+        driverId: row.driverId,
+        driverName: row.driverName,
+        services: row.services,
+        distanceKm: km(row.distanceM),
+        durationSec: row.durationSec,
+        loadDwellSec: row.loadDwellSec,
+      })),
+    };
+  }
+
+  private routeInfo(haul: HaulComputation) {
+    return {
+      id: haul.route.id,
+      name: haul.route.name,
+      shiftStartHour: haul.route.shift_start_hour,
+      shiftDurationHours: haul.route.shift_duration_hours,
+      shiftCount: haul.shiftCount,
+      timeZone: TIME_ZONE,
+    };
+  }
+
+  private async computeHaul(
+    tenantId: string,
+    routeId: string | undefined,
+    input: ReportQueryBase,
+    positionCap: number,
+  ): Promise<HaulComputation> {
     if (!routeId || !UUID_RE.test(routeId)) {
       throw new ReportInputError('routeId must be a haul route id', 'INVALID_FILTER');
     }
@@ -144,7 +255,7 @@ export class OperationsReportService {
     const vehicleIds = [
       ...new Set(members.map((row) => row.vehicle_id).filter((id): id is string => Boolean(id))),
     ];
-    const points = await this.loadPoints(tenantId, vehicleIds, window);
+    const points = await this.loadPoints(tenantId, vehicleIds, window, positionCap);
     const drivers = await this.loadDrivers(tenantId, vehicleIds, window);
     const rosterIds = [
       ...new Set(members.flatMap((row) => parseUuidArray(row.shift_drivers)).filter(Boolean)),
@@ -204,19 +315,26 @@ export class OperationsReportService {
       shiftCount,
       timeZone: TIME_ZONE,
     });
+    return {
+      route,
+      shiftCount,
+      window,
+      detected,
+      truncated: points.truncated,
+      vehicleName,
+      shovelLabel,
+      unbound,
+    };
+  }
+
+  private formatHaul(haul: HaulComputation) {
+    const { window, detected, vehicleName, shovelLabel, unbound } = haul;
     const summary = summarizeHauls(detected.cycles);
     return {
-      route: {
-        id: route.id,
-        name: route.name,
-        shiftStartHour: route.shift_start_hour,
-        shiftDurationHours: route.shift_duration_hours,
-        shiftCount,
-        timeZone: TIME_ZONE,
-      },
+      route: this.routeInfo(haul),
       from: window.from.toISOString(),
       to: window.to.toISOString(),
-      truncated: points.truncated,
+      truncated: haul.truncated,
       services: detected.cycles.length,
       distanceKm: km(detected.cycles.reduce((sum, cycle) => sum + cycle.distanceM, 0)),
       cycles: detected.cycles.map((cycle) => ({
@@ -360,6 +478,7 @@ export class OperationsReportService {
     tenantId: string,
     vehicleIds: readonly string[],
     window: ReportWindow,
+    cap: number,
   ): Promise<{ rows: PointRow[]; truncated: boolean }> {
     if (vehicleIds.length === 0) return { rows: [], truncated: false };
     const { rows } = await this.query<{ rows: PointRow[] }>((trx) =>
@@ -371,11 +490,11 @@ export class OperationsReportService {
            AND captured_at >= ? AND captured_at < ?
            AND vehicle_id = ANY(?::uuid[])
          ORDER BY vehicle_id, captured_at
-         LIMIT ${POSITION_CAP}`,
+         LIMIT ${Math.floor(cap)}`,
         [tenantId, window.from, window.to, vehicleIds],
       ),
     );
-    return { rows, truncated: rows.length >= POSITION_CAP };
+    return { rows, truncated: rows.length >= cap };
   }
 
   private async loadDrivers(
@@ -386,7 +505,7 @@ export class OperationsReportService {
     if (vehicleIds.length === 0) return [];
     const { rows } = await this.query<{ rows: DriverRow[] }>((trx) =>
       trx.raw(
-        `SELECT a.vehicle_id, a.driver_id, a.started_at, a.ended_at,
+        `SELECT a.vehicle_id, a.driver_id, a.started_at, a.ended_at, a.shift_no,
                 BTRIM(d.first_name || ' ' || d.last_name) AS driver_name
          FROM fleet.driver_assignments a
          JOIN fleet.drivers d ON d.id = a.driver_id AND d.tenant_id = a.tenant_id
@@ -403,6 +522,7 @@ export class OperationsReportService {
       driverName: row.driver_name,
       startedAt: asDate(row.started_at),
       endedAt: row.ended_at ? asDate(row.ended_at) : null,
+      shiftNo: row.shift_no ?? null,
     }));
   }
 

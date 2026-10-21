@@ -54,6 +54,7 @@ export class VehicleService {
           vin: input.vin,
           odometerKm: typeof input.odometerKm === 'number' ? input.odometerKm : undefined,
           engineHours: typeof input.engineHours === 'number' ? input.engineHours : undefined,
+          machineType: input.machineType,
         });
         const record = VehicleRepository.toRecord(row);
         await this.audit.append(trx, this.entry(ctx, 'vehicle.created', record.id, null, record));
@@ -113,6 +114,7 @@ export class VehicleService {
               : typeof input.engineHours === 'number'
                 ? input.engineHours
                 : undefined,
+          machineType: input.machineType,
         },
         current.version,
       );
@@ -203,6 +205,7 @@ export class VehicleService {
             vin: input.vin,
             odometerKm: typeof input.odometerKm === 'number' ? input.odometerKm : undefined,
             engineHours: typeof input.engineHours === 'number' ? input.engineHours : undefined,
+            machineType: input.machineType,
           }),
         );
       } catch (err) {

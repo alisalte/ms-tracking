@@ -301,3 +301,71 @@ describe('haul cycles', () => {
     expect(shiftDayWindow('bogus', 6, 'UTC', now)).toBeNull();
   });
 });
+
+describe('haul cycles: drivers assigned per shift', () => {
+  const base = {
+    trucks: ['truck-1'],
+    shovels: [],
+    origin,
+    destination,
+    shiftStartHour: 6,
+    shiftDurationHours: 8,
+    shiftCount: 3,
+    timeZone: 'UTC',
+  };
+  const assignment = (driverId: string, shiftNo: number | null) => ({
+    vehicleId: 'truck-1',
+    driverId,
+    driverName: driverId,
+    startedAt: at('2026-05-01T00:00:00Z'),
+    endedAt: null,
+    shiftNo,
+  });
+
+  it('credits the driver assigned to the shift of the service', () => {
+    const drivers = [assignment('morning', 1), assignment('evening', 2), assignment('night', 3)];
+    const tracks = new Map([
+      [
+        'truck-1',
+        [
+          // 06:00, 14:00 and 22:00 UTC → shifts 1, 2 and 3 of 2026-06-01.
+          ...['06', '14', '22'].flatMap((hour) => [
+            { at: at(`2026-06-01T${hour}:00:00Z`), lat: 35.005, lng: 51.005 },
+            { at: at(`2026-06-01T${hour}:20:00Z`), lat: 35.03, lng: 51.03 },
+            { at: at(`2026-06-01T${hour}:40:00Z`), lat: 35.055, lng: 51.055 },
+          ]),
+        ],
+      ],
+    ]);
+    const { cycles } = detectHaulCycles({ ...base, tracks, drivers });
+    expect(cycles.map((c) => [c.shiftNo, c.driverId, c.driverSource])).toEqual([
+      [1, 'morning', 'ASSIGNMENT'],
+      [2, 'evening', 'ASSIGNMENT'],
+      [3, 'night', 'ASSIGNMENT'],
+    ]);
+  });
+
+  it('falls back to the any-shift driver, and leaves an unstaffed shift empty', () => {
+    const drivers = [assignment('all-day', null), assignment('night', 3)];
+    const tracks = new Map([
+      [
+        'truck-1',
+        [
+          ...['06', '22'].flatMap((hour) => [
+            { at: at(`2026-06-01T${hour}:00:00Z`), lat: 35.005, lng: 51.005 },
+            { at: at(`2026-06-01T${hour}:20:00Z`), lat: 35.03, lng: 51.03 },
+            { at: at(`2026-06-01T${hour}:40:00Z`), lat: 35.055, lng: 51.055 },
+          ]),
+        ],
+      ],
+    ]);
+    const { cycles } = detectHaulCycles({ ...base, tracks, drivers });
+    expect(cycles.map((c) => c.driverId)).toEqual(['all-day', 'night']);
+    const alone = detectHaulCycles({
+      ...base,
+      tracks,
+      drivers: [assignment('night', 3)],
+    }).cycles;
+    expect(alone.map((c) => c.driverId)).toEqual([null, 'night']);
+  });
+});

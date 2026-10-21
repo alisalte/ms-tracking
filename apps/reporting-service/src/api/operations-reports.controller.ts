@@ -3,6 +3,7 @@
  *
  *   GET /api/v1/reports/device-activity   — first fix, volume, offline, distance
  *   GET /api/v1/reports/haul-cycles       — origin → destination services
+ *   GET /api/v1/reports/haul-periods      — services per day / week / month
  *
  * Both require `report.read`. Responses are raw (no `{ data }` envelope),
  * matching the rest of the reporting API.
@@ -40,6 +41,28 @@ export class OperationsReportsController {
     @Query('to') to?: string,
   ) {
     return this.guard(() => this.operations.haulCycles(tenantId, routeId, { preset, from, to }));
+  }
+
+  @Get('haul-periods')
+  @RequirePermissions('report.read')
+  public async haulPeriods(
+    @CurrentTenant() tenantId: string,
+    @Query('routeId') routeId?: string,
+    @Query('granularity') granularity?: string,
+    @Query('calendar') calendar?: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.guard(() =>
+      this.operations.haulPeriods(tenantId, routeId, {
+        preset,
+        from,
+        to,
+        granularity,
+        calendar,
+      }),
+    );
   }
 
   private async guard<T>(fn: () => Promise<T>): Promise<T> {

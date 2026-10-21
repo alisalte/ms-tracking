@@ -178,6 +178,7 @@ describe('vehicle Excel export', () => {
           vin: null,
           odometerKm: 10,
           engineHours: null,
+          machineType: null,
           status: 'ACTIVE',
           version: 1,
           createdAt: '',

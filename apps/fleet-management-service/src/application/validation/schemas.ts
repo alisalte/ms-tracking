@@ -64,6 +64,16 @@ const engineHoursPatch = z.preprocess((v) => {
   if (v === null) return null;
   return v;
 }, z.union([z.null(), z.coerce.number().finite().min(0).max(ENGINE_HOURS_MAX)]).optional());
+/** Machine type set once on the vehicle; PATCH may clear it with `null`. */
+const MACHINE_TYPES = ['TRUCK', 'SHOVEL'] as const;
+const machineType = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.enum(MACHINE_TYPES).optional(),
+);
+const machineTypePatch = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.union([z.null(), z.enum(MACHINE_TYPES)]).optional(),
+);
 /** Canonical, Luhn-valid IMEI. Stored normalized (15 digits). */
 const imeiField = z
   .string()
@@ -109,6 +119,7 @@ export const createVehicleSchema = z.object({
   vin,
   odometerKm,
   engineHours,
+  machineType,
 });
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 
@@ -129,6 +140,7 @@ export const importVehicleRowSchema = z.object({
   vin,
   odometerKm,
   engineHours,
+  machineType,
 });
 export type ImportVehicleRowInput = z.infer<typeof importVehicleRowSchema>;
 
@@ -146,6 +158,7 @@ export const updateVehicleSchema = z.object({
   vin,
   odometerKm: odometerKmPatch,
   engineHours: engineHoursPatch,
+  machineType: machineTypePatch,
 });
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 

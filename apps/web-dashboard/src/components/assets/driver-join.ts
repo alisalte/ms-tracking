@@ -26,6 +26,34 @@ export function driverOnVehicle(
   );
 }
 
+/**
+ * Every active driver on a vehicle, one per shift: any-shift drivers first,
+ * then shift 1, 2, 3. A vehicle on a multi-shift operation has several.
+ */
+export function driversOnVehicle(drivers: readonly Driver[], vehicleId: string | null): Driver[] {
+  if (!vehicleId) return [];
+  return drivers
+    .filter((d) => d.assignedVehicleId === vehicleId && d.status === 'ACTIVE')
+    .sort((a, b) => (a.assignedShift ?? 0) - (b.assignedShift ?? 0));
+}
+
+/** `Ali (Shift 1), Reza (Shift 2)` — or just names when no shift is set. */
+export function driverLabelsOnVehicle(
+  drivers: readonly Driver[],
+  vehicleId: string | null,
+  shiftLabel: (shiftNo: number) => string,
+): string | undefined {
+  const onVehicle = driversOnVehicle(drivers, vehicleId);
+  if (onVehicle.length === 0) return undefined;
+  return onVehicle
+    .map((d) =>
+      d.assignedShift != null
+        ? `${driverFullName(d)} (${shiftLabel(d.assignedShift)})`
+        : driverFullName(d),
+    )
+    .join('، ');
+}
+
 /** IMEI, with manufacturer/model when present. */
 export function formatDeviceLabel(d: Pick<Device, 'imei' | 'manufacturer' | 'model'>): string {
   const model = [d.manufacturer, d.model].filter(Boolean).join(' ');

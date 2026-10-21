@@ -4,13 +4,13 @@ import {
   shouldCloseOpenAssignment,
   shouldOpenAssignmentInterval,
 } from '../domain/driver-assignment.js';
+import { Driver } from '../domain/driver.js';
 import {
+  LOW_SCORE_ATTENTION_THRESHOLD,
   computeDriverScore,
   emptyCounts,
-  LOW_SCORE_ATTENTION_THRESHOLD,
   mapAlarmToDrivingEventType,
 } from '../domain/driving-behavior.js';
-import { Driver } from '../domain/driver.js';
 import {
   type DriverStatus,
   IllegalDriverTransitionError,
@@ -152,7 +152,10 @@ describe('driver behavior score', () => {
 
   it('flags attention at or below threshold', () => {
     expect(LOW_SCORE_ATTENTION_THRESHOLD).toBe(70);
-    expect(computeDriverScore({ harshBrake: 6, rapidAccel: 0, speedViolation: 0, excessiveIdle: 0 }).score).toBe(70);
+    expect(
+      computeDriverScore({ harshBrake: 6, rapidAccel: 0, speedViolation: 0, excessiveIdle: 0 })
+        .score,
+    ).toBe(70);
   });
 });
 
@@ -257,5 +260,37 @@ describe('isValidTripTransition', () => {
   it('rejects COMPLETED/CANCELLED → anything', () => {
     expect(isValidTripTransition('COMPLETED', 'PLANNED' as TripStatus)).toBe(false);
     expect(isValidTripTransition('CANCELLED', 'ACTIVE' as TripStatus)).toBe(false);
+  });
+});
+
+describe('assignment history with shifts', () => {
+  it('opens another interval when the same vehicle is taken for a different shift', () => {
+    expect(shouldCloseOpenAssignment('v1', 'v1', null, 2)).toBe(true);
+    expect(shouldOpenAssignmentInterval('v1', 'v1', null, 2)).toBe(true);
+    expect(shouldOpenAssignmentInterval('v1', 'v1', 2, 2)).toBe(false);
+    expect(shouldCloseOpenAssignment('v1', null, 2, null)).toBe(true);
+  });
+
+  it('remembers the shift on the driver and clears it with the vehicle', () => {
+    const d = Driver.create(undefined, {
+      tenantId: 't1',
+      employeeId: null,
+      firstName: 'A',
+      lastName: 'B',
+      email: null,
+      phone: null,
+      licenseNumber: 'L1',
+      licenseClass: null,
+      licenseIssued: null,
+      licenseExpires: null,
+      licenseCountry: null,
+    });
+    d.assignVehicle('v1', 3);
+    expect(d.assignedShift).toBe(3);
+    d.assignVehicle('v1');
+    expect(d.assignedShift).toBeNull();
+    d.assignVehicle('v1', 2);
+    d.unassignVehicle();
+    expect(d.assignedShift).toBeNull();
   });
 });

@@ -4,7 +4,11 @@
  */
 import type { Knex } from '@fleetvision/persistence-knex';
 import type { Page } from '@fleetvision/shared-kernel';
-import type { VehicleRecord, VehicleStatus } from '../../domain/vehicle/vehicle-types.js';
+import type {
+  MachineType,
+  VehicleRecord,
+  VehicleStatus,
+} from '../../domain/vehicle/vehicle-types.js';
 import { listPaginated } from './list-pagination.js';
 
 const SCHEMA = 'fleet';
@@ -20,6 +24,7 @@ export interface VehicleRow {
   readonly vin: string | null;
   readonly odometer_km: number | null;
   readonly engine_hours: number | null;
+  readonly machine_type: MachineType | null;
   readonly status: VehicleStatus;
   readonly version: number;
   readonly created_at: Date;
@@ -101,6 +106,7 @@ export class VehicleRepository {
       vin?: string | null;
       odometerKm?: number | null;
       engineHours?: number | null;
+      machineType?: MachineType | null;
     },
   ): Promise<VehicleRow> {
     const [row] = await trx
@@ -115,6 +121,7 @@ export class VehicleRepository {
         vin: input.vin ?? null,
         odometer_km: input.odometerKm ?? null,
         engine_hours: input.engineHours ?? null,
+        machine_type: input.machineType ?? null,
         status: 'ACTIVE',
       })
       .returning('*');
@@ -133,6 +140,7 @@ export class VehicleRepository {
       vin?: string | null;
       odometerKm?: number | null;
       engineHours?: number | null;
+      machineType?: MachineType | null;
     },
     expectedVersion: number,
   ): Promise<VehicleRow | null> {
@@ -146,6 +154,7 @@ export class VehicleRepository {
     };
     if (patch.odometerKm !== undefined) updates.odometer_km = patch.odometerKm;
     if (patch.engineHours !== undefined) updates.engine_hours = patch.engineHours;
+    if (patch.machineType !== undefined) updates.machine_type = patch.machineType;
     if (patch.fleetId) updates.fleet_id = trx.raw('?::uuid', [patch.fleetId]);
     const [row] = await trx
       .withSchema(SCHEMA)
@@ -186,6 +195,7 @@ export class VehicleRepository {
       vin: row.vin,
       odometerKm: row.odometer_km,
       engineHours: row.engine_hours,
+      machineType: row.machine_type ?? null,
       status: row.status,
       version: row.version,
       createdAt: new Date(row.created_at),

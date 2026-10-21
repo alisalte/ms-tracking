@@ -143,7 +143,14 @@ export function DriversTab({
       headerKey: 'assets.driver.colVehicle',
       render: (d) =>
         d.assignedVehicleId ? (
-          vehicleName(d.assignedVehicleId)
+          <>
+            {vehicleName(d.assignedVehicleId)}
+            {d.assignedShift != null && (
+              <span className="ms-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-white/10 dark:text-graydark-700">
+                {t('assets.driver.shiftBadge', { n: d.assignedShift })}
+              </span>
+            )}
+          </>
         ) : (
           <span className="text-gray-400 dark:text-graydark-600">{t('map.popup.unassigned')}</span>
         ),
