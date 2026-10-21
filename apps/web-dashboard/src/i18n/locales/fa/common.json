@@ -1712,7 +1712,9 @@
         "missingLastName": "نام خانوادگی الزامی است.",
         "missingLicenseNumber": "شماره گواهینامه الزامی است.",
         "invalidEmail": "ایمیل نامعتبر است.",
-        "invalidDate": "تاریخ باید به صورت YYYY-MM-DD باشد (یا سلول تاریخ اکسل)."
+        "invalidDate": "تاریخ باید به صورت YYYY-MM-DD باشد (یا سلول تاریخ اکسل).",
+        "invalidMachineType": "نوع ماشین باید کامیون یا شافل باشد.",
+        "invalidShift": "شیفت باید ۱ تا ۴ باشد (خالی یعنی همهٔ شیفت‌ها)."
       }
     },
     "export": {

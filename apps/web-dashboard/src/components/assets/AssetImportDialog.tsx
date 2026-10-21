@@ -120,6 +120,7 @@ export function AssetImportDialog({ open, kind, vehicles = [], onClose }: AssetI
                 ...(v.vin ? { vin: v.vin } : {}),
                 ...(v.odometerKm !== undefined ? { odometerKm: v.odometerKm } : {}),
                 ...(v.engineHours !== undefined ? { engineHours: v.engineHours } : {}),
+                ...(v.machineType ? { machineType: v.machineType } : {}),
               })),
             )
           : kind === 'devices'
@@ -312,7 +313,16 @@ function PreviewTable({
   if (rows.length === 0) return null;
   const cols =
     kind === 'vehicles'
-      ? (['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours'] as const)
+      ? ([
+          'name',
+          'code',
+          'fleetCode',
+          'plate',
+          'vin',
+          'odometerKm',
+          'engineHours',
+          'machineType',
+        ] as const)
       : kind === 'devices'
         ? (['imei', 'protocol', 'serialNumber', 'manufacturer', 'model', 'vehicleCode'] as const)
         : ([
@@ -322,6 +332,7 @@ function PreviewTable({
             'employeeId',
             'email',
             'vehicleCode',
+            'shiftNo',
           ] as const);
   return (
     <div className="overflow-auto rounded-lg border border-gray-200 dark:border-white/10">

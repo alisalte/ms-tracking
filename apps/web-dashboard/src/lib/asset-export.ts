@@ -42,7 +42,17 @@ export function buildFleetsExportGrid(fleets: Fleet[]): string[][] {
 export function buildVehiclesExportGrid(vehicles: Vehicle[], fleets: Fleet[]): string[][] {
   const codeById = new Map(fleets.map((f) => [f.id, f.code]));
   return [
-    ['name', 'code', 'fleetCode', 'plate', 'vin', 'odometerKm', 'engineHours', 'status'],
+    [
+      'name',
+      'code',
+      'fleetCode',
+      'plate',
+      'vin',
+      'odometerKm',
+      'engineHours',
+      'machineType',
+      'status',
+    ],
     ...vehicles.map((v) => [
       v.name,
       v.code,
@@ -51,6 +61,7 @@ export function buildVehiclesExportGrid(vehicles: Vehicle[], fleets: Fleet[]): s
       cell(v.vin),
       cell(v.odometerKm),
       cell(v.engineHours),
+      cell(v.machineType),
       v.status,
     ]),
   ];
@@ -87,6 +98,7 @@ export function buildDriversExportGrid(drivers: Driver[], vehicles: Vehicle[]): 
       'licenseExpires',
       'licenseCountry',
       'vehicleCode',
+      'shift',
       'status',
     ],
     ...drivers.map((d) => [
@@ -101,6 +113,7 @@ export function buildDriversExportGrid(drivers: Driver[], vehicles: Vehicle[]): 
       dateCell(d.licenseExpires),
       cell(d.licenseCountry),
       d.assignedVehicleId ? (codeById.get(d.assignedVehicleId) ?? '') : '',
+      d.assignedVehicleId ? cell(d.assignedShift) : '',
       d.status,
     ]),
   ];

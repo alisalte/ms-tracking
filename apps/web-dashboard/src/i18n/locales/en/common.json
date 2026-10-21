@@ -1714,7 +1714,9 @@
         "missingLastName": "Last name is required.",
         "missingLicenseNumber": "License number is required.",
         "invalidEmail": "Email is not valid.",
-        "invalidDate": "Date must be YYYY-MM-DD (or an Excel date cell)."
+        "invalidDate": "Date must be YYYY-MM-DD (or an Excel date cell).",
+        "invalidMachineType": "Machine type must be truck or shovel.",
+        "invalidShift": "Shift must be 1 to 4 (empty means every shift)."
       }
     },
     "export": {

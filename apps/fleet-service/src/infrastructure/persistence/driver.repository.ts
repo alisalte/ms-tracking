@@ -16,10 +16,16 @@ import {
   DriverAssignment,
   Driver as DriverClass,
   type DriverStatus,
+  type ShiftSchedule,
   TenantQuotaExceededError,
+  pickShiftDriver,
+  shiftNoAt,
   shouldCloseOpenAssignment,
   shouldOpenAssignmentInterval,
 } from '../../domain/index.js';
+
+/** Work days are local to the mine; reporting-service uses the same zone. */
+const SHIFT_TIME_ZONE = 'Asia/Tehran';
 
 export interface DriverRow {
   id: string;
@@ -232,21 +238,61 @@ export class DriverRepository {
     });
   }
 
-  /** Active assignment for vehicle at timestamp (Slice D / behavior attribution). */
+  /**
+   * Driver on duty for the vehicle at a timestamp (behavior attribution).
+   * With several shift drivers the vehicle's haul route says which shift the
+   * instant belongs to; without a route the any-shift driver, or else the
+   * latest assignment, is credited.
+   */
   public async findDriverForVehicleAt(
     tenantId: string,
     vehicleId: string,
     at: Date,
   ): Promise<string | null> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
-      const row = await trx<DriverAssignmentRow>('fleet.driver_assignments')
+      const rows = (await trx<DriverAssignmentRow>('fleet.driver_assignments')
         .where({ tenant_id: tenantId, vehicle_id: vehicleId })
         .andWhere('started_at', '<=', at)
         .andWhere((q) => q.whereNull('ended_at').orWhere('ended_at', '>', at))
-        .orderBy('started_at', 'desc')
-        .first();
-      return row?.driver_id ?? null;
+        .orderBy('started_at', 'desc')) as DriverAssignmentRow[];
+      if (rows.length <= 1) return rows[0]?.driver_id ?? null;
+      const schedule = await this.shiftScheduleOf(trx, tenantId, vehicleId);
+      return pickShiftDriver(
+        rows.map((row) => ({
+          driverId: row.driver_id,
+          shiftNo: row.shift_no ?? null,
+          startedAt: new Date(row.started_at),
+        })),
+        schedule ? shiftNoAt(at, schedule) : undefined,
+      );
     });
+  }
+
+  /** Shift plan of the newest active haul route the vehicle's devices are on. */
+  private async shiftScheduleOf(
+    trx: Knex.Transaction,
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<ShiftSchedule | null> {
+    const row = (await trx('fleet.haul_members as m')
+      .join('fleet.haul_routes as r', 'r.id', 'm.route_id')
+      .join('fleet.vehicle_devices as vd', function joinDevice() {
+        this.on('vd.device_id', 'm.device_id').andOn('vd.tenant_id', 'm.tenant_id');
+      })
+      .where('m.tenant_id', tenantId)
+      .where('vd.vehicle_id', vehicleId)
+      .where('r.status', 'ACTIVE')
+      .orderBy('r.updated_at', 'desc')
+      .first('r.shift_start_hour', 'r.shift_duration_hours', 'r.shift_count')) as
+      | { shift_start_hour: number; shift_duration_hours: number; shift_count: number }
+      | undefined;
+    if (!row) return null;
+    return {
+      startHour: row.shift_start_hour,
+      durationHours: row.shift_duration_hours,
+      shiftCount: row.shift_count,
+      timeZone: SHIFT_TIME_ZONE,
+    };
   }
 
   /** True when the driver has any assignment overlapping [from, to]. */

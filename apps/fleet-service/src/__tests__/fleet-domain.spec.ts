@@ -19,6 +19,7 @@ import {
   isValidDriverTransition,
   isValidTripTransition,
 } from '../domain/fleet-types.js';
+import { pickShiftDriver, shiftNoAt } from '../domain/shift-schedule.js';
 
 const TENANT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -292,5 +293,40 @@ describe('assignment history with shifts', () => {
     d.assignVehicle('v1', 2);
     d.unassignVehicle();
     expect(d.assignedShift).toBeNull();
+  });
+});
+
+describe('shift drivers on a vehicle', () => {
+  const schedule = { startHour: 6, durationHours: 8, shiftCount: 3, timeZone: 'UTC' };
+  const at = (iso: string) => new Date(iso);
+
+  it('finds the shift an instant belongs to', () => {
+    expect(shiftNoAt(at('2026-06-01T06:00:00Z'), schedule)).toBe(1);
+    expect(shiftNoAt(at('2026-06-01T13:59:00Z'), schedule)).toBe(1);
+    expect(shiftNoAt(at('2026-06-01T14:00:00Z'), schedule)).toBe(2);
+    expect(shiftNoAt(at('2026-06-01T23:30:00Z'), schedule)).toBe(3);
+    expect(shiftNoAt(at('2026-06-02T03:00:00Z'), schedule)).toBe(3);
+    // Two 8 h shifts leave the last 8 hours of the day uncovered.
+    expect(shiftNoAt(at('2026-06-01T23:00:00Z'), { ...schedule, shiftCount: 2 })).toBeNull();
+  });
+
+  it('credits the driver of the shift, then the any-shift driver', () => {
+    const list = [
+      { driverId: 'morning', shiftNo: 1, startedAt: at('2026-05-01T00:00:00Z') },
+      { driverId: 'night', shiftNo: 3, startedAt: at('2026-05-01T00:00:00Z') },
+      { driverId: 'all', shiftNo: null, startedAt: at('2026-04-01T00:00:00Z') },
+    ];
+    expect(pickShiftDriver(list, 3)).toBe('night');
+    expect(pickShiftDriver(list, 2)).toBe('all');
+    expect(pickShiftDriver(list.slice(0, 2), 2)).toBeNull();
+  });
+
+  it('without a schedule falls back to the latest assignment', () => {
+    const list = [
+      { driverId: 'old', shiftNo: 1, startedAt: at('2026-04-01T00:00:00Z') },
+      { driverId: 'new', shiftNo: 2, startedAt: at('2026-05-01T00:00:00Z') },
+    ];
+    expect(pickShiftDriver(list, undefined)).toBe('new');
+    expect(pickShiftDriver(list, null)).toBeNull();
   });
 });

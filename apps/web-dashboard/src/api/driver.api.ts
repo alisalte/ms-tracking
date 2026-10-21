@@ -615,7 +615,7 @@ export function useImportDrivers() {
               });
             } else if (id) {
               try {
-                await syncAssignment(id, vehicle.id);
+                await syncAssignment(id, vehicle.id, row.shiftNo ?? null);
               } catch (err) {
                 warnings.push({ row: row.row, error: getApiErrorMessage(err) });
               }

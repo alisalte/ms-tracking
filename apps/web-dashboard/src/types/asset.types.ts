@@ -160,6 +160,7 @@ export interface ImportVehicleRow {
   vin?: string;
   odometerKm?: number;
   engineHours?: number;
+  machineType?: MachineType;
 }
 
 /** Device row sent to POST /devices/import. Optional `vehicleCode` binds after create. */
