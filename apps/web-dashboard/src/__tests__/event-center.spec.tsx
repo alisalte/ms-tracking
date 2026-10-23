@@ -72,6 +72,7 @@ const notifApi = vi.hoisted(() => ({
 
 vi.mock('@/api/asset.api', () => ({
   useVehicles: () => ({ data: [] }),
+  useDevices: () => ({ data: [] }),
 }));
 
 vi.mock('@/api/notification.api', () => ({
