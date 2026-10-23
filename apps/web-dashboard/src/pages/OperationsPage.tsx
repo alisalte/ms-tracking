@@ -11,7 +11,8 @@
  * truck, the driver of that shift, and the shovel that was loading.
  *
  * Every report takes a ready-made or custom date range and can be exported
- * to Excel; the period section rolls services up per day, week or month.
+ * to Excel; the period section rolls services up per day, week or month, and
+ * the analysis section shows where the time of a service is wasted.
  */
 import { Download } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
@@ -38,10 +39,12 @@ import {
   useUpdateHaulRoute,
 } from '@/api/operations.api';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
+import { HaulAnalysisSection } from '@/components/operations/HaulAnalysisSection';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { Button, PageHeader, SegmentedControl } from '@/components/tailwind-ui';
 import {
   activitySheets,
+  analysisSheets,
   downloadWorkbook,
   formatWorkDay,
   haulSheets,
@@ -768,6 +771,18 @@ export function OperationsPage() {
           exportExcel(
             () => periodSheets(report, t, i18n.language),
             `${report.route.name}-${report.granularity}`,
+          )
+        }
+      />
+
+      <HaulAnalysisSection
+        routeId={routeId}
+        range={range}
+        exporting={exporting}
+        onExport={(report) =>
+          exportExcel(
+            () => analysisSheets(report, t, i18n.language),
+            `${report.route.name}-${t('operations.analysis.title')}`,
           )
         }
       />

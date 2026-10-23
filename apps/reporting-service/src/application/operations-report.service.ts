@@ -10,6 +10,13 @@
  */
 import type { Knex } from '@fleetvision/persistence-knex';
 import {
+  DEFAULT_MIN_STOP_SEC,
+  type PhaseTargets,
+  type TruckMeasure,
+  analyzeHaul,
+  measureTruck,
+} from '../domain/haul-analysis.js';
+import {
   type DriverInterval,
   type HaulCycle,
   type OpenHaul,
@@ -94,6 +101,17 @@ interface PointRow {
   captured_at: Date | string;
   latitude: number | string;
   longitude: number | string;
+  speed_kmh: number | string | null;
+  ignition_on: boolean | null;
+}
+
+/** Operator-set targets (minutes) for the analysis; blank means "use the fleet's own best". */
+export interface HaulAnalysisInput extends ReportQueryBase {
+  targetLoadMin?: string;
+  targetTravelMin?: string;
+  targetUnloadMin?: string;
+  targetReturnMin?: string;
+  stopMin?: string;
 }
 
 interface DriverRow {
@@ -141,10 +159,26 @@ interface HaulComputation {
   readonly shiftCount: number;
   readonly window: ReportWindow;
   readonly detected: ReturnType<typeof detectHaulCycles>;
+  /** One per truck; filled only when the caller asked for the analysis. */
+  readonly measures: TruckMeasure[];
   readonly truncated: boolean;
   readonly vehicleName: ReadonlyMap<string, string>;
   readonly shovelLabel: ReadonlyMap<string, string>;
   readonly unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }>;
+}
+
+/** Minutes from a query string → seconds; blank = unset, anything else must be a positive number. */
+function minutesToSec(value: string | undefined, field: string): number | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const minutes = Number(raw);
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 1440) {
+    throw new ReportInputError(
+      `${field} must be a number of minutes between 0 and 1440`,
+      'INVALID_FILTER',
+    );
+  }
+  return Math.round(minutes * 60);
 }
 
 function parseOption<T extends string>(
@@ -200,6 +234,34 @@ export class OperationsReportService {
   public async haulCycles(tenantId: string, routeId: string | undefined, input: ReportQueryBase) {
     const haul = await this.computeHaul(tenantId, routeId, input);
     return this.formatHaul(haul);
+  }
+
+  /**
+   * Where the time of every service goes (load / haul / unload / return), how
+   * much of it is waste against the fleet's own best or a configured target,
+   * who loses it, and where trucks stand idle.
+   */
+  public async haulAnalysis(
+    tenantId: string,
+    routeId: string | undefined,
+    input: HaulAnalysisInput,
+  ) {
+    const targets: PhaseTargets = {
+      loadSec: minutesToSec(input.targetLoadMin, 'targetLoadMin'),
+      travelSec: minutesToSec(input.targetTravelMin, 'targetTravelMin'),
+      unloadSec: minutesToSec(input.targetUnloadMin, 'targetUnloadMin'),
+      returnSec: minutesToSec(input.targetReturnMin, 'targetReturnMin'),
+    };
+    const minStopSec = minutesToSec(input.stopMin, 'stopMin') ?? DEFAULT_MIN_STOP_SEC;
+    const haul = await this.computeHaul(tenantId, routeId, input, { analysis: true, minStopSec });
+    const analysis = analyzeHaul({
+      measures: haul.measures,
+      open: haul.detected.open,
+      // A past range ends at its own `to`: an open haul is measured against that, not today.
+      now: new Date(Math.min(Date.now(), haul.window.to.getTime())),
+      targets,
+    });
+    return this.formatAnalysis(haul, analysis, minStopSec);
   }
 
   /** Services rolled up per day, week or month, with the vehicle / shift / driver split. */
@@ -275,6 +337,7 @@ export class OperationsReportService {
     tenantId: string,
     routeId: string | undefined,
     input: ReportQueryBase,
+    options: { analysis: boolean; minStopSec?: number } = { analysis: false },
   ): Promise<HaulComputation> {
     if (!routeId || !UUID_RE.test(routeId)) {
       throw new ReportInputError('routeId must be a haul route id', 'INVALID_FILTER');
@@ -339,6 +402,7 @@ export class OperationsReportService {
     // truck's track, and only that track is held in memory at once.
     const cycles: HaulCycle[] = [];
     const open: OpenHaul[] = [];
+    const measures: TruckMeasure[] = [];
     for (const truck of trucks) {
       const loaded = await this.loadTrack(tenantId, truck, window);
       truncated ||= loaded.truncated;
@@ -357,6 +421,24 @@ export class OperationsReportService {
       });
       cycles.push(...found.cycles);
       open.push(...found.open);
+      if (options.analysis) {
+        measures.push(
+          measureTruck({
+            vehicleId: truck,
+            samples: loaded.samples,
+            cycles: found.cycles,
+            origin,
+            destination,
+            drivers,
+            rosters,
+            shiftStartHour: route.shift_start_hour,
+            shiftDurationHours: route.shift_duration_hours,
+            shiftCount,
+            timeZone: TIME_ZONE,
+            minStopSec: options.minStopSec,
+          }),
+        );
+      }
     }
     cycles.sort((a, b) => a.originEnteredAt.getTime() - b.originEnteredAt.getTime());
     return {
@@ -364,6 +446,7 @@ export class OperationsReportService {
       shiftCount,
       window,
       detected: { cycles, open },
+      measures,
       truncated,
       vehicleName,
       shovelLabel,
@@ -442,6 +525,166 @@ export class OperationsReportService {
         since: row.since.toISOString(),
       })),
       unbound,
+    };
+  }
+
+  private formatAnalysis(
+    haul: HaulComputation,
+    analysis: ReturnType<typeof analyzeHaul>,
+    minStopSec: number,
+  ) {
+    const name = (id: string) => haul.vehicleName.get(id) ?? id;
+    const shovel = (id: string) => haul.shovelLabel.get(id) ?? id;
+    const waste = (w: {
+      loadSec: number;
+      travelSec: number;
+      unloadSec: number;
+      returnSec: number;
+      totalSec: number;
+    }) => ({
+      loadSec: Math.round(w.loadSec),
+      travelSec: Math.round(w.travelSec),
+      unloadSec: Math.round(w.unloadSec),
+      returnSec: Math.round(w.returnSec),
+      totalSec: Math.round(w.totalSec),
+    });
+    const budget = (b: typeof analysis.budget) => ({
+      originSec: Math.round(b.originSec),
+      destinationSec: Math.round(b.destinationSec),
+      movingSec: Math.round(b.movingSec),
+      idleOutsideSec: Math.round(b.idleOutsideSec),
+      parkedSec: Math.round(b.parkedSec),
+      noDataSec: Math.round(b.noDataSec),
+    });
+    const iso = (d: Date | null) => (d ? d.toISOString() : null);
+    return {
+      route: this.routeInfo(haul),
+      from: haul.window.from.toISOString(),
+      to: haul.window.to.toISOString(),
+      truncated: haul.truncated,
+      services: analysis.services,
+      distanceKm: km(haul.detected.cycles.reduce((sum, cycle) => sum + cycle.distanceM, 0)),
+      stopMinSec: minStopSec,
+      references: analysis.references,
+      cycleMedianSec: analysis.cycleMedianSec === null ? null : Math.round(analysis.cycleMedianSec),
+      waste: waste(analysis.waste),
+      wasteShare: analysis.wasteShare,
+      lostServices:
+        analysis.lostServices === null ? null : Math.round(analysis.lostServices * 10) / 10,
+      timeBudget: budget(analysis.budget),
+      stopCount: analysis.stopCount,
+      stopSec: analysis.stopSec,
+      withoutDriver: analysis.withoutDriver,
+      controlLimits: {
+        loadSec:
+          analysis.references.load.p75Sec === null
+            ? null
+            : Math.round(analysis.references.load.p75Sec),
+        unloadSec:
+          analysis.references.unload.p75Sec === null
+            ? null
+            : Math.round(analysis.references.unload.p75Sec),
+        stopSec: minStopSec,
+      },
+      byVehicle: analysis.byVehicle.map((row) => ({
+        vehicleId: row.vehicleId,
+        vehicleName: name(row.vehicleId),
+        services: row.services,
+        avgCycleSec: row.avgCycleSec,
+        avgLoadSec: row.avgLoadSec,
+        avgUnloadSec: row.avgUnloadSec,
+        waste: waste(row.waste),
+        timeBudget: budget(row.budget),
+        stopCount: row.stopCount,
+      })),
+      byDriver: analysis.byDriver.map((row) => ({
+        driverId: row.driverId,
+        driverName: row.driverName,
+        vehicleNames: row.vehicleIds.map(name),
+        services: row.services,
+        avgLoadSec: row.avgLoadSec,
+        avgTravelSec: row.avgTravelSec,
+        avgUnloadSec: row.avgUnloadSec,
+        avgReturnSec: row.avgReturnSec,
+        waste: waste(row.waste),
+        wastePerServiceSec: row.wastePerServiceSec,
+        stopCount: row.stopCount,
+        stopSec: row.stopSec,
+      })),
+      byShift: analysis.byShift.map((row) => ({
+        shift: row.shift,
+        shiftDate: row.shiftDate,
+        shiftNo: row.shiftNo,
+        services: row.services,
+        trucks: row.trucks,
+        avgCycleSec: row.avgCycleSec,
+        waste: waste(row.waste),
+      })),
+      byShovel: analysis.byShovel.map((row) => ({
+        shovelId: row.shovelId,
+        shovelLabel: shovel(row.shovelId),
+        loads: row.loads,
+        avgLoadSec: row.avgLoadSec,
+        truckQueueSec: row.truckQueueSec,
+        shovelIdleSec: row.shovelIdleSec,
+      })),
+      cycles: analysis.cycles.map((row) => {
+        const cycle = row.timing.cycle;
+        return {
+          vehicleId: cycle.vehicleId,
+          vehicleName: name(cycle.vehicleId),
+          driverName: cycle.driverName,
+          shovelLabel: cycle.shovelId ? shovel(cycle.shovelId) : null,
+          shift: cycle.shift,
+          shiftDate: cycle.shiftDate,
+          shiftNo: cycle.shiftNo,
+          originEnteredAt: cycle.originEnteredAt.toISOString(),
+          destinationEnteredAt: cycle.destinationEnteredAt.toISOString(),
+          destinationLeftAt: iso(row.timing.destinationLeftAt),
+          loadSec: cycle.loadDwellSec,
+          travelSec: cycle.travelSec,
+          unloadSec: row.timing.unloadSec,
+          returnSec: row.timing.returnSec,
+          cycleSec: row.timing.cycleSec,
+          wasteSec: Math.round(row.totalSec),
+          wasteLoadSec: Math.round(row.loadSec),
+          wasteTravelSec: Math.round(row.travelSec),
+          wasteUnloadSec: Math.round(row.unloadSec),
+          wasteReturnSec: Math.round(row.returnSec),
+        };
+      }),
+      stops: analysis.stops.map((stop) => ({
+        vehicleId: stop.vehicleId,
+        vehicleName: name(stop.vehicleId),
+        driverName: stop.driverName,
+        startedAt: stop.startedAt.toISOString(),
+        endedAt: stop.endedAt.toISOString(),
+        durationSec: stop.durationSec,
+        lat: stop.lat,
+        lng: stop.lng,
+        engineOn: stop.engineOn,
+        phase: stop.phase,
+      })),
+      openHauls: analysis.openHauls.map((row) => ({
+        vehicleId: row.vehicleId,
+        vehicleName: name(row.vehicleId),
+        phase: row.phase,
+        since: row.since.toISOString(),
+        elapsedSec: row.elapsedSec,
+        overdue: row.overdue,
+      })),
+      findings: analysis.findings.map((row) => ({
+        code: row.code,
+        subject: row.subject,
+        subjectId: row.subjectId,
+        subjectLabel:
+          row.code === 'SHOVEL_QUEUE' || row.code === 'SHOVEL_STARVED'
+            ? shovel(row.subjectId ?? '')
+            : row.subject,
+        value: Math.round(row.value),
+        reference: row.reference === null ? null : Math.round(row.reference),
+      })),
+      unbound: haul.unbound,
     };
   }
 
@@ -527,7 +770,7 @@ export class OperationsReportService {
   ): Promise<{ samples: TrackSample[]; truncated: boolean }> {
     const { rows } = await this.query<{ rows: PointRow[] }>((trx) =>
       trx.raw(
-        `SELECT vehicle_id, captured_at, latitude, longitude
+        `SELECT vehicle_id, captured_at, latitude, longitude, speed_kmh, ignition_on
          FROM tracking.vehicle_positions
          WHERE tenant_id = ?::uuid
            AND vehicle_id = ?::uuid
@@ -550,6 +793,8 @@ export class OperationsReportService {
         at: asDate(point.captured_at),
         lat: num(point.latitude),
         lng: num(point.longitude),
+        speedKmh: point.speed_kmh === null ? null : num(point.speed_kmh),
+        ignitionOn: point.ignition_on,
       })),
       truncated: rows.length >= TRACK_POSITION_CAP,
     };
