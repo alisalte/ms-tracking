@@ -4,9 +4,9 @@
 import { type Knex, withPlatformContext, withTenantContext } from '@fleetvision/persistence-knex';
 import {
   type AlarmEvidenceRecord,
+  EVIDENCE_COOLDOWN_MS,
   type EvidenceStatus,
   type VideoEvidenceStatus,
-  EVIDENCE_COOLDOWN_MS,
   computeEvidenceExpiry,
 } from '../../domain/alarm-evidence.js';
 

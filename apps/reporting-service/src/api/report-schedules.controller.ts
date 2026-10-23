@@ -58,9 +58,7 @@ type UpdateDto = z.infer<typeof updateSchema>;
 
 @Controller('api/v1/reports')
 export class ReportSchedulesController {
-  constructor(
-    @Inject(REPORT_SCHEDULE_SERVICE) private readonly schedules: ReportScheduleService,
-  ) {}
+  constructor(@Inject(REPORT_SCHEDULE_SERVICE) private readonly schedules: ReportScheduleService) {}
 
   @Get('schedules')
   @RequirePermissions('report.schedule')

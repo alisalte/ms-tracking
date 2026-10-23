@@ -18,7 +18,6 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AlarmEvaluatorService } from '../application/alarm-evaluator.service.js';
 import { AlarmEvidenceService } from '../application/alarm-evidence.service.js';
-import { EvidenceRetentionWorker } from '../application/evidence-retention.worker.js';
 import {
   InAppChannel,
   PushChannel,
@@ -29,6 +28,7 @@ import {
 import { NotificationProviderRegistry } from '../application/channels/provider-registry.js';
 import { DeliveryExecutor } from '../application/delivery-executor.js';
 import { DeliveryRetryWorker } from '../application/delivery-retry-worker.js';
+import { EvidenceRetentionWorker } from '../application/evidence-retention.worker.js';
 import { NotificationDispatcherService } from '../application/notification-dispatcher.service.js';
 import type { NotificationConfig } from '../config/notification.config.js';
 import { AlarmStateCache } from '../infrastructure/cache/alarm-state-cache.js';

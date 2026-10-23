@@ -27,6 +27,7 @@ vi.mock('@/api/asset.api', () => ({
     data: [{ id: GUID, name: 'Tehran truck', plate: '12A345', code: 'V1' }],
     isLoading: false,
   }),
+  useDevices: () => ({ data: [], isLoading: false }),
 }));
 
 // ── API mocks ──────────────────────────────────────────────────────────────

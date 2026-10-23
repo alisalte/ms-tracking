@@ -20,7 +20,12 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MDVR_PLAYBACK_CLOCK, type MdvrResource, fromMdvrBcdTime, useSnapshot } from '@/api/video.api';
+import {
+  MDVR_PLAYBACK_CLOCK,
+  type MdvrResource,
+  fromMdvrBcdTime,
+  useSnapshot,
+} from '@/api/video.api';
 import { Alert, Badge, Input, Spinner } from '@/components/tailwind-ui';
 import { HLSLivePlayer } from '@/components/video/HLSLivePlayer';
 import { JSMpegLivePlayer } from '@/components/video/JSMpegLivePlayer';

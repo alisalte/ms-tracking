@@ -4,13 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { downloadBlob } from '@/lib/video-stream';
-import {
-  apiDeleteNoContent,
-  apiGetBlob,
-  apiGetRaw,
-  apiPatchRaw,
-  apiPostRaw,
-} from './client';
+import { apiDeleteNoContent, apiGetBlob, apiGetRaw, apiPatchRaw, apiPostRaw } from './client';
 
 export type SchedulableReportType = 'trips' | 'vehicle-utilization' | 'alarms';
 export type ScheduleCadence = 'daily' | 'weekly';
@@ -70,8 +64,7 @@ export function useReportSchedules(enabled = true) {
 export function useReportScheduleJobs(scheduleId: string | null) {
   return useQuery({
     queryKey: ['reports', 'schedules', scheduleId, 'jobs'],
-    queryFn: () =>
-      apiGetRaw<{ items: ReportJobWire[] }>(`/reports/schedules/${scheduleId}/jobs`),
+    queryFn: () => apiGetRaw<{ items: ReportJobWire[] }>(`/reports/schedules/${scheduleId}/jobs`),
     enabled: Boolean(scheduleId),
   });
 }

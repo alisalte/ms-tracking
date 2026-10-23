@@ -41,7 +41,11 @@ export function TrendChartsRow() {
   const alarmBuckets = useMemo(
     () =>
       [
-        { key: 'alarmSpeeding' as const, label: t('dashboard.charts.speeding'), color: chart.speeding },
+        {
+          key: 'alarmSpeeding' as const,
+          label: t('dashboard.charts.speeding'),
+          color: chart.speeding,
+        },
         {
           key: 'alarmGeofence' as const,
           label: t('dashboard.charts.geofence'),
@@ -115,12 +119,7 @@ export function TrendChartsRow() {
           flush
         >
           <div className="w-full px-4 pb-3 sm:px-5">
-            <ApexChart
-              type="line"
-              series={mixed.series}
-              options={mixed.options}
-              height={300}
-            />
+            <ApexChart type="line" series={mixed.series} options={mixed.options} height={300} />
           </div>
         </DashboardCard>
       </div>

@@ -289,6 +289,7 @@ vi.mock('maplibre-gl', () => {
       isStyleLoaded: () => true,
       once: (_e: string, cb: () => void) => cb(),
       on: vi.fn(),
+      off: vi.fn(),
       addControl: vi.fn(),
       getSource: () => null,
       addSource: vi.fn(),

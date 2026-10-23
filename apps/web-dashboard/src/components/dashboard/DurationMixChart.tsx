@@ -45,10 +45,7 @@ export function DurationMixChart() {
     ].filter((s) => s.value > 0);
   }, [o, t]);
 
-  const empty =
-    !overview.isLoading &&
-    !overview.isError &&
-    slices.length === 0;
+  const empty = !overview.isLoading && !overview.isError && slices.length === 0;
 
   const options = useMemo<ApexOptions>(
     () => ({
@@ -64,8 +61,7 @@ export function DurationMixChart() {
               total: {
                 show: true,
                 label: t('dashboard.charts.totalHours'),
-                formatter: () =>
-                  slices.reduce((a, b) => a + b.value, 0).toLocaleString(),
+                formatter: () => slices.reduce((a, b) => a + b.value, 0).toLocaleString(),
               },
             },
           },
@@ -91,7 +87,12 @@ export function DurationMixChart() {
       flush
     >
       <div className="w-full px-4 pb-3 sm:px-5">
-        <ApexChart type="donut" series={slices.map((s) => s.value)} options={options} height={240} />
+        <ApexChart
+          type="donut"
+          series={slices.map((s) => s.value)}
+          options={options}
+          height={240}
+        />
       </div>
     </DashboardCard>
   );

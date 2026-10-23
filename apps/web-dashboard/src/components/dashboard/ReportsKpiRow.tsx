@@ -53,13 +53,9 @@ export function ReportsKpiRow() {
   const loading = overview.isLoading;
   const utilization = o?.avgUtilizationPct ?? null;
   const avgSpeed =
-    o?.avgSpeedKmh !== null && o?.avgSpeedKmh !== undefined
-      ? Math.round(o.avgSpeedKmh)
-      : null;
+    o?.avgSpeedKmh !== null && o?.avgSpeedKmh !== undefined ? Math.round(o.avgSpeedKmh) : null;
   const maxSpeed =
-    o?.maxSpeedKmh !== null && o?.maxSpeedKmh !== undefined
-      ? Math.round(o.maxSpeedKmh)
-      : null;
+    o?.maxSpeedKmh !== null && o?.maxSpeedKmh !== undefined ? Math.round(o.maxSpeedKmh) : null;
   const summary = alarms.data?.summary;
   const criticalAlarms = summary?.critical ?? null;
   const movingH = o ? hoursFromSec(o.movingDurationSec ?? 0) : null;
@@ -142,9 +138,7 @@ export function ReportsKpiRow() {
         loading={loading}
         footer={
           maxSpeed !== null && (
-            <KpiChip tone="gray">
-              {t('dashboard.stats.maxSpeedChip', { value: maxSpeed })}
-            </KpiChip>
+            <KpiChip tone="gray">{t('dashboard.stats.maxSpeedChip', { value: maxSpeed })}</KpiChip>
           )
         }
       />

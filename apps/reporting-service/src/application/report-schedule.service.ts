@@ -2,19 +2,19 @@
  * Report schedule application service — CRUD + run-now + worker execution.
  */
 import { Logger } from '@nestjs/common';
-import type { ReportService } from './report.service.js';
 import {
   type ReportJob,
   type ReportSchedule,
+  type SchedulableReport,
   type ScheduleCadence,
   type SchedulePreset,
-  type SchedulableReport,
   computeNextRunAt,
+  isSchedulableReport,
   isScheduleCadence,
   isSchedulePreset,
-  isSchedulableReport,
 } from '../domain/report-schedule.js';
 import type { ReportScheduleRepository } from '../infrastructure/persistence/report-schedule.repository.js';
+import type { ReportService } from './report.service.js';
 
 export class ReportScheduleInputError extends Error {
   constructor(
@@ -201,9 +201,7 @@ export class ReportScheduleService {
       try {
         await this.executeSchedule(schedule);
       } catch (err) {
-        this.logger.error(
-          `Scheduled report ${schedule.id} failed: ${(err as Error).message}`,
-        );
+        this.logger.error(`Scheduled report ${schedule.id} failed: ${(err as Error).message}`);
       }
     }
     return due.length;
@@ -231,7 +229,14 @@ export class ReportScheduleService {
         artifactCsv: result.csv,
         rowCount: result.rows,
       });
-      return completed ?? { ...job, status: 'SUCCEEDED', filename: result.filename, rowCount: result.rows };
+      return (
+        completed ?? {
+          ...job,
+          status: 'SUCCEEDED',
+          filename: result.filename,
+          rowCount: result.rows,
+        }
+      );
     } catch (err) {
       const message = (err as Error)?.message ?? 'export failed';
       const failed = await this.deps.schedules.completeJob(schedule.tenantId, job.id, {

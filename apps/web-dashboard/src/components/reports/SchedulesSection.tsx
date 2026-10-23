@@ -258,9 +258,7 @@ function SchedulesPanel() {
             {t('reports.schedules.jobsTitle')}
           </h3>
           {jobs.isLoading && <p className="text-sm text-gray-500">{t('common.loading')}</p>}
-          {jobs.isError && (
-            <ErrorState error={jobs.error} onRetry={() => void jobs.refetch()} />
-          )}
+          {jobs.isError && <ErrorState error={jobs.error} onRetry={() => void jobs.refetch()} />}
           {(jobs.data?.items ?? []).length === 0 && !jobs.isLoading && (
             <p className="text-sm text-gray-500">{t('reports.schedules.jobsEmpty')}</p>
           )}

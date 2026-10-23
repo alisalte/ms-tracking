@@ -15,7 +15,6 @@ export function TenantSettingsPanel({ tenantId }: { tenantId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refetch when the tenant changes.
   useEffect(() => {
     setError(null);
     setNotice(null);

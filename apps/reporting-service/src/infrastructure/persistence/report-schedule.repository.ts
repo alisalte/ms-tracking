@@ -6,9 +6,9 @@ import type {
   ReportJob,
   ReportJobStatus,
   ReportSchedule,
+  SchedulableReport,
   ScheduleCadence,
   SchedulePreset,
-  SchedulableReport,
 } from '../../domain/report-schedule.js';
 
 interface ScheduleRow {
@@ -173,10 +173,7 @@ export class ReportScheduleRepository {
    * Claim due schedules across tenants (platform). Advances next_run_at
    * immediately so concurrent workers do not double-run.
    */
-  public async claimDueSchedules(
-    limit: number,
-    now: Date = new Date(),
-  ): Promise<ReportSchedule[]> {
+  public async claimDueSchedules(limit: number, now: Date = new Date()): Promise<ReportSchedule[]> {
     return withPlatformContext(this.knex, async (trx) => {
       const due = await trx('reporting.report_schedules')
         .where({ enabled: true })
@@ -254,11 +251,7 @@ export class ReportScheduleRepository {
     });
   }
 
-  public async listJobs(
-    tenantId: string,
-    scheduleId: string,
-    limit = 20,
-  ): Promise<ReportJob[]> {
+  public async listJobs(tenantId: string, scheduleId: string, limit = 20): Promise<ReportJob[]> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
       const rows = await trx('reporting.report_jobs')
         .where({ tenant_id: tenantId, schedule_id: scheduleId })

@@ -38,9 +38,11 @@ export async function up(knex) {
       WHERE ended_at IS NULL
   `);
 
-  await knex.raw(`ALTER TABLE fleet.driver_assignments ENABLE ROW LEVEL SECURITY`);
-  await knex.raw(`ALTER TABLE fleet.driver_assignments FORCE ROW LEVEL SECURITY`);
-  await knex.raw(`DROP POLICY IF EXISTS "driver_assignments_tenant_isolation" ON fleet.driver_assignments`);
+  await knex.raw('ALTER TABLE fleet.driver_assignments ENABLE ROW LEVEL SECURITY');
+  await knex.raw('ALTER TABLE fleet.driver_assignments FORCE ROW LEVEL SECURITY');
+  await knex.raw(
+    `DROP POLICY IF EXISTS "driver_assignments_tenant_isolation" ON fleet.driver_assignments`,
+  );
   await knex.raw(`
     CREATE POLICY "driver_assignments_tenant_isolation" ON fleet.driver_assignments
       USING (
@@ -76,6 +78,8 @@ export async function up(knex) {
 
 /** @param {import("knex").Knex} knex */
 export async function down(knex) {
-  await knex.raw(`DROP POLICY IF EXISTS "driver_assignments_tenant_isolation" ON fleet.driver_assignments`);
+  await knex.raw(
+    `DROP POLICY IF EXISTS "driver_assignments_tenant_isolation" ON fleet.driver_assignments`,
+  );
   await knex.schema.withSchema('fleet').dropTableIfExists('driver_assignments');
 }

@@ -64,10 +64,7 @@ export function vehicleHealthScore(
 ): { score: number; connectivity: number; alarmPenalty: number } {
   const connectivity = connectivityScore(presence);
   const penalty = alarmPenalty(severities);
-  const score = Math.max(
-    0,
-    Math.min(100, Math.round(0.6 * connectivity + 0.4 * (100 - penalty))),
-  );
+  const score = Math.max(0, Math.min(100, Math.round(0.6 * connectivity + 0.4 * (100 - penalty))));
   return { score, connectivity, alarmPenalty: penalty };
 }
 
@@ -88,10 +85,11 @@ export function computeFleetHealthScore(
 
   const results: VehicleHealthScoreResult[] = vehicles.map((v) => {
     const severities = byVehicle.get(v.vehicleId) ?? [];
-    const { score, connectivity, alarmPenalty: penalty } = vehicleHealthScore(
-      v.presence,
-      severities,
-    );
+    const {
+      score,
+      connectivity,
+      alarmPenalty: penalty,
+    } = vehicleHealthScore(v.presence, severities);
     return {
       vehicleId: v.vehicleId,
       score,
@@ -116,9 +114,7 @@ export function computeFleetHealthScore(
   };
 }
 
-export function healthScoreTone(
-  score: number | null,
-): 'success' | 'warning' | 'danger' | 'gray' {
+export function healthScoreTone(score: number | null): 'success' | 'warning' | 'danger' | 'gray' {
   if (score == null) return 'gray';
   if (score >= 80) return 'success';
   if (score >= HEALTH_ATTENTION_THRESHOLD) return 'warning';

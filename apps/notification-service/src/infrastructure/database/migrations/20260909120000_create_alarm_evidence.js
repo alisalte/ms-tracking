@@ -14,14 +14,16 @@ export async function up(knex) {
     t.uuid('device_id').notNullable();
     t.uuid('vehicle_id').nullable();
     t.text('alarm_type').notNullable();
-    t.text('status').notNullable().checkIn([
-      'PENDING',
-      'FETCHING',
-      'PHOTO_READY',
-      'PHOTO_MISSING',
-      'PHOTO_FAILED',
-      'SKIPPED_COOLDOWN',
-    ]);
+    t.text('status')
+      .notNullable()
+      .checkIn([
+        'PENDING',
+        'FETCHING',
+        'PHOTO_READY',
+        'PHOTO_MISSING',
+        'PHOTO_FAILED',
+        'SKIPPED_COOLDOWN',
+      ]);
     t.text('photo_name').nullable();
     t.binary('photo_bytes').nullable();
     t.text('photo_content_type').nullable();
@@ -42,7 +44,7 @@ export async function up(knex) {
     'CREATE INDEX ix_alarm_evidence_cooldown ON notification.alarm_evidence (tenant_id, device_id, alarm_type, created_at DESC)',
   );
   await knex.raw(
-    'CREATE INDEX ix_alarm_evidence_pending ON notification.alarm_evidence (status, created_at ASC) WHERE status = \'PENDING\'',
+    "CREATE INDEX ix_alarm_evidence_pending ON notification.alarm_evidence (status, created_at ASC) WHERE status = 'PENDING'",
   );
   await knex.raw(
     'CREATE INDEX ix_alarm_evidence_expires ON notification.alarm_evidence (expires_at)',
@@ -51,9 +53,11 @@ export async function up(knex) {
     'CREATE INDEX ix_alarm_evidence_command ON notification.alarm_evidence (command_id) WHERE command_id IS NOT NULL',
   );
 
-  await knex.raw(`ALTER TABLE notification.alarm_evidence ENABLE ROW LEVEL SECURITY`);
-  await knex.raw(`ALTER TABLE notification.alarm_evidence FORCE ROW LEVEL SECURITY`);
-  await knex.raw(`DROP POLICY IF EXISTS "alarm_evidence_tenant_isolation" ON notification.alarm_evidence`);
+  await knex.raw('ALTER TABLE notification.alarm_evidence ENABLE ROW LEVEL SECURITY');
+  await knex.raw('ALTER TABLE notification.alarm_evidence FORCE ROW LEVEL SECURITY');
+  await knex.raw(
+    `DROP POLICY IF EXISTS "alarm_evidence_tenant_isolation" ON notification.alarm_evidence`,
+  );
   await knex.raw(`
     CREATE POLICY "alarm_evidence_tenant_isolation" ON notification.alarm_evidence
       USING (
@@ -73,6 +77,8 @@ export async function up(knex) {
 
 /** @param {import("knex").Knex} knex */
 export async function down(knex) {
-  await knex.raw(`DROP POLICY IF EXISTS "alarm_evidence_tenant_isolation" ON notification.alarm_evidence`);
+  await knex.raw(
+    `DROP POLICY IF EXISTS "alarm_evidence_tenant_isolation" ON notification.alarm_evidence`,
+  );
   await knex.schema.withSchema('notification').dropTableIfExists('alarm_evidence');
 }

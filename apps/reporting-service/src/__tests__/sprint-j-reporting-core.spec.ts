@@ -5,7 +5,12 @@
  */
 import { describe, expect, it } from '@jest/globals';
 import { csvCell, csvDocument } from '../domain/csv.js';
-import { TRIP_SORT_FIELDS, UTILIZATION_SORT_FIELDS, periodDeltaPct, resolveSort } from '../domain/report-types.js';
+import {
+  TRIP_SORT_FIELDS,
+  UTILIZATION_SORT_FIELDS,
+  periodDeltaPct,
+  resolveSort,
+} from '../domain/report-types.js';
 import {
   parseReportWindow,
   reportWindowErrorMessage,

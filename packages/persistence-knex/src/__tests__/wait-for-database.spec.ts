@@ -3,15 +3,15 @@ import { isTransientPgError, waitForDatabase } from '../migrations.js';
 
 describe('isTransientPgError', () => {
   it('treats TCP refusals as transient', () => {
-    expect(isTransientPgError({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 172.18.0.5:5432' })).toBe(
-      true,
-    );
+    expect(
+      isTransientPgError({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 172.18.0.5:5432' }),
+    ).toBe(true);
   });
 
   it('treats Postgres cannot_connect_now as transient', () => {
-    expect(isTransientPgError({ code: '57P03', message: 'the database system is starting up' })).toBe(
-      true,
-    );
+    expect(
+      isTransientPgError({ code: '57P03', message: 'the database system is starting up' }),
+    ).toBe(true);
   });
 
   it('matches recovery-mode text even without a SQLSTATE', () => {

@@ -29,10 +29,10 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { AlarmNotFoundError } from '../domain/index.js';
-import type { AlarmListFilters } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { AlarmEvidenceService } from '../application/alarm-evidence.service.js';
+import { AlarmNotFoundError } from '../domain/index.js';
+import type { AlarmListFilters } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 // biome-ignore lint/style/useImportType: NestJS DI needs the class value at runtime for reflect-metadata.
 import { AlarmOccurrenceRepository } from '../infrastructure/persistence/alarm-occurrence.repository.js';
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';

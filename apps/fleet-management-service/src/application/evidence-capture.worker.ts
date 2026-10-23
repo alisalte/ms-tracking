@@ -93,10 +93,14 @@ export class EvidenceCaptureWorker implements OnApplicationBootstrap, OnApplicat
           await this.deps.evidence.markFailed(row.tenantId, row.id, 'Missing photoName');
           continue;
         }
-        const record = await this.deps.commands.create(this.systemActor(row.tenantId), row.deviceId, {
-          commandCode: 'D00',
-          params: { filename: row.photoName },
-        });
+        const record = await this.deps.commands.create(
+          this.systemActor(row.tenantId),
+          row.deviceId,
+          {
+            commandCode: 'D00',
+            params: { filename: row.photoName },
+          },
+        );
         await this.deps.evidence.markFetchingWithCommand(row.tenantId, row.id, record.id);
       } catch (err) {
         await this.deps.evidence.markFailed(
@@ -119,18 +123,22 @@ export class EvidenceCaptureWorker implements OnApplicationBootstrap, OnApplicat
           continue;
         }
         const channel = channelFromPhotoName(row.photoName, row.videoChannel);
-        const record = await this.deps.commands.create(this.systemActor(row.tenantId), row.deviceId, {
-          commandCode: 'AB4',
-          params: {
-            url: 'rtmp://placeholder/live/md300/pb', // rewritten by resolveMediaDialback
-            channel,
-            avType: '3',
-            streamType: '0',
-            capType: '0',
-            startTime: toMdvrBcdUtc(row.videoWindowFrom),
-            endTime: toMdvrBcdUtc(row.videoWindowTo),
+        const record = await this.deps.commands.create(
+          this.systemActor(row.tenantId),
+          row.deviceId,
+          {
+            commandCode: 'AB4',
+            params: {
+              url: 'rtmp://placeholder/live/md300/pb', // rewritten by resolveMediaDialback
+              channel,
+              avType: '3',
+              streamType: '0',
+              capType: '0',
+              startTime: toMdvrBcdUtc(row.videoWindowFrom),
+              endTime: toMdvrBcdUtc(row.videoWindowTo),
+            },
           },
-        });
+        );
         await this.deps.evidence.markVideoFetching(row.tenantId, row.id, record.id, channel);
       } catch (err) {
         await this.deps.evidence.markVideoFailed(
