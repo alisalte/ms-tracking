@@ -70,10 +70,7 @@ export function HourlyActivityChart() {
           columnWidth: '52%',
           borderRadius: 6,
           colors: {
-            ranges:
-              peak >= 0
-                ? [{ from: counts[peak], to: counts[peak], color: chart.peak }]
-                : [],
+            ranges: peak >= 0 ? [{ from: counts[peak], to: counts[peak], color: chart.peak }] : [],
           },
         },
       },

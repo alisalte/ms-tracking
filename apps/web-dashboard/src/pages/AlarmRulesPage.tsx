@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
+import { useVehicles } from '@/api/asset.api';
 import { getApiErrorMessage } from '@/api/errors';
 import { useGeofences } from '@/api/geofence.api';
 import {
@@ -20,7 +21,6 @@ import {
   useEnableAlarmRule,
   useUpdateAlarmRule,
 } from '@/api/rule.api';
-import { useVehicles } from '@/api/asset.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
@@ -38,17 +38,8 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
-import type {
-  AlarmRule,
-  AlarmRuleSeverity,
-  AlarmRuleType,
-  RepeatPolicy,
-} from '@/types/rule.types';
-import {
-  ALARM_RULE_SEVERITIES,
-  ALARM_RULE_TYPES,
-  REPEAT_POLICIES,
-} from '@/types/rule.types';
+import type { AlarmRule, AlarmRuleSeverity, AlarmRuleType, RepeatPolicy } from '@/types/rule.types';
+import { ALARM_RULE_SEVERITIES, ALARM_RULE_TYPES, REPEAT_POLICIES } from '@/types/rule.types';
 
 interface RuleFormValues {
   name: string;
@@ -149,7 +140,8 @@ function summarizeConditions(r: AlarmRule, t: (k: string) => string): string {
   if (r.type === 'device_offline') return `${c.minOfflineSec ?? '—'} s`;
   if (r.type === 'excessive_trip_duration') return `${c.maxDurationSec ?? '—'} s`;
   if (r.type === 'excessive_stop_duration') return `${c.maxStopDurationSec ?? '—'} s`;
-  if (r.type.startsWith('geofence')) return r.entityId ? String(c.geofenceId ?? t('rules.allGeofences')) : t('rules.allGeofences');
+  if (r.type.startsWith('geofence'))
+    return r.entityId ? String(c.geofenceId ?? t('rules.allGeofences')) : t('rules.allGeofences');
   return t('rules.noParams');
 }
 
@@ -266,7 +258,9 @@ export function AlarmRulesPage() {
       id: 'name',
       headerKey: 'rules.colName',
       sortBy: (r) => r.name,
-      render: (r) => <span className="font-medium text-gray-800 dark:text-graydark-800">{r.name}</span>,
+      render: (r) => (
+        <span className="font-medium text-gray-800 dark:text-graydark-800">{r.name}</span>
+      ),
     },
     {
       id: 'type',
@@ -305,7 +299,11 @@ export function AlarmRulesPage() {
       header: t('common.actions'),
       align: 'end',
       render: (r) => (
-        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex justify-end gap-1"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           <PermissionGate requires={PERMISSIONS.ruleWrite}>
             <Button size="sm" variant="outline" onClick={() => void toggleEnabled(r)}>
               {r.enabled ? t('rules.disable') : t('rules.enable')}
@@ -326,7 +324,8 @@ export function AlarmRulesPage() {
   const needsThreshold = type === 'overspeed';
   const needsDuration = type === 'prolonged_idle' || type === 'parking';
   const needsOffline = type === 'device_offline';
-  const needsGeofence = type === 'geofence_enter' || type === 'geofence_exit' || type === 'geofence_dwell';
+  const needsGeofence =
+    type === 'geofence_enter' || type === 'geofence_exit' || type === 'geofence_dwell';
   const needsTripMax = type === 'excessive_trip_duration';
   const needsStopMax = type === 'excessive_stop_duration';
 
@@ -367,7 +366,11 @@ export function AlarmRulesPage() {
             onRowClick={openEdit}
             maxHeight="calc(100vh - 280px)"
             emptyState={
-              <EmptyState icon={<Scale />} title={t('rules.empty')} description={t('rules.emptyHelp')} />
+              <EmptyState
+                icon={<Scale />}
+                title={t('rules.empty')}
+                description={t('rules.emptyHelp')}
+              />
             }
           />
         </>
@@ -388,15 +391,18 @@ export function AlarmRulesPage() {
           </>
         }
       >
-        <form id="rule-form" onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+        <form
+          id="rule-form"
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          className="flex flex-col gap-4"
+        >
           {serverError && <Alert variant="danger">{serverError}</Alert>}
           <Controller
             control={control}
             name="name"
             rules={{ required: true }}
-            render={({ field }) => (
-              <Input {...field} label={`${t('rules.name')} *`} />
-            )}
+            render={({ field }) => <Input {...field} label={`${t('rules.name')} *`} />}
           />
           <Controller
             control={control}

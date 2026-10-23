@@ -45,7 +45,10 @@ const CAP = {
 /** Pure score from attributed event counts (higher = safer). */
 export function computeDriverScore(counts: DrivingEventCounts): DriverScoreBreakdown {
   const harshBrake = Math.min(counts.harshBrake * DEDUCT.HARSH_BRAKE, CAP.HARSH_BRAKE);
-  const rapidAccel = Math.min(counts.rapidAccel * DEDUCT.RAPID_ACCELERATION, CAP.RAPID_ACCELERATION);
+  const rapidAccel = Math.min(
+    counts.rapidAccel * DEDUCT.RAPID_ACCELERATION,
+    CAP.RAPID_ACCELERATION,
+  );
   const speedViolation = Math.min(
     counts.speedViolation * DEDUCT.SPEED_VIOLATION,
     CAP.SPEED_VIOLATION,

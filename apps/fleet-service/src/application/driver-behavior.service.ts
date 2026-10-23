@@ -2,6 +2,7 @@
  * Driver Behavior — sync alarms → driving_events, compute score, ranking (Sprint 1–2).
  */
 import {
+  DEFAULT_SCORE_PERIOD_DAYS,
   type DriverScoreBreakdown,
   type DrivingEventCounts,
   LOW_SCORE_ATTENTION_THRESHOLD,
@@ -9,7 +10,6 @@ import {
   emptyCounts,
   mapAlarmToDrivingEventType,
   tallyEventType,
-  DEFAULT_SCORE_PERIOD_DAYS,
 } from '../domain/index.js';
 import type { DriverRepository } from '../infrastructure/persistence/driver.repository.js';
 import type {
@@ -284,11 +284,7 @@ export class DriverBehaviorService {
    * Tenant-wide ranking for the period (lowest score first = most at risk).
    * Syncs once, scores every ACTIVE driver with assignment overlap.
    */
-  public async listRanking(
-    tenantId: string,
-    from: Date,
-    to: Date,
-  ): Promise<DriverRankingRow[]> {
+  public async listRanking(tenantId: string, from: Date, to: Date): Promise<DriverRankingRow[]> {
     await this.syncEvents(tenantId, from, to);
 
     const active = await this.drivers.listActiveIds(tenantId);

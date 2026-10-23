@@ -72,6 +72,4 @@ export interface CreateAlarmRulePayload {
   repeatPolicy: RepeatPolicy;
 }
 
-export type UpdateAlarmRulePayload = Partial<
-  Omit<CreateAlarmRulePayload, 'type'>
->;
+export type UpdateAlarmRulePayload = Partial<Omit<CreateAlarmRulePayload, 'type'>>;

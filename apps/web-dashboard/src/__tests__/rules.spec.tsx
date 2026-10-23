@@ -57,11 +57,23 @@ vi.mock('@/api/rule.api', () => {
 });
 
 vi.mock('@/api/asset.api', () => ({
-  useVehicles: () => ({ data: [], isLoading: false, isError: false, error: null, refetch: vi.fn() }),
+  useVehicles: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
 }));
 
 vi.mock('@/api/geofence.api', () => ({
-  useGeofences: () => ({ data: [], isLoading: false, isError: false, error: null, refetch: vi.fn() }),
+  useGeofences: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
 }));
 
 function setUser(permissions: readonly string[]) {
@@ -88,7 +100,11 @@ function renderRules() {
         createElement(
           I18nextProvider,
           { i18n },
-          createElement(MemoryRouter, { initialEntries: ['/rules'] }, createElement(AlarmRulesPage)),
+          createElement(
+            MemoryRouter,
+            { initialEntries: ['/rules'] },
+            createElement(AlarmRulesPage),
+          ),
         ),
       ),
     ),

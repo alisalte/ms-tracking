@@ -32,7 +32,8 @@ export function AlarmSeverityChart() {
   const empty = !alarms.isLoading && !alarms.isError && (!summary || summary.total === 0);
 
   const slices = useMemo(() => {
-    if (!summary || summary.total === 0) return [] as Array<{ label: string; value: number; color: string }>;
+    if (!summary || summary.total === 0)
+      return [] as Array<{ label: string; value: number; color: string }>;
     return SEVERITIES.map((s) => ({
       label: t(`dashboard.severities.${s.key}`),
       value: summary[s.key],
@@ -77,7 +78,12 @@ export function AlarmSeverityChart() {
       flush
     >
       <div className="w-full px-4 sm:px-5">
-        <ApexChart type="donut" series={slices.map((s) => s.value)} options={options} height={230} />
+        <ApexChart
+          type="donut"
+          series={slices.map((s) => s.value)}
+          options={options}
+          height={230}
+        />
         {summary && summary.total > 0 && (
           <div className="flex items-center justify-center gap-2 pb-3">
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-danger-500/10 px-2.5 py-1 text-[0.7rem] font-bold text-danger-600 tabular-nums dark:text-danger-400">

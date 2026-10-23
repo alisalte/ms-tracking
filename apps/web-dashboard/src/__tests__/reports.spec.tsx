@@ -707,7 +707,10 @@ describe('expanded report sections', () => {
         return [{ id: 'g-1', name: 'Depot', type: 'CIRCLE', status: 'ACTIVE' }];
       }
       if (path.includes('/vehicles')) {
-        return { data: [{ id: 'v-36', name: 'وانت نیسان 36', plate: '12A', status: 'ACTIVE' }], nextCursor: null };
+        return {
+          data: [{ id: 'v-36', name: 'وانت نیسان 36', plate: '12A', status: 'ACTIVE' }],
+          nextCursor: null,
+        };
       }
       return { data: [], items: [], nextCursor: null };
     });

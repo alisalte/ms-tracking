@@ -1,14 +1,11 @@
+import { AlertTriangle, Trophy } from 'lucide-react';
 /**
  * Driver ranking view — Sprint 2 behavior ranking (lowest score first).
  */
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Trophy } from 'lucide-react';
 
-import {
-  type DriverBehaviorRankingRow,
-  useDriverBehaviorRanking,
-} from '@/api/driver.api';
+import { type DriverBehaviorRankingRow, useDriverBehaviorRanking } from '@/api/driver.api';
 import {
   Badge,
   DataTable,
@@ -37,9 +34,7 @@ export function DriverRankingPanel({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return data;
-    return data.filter((r) =>
-      `${r.firstName} ${r.lastName}`.toLowerCase().includes(q),
-    );
+    return data.filter((r) => `${r.firstName} ${r.lastName}`.toLowerCase().includes(q));
   }, [data, query]);
 
   const columns: Array<TableColumn<DriverBehaviorRankingRow>> = [

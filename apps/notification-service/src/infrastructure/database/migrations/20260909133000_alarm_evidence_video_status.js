@@ -56,8 +56,8 @@ export async function up(knex) {
 
 /** @param {import("knex").Knex} knex */
 export async function down(knex) {
-  await knex.raw(`DROP INDEX IF EXISTS notification.ix_alarm_evidence_video_pending`);
-  await knex.raw(`DROP INDEX IF EXISTS notification.ix_alarm_evidence_video_command`);
+  await knex.raw('DROP INDEX IF EXISTS notification.ix_alarm_evidence_video_pending');
+  await knex.raw('DROP INDEX IF EXISTS notification.ix_alarm_evidence_video_command');
   await knex.raw(`
     ALTER TABLE notification.alarm_evidence
       DROP CONSTRAINT IF EXISTS alarm_evidence_video_status_check

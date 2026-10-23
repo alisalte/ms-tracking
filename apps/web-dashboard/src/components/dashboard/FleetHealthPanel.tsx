@@ -1,5 +1,5 @@
-import type { ApexOptions } from 'apexcharts';
 import { useQuery } from '@tanstack/react-query';
+import type { ApexOptions } from 'apexcharts';
 import { Activity, HeartPulse } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,9 +8,9 @@ import { fetchAlarms } from '@/api/alarm.api';
 import { useDeviceStatuses, useFleetStats } from '@/api/fleet.api';
 import { Meter } from '@/components/tailwind-ui';
 import {
+  type HealthAlarmSeverity,
   computeFleetHealthScore,
   healthScoreTone,
-  type HealthAlarmSeverity,
 } from '@/lib/fleet-health-score';
 import { formatNumber } from '@/lib/format-number';
 import { chart } from '@/theme/palette';
