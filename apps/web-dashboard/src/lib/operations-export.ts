@@ -9,6 +9,7 @@ import type { TFunction } from 'i18next';
 
 import type {
   DeviceActivityReport,
+  HaulAnalysisReport,
   HaulCycleReport,
   HaulPeriodReport,
   PeriodCalendar,
@@ -20,6 +21,12 @@ import { downloadBlob } from '@/lib/video-stream';
 export function hoursOf(sec: number | null | undefined): number | null {
   if (sec === null || sec === undefined) return null;
   return Math.round((sec / 3600) * 100) / 100;
+}
+
+/** Seconds → minutes with one decimal, for the analysis sheets. */
+export function minutesOf(sec: number | null | undefined): number | null {
+  if (sec === null || sec === undefined) return null;
+  return Math.round((sec / 60) * 10) / 10;
 }
 
 function dateTime(value: string | null, lang: string): string {
@@ -279,6 +286,252 @@ export function periodSheets(report: HaulPeriodReport, t: TFunction, lang: strin
           row.distanceKm,
           hoursOf(row.loadDwellSec),
           hoursOf(row.durationSec),
+        ]),
+      ],
+    },
+  ];
+}
+
+export function analysisSheets(
+  report: HaulAnalysisReport,
+  t: TFunction,
+  lang: string,
+): SheetSpec[] {
+  const rtl = lang === 'fa';
+  const a = (key: string, options?: Record<string, unknown>) =>
+    t(`operations.analysis.${key}`, options);
+  const phases = ['load', 'travel', 'unload', 'return'] as const;
+  const waste = report.waste;
+  const wasteOf = (phase: (typeof phases)[number]) =>
+    waste[`${phase}Sec` as 'loadSec' | 'travelSec' | 'unloadSec' | 'returnSec'];
+  const wasteCols = (w: HaulAnalysisReport['waste']): SheetCell[] => [
+    minutesOf(w.loadSec),
+    minutesOf(w.travelSec),
+    minutesOf(w.unloadSec),
+    minutesOf(w.returnSec),
+    minutesOf(w.totalSec),
+  ];
+  const wasteHeads = [
+    a('colWasteLoad'),
+    a('colWasteTravel'),
+    a('colWasteUnload'),
+    a('colWasteReturn'),
+    a('colWasteTotal'),
+  ];
+  const budget = report.timeBudget;
+  const budgetKeys = [
+    'origin',
+    'destination',
+    'moving',
+    'idleOutside',
+    'parked',
+    'noData',
+  ] as const;
+  const budgetSec = (key: (typeof budgetKeys)[number]) =>
+    budget[`${key}Sec` as keyof typeof budget];
+
+  return [
+    {
+      name: a('sheetSummary'),
+      rtl,
+      rows: [
+        [a('metric'), a('value')],
+        [a('kpiServices'), report.services],
+        [`${a('kpiMedianCycle')} (${a('unitMin')})`, minutesOf(report.cycleMedianSec)],
+        [`${a('kpiWaste')} (${a('unitMin')})`, minutesOf(waste.totalSec)],
+        [
+          `${a('kpiWasteShare')} (%)`,
+          report.wasteShare === null ? null : Math.round(report.wasteShare * 1000) / 10,
+        ],
+        [a('kpiLost'), report.lostServices],
+        [a('kpiStops'), report.stopCount],
+        [a('kpiWithoutDriver'), report.withoutDriver],
+        [],
+        [
+          a('colPhase'),
+          a('colSamples'),
+          a('colReference'),
+          a('colMedian'),
+          a('colP75'),
+          a('colWasteMin'),
+        ],
+        ...phases.map((phase): SheetCell[] => {
+          const ref = report.references[phase];
+          return [
+            a(`phase.${phase}`),
+            ref.samples,
+            minutesOf(ref.referenceSec),
+            minutesOf(ref.medianSec),
+            minutesOf(ref.p75Sec),
+            minutesOf(wasteOf(phase)),
+          ];
+        }),
+        [],
+        [a('budgetTitle'), a('unitMin')],
+        ...budgetKeys.map((key): SheetCell[] => [a(`budget.${key}`), minutesOf(budgetSec(key))]),
+      ],
+    },
+    {
+      name: a('sheetDrivers'),
+      rtl,
+      rows: [
+        [
+          t('operations.colDriver'),
+          t('operations.colVehicle'),
+          t('operations.colServices'),
+          a('colAvgLoad'),
+          a('colAvgTravel'),
+          a('colAvgUnload'),
+          a('colAvgReturn'),
+          ...wasteHeads,
+          a('colWastePerService'),
+          a('colStops'),
+          a('colStopMin'),
+        ],
+        ...report.byDriver.map((row): SheetCell[] => [
+          row.driverName,
+          row.vehicleNames.join(', '),
+          row.services,
+          minutesOf(row.avgLoadSec),
+          minutesOf(row.avgTravelSec),
+          minutesOf(row.avgUnloadSec),
+          minutesOf(row.avgReturnSec),
+          ...wasteCols(row.waste),
+          minutesOf(row.wastePerServiceSec),
+          row.stopCount,
+          minutesOf(row.stopSec),
+        ]),
+      ],
+    },
+    {
+      name: a('sheetVehicles'),
+      rtl,
+      rows: [
+        [
+          t('operations.colVehicle'),
+          t('operations.colServices'),
+          a('colCycle'),
+          a('colAvgLoad'),
+          a('colAvgUnload'),
+          ...wasteHeads,
+          a('colIdleOutside'),
+          a('colParked'),
+          a('colNoData'),
+          a('colStops'),
+        ],
+        ...report.byVehicle.map((row): SheetCell[] => [
+          row.vehicleName,
+          row.services,
+          minutesOf(row.avgCycleSec),
+          minutesOf(row.avgLoadSec),
+          minutesOf(row.avgUnloadSec),
+          ...wasteCols(row.waste),
+          minutesOf(row.timeBudget.idleOutsideSec),
+          minutesOf(row.timeBudget.parkedSec),
+          minutesOf(row.timeBudget.noDataSec),
+          row.stopCount,
+        ]),
+      ],
+    },
+    {
+      name: a('sheetShifts'),
+      rtl,
+      rows: [
+        [
+          t('operations.colShift'),
+          t('operations.colServices'),
+          t('operations.colTrucks'),
+          a('colCycle'),
+          ...wasteHeads,
+        ],
+        ...report.byShift.map((row): SheetCell[] => [
+          shiftText(row, t, lang),
+          row.services,
+          row.trucks,
+          minutesOf(row.avgCycleSec),
+          ...wasteCols(row.waste),
+        ]),
+      ],
+    },
+    {
+      name: a('sheetShovels'),
+      rtl,
+      rows: [
+        [
+          t('operations.colShovel'),
+          t('operations.loads'),
+          a('colAvgLoad'),
+          a('colQueue'),
+          a('colShovelIdle'),
+        ],
+        ...report.byShovel.map((row): SheetCell[] => [
+          row.shovelLabel,
+          row.loads,
+          minutesOf(row.avgLoadSec),
+          minutesOf(row.truckQueueSec),
+          minutesOf(row.shovelIdleSec),
+        ]),
+      ],
+    },
+    {
+      name: a('sheetStops'),
+      rtl,
+      rows: [
+        [
+          t('operations.colVehicle'),
+          t('operations.colDriver'),
+          a('colStart'),
+          a('colDuration'),
+          a('colEngine'),
+          a('colLeg'),
+          'lat',
+          'lng',
+        ],
+        ...report.stops.map((row): SheetCell[] => [
+          row.vehicleName,
+          row.driverName ?? '',
+          dateTime(row.startedAt, lang),
+          minutesOf(row.durationSec),
+          row.engineOn ? a('engineOn') : a('engineOff'),
+          row.phase === 'LOADED' ? a('legLoaded') : a('legEmpty'),
+          row.lat,
+          row.lng,
+        ]),
+      ],
+    },
+    {
+      name: a('sheetCycles'),
+      rtl,
+      rows: [
+        [
+          t('operations.colVehicle'),
+          t('operations.colDriver'),
+          t('operations.colShovel'),
+          t('operations.colShift'),
+          a('colStart'),
+          a('colAvgLoad'),
+          a('colAvgTravel'),
+          a('colAvgUnload'),
+          a('colAvgReturn'),
+          a('colCycle'),
+          ...wasteHeads,
+        ],
+        ...report.cycles.map((row): SheetCell[] => [
+          row.vehicleName,
+          row.driverName ?? '',
+          row.shovelLabel ?? '',
+          shiftText(row, t, lang),
+          dateTime(row.originEnteredAt, lang),
+          minutesOf(row.loadSec),
+          minutesOf(row.travelSec),
+          minutesOf(row.unloadSec),
+          minutesOf(row.returnSec),
+          minutesOf(row.cycleSec),
+          minutesOf(row.wasteLoadSec),
+          minutesOf(row.wasteTravelSec),
+          minutesOf(row.wasteUnloadSec),
+          minutesOf(row.wasteReturnSec),
+          minutesOf(row.wasteSec),
         ]),
       ],
     },

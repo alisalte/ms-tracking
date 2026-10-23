@@ -4,8 +4,9 @@
  *   GET /api/v1/reports/device-activity   — first fix, volume, offline, distance
  *   GET /api/v1/reports/haul-cycles       — origin → destination services
  *   GET /api/v1/reports/haul-periods      — services per day / week / month
+ *   GET /api/v1/reports/haul-analysis     — wasted time, idle stops, driver and shovel scores
  *
- * Both require `report.read`. Responses are raw (no `{ data }` envelope),
+ * All require `report.read`. Responses are raw (no `{ data }` envelope),
  * matching the rest of the reporting API.
  */
 import { CurrentTenant, RequirePermissions } from '@fleetvision/auth';
@@ -61,6 +62,34 @@ export class OperationsReportsController {
         to,
         granularity,
         calendar,
+      }),
+    );
+  }
+
+  @Get('haul-analysis')
+  @RequirePermissions('report.read')
+  public async haulAnalysis(
+    @CurrentTenant() tenantId: string,
+    @Query('routeId') routeId?: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('targetLoadMin') targetLoadMin?: string,
+    @Query('targetTravelMin') targetTravelMin?: string,
+    @Query('targetUnloadMin') targetUnloadMin?: string,
+    @Query('targetReturnMin') targetReturnMin?: string,
+    @Query('stopMin') stopMin?: string,
+  ) {
+    return this.guard(() =>
+      this.operations.haulAnalysis(tenantId, routeId, {
+        preset,
+        from,
+        to,
+        targetLoadMin,
+        targetTravelMin,
+        targetUnloadMin,
+        targetReturnMin,
+        stopMin,
       }),
     );
   }

@@ -210,6 +210,169 @@ export interface HaulPeriodReport {
   details: HaulPeriodDetail[];
 }
 
+export type AnalysisPhase = 'load' | 'travel' | 'unload' | 'return';
+
+export interface PhaseReference {
+  samples: number;
+  /** What the phase should take; everything above is waste. */
+  referenceSec: number | null;
+  medianSec: number | null;
+  p75Sec: number | null;
+  maxSec: number | null;
+  source: 'CONFIGURED' | 'FLEET' | 'NONE';
+}
+
+export interface WasteTotals {
+  loadSec: number;
+  travelSec: number;
+  unloadSec: number;
+  returnSec: number;
+  totalSec: number;
+}
+
+export interface TimeBudget {
+  originSec: number;
+  destinationSec: number;
+  movingSec: number;
+  idleOutsideSec: number;
+  parkedSec: number;
+  noDataSec: number;
+}
+
+export type AnalysisFindingCode =
+  | 'DRIVER_SLOW_LOAD'
+  | 'DRIVER_SLOW_UNLOAD'
+  | 'DRIVER_LONG_STOPS'
+  | 'SHOVEL_QUEUE'
+  | 'SHOVEL_STARVED'
+  | 'NO_DRIVER'
+  | 'LOW_DATA'
+  | 'LOAD_IS_BIGGEST';
+
+export interface HaulAnalysisReport {
+  route: HaulCycleReport['route'];
+  from: string;
+  to: string;
+  truncated: boolean;
+  services: number;
+  distanceKm: number;
+  stopMinSec: number;
+  references: Record<AnalysisPhase, PhaseReference>;
+  cycleMedianSec: number | null;
+  waste: WasteTotals;
+  /** Waste as a share (0–1) of all measured phase time. */
+  wasteShare: number | null;
+  /** Waste expressed in services the fleet could have made with it. */
+  lostServices: number | null;
+  timeBudget: TimeBudget;
+  stopCount: number;
+  stopSec: number;
+  withoutDriver: number;
+  controlLimits: { loadSec: number | null; unloadSec: number | null; stopSec: number };
+  byVehicle: Array<{
+    vehicleId: string;
+    vehicleName: string;
+    services: number;
+    avgCycleSec: number | null;
+    avgLoadSec: number | null;
+    avgUnloadSec: number | null;
+    waste: WasteTotals;
+    timeBudget: TimeBudget;
+    stopCount: number;
+  }>;
+  byDriver: Array<{
+    driverId: string;
+    driverName: string;
+    vehicleNames: string[];
+    services: number;
+    avgLoadSec: number | null;
+    avgTravelSec: number | null;
+    avgUnloadSec: number | null;
+    avgReturnSec: number | null;
+    waste: WasteTotals;
+    wastePerServiceSec: number;
+    stopCount: number;
+    stopSec: number;
+  }>;
+  byShift: Array<{
+    shift: string;
+    shiftDate: string | null;
+    shiftNo: number;
+    services: number;
+    trucks: number;
+    avgCycleSec: number | null;
+    waste: WasteTotals;
+  }>;
+  byShovel: Array<{
+    shovelId: string;
+    shovelLabel: string;
+    loads: number;
+    avgLoadSec: number | null;
+    truckQueueSec: number;
+    shovelIdleSec: number;
+  }>;
+  cycles: Array<{
+    vehicleId: string;
+    vehicleName: string;
+    driverName: string | null;
+    shovelLabel: string | null;
+    shift: string;
+    shiftDate: string | null;
+    shiftNo: number;
+    originEnteredAt: string;
+    destinationEnteredAt: string;
+    destinationLeftAt: string | null;
+    loadSec: number;
+    travelSec: number;
+    unloadSec: number | null;
+    returnSec: number | null;
+    cycleSec: number | null;
+    wasteSec: number;
+    wasteLoadSec: number;
+    wasteTravelSec: number;
+    wasteUnloadSec: number;
+    wasteReturnSec: number;
+  }>;
+  stops: Array<{
+    vehicleId: string;
+    vehicleName: string;
+    driverName: string | null;
+    startedAt: string;
+    endedAt: string;
+    durationSec: number;
+    lat: number;
+    lng: number;
+    engineOn: boolean;
+    phase: 'LOADED' | 'EMPTY';
+  }>;
+  openHauls: Array<{
+    vehicleId: string;
+    vehicleName: string;
+    phase: 'LOADING' | 'HAULING';
+    since: string;
+    elapsedSec: number;
+    overdue: boolean;
+  }>;
+  findings: Array<{
+    code: AnalysisFindingCode;
+    subject: string | null;
+    subjectId: string | null;
+    subjectLabel: string | null;
+    value: number;
+    reference: number | null;
+  }>;
+  unbound: HaulCycleReport['unbound'];
+}
+
+/** Targets in minutes; a blank field uses the fleet's own best time. */
+export interface AnalysisTargets {
+  targetLoadMin?: string;
+  targetTravelMin?: string;
+  targetUnloadMin?: string;
+  targetReturnMin?: string;
+  stopMin?: string;
+}
+
 export function useDeviceActivity(range: OperationsRange) {
   return useQuery({
     queryKey: ['reports', 'device-activity', range],
@@ -253,6 +416,25 @@ export function useHaulPeriods(
       apiGetRaw<HaulPeriodReport>(
         '/reports/haul-periods',
         rangeParams(range, { routeId, granularity, calendar }),
+      ),
+    enabled: Boolean(routeId),
+  });
+}
+
+export function useHaulAnalysis(
+  routeId: string | null,
+  range: OperationsRange,
+  targets: AnalysisTargets,
+) {
+  const given = Object.fromEntries(
+    Object.entries(targets).filter(([, value]) => typeof value === 'string' && value.trim() !== ''),
+  );
+  return useQuery({
+    queryKey: ['reports', 'haul-analysis', routeId, range, given],
+    queryFn: () =>
+      apiGetRaw<HaulAnalysisReport>(
+        '/reports/haul-analysis',
+        rangeParams(range, { routeId, ...given }),
       ),
     enabled: Boolean(routeId),
   });

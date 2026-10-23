@@ -27,6 +27,10 @@ export interface TrackSample {
   readonly at: Date;
   readonly lat: number;
   readonly lng: number;
+  /** Device speed; absent when the caller did not read it. */
+  readonly speedKmh?: number | null;
+  /** Ignition line; null/absent when the unit does not report it. */
+  readonly ignitionOn?: boolean | null;
 }
 
 export interface DriverInterval {
@@ -79,13 +83,8 @@ export interface OpenHaul {
   readonly since: Date;
 }
 
-export interface DetectHaulInput {
-  readonly trucks: readonly string[];
-  /** Ids used as track keys. The one inside the origin during loading is credited. */
-  readonly shovels: readonly string[];
-  readonly tracks: ReadonlyMap<string, readonly TrackSample[]>;
-  readonly origin: Zone;
-  readonly destination: Zone;
+/** What it takes to name the driver of a truck at a given instant. */
+export interface DriverContext {
   readonly drivers: readonly DriverInterval[];
   /** Per truck: index `n - 1` is the driver of shift `n`. */
   readonly rosters?: ReadonlyMap<string, ReadonlyArray<RosterDriver | null>>;
@@ -93,6 +92,15 @@ export interface DetectHaulInput {
   readonly shiftDurationHours: number;
   readonly shiftCount?: number;
   readonly timeZone: string;
+}
+
+export interface DetectHaulInput extends DriverContext {
+  readonly trucks: readonly string[];
+  /** Ids used as track keys. The one inside the origin during loading is credited. */
+  readonly shovels: readonly string[];
+  readonly tracks: ReadonlyMap<string, readonly TrackSample[]>;
+  readonly origin: Zone;
+  readonly destination: Zone;
 }
 
 export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -279,22 +287,13 @@ function buildCycle(
   arrivedAt: Date,
   leg: readonly TrackSample[],
 ): HaulCycle {
-  const slot = shiftSlot(
-    enteredAt,
-    input.shiftStartHour,
-    input.shiftDurationHours,
-    input.timeZone,
-    input.shiftCount ?? 1,
-  );
-  const rostered = slot.no > 0 ? (input.rosters?.get(vehicleId)?.[slot.no - 1] ?? null) : null;
-  const assigned = rostered ? null : driverAt(input.drivers, vehicleId, enteredAt, slot.no);
-  const driver = rostered ?? assigned;
+  const { slot, driver, source } = resolveDriver(input, vehicleId, enteredAt);
   return {
     vehicleId,
     shovelId: shovelAt(input, enteredAt, leftAt),
     driverId: driver?.driverId ?? null,
     driverName: driver?.driverName ?? null,
-    driverSource: rostered ? 'ROSTER' : assigned ? 'ASSIGNMENT' : null,
+    driverSource: source,
     originEnteredAt: enteredAt,
     originLeftAt: leftAt,
     destinationEnteredAt: arrivedAt,
@@ -305,6 +304,31 @@ function buildCycle(
     shift: slot.key,
     shiftDate: slot.date,
     shiftNo: slot.no,
+  };
+}
+
+/**
+ * The shift at `at` and the driver credited for it on `vehicleId`: the shift
+ * roster first, then the vehicle's assignment history.
+ */
+export function resolveDriver(
+  ctx: DriverContext,
+  vehicleId: string,
+  at: Date,
+): { slot: ShiftSlot; driver: RosterDriver | null; source: DriverSource | null } {
+  const slot = shiftSlot(
+    at,
+    ctx.shiftStartHour,
+    ctx.shiftDurationHours,
+    ctx.timeZone,
+    ctx.shiftCount ?? 1,
+  );
+  const rostered = slot.no > 0 ? (ctx.rosters?.get(vehicleId)?.[slot.no - 1] ?? null) : null;
+  const assigned = rostered ? null : driverAt(ctx.drivers, vehicleId, at, slot.no);
+  return {
+    slot,
+    driver: rostered ?? assigned,
+    source: rostered ? 'ROSTER' : assigned ? 'ASSIGNMENT' : null,
   };
 }
 

@@ -190,6 +190,7 @@ vi.mock('@/api/operations.api', () => ({
       : undefined,
     isFetching: false,
   }),
+  useHaulAnalysis: () => ({ data: undefined, isError: false }),
   useCreateHaulRoute: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateHaulRoute: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArchiveHaulRoute: () => ({ mutateAsync: vi.fn(), isPending: false }),
