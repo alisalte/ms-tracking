@@ -3180,7 +3180,31 @@
       "colWasteLoad": "Loading waste (min)",
       "colWasteTravel": "Haul waste (min)",
       "colWasteUnload": "Unloading waste (min)",
-      "colWasteReturn": "Return waste (min)"
+      "colWasteReturn": "Return waste (min)",
+      "alerts": {
+        "title": "Live over-limit alerts",
+        "hint": "When a truck stays in the origin or destination longer than the limit, you are alerted at that moment, not after it leaves. Limits are suggested from the 75th percentile of the times and can be changed. Stops outside the origin and destination are report-only and have no live alert.",
+        "missingFence": "The route's origin or destination geofence was not found (it may be archived); alerts cannot be enabled.",
+        "limit": {
+          "load": "Loading limit at the origin (min)",
+          "unload": "Unloading limit at the destination (min)"
+        },
+        "off": "off",
+        "enable": "Enable alerts",
+        "update": "Apply changes",
+        "disable": "Turn alerts off",
+        "statusOff": "off",
+        "statusOn": "on, over {{minutes}} min; {{active}} of {{trucks}} trucks",
+        "fenceChanges": "Applying changes these geofences:",
+        "fenceChange": "{{name}}: dwell time {{from}} → {{to}} min and the DWELL alert is switched on. Other rules that use this geofence's dwell event will fire at this time too.",
+        "fenceInactive": "(geofence is inactive and is not evaluated)",
+        "none": "not set",
+        "latency": "The alert is raised when the first position after the limit arrives, so it can lag by up to the device's reporting interval. Until an open alert is acknowledged, repeats are counted inside it.",
+        "ruleLoad": "Loading limit",
+        "ruleUnload": "Unloading limit",
+        "done": "Done.",
+        "failed": "Failed:"
+      }
     }
   },
   "navGroups": {

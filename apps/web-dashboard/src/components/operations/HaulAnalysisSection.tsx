@@ -21,6 +21,7 @@ import {
 } from '@/api/operations.api';
 import { Button } from '@/components/tailwind-ui';
 import { formatWorkDay, hoursOf, minutesOf } from '@/lib/operations-export';
+import { HaulLiveAlerts } from './HaulLiveAlerts';
 
 const PHASES: AnalysisPhase[] = ['load', 'travel', 'unload', 'return'];
 const TARGET_FIELDS: Array<{ key: keyof AnalysisTargets; label: string }> = [
@@ -449,6 +450,8 @@ export function HaulAnalysisSection({
               </ul>
             </div>
           )}
+
+          {routeId && <HaulLiveAlerts routeId={routeId} analysis={data} />}
 
           <div className="rounded-lg bg-slate-50 p-3" data-testid="analysis-control">
             <h3 className="text-sm font-semibold">{a('controlTitle')}</h3>

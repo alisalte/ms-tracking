@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,7 +7,12 @@ import { HaulAnalysisSection } from '@/components/operations/HaulAnalysisSection
 import { i18n } from '@/i18n';
 import { analysisSheets, minutesOf } from '@/lib/operations-export';
 
-const seen = vi.hoisted(() => ({ targets: [] as unknown[] }));
+const seen = vi.hoisted(() => ({
+  targets: [] as unknown[],
+  geofence: [] as Array<{ id: string; payload: unknown }>,
+  created: [] as Array<Record<string, unknown>>,
+  deleted: [] as string[],
+}));
 
 const zeroWaste = { loadSec: 0, travelSec: 0, unloadSec: 0, returnSec: 0, totalSec: 0 };
 const budget = {
@@ -201,6 +206,63 @@ vi.mock('@/api/operations.api', () => ({
     seen.targets.push(targets);
     return { data: routeId ? report : undefined, isError: false };
   },
+  useHaulRoutes: () => ({
+    data: [
+      {
+        id: 'route-1',
+        name: 'Pit to dump',
+        originGeofenceId: 'g-o',
+        destinationGeofenceId: 'g-d',
+        shiftStartHour: 6,
+        shiftDurationHours: 12,
+        shiftCount: 2,
+        status: 'ACTIVE',
+      },
+    ],
+    isLoading: false,
+  }),
+}));
+
+vi.mock('@/api/geofence.api', () => ({
+  useGeofences: () => ({
+    data: [
+      { id: 'g-o', name: 'Pit', status: 'ACTIVE', alertOn: ['ENTER'], dwellSec: null },
+      { id: 'g-d', name: 'Dump', status: 'ACTIVE', alertOn: ['DWELL'], dwellSec: 300 },
+    ],
+    isLoading: false,
+  }),
+  useUpdateGeofence: () => ({
+    mutateAsync: async (arg: { id: string; payload: unknown }) => {
+      seen.geofence.push(arg);
+    },
+  }),
+}));
+
+vi.mock('@/api/rule.api', () => ({
+  useAlarmRules: () => ({
+    data: [
+      {
+        id: 'old',
+        name: 'Unloading limit · Pit to dump · Truck 1 #haul:route-1:unload',
+        type: 'geofence_dwell',
+        enabled: true,
+        entityId: 'v1',
+        conditions: { geofenceId: 'g-d', dwellSec: 300 },
+      },
+    ],
+  }),
+  useCreateAlarmRule: () => ({
+    mutateAsync: async (payload: Record<string, unknown>) => {
+      seen.created.push(payload);
+    },
+  }),
+  useUpdateAlarmRule: () => ({ mutateAsync: vi.fn() }),
+  useEnableAlarmRule: () => ({ mutateAsync: vi.fn() }),
+  useDeleteAlarmRule: () => ({
+    mutateAsync: async (id: string) => {
+      seen.deleted.push(id);
+    },
+  }),
 }));
 
 function renderSection(onExport = vi.fn()) {
@@ -220,6 +282,9 @@ function renderSection(onExport = vi.fn()) {
 describe('haul analysis section', () => {
   beforeEach(() => {
     seen.targets.length = 0;
+    seen.geofence.length = 0;
+    seen.created.length = 0;
+    seen.deleted.length = 0;
   });
 
   it('shows the service count, the wasted time and the lost services', () => {
@@ -261,6 +326,46 @@ describe('haul analysis section', () => {
 
     fireEvent.click(screen.getByTestId('export-analysis'));
     expect(onExport).toHaveBeenCalledWith(report);
+  });
+});
+
+describe('live over-limit alerts', () => {
+  beforeEach(() => {
+    seen.geofence.length = 0;
+    seen.created.length = 0;
+    seen.deleted.length = 0;
+  });
+
+  it('suggests the p75 limits and shows what is already on', () => {
+    renderSection();
+    expect((screen.getByTestId('alert-limit-load') as HTMLInputElement).value).toBe('10');
+    // The unloading alert is already on at 5 min, so that wins over the 5 min p75 suggestion.
+    expect((screen.getByTestId('alert-limit-unload') as HTMLInputElement).value).toBe('5');
+    expect(screen.getByTestId('alerts-status').textContent).toMatch(
+      /on, over 5 min; 1 of 1 trucks/,
+    );
+  });
+
+  it('applies the limits: geofence dwell first, then one rule per truck', async () => {
+    renderSection();
+    fireEvent.click(screen.getByTestId('alerts-apply'));
+    await waitFor(() => expect(screen.getByTestId('alerts-message').textContent).toMatch(/Done/));
+    expect(seen.geofence).toEqual([
+      { id: 'g-o', payload: { alertOn: ['ENTER', 'DWELL'], dwellSec: 600 } },
+    ]);
+    expect(seen.created).toHaveLength(1);
+    expect(seen.created[0]).toMatchObject({
+      type: 'geofence_dwell',
+      entityId: 'v1',
+      conditions: { geofenceId: 'g-o', dwellSec: 600 },
+    });
+    expect(seen.deleted).toEqual([]);
+  });
+
+  it('turns the alerts off by deleting only the rules it manages', async () => {
+    renderSection();
+    fireEvent.click(screen.getByTestId('alerts-off'));
+    await waitFor(() => expect(seen.deleted).toEqual(['old']));
   });
 });
 
