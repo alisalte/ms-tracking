@@ -18,7 +18,8 @@ import {
   useEnableAlarmRule,
   useUpdateAlarmRule,
 } from '@/api/rule.api';
-import { Button } from '@/components/tailwind-ui';
+import { Panel } from '@/components/operations/ops-ui';
+import { Alert, Badge, Button, Input } from '@/components/tailwind-ui';
 import {
   type HaulAlertKind,
   type HaulAlertLimits,
@@ -138,29 +139,28 @@ export function HaulLiveAlerts({
   const missing = !route || !origin || !destination;
 
   return (
-    <div className="rounded-lg border border-slate-200 p-3" data-testid="haul-live-alerts">
-      <h3 className="text-sm font-semibold">{a('title')}</h3>
-      <p className="mt-1 text-xs text-slate-500">{a('hint')}</p>
+    <Panel title={a('title')} hint={a('hint')} testId="haul-live-alerts">
       {missing && !routes.isLoading && !geofences.isLoading && (
-        <p className="mt-2 text-sm text-amber-800">{a('missingFence')}</p>
+        <Alert variant="warning" className="mb-3">
+          {a('missingFence')}
+        </Alert>
       )}
 
-      <div className="mt-3 flex flex-wrap items-end gap-4">
+      <div className="flex flex-wrap items-end gap-4">
         {KINDS.map((kind) => (
-          <label key={kind} className="text-xs font-medium">
-            {a(`limit.${kind}`)}
-            <input
-              type="number"
-              min={1}
-              max={1440}
-              inputMode="numeric"
-              placeholder={a('off')}
-              data-testid={`alert-limit-${kind}`}
-              className="mt-1 block w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-              value={value(kind)}
-              onChange={(event) => setEdited((prev) => ({ ...prev, [kind]: event.target.value }))}
-            />
-          </label>
+          <Input
+            key={kind}
+            label={a(`limit.${kind}`)}
+            type="number"
+            min={1}
+            max={1440}
+            inputMode="numeric"
+            placeholder={a('off')}
+            data-testid={`alert-limit-${kind}`}
+            wrapperClassName="w-60"
+            value={value(kind)}
+            onChange={(event) => setEdited((prev) => ({ ...prev, [kind]: event.target.value }))}
+          />
         ))}
         <Button
           size="sm"
@@ -181,23 +181,28 @@ export function HaulLiveAlerts({
         </Button>
       </div>
 
-      <ul className="mt-3 space-y-1 text-sm" data-testid="alerts-status">
+      <ul className="mt-4 flex flex-col gap-2 text-sm" data-testid="alerts-status">
         {KINDS.map((kind) => (
-          <li key={kind}>
-            {a(`limit.${kind}`)}:{' '}
-            {status[kind].active === 0
-              ? a('statusOff')
-              : a('statusOn', {
-                  minutes: Math.round((status[kind].limitSec ?? 0) / 60),
-                  active: status[kind].active,
-                  trucks: status[kind].trucks,
-                })}
+          <li key={kind} className="flex flex-wrap items-center gap-2">
+            <span className="text-gray-600 dark:text-graydark-700">{a(`limit.${kind}`)}:</span>
+            <Badge color={status[kind].active === 0 ? 'gray' : 'success'} dot>
+              {status[kind].active === 0
+                ? a('statusOff')
+                : a('statusOn', {
+                    minutes: Math.round((status[kind].limitSec ?? 0) / 60),
+                    active: status[kind].active,
+                    trucks: status[kind].trucks,
+                  })}
+            </Badge>
           </li>
         ))}
       </ul>
 
       {plan && plan.fences.length > 0 && (
-        <div className="mt-2 text-xs text-slate-600" data-testid="alerts-fence-changes">
+        <div
+          className="mt-3 text-xs text-gray-600 dark:text-graydark-700"
+          data-testid="alerts-fence-changes"
+        >
           <div className="font-medium">{a('fenceChanges')}</div>
           <ul className="mt-1 list-disc space-y-0.5 ps-5">
             {plan.fences.map((change) => (
@@ -209,22 +214,19 @@ export function HaulLiveAlerts({
                   to: Math.round(change.toDwellSec / 60),
                 })}
                 {change.inactive && (
-                  <span className="ms-1 text-amber-800">{a('fenceInactive')}</span>
+                  <span className="ms-1 text-warning-700">{a('fenceInactive')}</span>
                 )}
               </li>
             ))}
           </ul>
         </div>
       )}
-      <p className="mt-2 text-xs text-slate-500">{a('latency')}</p>
+      <p className="mt-3 text-xs text-gray-500 dark:text-graydark-600">{a('latency')}</p>
       {message && (
-        <p
-          className={`mt-2 text-sm ${message.ok ? 'text-emerald-700' : 'text-red-700'}`}
-          data-testid="alerts-message"
-        >
-          {message.text}
-        </p>
+        <Alert variant={message.ok ? 'success' : 'danger'} className="mt-3">
+          <span data-testid="alerts-message">{message.text}</span>
+        </Alert>
       )}
-    </div>
+    </Panel>
   );
 }

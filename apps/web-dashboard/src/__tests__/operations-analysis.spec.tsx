@@ -7,6 +7,11 @@ import { HaulAnalysisSection } from '@/components/operations/HaulAnalysisSection
 import { i18n } from '@/i18n';
 import { analysisSheets, minutesOf } from '@/lib/operations-export';
 
+// ApexCharts mounts a canvas — stub the wrapper (charts are covered by the reports tests).
+vi.mock('@/components/dashboard/ApexChart', () => ({
+  ApexChart: () => <div data-testid="apex-chart" />,
+}));
+
 const seen = vi.hoisted(() => ({
   targets: [] as unknown[],
   geofence: [] as Array<{ id: string; payload: unknown }>,
@@ -279,6 +284,10 @@ function renderSection(onExport = vi.fn()) {
   return onExport;
 }
 
+function openView(name: string) {
+  fireEvent.click(screen.getByRole('radio', { name }));
+}
+
 describe('haul analysis section', () => {
   beforeEach(() => {
     seen.targets.length = 0;
@@ -304,13 +313,16 @@ describe('haul analysis section', () => {
     expect(findings).toMatch(/9 min/);
     expect(findings).toMatch(/7 min/);
     expect(findings).toMatch(/2 of 12 services/);
-    expect(screen.getByTestId('analysis-drivers').querySelectorAll('tbody tr')).toHaveLength(1);
-    expect(screen.getByTestId('analysis-stops').querySelectorAll('tbody tr')).toHaveLength(1);
     expect(screen.getByTestId('analysis-open').textContent).toMatch(/slower than 75%/);
+    openView('Drivers');
+    expect(screen.getByTestId('analysis-drivers').querySelectorAll('tbody tr')).toHaveLength(1);
+    openView('Long stops');
+    expect(screen.getByTestId('analysis-stops').querySelectorAll('tbody tr')).toHaveLength(1);
   });
 
   it('turns the control limits into alert advice', () => {
     renderSection();
+    openView('Targets and alerts');
     const control = screen.getByTestId('analysis-control').textContent ?? '';
     expect(control).toMatch(/longer than 10 min/);
     expect(control).toMatch(/longer than 5 min/);
@@ -338,6 +350,7 @@ describe('live over-limit alerts', () => {
 
   it('suggests the p75 limits and shows what is already on', () => {
     renderSection();
+    openView('Targets and alerts');
     expect((screen.getByTestId('alert-limit-load') as HTMLInputElement).value).toBe('10');
     // The unloading alert is already on at 5 min, so that wins over the 5 min p75 suggestion.
     expect((screen.getByTestId('alert-limit-unload') as HTMLInputElement).value).toBe('5');
@@ -348,6 +361,7 @@ describe('live over-limit alerts', () => {
 
   it('applies the limits: geofence dwell first, then one rule per truck', async () => {
     renderSection();
+    openView('Targets and alerts');
     fireEvent.click(screen.getByTestId('alerts-apply'));
     await waitFor(() => expect(screen.getByTestId('alerts-message').textContent).toMatch(/Done/));
     expect(seen.geofence).toEqual([
@@ -364,6 +378,7 @@ describe('live over-limit alerts', () => {
 
   it('turns the alerts off by deleting only the rules it manages', async () => {
     renderSection();
+    openView('Targets and alerts');
     fireEvent.click(screen.getByTestId('alerts-off'));
     await waitFor(() => expect(seen.deleted).toEqual(['old']));
   });

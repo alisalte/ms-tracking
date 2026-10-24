@@ -3205,6 +3205,100 @@
         "done": "Done.",
         "failed": "Failed:"
       }
+    },
+    "ui": {
+      "tabs": {
+        "activity": "Device activity",
+        "services": "Haul services",
+        "periods": "Periods",
+        "analysis": "Waste analysis",
+        "routes": "Services setup"
+      },
+      "tabsLabel": "Operations sections",
+      "pickRouteTitle": "Choose a haul service",
+      "pickRouteDesc": "This tab reports on one haul service (origin → destination). Pick one above, or create it in Services setup.",
+      "goToRoutes": "Open services setup",
+      "noRoutesYet": "No service yet",
+      "chartEmpty": "No data to chart in this range.",
+      "unitKm": "km",
+      "unitH": "h",
+      "unitMin": "min",
+      "activity": {
+        "kpiDistance": "Total distance",
+        "kpiSending": "Sending data",
+        "kpiSilent": "Never sent data",
+        "kpiFixes": "Stored fixes",
+        "chartDistance": "Distance per machine",
+        "chartStatus": "Data status",
+        "chartFixes": "Fixes per machine",
+        "statusOffline": "Offline time per machine (h)",
+        "tableTitle": "Machines",
+        "total": "Devices"
+      },
+      "services": {
+        "kpiServices": "Services",
+        "kpiDistance": "Loaded distance",
+        "kpiHours": "Loaded haul time",
+        "kpiTrucks": "Trucks working",
+        "kpiOpen": "In progress",
+        "views": {
+          "shift": "Shifts",
+          "vehicle": "Machines",
+          "driver": "Drivers",
+          "shovel": "Shovels",
+          "list": "Each service"
+        },
+        "viewsLabel": "Service views",
+        "chartShift": "Services and loaded distance per shift",
+        "chartVehicle": "Services per machine",
+        "chartDriver": "Services per driver",
+        "chartShovel": "Loads per shovel",
+        "noShifts": "No shift in this range."
+      },
+      "periods": {
+        "kpiServices": "Services",
+        "kpiDistance": "Loaded distance",
+        "kpiHours": "Loaded haul time",
+        "kpiLoad": "Loading time",
+        "kpiBusiest": "Busiest period",
+        "chartTitle": "Services and distance per period",
+        "views": {
+          "summary": "Summary",
+          "details": "By machine and driver"
+        },
+        "viewsLabel": "Period views"
+      },
+      "analysis": {
+        "views": {
+          "overview": "Overview",
+          "drivers": "Drivers",
+          "vehicles": "Trucks",
+          "shifts": "Shifts and shovels",
+          "stops": "Long stops",
+          "alerts": "Targets and alerts"
+        },
+        "viewsLabel": "Analysis views",
+        "chartPhases": "Wasted time by phase (min)",
+        "chartBudget": "Where the trucks' time went",
+        "chartDrivers": "Average phase time per driver (min)",
+        "chartDriverWaste": "Waste per service (min)",
+        "chartVehicles": "Waste per truck (min)",
+        "chartShifts": "Waste per shift (min)",
+        "chartShovels": "Truck queue and shovel idle (min)",
+        "targetsToggle": "Reference times",
+        "kpiWastePerService": "Waste per service",
+        "kpiStopsShort": "Long stops"
+      },
+      "routes": {
+        "newTitle": "New service",
+        "newHint": "Name it and choose the origin and destination geofences. Shifts decide how the work day is split.",
+        "listTitle": "Services",
+        "pickHint": "Choose a service to edit its settings and machines.",
+        "empty": "No service has been created yet.",
+        "settingsTitle": "Settings",
+        "machinesTitle": "Machines and drivers",
+        "shiftsSummary": "{{count}} shifts · {{hours}} h from {{start}}"
+      }
     }
   },
   "navGroups": {
