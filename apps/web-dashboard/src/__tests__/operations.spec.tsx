@@ -8,6 +8,11 @@ import { OperationsPage } from '@/pages/OperationsPage';
 const rangeSeen = vi.hoisted(() => ({ activity: [] as unknown[], periods: [] as unknown[][] }));
 const downloads = vi.hoisted(() => ({ calls: [] as Array<{ blob: Blob; name: string }> }));
 
+// ApexCharts mounts a canvas — stub the wrapper (charts are covered by the reports tests).
+vi.mock('@/components/dashboard/ApexChart', () => ({
+  ApexChart: () => <div data-testid="apex-chart" />,
+}));
+
 vi.mock('@/lib/video-stream', () => ({
   downloadBlob: (blob: Blob, name: string) => downloads.calls.push({ blob, name }),
 }));
@@ -253,6 +258,21 @@ vi.mock('@/api/asset.api', () => ({
   }),
 }));
 
+function renderPage() {
+  render(
+    <I18nextProvider i18n={i18n}>
+      <OperationsPage />
+    </I18nextProvider>,
+  );
+}
+
+/** Pick the route in the toolbar, then open another tab (the choice is kept). */
+function openRouteTab(tab: 'services' | 'periods' | 'analysis' | 'routes') {
+  fireEvent.click(screen.getByTestId('ops-tab-services'));
+  fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
+  fireEvent.click(screen.getByTestId(`ops-tab-${tab}`));
+}
+
 describe('operations page', () => {
   beforeEach(() => {
     rangeSeen.activity.length = 0;
@@ -260,15 +280,24 @@ describe('operations page', () => {
     downloads.calls.length = 0;
   });
 
-  it('shows a silent device and the haul form', () => {
-    render(
-      <I18nextProvider i18n={i18n}>
-        <OperationsPage />
-      </I18nextProvider>,
-    );
+  it('opens on the device activity tab with charts and the silent device', () => {
+    renderPage();
     expect(screen.getByTestId('operations-page')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Device activity/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(screen.getByText('490154203237518')).toBeInTheDocument();
     expect(screen.getByTestId('activity-totals').textContent).toMatch(/12\.5/);
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThan(0);
+    // The reports of other tabs are not stacked underneath.
+    expect(screen.queryByTestId('haul-route-form')).toBeNull();
+    expect(screen.queryByTestId('haul-periods')).toBeNull();
+  });
+
+  it('keeps the haul setup form on its own tab', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('ops-tab-routes'));
     expect(screen.getByTestId('haul-route-form')).toBeInTheDocument();
     expect(screen.getAllByRole('option', { name: 'Pit' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('option', { name: 'Dump' }).length).toBeGreaterThan(0);
@@ -276,26 +305,28 @@ describe('operations page', () => {
     expect(screen.getByTestId('shift-plan').textContent).toMatch(/06:00–18:00.*18:00–06:00/);
   });
 
-  it('shows a driver per shift for each truck and a per-shift summary', () => {
-    render(
-      <I18nextProvider i18n={i18n}>
-        <OperationsPage />
-      </I18nextProvider>,
-    );
+  it('asks for a route on the route tabs until one is chosen', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('ops-tab-services'));
+    expect(screen.getByText('Choose a haul service')).toBeInTheDocument();
+    expect(screen.queryByTestId('haul-results')).toBeNull();
     fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
+    expect(screen.getByTestId('haul-results')).toBeInTheDocument();
+  });
+
+  it('shows a driver per shift for each truck and a per-shift summary', () => {
+    renderPage();
+    openRouteTab('services');
+    expect(screen.getByTestId('haul-by-shift').querySelectorAll('tbody tr')).toHaveLength(2);
+    fireEvent.click(screen.getByTestId('ops-tab-routes'));
     expect(screen.getByTestId('haul-route-settings')).toBeInTheDocument();
     expect((screen.getByTestId('roster-dev-1-1') as HTMLSelectElement).value).toBe('drv-1');
     expect((screen.getByTestId('roster-dev-1-2') as HTMLSelectElement).value).toBe('drv-2');
-    expect(screen.getByTestId('haul-by-shift').querySelectorAll('tbody tr')).toHaveLength(2);
   });
 
   it('takes the machine type from the vehicle instead of asking for it on the route', () => {
-    render(
-      <I18nextProvider i18n={i18n}>
-        <OperationsPage />
-      </I18nextProvider>,
-    );
-    fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
+    renderPage();
+    openRouteTab('routes');
     // dev-1 sits on a truck: a plain checkbox, no role dropdown.
     const typed = screen.getByTestId('member-dev-1') as HTMLInputElement;
     expect(typed.type).toBe('checkbox');
@@ -309,11 +340,7 @@ describe('operations page', () => {
   });
 
   it('lets the range be custom and exports the activity to Excel', () => {
-    render(
-      <I18nextProvider i18n={i18n}>
-        <OperationsPage />
-      </I18nextProvider>,
-    );
+    renderPage();
     expect(rangeSeen.activity.at(-1)).toEqual({ preset: 'today' });
     fireEvent.click(screen.getByTestId('report-range-custom'));
     const last = rangeSeen.activity.at(-1) as { from?: string; to?: string; preset?: string };
@@ -328,15 +355,13 @@ describe('operations page', () => {
   });
 
   it('shows the daily, weekly and monthly period report and exports it', () => {
-    render(
-      <I18nextProvider i18n={i18n}>
-        <OperationsPage />
-      </I18nextProvider>,
-    );
-    fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
+    renderPage();
+    openRouteTab('periods');
     const table = screen.getByTestId('haul-period-table');
     // A quiet day is listed as zero rather than dropped.
     expect(table.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('radio', { name: 'By machine and driver' }));
     expect(screen.getByTestId('haul-period-details').querySelectorAll('tbody tr')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Weekly' }));
