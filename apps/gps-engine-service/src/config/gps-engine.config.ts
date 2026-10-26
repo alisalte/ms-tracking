@@ -118,6 +118,50 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     /** A position more than this many seconds in the future is REJECTED (07 §3.3). */
     GPS_FUTURE_THRESHOLD_SECONDS: z.coerce.number().int().min(1).default(60),
 
+    // --- GPS fix plausibility filter (domain/gps-fix-filter.ts) ---
+    /** Flag low-quality / implausible fixes and zero their speed. */
+    GPS_FILTER_ENABLED: z
+      .enum(['true', 'false', '1', '0'])
+      .default('true')
+      .transform((v) => v === 'true' || v === '1'),
+    /** Fixes with fewer satellites are LOW_ACCURACY. Default 5. */
+    GPS_FILTER_MIN_SATELLITES: z.coerce.number().int().min(0).default(5),
+    /** Fixes with a larger HDOP are LOW_ACCURACY. Default 5. */
+    GPS_FILTER_MAX_HDOP: z.coerce.number().min(0).default(5),
+    /** Speed cap for machines without a type-specific cap (km/h). Default 200. */
+    GPS_FILTER_MAX_SPEED_KMH: z.coerce.number().min(1).default(200),
+    /**
+     * Per-machine-type speed caps (km/h) as JSON, keyed by fleet.vehicles
+     * machine_type. Default `{"SHOVEL":15}` (tracked excavators crawl).
+     */
+    GPS_FILTER_MACHINE_MAX_SPEED_KMH: z
+      .string()
+      .default('{"SHOVEL":15}')
+      .transform((raw, ctx) => {
+        try {
+          const parsed = JSON.parse(raw) as unknown;
+          const caps = z.record(z.number().positive()).parse(parsed);
+          return caps as Readonly<Record<string, number>>;
+        } catch {
+          ctx.addIssue({ code: 'custom', message: 'must be a JSON object of positive numbers' });
+          return z.NEVER;
+        }
+      }),
+    /** Reported-vs-travelled mismatch check applies above this speed (km/h). Default 20. */
+    GPS_FILTER_MISMATCH_MIN_SPEED_KMH: z.coerce.number().min(0).default(20),
+    /** Reported speed is a spike when > travelled speed × factor + slack. Default 3. */
+    GPS_FILTER_MISMATCH_FACTOR: z.coerce.number().min(1).default(3),
+    /** Slack for the mismatch check (km/h). Default 10. */
+    GPS_FILTER_MISMATCH_SLACK_KMH: z.coerce.number().min(0).default(10),
+    /**
+     * Distance-based checks only compare against a previous fix this recent (s).
+     * Default 10 — over longer gaps a turning truck's straight-line distance
+     * understates its speed.
+     */
+    GPS_FILTER_MAX_GAP_S: z.coerce.number().int().min(1).default(10),
+    /** Steps shorter than this are never position jumps (meters). Default 50. */
+    GPS_FILTER_JUMP_MIN_DISTANCE_M: z.coerce.number().min(0).default(50),
+
     // --- Trip FSM thresholds (07 §5.2; GPSEngine.md Appendix B) ---
     /** Speed above which movement is "real" (km/h). Default 10. */
     GPS_TRIP_START_SPEED_KMH: z.coerce.number().min(0).default(10),

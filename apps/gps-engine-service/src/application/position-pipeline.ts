@@ -3,12 +3,17 @@ import type { TelemetryMetrics } from '@fleetvision/observability';
  * Position pipeline — the staged processor for each inbound position
  * (07 §2, §3, §9.2).
  *
- *   validate → dedupe → persist → trip-engine → cache → broadcast
+ *   validate → dedupe → gps-filter → persist → trip-engine → cache → broadcast
  *
  *   1. VALIDATE     — range + timestamp gates → quality code (07 §3.3). REJECTED
  *                     positions are dropped.
  *   2. DEDUPE       — skip if (vehicleId, messageId) already seen/persisted
  *                     (07 §3.5; idempotency contract 06 §8.4).
+ *   2.5 GPS FILTER  — flag drift (few satellites, high HDOP, speed above the
+ *                     machine-type cap or far above the distance travelled):
+ *                     speed zeroed, quality LOW_ACCURACY / SUSPECT_JUMP.
+ *                     SUSPECT_JUMP fixes are persisted but, like STALE, not
+ *                     cached or broadcast.
  *   3. PERSIST      — append to TimescaleDB (idempotent on conflict).
  *   4. TRIP ENGINE  — run the trip/idle/parking FSMs + mileage + engine-hours
  *                     (Sprint 8, 07 §5). Runs BEFORE the cache/broadcast gates
@@ -42,6 +47,7 @@ import type { RedisPositionCache } from '../infrastructure/cache/redis-position-
 import type { DeviceStatusRepository } from '../infrastructure/persistence/device-status.repository.js';
 import type { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import type { GeofenceEvaluator } from './geofence-evaluator.js';
+import type { GpsFixFilter } from './gps-fix-filter.js';
 import type { SignalBus } from './signal-bus.js';
 import type { TripEngine } from './trip-engine.js';
 
@@ -60,6 +66,8 @@ export interface PositionPipelineDeps {
   readonly geofenceEvaluator?: GeofenceEvaluator | null;
   /** Keeps the last CAN reading across CCE records that carry none (optional in tests). */
   readonly lastCan?: LastCanMemory | null;
+  /** GPS fix plausibility filter (optional in tests; null = disabled). */
+  readonly gpsFilter?: GpsFixFilter | null;
 }
 
 export class PositionPipeline {
@@ -102,7 +110,15 @@ export class PositionPipeline {
       return;
     }
 
-    // 2.5 CAN memory — remember CAN from this record, or carry the last reading
+    // 2.5 GPS filter — must run before the trip engine overwrites prev-pos.
+    if (this.deps.gpsFilter) {
+      validated = await this.deps.gpsFilter.apply(validated);
+      if (validated.quality === 'LOW_ACCURACY' || validated.quality === 'SUSPECT_JUMP') {
+        this.metrics?.positions.inc({ result: validated.quality.toLowerCase() });
+      }
+    }
+
+    // 2.6 CAN memory — remember CAN from this record, or carry the last reading
     //     onto a record that has none (best-effort, never throws).
     if (this.deps.lastCan) validated = await this.deps.lastCan.apply(validated);
 
@@ -139,13 +155,18 @@ export class PositionPipeline {
     //    positions: an older packet must not regress the latest-position view
     //    (Sprint D §21), and a stale GPS clock must not become last-known.
     //    (`outcome?.` — a void-returning engine degrades to in-order.)
-    if (validated.quality !== 'STALE' && outcome?.skipped !== 'OUT_OF_ORDER') {
+    //    SUSPECT_JUMP fixes are drift — the latest-position view skips them too.
+    const live =
+      validated.quality !== 'STALE' &&
+      validated.quality !== 'SUSPECT_JUMP' &&
+      outcome?.skipped !== 'OUT_OF_ORDER';
+    if (live) {
       await this.deps.cache.setLatest(validated);
     }
 
-    // 6. Broadcast — NOT for STALE positions (07 §3.4) nor OUT-OF-ORDER ones
-    //    (Sprint D §21 — an old packet must not hit the live map).
-    if (validated.quality !== 'STALE' && outcome?.skipped !== 'OUT_OF_ORDER') {
+    // 6. Broadcast — NOT for STALE positions (07 §3.4), SUSPECT_JUMP drift, nor
+    //    OUT-OF-ORDER ones (Sprint D §21 — an old packet must not hit the live map).
+    if (live) {
       this.deps.signalBus.emitPosition(validated);
     }
   }

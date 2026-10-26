@@ -124,22 +124,26 @@ export class TripEngine {
         return { skipped: 'OUT_OF_ORDER' };
       }
 
-      // Mileage: filtered haversine step.
-      const distanceStepM = prevPos
-        ? filteredDistanceStep(
-            prevPos.latitude,
-            prevPos.longitude,
-            position.latitude,
-            position.longitude,
-            prevPos.capturedAt,
-            position.capturedAt,
-            prevPos.speedKph,
-            {
-              dedupeDistanceM: thresholds.dedupeDistanceM,
-              maxPlausibleSpeedKmh: thresholds.maxPlausibleSpeedKmh,
-            },
-          )
-        : 0;
+      // Mileage: filtered haversine step. A fix the GPS filter flagged is drift,
+      // so it adds no distance (and, with its speed zeroed, the step out of it is
+      // stop-zeroed too).
+      const flagged = position.quality === 'LOW_ACCURACY' || position.quality === 'SUSPECT_JUMP';
+      const distanceStepM =
+        prevPos && !flagged
+          ? filteredDistanceStep(
+              prevPos.latitude,
+              prevPos.longitude,
+              position.latitude,
+              position.longitude,
+              prevPos.capturedAt,
+              position.capturedAt,
+              prevPos.speedKph,
+              {
+                dedupeDistanceM: thresholds.dedupeDistanceM,
+                maxPlausibleSpeedKmh: thresholds.maxPlausibleSpeedKmh,
+              },
+            )
+          : 0;
       const newOdometerM = odometerM + distanceStepM;
 
       // Advance the FSMs.
