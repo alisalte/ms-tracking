@@ -23,6 +23,7 @@ import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DeviceStatusPipeline } from '../application/device-status-pipeline.js';
 import { GeofenceEvaluator } from '../application/geofence-evaluator.js';
+import { GpsFixFilter, gpsFilterOptions } from '../application/gps-fix-filter.js';
 import { PositionPipeline } from '../application/position-pipeline.js';
 import { SignalBus } from '../application/signal-bus.js';
 import { TripEngine } from '../application/trip-engine.js';
@@ -40,6 +41,7 @@ import { GeofenceStateRepository } from '../infrastructure/persistence/geofence-
 import { PositionAnalyticsRepository } from '../infrastructure/persistence/position-analytics.repository.js';
 import { PositionRepository } from '../infrastructure/persistence/position.repository.js';
 import { TripRepository } from '../infrastructure/persistence/trip.repository.js';
+import { VehicleProfileRepository } from '../infrastructure/persistence/vehicle-profile.repository.js';
 import { DeviceStaleSweeper } from '../infrastructure/scheduling/device-stale-sweeper.js';
 import { RealtimeGateway } from '../infrastructure/websocket/realtime.gateway.js';
 import { AdminController } from './admin.controller.js';
@@ -56,6 +58,7 @@ import {
   GEOFENCE_EVALUATOR,
   GEOFENCE_STATE_REPOSITORY,
   GPS_ENGINE_CONFIG,
+  GPS_FIX_FILTER,
   KAFKA_CONSUMER,
   LAST_CAN_MEMORY,
   POSITION_ANALYTICS_REPOSITORY,
@@ -197,6 +200,20 @@ export class GpsEngineModule {
               metrics,
             }),
         },
+        // GPS fix plausibility filter (null when disabled).
+        {
+          provide: GPS_FIX_FILTER,
+          inject: [GPS_ENGINE_CONFIG, KNEX_TOKEN, POSITION_CACHE],
+          useFactory: (cfg: GpsEngineConfig, knex: unknown, cache: RedisPositionCache) => {
+            if (!cfg.GPS_FILTER_ENABLED) return null;
+            const profiles = new VehicleProfileRepository(knex as never);
+            return new GpsFixFilter({
+              options: gpsFilterOptions(cfg),
+              prevFix: (tenantId, vehicleId) => cache.getPrevPos(tenantId, vehicleId),
+              machineType: (tenantId, vehicleId) => profiles.machineType(tenantId, vehicleId),
+            });
+          },
+        },
         // Pipelines (Sprint D: device-status repo + metrics wired in).
         {
           provide: POSITION_PIPELINE,
@@ -210,6 +227,7 @@ export class GpsEngineModule {
             METRICS_TOKEN,
             GEOFENCE_EVALUATOR,
             LAST_CAN_MEMORY,
+            GPS_FIX_FILTER,
           ],
           useFactory: (
             cfg: GpsEngineConfig,
@@ -221,6 +239,7 @@ export class GpsEngineModule {
             metrics: TelemetryMetrics,
             geofenceEvaluator: GeofenceEvaluator,
             lastCan: LastCanMemory,
+            gpsFilter: GpsFixFilter | null,
           ) =>
             new PositionPipeline({
               config: cfg,
@@ -232,6 +251,7 @@ export class GpsEngineModule {
               metrics,
               geofenceEvaluator,
               lastCan,
+              gpsFilter,
             }),
         },
         {
