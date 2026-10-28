@@ -292,7 +292,6 @@
       "openMap": "Open map",
       "vehicleList": "Vehicles",
       "usageTrend": "Fleet usage trend",
-      "maintenanceStatus": "Maintenance & service",
       "upcomingPm": "Upcoming PM items",
       "totalRequests": "Work orders",
       "insights": "More insights",
@@ -332,7 +331,6 @@
       "attention": "Nothing needs attention right now.",
       "performance": "No trip data yet.",
       "activity": "No vehicles to chart yet.",
-      "maintenance": "Maintenance work orders are not connected yet.",
       "upcomingPm": "No preventive-maintenance schedule is available yet.",
       "vehicleList": "No vehicles reporting a location."
     },
@@ -359,13 +357,6 @@
       "fleetScore": "Fleet health score",
       "fleetScoreHint": "Rule-based: 60% device presence + 40% open-alarm headroom (higher is healthier).",
       "attentionVehicles": "{{count}} vehicles need attention (≤70)"
-    },
-    "maintenance": {
-      "inProgress": "In progress",
-      "completed": "Completed",
-      "pending": "Pending",
-      "openPortal": "Open maintenance",
-      "waitingBackend": "Waiting for vehicle-maintenance-service"
     },
     "severities": {
       "critical": "Critical",

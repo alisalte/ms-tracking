@@ -292,7 +292,6 @@
       "openMap": "باز کردن نقشه",
       "vehicleList": "خودروها",
       "usageTrend": "روند استفاده از ناوگان",
-      "maintenanceStatus": "وضعیت تعمیر و نگهداری",
       "upcomingPm": "موارد نگهداری پیشگیرانه",
       "totalRequests": "دستور کارها",
       "insights": "تحلیل‌های بیشتر",
@@ -332,7 +331,6 @@
       "attention": "در حال حاضر چیزی نیازمند توجه نیست.",
       "performance": "هنوز داده‌ی سفری موجود نیست.",
       "activity": "هنوز خودرویی برای نمودار وجود ندارد.",
-      "maintenance": "دستورکارهای تعمیرات هنوز متصل نشده‌اند.",
       "upcomingPm": "برنامه نگهداری پیشگیرانه هنوز در دسترس نیست.",
       "vehicleList": "هیچ خودرویی موقعیت ارسال نمی‌کند."
     },
@@ -359,13 +357,6 @@
       "fleetScore": "امتیاز سلامت ناوگان",
       "fleetScoreHint": "قاعده‌محور: ۶۰٪ حضور دستگاه + ۴۰٪ فضای آلارم باز (بالاتر = سالم‌تر).",
       "attentionVehicles": "{{count}} خودرو نیاز به توجه دارند (≤۷۰)"
-    },
-    "maintenance": {
-      "inProgress": "در حال انجام",
-      "completed": "تکمیل‌شده",
-      "pending": "در انتظار",
-      "openPortal": "باز کردن تعمیرات",
-      "waitingBackend": "در انتظار سرویس vehicle-maintenance-service"
     },
     "severities": {
       "critical": "بحرانی",
