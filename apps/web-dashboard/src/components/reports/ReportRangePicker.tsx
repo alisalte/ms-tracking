@@ -34,6 +34,16 @@ function parseCustom(fromValue: string, toValue: string): { from: Date; to: Date
   return from < to ? { from, to } : null;
 }
 
+/**
+ * Picking another day starts it at `time` (00:00 for the start, 23:59 for the
+ * end), so one day alone is a valid range. A pick on the same day is a time
+ * change and is kept.
+ */
+function onNewDay(next: string, previous: string, time: string): string {
+  if (!next || next.slice(0, 10) === previous.slice(0, 10)) return next;
+  return `${next.slice(0, 10)}T${time}`;
+}
+
 export function ReportRangePicker({
   range,
   onChange,
@@ -110,8 +120,9 @@ export function ReportRangePicker({
             type="datetime-local"
             value={fromInput}
             onChange={(e) => {
-              setFromInput(e.target.value);
-              commit(e.target.value, toInput);
+              const next = onNewDay(e.target.value, fromInput, '00:00');
+              setFromInput(next);
+              commit(next, toInput);
             }}
             aria-label={t('reports.range.from')}
             wrapperClassName="w-auto"
@@ -123,8 +134,9 @@ export function ReportRangePicker({
             type="datetime-local"
             value={toInput}
             onChange={(e) => {
-              setToInput(e.target.value);
-              commit(fromInput, e.target.value);
+              const next = onNewDay(e.target.value, toInput, '23:59');
+              setToInput(next);
+              commit(fromInput, next);
             }}
             aria-label={t('reports.range.to')}
             wrapperClassName="w-auto"
