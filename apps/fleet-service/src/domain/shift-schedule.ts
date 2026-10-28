@@ -5,7 +5,9 @@
  */
 
 export interface ShiftSchedule {
+  /** Fractional hours are allowed: 6.5 starts at 06:30. */
   readonly startHour: number;
+  /** Fractional hours are allowed: 8.25 is 8 h 15 min. */
   readonly durationHours: number;
   readonly shiftCount: number;
   readonly timeZone: string;
@@ -13,17 +15,18 @@ export interface ShiftSchedule {
 
 /** 1-based shift number at `at`, or null when the instant is after the last shift. */
 export function shiftNoAt(at: Date, schedule: ShiftSchedule): number | null {
-  const start = Math.min(23, Math.max(0, Math.floor(schedule.startHour)));
-  const duration = Math.min(24, Math.max(1, Math.floor(schedule.durationHours)));
-  const count = Math.min(Math.floor(24 / duration), Math.max(1, Math.floor(schedule.shiftCount)));
-  const hour = Number(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: schedule.timeZone,
-      hourCycle: 'h23',
-      hour: '2-digit',
-    }).format(at),
-  );
-  const no = Math.floor(((hour - start + 24) % 24) / duration) + 1;
+  const start = Math.min(1439, Math.max(0, Math.round(schedule.startHour * 60)));
+  const duration = Math.min(1440, Math.max(1, Math.round(schedule.durationHours * 60)));
+  const count = Math.min(Math.floor(1440 / duration), Math.max(1, Math.floor(schedule.shiftCount)));
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: schedule.timeZone,
+    hourCycle: 'h23',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(at);
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+  const minuteOfDay = (part('hour') % 24) * 60 + part('minute');
+  const no = Math.floor(((minuteOfDay - start + 1440) % 1440) / duration) + 1;
   return no > count ? null : no;
 }
 

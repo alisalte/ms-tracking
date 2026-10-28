@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  type PeriodRowWire,
   type ReportRange,
   useFleetOverview,
   useIdleParking,
@@ -16,8 +17,8 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
-import { formatDateTime } from '@/lib/format-date';
 import { formatDurationSec, hours1, shortLabel } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
 
@@ -93,16 +94,10 @@ export function StopsSection({ range }: { range: ReportRange }) {
   const columns: Column<NonNullable<typeof periods.data>['items'][number]>[] = [
     { id: 'kind', headerKey: 'reports.cols.kind', render: (r) => r.kind },
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    {
-      id: 'start',
-      headerKey: 'reports.cols.start',
-      render: (r) => formatDateTime(r.startedAt),
-    },
-    {
-      id: 'end',
-      headerKey: 'reports.cols.end',
-      render: (r) => (r.endedAt ? formatDateTime(r.endedAt) : '—'),
-    },
+    ...startEndColumns<PeriodRowWire>(
+      (r) => r.startedAt,
+      (r) => r.endedAt,
+    ),
     {
       id: 'duration',
       headerKey: 'reports.cols.duration',

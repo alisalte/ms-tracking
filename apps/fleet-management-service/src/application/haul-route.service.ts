@@ -20,7 +20,11 @@ export interface HaulRouteRecord {
   readonly originGeofenceId: string;
   readonly destinationGeofenceId: string;
   readonly shiftStartHour: number;
+  /** Minute past `shiftStartHour` that shift 1 starts at (0-59). */
+  readonly shiftStartMinute: number;
   readonly shiftDurationHours: number;
+  /** Minutes added to `shiftDurationHours` (0-59). */
+  readonly shiftDurationMinutes: number;
   readonly shiftCount: number;
   readonly status: 'ACTIVE' | 'ARCHIVED';
   readonly version: number;
@@ -42,7 +46,9 @@ export interface CreateHaulRouteInput {
   readonly originGeofenceId: string;
   readonly destinationGeofenceId: string;
   readonly shiftStartHour?: number;
+  readonly shiftStartMinute?: number;
   readonly shiftDurationHours?: number;
+  readonly shiftDurationMinutes?: number;
   readonly shiftCount?: number;
 }
 
@@ -51,7 +57,9 @@ export interface UpdateHaulRouteInput {
   readonly originGeofenceId?: string;
   readonly destinationGeofenceId?: string;
   readonly shiftStartHour?: number;
+  readonly shiftStartMinute?: number;
   readonly shiftDurationHours?: number;
+  readonly shiftDurationMinutes?: number;
   readonly shiftCount?: number;
 }
 
@@ -69,7 +77,9 @@ interface RouteRow {
   origin_geofence_id: string;
   destination_geofence_id: string;
   shift_start_hour: number;
+  shift_start_minute: number | null;
   shift_duration_hours: number;
+  shift_duration_minutes: number | null;
   shift_count: number;
   status: 'ACTIVE' | 'ARCHIVED';
   version: number;
@@ -92,6 +102,8 @@ export class HaulRouteService {
       input.shiftStartHour ?? 6,
       input.shiftDurationHours ?? 12,
       input.shiftCount ?? 2,
+      input.shiftStartMinute ?? 0,
+      input.shiftDurationMinutes ?? 0,
     );
     return withTenantContext(this.knex, ctx.tenantId, async (trx) => {
       const [row] = await trx
@@ -103,7 +115,9 @@ export class HaulRouteService {
           origin_geofence_id: input.originGeofenceId,
           destination_geofence_id: input.destinationGeofenceId,
           shift_start_hour: shifts.startHour,
+          shift_start_minute: shifts.startMinute,
           shift_duration_hours: shifts.durationHours,
+          shift_duration_minutes: shifts.durationMinutes,
           shift_count: shifts.count,
         })
         .returning('*');
@@ -129,6 +143,8 @@ export class HaulRouteService {
       input.shiftStartHour ?? before.shiftStartHour,
       input.shiftDurationHours ?? before.shiftDurationHours,
       input.shiftCount ?? before.shiftCount,
+      input.shiftStartMinute ?? before.shiftStartMinute,
+      input.shiftDurationMinutes ?? before.shiftDurationMinutes,
     );
     return withTenantContext(this.knex, ctx.tenantId, async (trx) => {
       const [row] = await trx
@@ -141,7 +157,9 @@ export class HaulRouteService {
           origin_geofence_id: origin,
           destination_geofence_id: destination,
           shift_start_hour: shifts.startHour,
+          shift_start_minute: shifts.startMinute,
           shift_duration_hours: shifts.durationHours,
+          shift_duration_minutes: shifts.durationMinutes,
           shift_count: shifts.count,
           version: trx.raw('version + 1'),
           updated_at: trx.fn.now(),
@@ -343,20 +361,38 @@ export function checkShifts(
   startHour: number,
   durationHours: number,
   count: number,
-): { startHour: number; durationHours: number; count: number } {
+  startMinute = 0,
+  durationMinutes = 0,
+): {
+  startHour: number;
+  startMinute: number;
+  durationHours: number;
+  durationMinutes: number;
+  count: number;
+} {
   if (!Number.isInteger(startHour) || startHour < 0 || startHour > 23) {
     throw new BadRequestException('Shift start hour must be between 0 and 23.');
   }
-  if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 24) {
-    throw new BadRequestException('Shift length must be between 1 and 24 hours.');
+  if (!Number.isInteger(startMinute) || startMinute < 0 || startMinute > 59) {
+    throw new BadRequestException('Shift start minute must be between 0 and 59.');
+  }
+  if (!Number.isInteger(durationHours) || durationHours < 0 || durationHours > 24) {
+    throw new BadRequestException('Shift length must be between 1 minute and 24 hours.');
+  }
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 0 || durationMinutes > 59) {
+    throw new BadRequestException('Shift length minutes must be between 0 and 59.');
+  }
+  const lengthMinutes = durationHours * 60 + durationMinutes;
+  if (lengthMinutes < 1 || lengthMinutes > 24 * 60) {
+    throw new BadRequestException('Shift length must be between 1 minute and 24 hours.');
   }
   if (!Number.isInteger(count) || count < 1 || count > 4) {
     throw new BadRequestException('A work day has between 1 and 4 shifts.');
   }
-  if (count * durationHours > 24) {
+  if (count * lengthMinutes > 24 * 60) {
     throw new BadRequestException('All shifts together cannot exceed 24 hours.');
   }
-  return { startHour, durationHours, count };
+  return { startHour, startMinute, durationHours, durationMinutes, count };
 }
 
 /** Trim to the route's shift count; drop trailing empty shifts. */
@@ -377,7 +413,9 @@ function toRoute(row: RouteRow): HaulRouteRecord {
     originGeofenceId: row.origin_geofence_id,
     destinationGeofenceId: row.destination_geofence_id,
     shiftStartHour: row.shift_start_hour,
+    shiftStartMinute: row.shift_start_minute ?? 0,
     shiftDurationHours: row.shift_duration_hours,
+    shiftDurationMinutes: row.shift_duration_minutes ?? 0,
     shiftCount: row.shift_count ?? 1,
     status: row.status,
     version: row.version,

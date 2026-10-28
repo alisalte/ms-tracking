@@ -15,6 +15,7 @@ import type {
   PeriodCalendar,
   PeriodGranularity,
 } from '@/api/operations.api';
+import { formatClock, formatDateNumeric } from '@/lib/format-date';
 import { type SheetCell, type SheetSpec, xlsxWorkbookBlob } from '@/lib/spreadsheet';
 import { downloadBlob } from '@/lib/video-stream';
 
@@ -34,6 +35,14 @@ function dateTime(value: string | null, lang: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-GB');
+}
+
+function datePart(value: string | null, lang: string): string {
+  return value ? formatDateNumeric(value, lang) : '';
+}
+
+function timePart(value: string | null, lang: string): string {
+  return value ? formatClock(value, lang) : '';
 }
 
 /** A work-day date (`YYYY-MM-DD`) in the UI language's calendar. */
@@ -85,7 +94,10 @@ export function activitySheets(
         [
           t('operations.colImei'),
           t('operations.colVehicle'),
-          t('operations.colStarted'),
+          t('reports.cols.startDate'),
+          t('reports.cols.startTime'),
+          t('reports.cols.lastFixDate'),
+          t('reports.cols.lastFixTime'),
           t('operations.colFixes'),
           t('operations.colOffline'),
           t('operations.colDistance'),
@@ -94,7 +106,10 @@ export function activitySheets(
         ...report.devices.map((row): SheetCell[] => [
           row.imei,
           row.vehicleName ?? t('operations.unbound'),
-          dateTime(row.startedAt, lang),
+          datePart(row.startedAt, lang),
+          timePart(row.startedAt, lang),
+          datePart(row.lastFixAt, lang),
+          timePart(row.lastFixAt, lang),
           row.fixes,
           hoursOf(row.offlineSec),
           row.distanceKm,
@@ -197,7 +212,10 @@ export function haulSheets(report: HaulCycleReport, t: TFunction, lang: string):
       rtl,
       rows: [
         [
-          t('operations.colTime'),
+          t('reports.cols.startDate'),
+          t('reports.cols.startTime'),
+          t('reports.cols.endDate'),
+          t('reports.cols.endTime'),
           t('operations.colVehicle'),
           t('operations.colDriver'),
           t('operations.colShovel'),
@@ -207,7 +225,10 @@ export function haulSheets(report: HaulCycleReport, t: TFunction, lang: string):
           t('operations.colDistance'),
         ],
         ...report.cycles.map((row): SheetCell[] => [
-          dateTime(row.originEnteredAt, lang),
+          datePart(row.originEnteredAt, lang),
+          timePart(row.originEnteredAt, lang),
+          datePart(row.destinationEnteredAt, lang),
+          timePart(row.destinationEnteredAt, lang),
           row.vehicleName,
           row.driverName ?? '',
           row.shovelLabel ?? '',
@@ -480,7 +501,10 @@ export function analysisSheets(
         [
           t('operations.colVehicle'),
           t('operations.colDriver'),
-          a('colStart'),
+          t('reports.cols.startDate'),
+          t('reports.cols.startTime'),
+          t('reports.cols.endDate'),
+          t('reports.cols.endTime'),
           a('colDuration'),
           a('colEngine'),
           a('colLeg'),
@@ -490,7 +514,10 @@ export function analysisSheets(
         ...report.stops.map((row): SheetCell[] => [
           row.vehicleName,
           row.driverName ?? '',
-          dateTime(row.startedAt, lang),
+          datePart(row.startedAt, lang),
+          timePart(row.startedAt, lang),
+          datePart(row.endedAt, lang),
+          timePart(row.endedAt, lang),
           minutesOf(row.durationSec),
           row.engineOn ? a('engineOn') : a('engineOff'),
           row.phase === 'LOADED' ? a('legLoaded') : a('legEmpty'),
@@ -508,7 +535,10 @@ export function analysisSheets(
           t('operations.colDriver'),
           t('operations.colShovel'),
           t('operations.colShift'),
-          a('colStart'),
+          t('reports.cols.startDate'),
+          t('reports.cols.startTime'),
+          t('reports.cols.endDate'),
+          t('reports.cols.endTime'),
           a('colAvgLoad'),
           a('colAvgTravel'),
           a('colAvgUnload'),
@@ -521,7 +551,10 @@ export function analysisSheets(
           row.driverName ?? '',
           row.shovelLabel ?? '',
           shiftText(row, t, lang),
-          dateTime(row.originEnteredAt, lang),
+          datePart(row.originEnteredAt, lang),
+          timePart(row.originEnteredAt, lang),
+          datePart(row.destinationLeftAt ?? row.destinationEnteredAt, lang),
+          timePart(row.destinationLeftAt ?? row.destinationEnteredAt, lang),
           minutesOf(row.loadSec),
           minutesOf(row.travelSec),
           minutesOf(row.unloadSec),

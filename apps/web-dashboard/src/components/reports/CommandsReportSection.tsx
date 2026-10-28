@@ -13,9 +13,9 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { dateTimeColumns } from '@/components/reports/dateTimeColumns';
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
 import { commandReply } from '@/lib/device-error';
-import { formatDateTime } from '@/lib/format-date';
 import { isInReportRange } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
 import type { CommandStatus, DeviceCommandRecord } from '@/types/command.types';
@@ -92,11 +92,11 @@ export function CommandsReportSection({ range }: { range: ReportRange }) {
   );
 
   const columns: Column<DeviceCommandRecord>[] = [
-    {
-      id: 'issued',
-      headerKey: 'reports.cols.start',
-      render: (r) => formatDateTime(r.issuedAt),
-    },
+    ...dateTimeColumns(
+      'issued',
+      { date: 'reports.cols.issuedDate', time: 'reports.cols.issuedTime' },
+      (r: DeviceCommandRecord) => r.issuedAt,
+    ),
     {
       id: 'device',
       headerKey: 'reports.cols.device',

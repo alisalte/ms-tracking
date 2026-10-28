@@ -97,3 +97,26 @@ export function calendarDayKey(
     parts.find((p) => p.type === type)?.value ?? '';
   return `${pick('year')}-${pick('month')}-${pick('day')}`;
 }
+
+/**
+ * Numeric calendar date for report columns (۱۴۰۵/۰۶/۱۵ in Persian, 15/06/2026
+ * otherwise). The time lives in its own column, see `formatClock`.
+ */
+export function formatDateNumeric(
+  value: Date | string | number | null | undefined,
+  lang?: string,
+): string {
+  return formatWith(value, { year: 'numeric', month: '2-digit', day: '2-digit' }, lang);
+}
+
+/** 24-hour clock with seconds for report columns (۱۴:۰۵:۳۰). */
+export function formatClock(
+  value: Date | string | number | null | undefined,
+  lang?: string,
+): string {
+  return formatWith(
+    value,
+    { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' },
+    lang,
+  );
+}

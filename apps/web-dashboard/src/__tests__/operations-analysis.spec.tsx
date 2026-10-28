@@ -393,6 +393,6 @@ describe('analysis workbook', () => {
     expect(drivers?.rows[1]?.[3]).toBe(9); // 540 s
     expect(minutesOf(null)).toBeNull();
     const cycles = sheets[6];
-    expect(cycles?.rows[1]?.[8]).toBeNull(); // last service of a truck has no return
+    expect(cycles?.rows[1]?.[11]).toBeNull(); // last service of a truck has no return
   });
 });

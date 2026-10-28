@@ -59,7 +59,11 @@ export interface HaulRoute {
   originGeofenceId: string;
   destinationGeofenceId: string;
   shiftStartHour: number;
+  /** Minute past `shiftStartHour` (0-59). */
+  shiftStartMinute: number;
   shiftDurationHours: number;
+  /** Minutes added to `shiftDurationHours` (0-59). */
+  shiftDurationMinutes: number;
   /** Back-to-back shifts in one work day (two by default). */
   shiftCount: number;
   status: 'ACTIVE' | 'ARCHIVED';
@@ -70,7 +74,9 @@ export interface HaulRouteInput {
   originGeofenceId: string;
   destinationGeofenceId: string;
   shiftStartHour: number;
+  shiftStartMinute: number;
   shiftDurationHours: number;
+  shiftDurationMinutes: number;
   shiftCount: number;
 }
 
@@ -130,7 +136,9 @@ export interface HaulCycleReport {
     id: string;
     name: string;
     shiftStartHour: number;
+    shiftStartMinute?: number;
     shiftDurationHours: number;
+    shiftDurationMinutes?: number;
     shiftCount: number;
     timeZone: string;
   };

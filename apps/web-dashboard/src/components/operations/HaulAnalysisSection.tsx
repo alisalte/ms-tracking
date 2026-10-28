@@ -42,9 +42,9 @@ import {
   minutesText,
   numText,
   round,
-  stampText,
 } from '@/components/operations/ops-ui';
 import type { Column } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Alert, Badge, Button, Input, SegmentedControl, Skeleton } from '@/components/tailwind-ui';
 import { formatWorkDay, minutesOf } from '@/lib/operations-export';
 import { apex } from '@/theme/palette';
@@ -838,11 +838,11 @@ function Stops({ data, a, lang, m }: ViewProps) {
   const columns: Array<Column<HaulAnalysisReport['stops'][number]>> = [
     { id: 'vehicle', headerKey: 'operations.colVehicle', render: (r) => r.vehicleName },
     { id: 'driver', headerKey: 'operations.colDriver', render: (r) => r.driverName ?? '—' },
-    {
-      id: 'start',
-      headerKey: 'operations.analysis.colStart',
-      render: (r) => stampText(r.startedAt, lang),
-    },
+    ...startEndColumns(
+      (r: HaulAnalysisReport['stops'][number]) => r.startedAt,
+      (r) => r.endedAt,
+      lang,
+    ),
     {
       id: 'duration',
       headerKey: 'operations.analysis.colDuration',

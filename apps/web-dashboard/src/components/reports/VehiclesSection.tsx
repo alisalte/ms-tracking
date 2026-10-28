@@ -10,6 +10,7 @@ import { Link as RouterLink } from 'react-router';
 
 import { getApiErrorMessage } from '@/api/errors';
 import {
+  type PeriodRowWire,
   type ReportRange,
   type UtilizationRowWire,
   exportReportCsv,
@@ -22,8 +23,8 @@ import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Badge, Button, Modal } from '@/components/tailwind-ui';
-import { formatDateTime } from '@/lib/format-date';
 import { Download, Map as MapIcon } from 'lucide-react';
 
 function fmtSec(s: number | null): string {
@@ -292,16 +293,10 @@ function IdleParkingTable({ range }: { range: ReportRange }) {
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'kind', headerKey: 'reports.cols.kind', render: (r) => r.kind },
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    {
-      id: 'start',
-      headerKey: 'reports.cols.start',
-      render: (r) => formatDateTime(r.startedAt),
-    },
-    {
-      id: 'end',
-      headerKey: 'reports.cols.end',
-      render: (r) => (r.endedAt ? formatDateTime(r.endedAt) : '—'),
-    },
+    ...startEndColumns<PeriodRowWire>(
+      (r) => r.startedAt,
+      (r) => r.endedAt,
+    ),
     { id: 'duration', headerKey: 'reports.cols.duration', render: (r) => fmtSec(r.durationSec) },
     {
       id: 'status',

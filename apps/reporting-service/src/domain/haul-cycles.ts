@@ -13,6 +13,7 @@ const EARTH_RADIUS_M = 6_371_000;
 /** A truck that steps outside the origin and back within this gap is still loading. */
 const ORIGIN_JITTER_MS = 120_000;
 const DAY_MS = 86_400_000;
+const MINUTES_PER_DAY = 1440;
 
 export interface Zone {
   readonly kind: 'circle' | 'polygon';
@@ -150,21 +151,22 @@ export function shiftSlot(
   timeZone: string,
   shiftCount = 1,
 ): ShiftSlot {
-  const start = clampHour(startHour);
-  const duration = clampDuration(durationHours);
+  const start = clampStartMinute(startHour);
+  const duration = clampDurationMinutes(durationHours);
   const count = clampCount(shiftCount, duration);
   const parts = localParts(at, timeZone);
-  const offset = (parts.hour - start + 24) % 24;
+  const minuteOfDay = parts.hour * 60 + parts.minute;
+  const offset = (minuteOfDay - start + MINUTES_PER_DAY) % MINUTES_PER_DAY;
   const no = Math.floor(offset / duration) + 1;
   if (no > count) return { key: 'off-shift', date: null, no: 0 };
   const date =
-    parts.hour < start ? localParts(new Date(at.getTime() - DAY_MS), timeZone).date : parts.date;
+    minuteOfDay < start ? localParts(new Date(at.getTime() - DAY_MS), timeZone).date : parts.date;
   return { key: `${date}#${no}`, date, no };
 }
 
 /** Largest shift count that still fits in 24 hours. */
 export function maxShiftCount(durationHours: number): number {
-  return Math.max(1, Math.floor(24 / clampDuration(durationHours)));
+  return Math.max(1, Math.floor(MINUTES_PER_DAY / clampDurationMinutes(durationHours)));
 }
 
 /**
@@ -178,10 +180,12 @@ export function shiftDayWindow(
   timeZone: string,
   now: Date,
 ): { from: Date; to: Date } | null {
-  const start = clampHour(startHour);
+  const start = clampStartMinute(startHour);
   const parts = localParts(now, timeZone);
   const day =
-    parts.hour < start ? localParts(new Date(now.getTime() - DAY_MS), timeZone).date : parts.date;
+    parts.hour * 60 + parts.minute < start
+      ? localParts(new Date(now.getTime() - DAY_MS), timeZone).date
+      : parts.date;
   const dayStart = zonedTime(day, start, timeZone);
   switch (preset) {
     case 'today':
@@ -570,9 +574,9 @@ function localParts(
 }
 
 /** The instant when the wall clock in `timeZone` reads `date` at `hour`:00. */
-function zonedTime(date: string, hour: number, timeZone: string): Date {
+function zonedTime(date: string, minuteOfDay: number, timeZone: string): Date {
   const [y, m, d] = date.split('-').map(Number);
-  const guess = Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, hour);
+  const guess = Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 0, minuteOfDay);
   const offset = (t: number) => {
     const p = localParts(new Date(t), timeZone);
     const [py, pm, pd] = p.date.split('-').map(Number);
@@ -582,17 +586,19 @@ function zonedTime(date: string, hour: number, timeZone: string): Date {
   return new Date(guess - offset(first));
 }
 
-function clampHour(hour: number): number {
-  if (!Number.isFinite(hour)) return 0;
-  return Math.min(23, Math.max(0, Math.floor(hour)));
+/** Start of shift 1 as minutes past local midnight; `startHour` may be fractional (6.5 = 06:30). */
+function clampStartMinute(startHour: number): number {
+  if (!Number.isFinite(startHour)) return 0;
+  return Math.min(MINUTES_PER_DAY - 1, Math.max(0, Math.round(startHour * 60)));
 }
 
-function clampDuration(hours: number): number {
-  if (!Number.isFinite(hours)) return 12;
-  return Math.min(24, Math.max(1, Math.floor(hours)));
+/** Shift length in minutes; `durationHours` may be fractional (8.25 = 8 h 15 min). */
+function clampDurationMinutes(hours: number): number {
+  if (!Number.isFinite(hours)) return 12 * 60;
+  return Math.min(MINUTES_PER_DAY, Math.max(1, Math.round(hours * 60)));
 }
 
-function clampCount(count: number, duration: number): number {
+function clampCount(count: number, durationMinutes: number): number {
   if (!Number.isFinite(count)) return 1;
-  return Math.min(maxShiftCount(duration), Math.max(1, Math.floor(count)));
+  return Math.min(Math.floor(MINUTES_PER_DAY / durationMinutes), Math.max(1, Math.floor(count)));
 }

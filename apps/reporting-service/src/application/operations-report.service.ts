@@ -83,8 +83,20 @@ interface RouteRow {
   origin_geofence_id: string;
   destination_geofence_id: string;
   shift_start_hour: number;
+  shift_start_minute: number | null;
   shift_duration_hours: number;
+  shift_duration_minutes: number | null;
   shift_count: number;
+}
+
+/** Start of shift 1 as fractional local hours (06:30 → 6.5). */
+function routeStartHour(route: RouteRow): number {
+  return route.shift_start_hour + (route.shift_start_minute ?? 0) / 60;
+}
+
+/** Shift length as fractional hours (8 h 15 min → 8.25). */
+function routeDurationHours(route: RouteRow): number {
+  return route.shift_duration_hours + (route.shift_duration_minutes ?? 0) / 60;
 }
 
 interface GeofenceRow {
@@ -327,7 +339,9 @@ export class OperationsReportService {
       id: haul.route.id,
       name: haul.route.name,
       shiftStartHour: haul.route.shift_start_hour,
+      shiftStartMinute: haul.route.shift_start_minute ?? 0,
       shiftDurationHours: haul.route.shift_duration_hours,
+      shiftDurationMinutes: haul.route.shift_duration_minutes ?? 0,
       shiftCount: haul.shiftCount,
       timeZone: TIME_ZONE,
     };
@@ -343,9 +357,9 @@ export class OperationsReportService {
       throw new ReportInputError('routeId must be a haul route id', 'INVALID_FILTER');
     }
     const route = await this.loadRoute(tenantId, routeId);
-    const window = this.haulWindow(input, route.shift_start_hour);
+    const window = this.haulWindow(input, routeStartHour(route));
     const shiftCount = Math.min(
-      maxShiftCount(route.shift_duration_hours),
+      maxShiftCount(routeDurationHours(route)),
       Math.max(1, route.shift_count),
     );
     const members = await this.loadMembers(tenantId, routeId);
@@ -414,8 +428,8 @@ export class OperationsReportService {
         destination,
         drivers,
         rosters,
-        shiftStartHour: route.shift_start_hour,
-        shiftDurationHours: route.shift_duration_hours,
+        shiftStartHour: routeStartHour(route),
+        shiftDurationHours: routeDurationHours(route),
         shiftCount,
         timeZone: TIME_ZONE,
       });
@@ -431,8 +445,8 @@ export class OperationsReportService {
             destination,
             drivers,
             rosters,
-            shiftStartHour: route.shift_start_hour,
-            shiftDurationHours: route.shift_duration_hours,
+            shiftStartHour: routeStartHour(route),
+            shiftDurationHours: routeDurationHours(route),
             shiftCount,
             timeZone: TIME_ZONE,
             minStopSec: options.minStopSec,
@@ -716,7 +730,8 @@ export class OperationsReportService {
     const { rows } = await this.query<{ rows: RouteRow[] }>((trx) =>
       trx.raw(
         `SELECT id, name, origin_geofence_id, destination_geofence_id,
-                shift_start_hour, shift_duration_hours, shift_count
+                shift_start_hour, shift_start_minute,
+                shift_duration_hours, shift_duration_minutes, shift_count
          FROM fleet.haul_routes
          WHERE tenant_id = ?::uuid AND id = ?::uuid AND status = 'ACTIVE'`,
         [tenantId, routeId],

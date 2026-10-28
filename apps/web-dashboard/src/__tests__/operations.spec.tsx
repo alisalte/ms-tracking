@@ -305,6 +305,19 @@ describe('operations page', () => {
     expect(screen.getByTestId('shift-plan').textContent).toMatch(/06:00–18:00.*18:00–06:00/);
   });
 
+  it('takes the minutes of the shift start and length', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('ops-tab-routes'));
+    fireEvent.change(screen.getByLabelText('Shift start time'), { target: { value: '06:30' } });
+    fireEvent.change(screen.getByLabelText('Shift length (hours)'), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Shift length (minutes)'), { target: { value: '15' } });
+    // Two shifts of 8 h 15 min from 06:30.
+    expect(screen.getByTestId('shift-plan').textContent).toMatch(/06:30–14:45.*14:45–23:00/);
+    // 3 shifts of 8 h 15 min do not fit in a day.
+    fireEvent.change(screen.getByLabelText('Shifts per day'), { target: { value: '3' } });
+    expect(screen.queryByTestId('shift-plan')).toBeNull();
+  });
+
   it('asks for a route on the route tabs until one is chosen', () => {
     renderPage();
     fireEvent.click(screen.getByTestId('ops-tab-services'));
