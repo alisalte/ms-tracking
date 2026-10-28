@@ -29,6 +29,7 @@ import {
   parseReportWindow,
   reportWindowErrorMessage,
 } from '../domain/report-window.js';
+import { shamsiCells } from '../domain/shamsi.js';
 import { ReportCache } from '../infrastructure/cache/report-cache.js';
 import type { ExportRateLimiter } from '../infrastructure/cache/report-cache.js';
 import type { ReportRepository } from '../infrastructure/persistence/report.repository.js';
@@ -41,6 +42,9 @@ export class ReportInputError extends Error {
     super(message);
   }
 }
+
+/** Local time the CSV exports are written in (same zone as the mine operations reports). */
+const EXPORT_TIME_ZONE = 'Asia/Tehran';
 
 export interface ReportQueryBase {
   preset?: string | undefined;
@@ -552,8 +556,8 @@ export class ReportService {
           for (const t of page.items) {
             collected.push([
               String(t.label),
-              String(t.startedAt),
-              t.endedAt ? String(t.endedAt) : '',
+              ...shamsiCells(t.startedAt, EXPORT_TIME_ZONE),
+              ...shamsiCells(t.endedAt, EXPORT_TIME_ZONE),
               Number(t.durationSec),
               Number(t.distanceKm),
               t.avgSpeedKph === null || t.avgSpeedKph === undefined ? '' : Number(t.avgSpeedKph),
@@ -567,8 +571,10 @@ export class ReportService {
         rows = collected.slice(0, maxRows);
         header = [
           'vehicle',
-          'started_at_utc',
-          'ended_at_utc',
+          'start_date_shamsi',
+          'start_time',
+          'end_date_shamsi',
+          'end_time',
           'duration_s',
           'distance_km',
           'avg_speed_kph',
