@@ -4,6 +4,7 @@
  * Headers accept English and Persian aliases. IMEI is stripped of separators
  * and expanded from Excel scientific notation when it still looks like 15 digits.
  */
+import { fixShamsiYmd } from '@/lib/jalali';
 import { SpreadsheetParseError, parseTabularFile, trimGrid, xlsxBlob } from '@/lib/spreadsheet';
 import type { DeviceProtocol, MachineType } from '@/types/asset.types';
 
@@ -312,12 +313,14 @@ export function parseSpreadsheetDate(raw: string): { value?: string; invalid: bo
   const t = asciiDigits(raw);
   if (t === '') return { invalid: false };
   if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
-    const iso = t.slice(0, 10);
+    const iso = fixShamsiYmd(t.slice(0, 10));
     return isValidYmd(iso) ? { value: iso, invalid: false } : { invalid: true };
   }
   const ymd = /^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/.exec(t);
   if (ymd) {
-    const iso = `${ymd[1]}-${(ymd[2] ?? '').padStart(2, '0')}-${(ymd[3] ?? '').padStart(2, '0')}`;
+    const iso = fixShamsiYmd(
+      `${ymd[1]}-${(ymd[2] ?? '').padStart(2, '0')}-${(ymd[3] ?? '').padStart(2, '0')}`,
+    );
     return isValidYmd(iso) ? { value: iso, invalid: false } : { invalid: true };
   }
   if (/^\d{4,6}(\.\d+)?$/.test(t)) {
@@ -336,7 +339,9 @@ export function parseSpreadsheetDate(raw: string): { value?: string; invalid: bo
     const y = Number(dmy[3]);
     const day = a > 12 ? a : b;
     const month = a > 12 ? b : a;
-    const iso = `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const iso = fixShamsiYmd(
+      `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    );
     return isValidYmd(iso) ? { value: iso, invalid: false } : { invalid: true };
   }
   return { invalid: true };

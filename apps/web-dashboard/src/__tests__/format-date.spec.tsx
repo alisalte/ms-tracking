@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DateField } from '@/components/tailwind-ui/DateField';
 import { i18n } from '@/i18n';
 import { formatDate, formatDateTime, isFaLocale } from '@/lib/format-date';
-import { dateToJalali, jalaliMonthLength, jalaliToDate } from '@/lib/jalali';
+import { dateToJalali, fixShamsiYmd, jalaliMonthLength, jalaliToDate } from '@/lib/jalali';
 
 describe('jalali conversion', () => {
   it('maps 6 Sep 2026 to 15 Shahrivar 1405', () => {
@@ -22,6 +22,30 @@ describe('jalali conversion', () => {
   it('gives Esfand 29 or 30 days', () => {
     const len = jalaliMonthLength(1405, 12);
     expect(len === 29 || len === 30).toBe(true);
+  });
+});
+
+describe('Shamsi date kept in a Gregorian slot', () => {
+  it('shows a stored 1415-05-14 as the Shamsi date it is, not as year 794', async () => {
+    await i18n.changeLanguage('fa');
+    expect(formatDate('1415-05-14')).toContain('۱۴۱۵');
+    expect(formatDate('1415-05-14')).not.toContain('۷۹۴');
+    expect(formatDate('1415-05-14T00:00:00.000Z')).toContain('۱۴ مرداد');
+    await i18n.changeLanguage('en');
+    // In English the same value is the matching Gregorian date.
+    expect(formatDate('1415-05-14')).toMatch(/2036/);
+  });
+
+  it('leaves real Gregorian dates alone', async () => {
+    await i18n.changeLanguage('fa');
+    expect(formatDate('2026-08-05')).toContain('۱۴۰۵');
+  });
+
+  it('fixes the value an edit form or export reads', () => {
+    expect(fixShamsiYmd('1415-05-14')).toBe('2036-08-04');
+    expect(fixShamsiYmd('1415-05-14T00:00:00.000Z')).toBe('2036-08-04T00:00:00.000Z');
+    expect(fixShamsiYmd('2036-08-04')).toBe('2036-08-04');
+    expect(fixShamsiYmd('not a date')).toBe('not a date');
   });
 });
 

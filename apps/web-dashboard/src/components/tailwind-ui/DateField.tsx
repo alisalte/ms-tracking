@@ -18,7 +18,13 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { formatDate, formatDateTime, isFaLocale } from '@/lib/format-date';
-import { type JalaliDate, dateToJalali, jalaliMonthLength, jalaliToDate } from '@/lib/jalali';
+import {
+  type JalaliDate,
+  dateToJalali,
+  fixShamsiYmd,
+  jalaliMonthLength,
+  jalaliToDate,
+} from '@/lib/jalali';
 
 type DateInputType = 'date' | 'datetime-local';
 
@@ -41,8 +47,10 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function parseValue(value: string | undefined, withTime: boolean): Date | null {
-  if (!value) return null;
+function parseValue(raw: string | undefined, withTime: boolean): Date | null {
+  if (!raw) return null;
+  // A Shamsi date saved in a Gregorian slot (year 1415) opens as the date it is.
+  const value = fixShamsiYmd(raw);
   if (withTime) {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;

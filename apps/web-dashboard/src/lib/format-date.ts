@@ -5,6 +5,7 @@
  * Persian UI → Solar Hijri (`fa-IR` + `ca-persian`); otherwise Gregorian.
  */
 import { i18n } from '@/i18n';
+import { fixShamsiDate } from '@/lib/jalali';
 
 export function isFaLocale(lang?: string): boolean {
   return (lang ?? i18n.language ?? '').toLowerCase().startsWith('fa');
@@ -18,7 +19,8 @@ export function dateTimeLocale(lang?: string): string {
 function toDate(value: Date | string | number | null | undefined): Date | null {
   if (value === null || value === undefined || value === '') return null;
   const d = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  // A Shamsi date stored as Gregorian (year 1415 instead of 2036) is shown as what it is.
+  return Number.isNaN(d.getTime()) ? null : fixShamsiDate(d);
 }
 
 function formatWith(

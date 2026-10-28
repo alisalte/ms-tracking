@@ -147,6 +147,10 @@ describe('parseDriverGrid', () => {
 
   it('converts an Excel serial date to YYYY-MM-DD', () => {
     expect(parseSpreadsheetDate('44927').value).toBe('2023-01-01');
+    // A Shamsi date (year 1200-1599) is stored as the Gregorian date it is.
+    expect(parseSpreadsheetDate('1415/05/14').value).toBe('2036-08-04');
+    expect(parseSpreadsheetDate('1415-05-14').value).toBe('2036-08-04');
+    expect(parseSpreadsheetDate('2036-08-04').value).toBe('2036-08-04');
     const parsed = parseDriverGrid([
       ['firstName', 'lastName', 'licenseNumber', 'licenseIssued'],
       ['Ali', 'Karimi', 'DL-1', '44927'],
