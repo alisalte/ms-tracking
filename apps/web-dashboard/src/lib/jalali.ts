@@ -103,3 +103,45 @@ export function jalaliMonthLength(jy: number, jm: number): number {
   const b = Date.UTC(nextYear.gy, nextYear.gm - 1, nextYear.gd);
   return Math.round((b - a) / 86_400_000) >= 1 ? 30 : 29;
 }
+
+/**
+ * A year that can only be Shamsi. No date in this app is a Gregorian year
+ * 1200-1599, so a stored `1415-05-14` is a Shamsi date that was typed or
+ * imported into a Gregorian field (read as Gregorian it shows as year 794).
+ */
+export function isShamsiYear(year: number): boolean {
+  return year >= 1200 && year <= 1599;
+}
+
+/**
+ * Turn a Shamsi date kept in a Gregorian slot into the real Gregorian date.
+ * Strings are `YYYY-MM-DD` with any `T…` time after it left as it was; other
+ * text, and real Gregorian years, come back unchanged.
+ */
+export function fixShamsiYmd(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  const [, y, m, d] = match;
+  if (!isShamsiYear(Number(y))) return value;
+  const { gy, gm, gd } = jalaliToGregorian(Number(y), Number(m), Number(d));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${String(gy).padStart(4, '0')}-${pad(gm)}-${pad(gd)}${value.slice(10)}`;
+}
+
+/** The same correction for a Date built from such a value (UTC fields, like an ISO string). */
+export function fixShamsiDate(date: Date): Date {
+  const year = date.getUTCFullYear();
+  if (!isShamsiYear(year)) return date;
+  const { gy, gm, gd } = jalaliToGregorian(year, date.getUTCMonth() + 1, date.getUTCDate());
+  return new Date(
+    Date.UTC(
+      gy,
+      gm - 1,
+      gd,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  );
+}

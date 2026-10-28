@@ -1,9 +1,9 @@
 /**
  * ReportRangePicker — the TailAdmin shared time-range control for every
  * report (Sprint J §16, Phase 8 port): Today | Yesterday | Last 7 Days |
- * Last 30 Days | Custom (datetime-local from/to, converted to UTC ISO before
- * sending — the documented UTC strategy). Accessible: labeled inputs +
- * aria-pressed chips.
+ * Last 30 Days | Custom (date + time from/to, converted to UTC ISO before
+ * sending — the documented UTC strategy). A valid custom pair filters at once;
+ * a reversed pair shows a message. Accessible: labeled inputs + aria-pressed chips.
  */
 import { ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -26,6 +26,14 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** `[from, to)` of two datetime-local values, or null while they do not form a range. */
+function parseCustom(fromValue: string, toValue: string): { from: Date; to: Date } | null {
+  const from = fromValue ? new Date(fromValue) : null;
+  const to = toValue ? new Date(toValue) : null;
+  if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  return from < to ? { from, to } : null;
+}
+
 export function ReportRangePicker({
   range,
   onChange,
@@ -43,12 +51,20 @@ export function ReportRangePicker({
     if (range.to) setToInput(toLocalInput(range.to));
   }, [range.from, range.to]);
 
-  const applyCustom = () => {
-    const from = fromInput ? new Date(fromInput) : null;
-    const to = toInput ? new Date(toInput) : null;
-    if (!from || !to || from >= to) return; // invalid — keep last valid range
-    onChange({ from: from.toISOString(), to: to.toISOString() });
+  const reversed = Boolean(fromInput && toInput && !parseCustom(fromInput, toInput));
+
+  // A valid pair filters the reports at once; an invalid one keeps the last
+  // valid range and says why (the message below), instead of silently doing nothing.
+  const commit = (fromValue: string, toValue: string) => {
+    const next = parseCustom(fromValue, toValue);
+    if (!next) return;
+    const from = next.from.toISOString();
+    const to = next.to.toISOString();
+    if (from === range.from && to === range.to) return;
+    onChange({ from, to });
   };
+
+  const applyCustom = () => commit(fromInput, toInput);
 
   const chip = (active: boolean) =>
     `h-7 cursor-pointer rounded-full border px-3 text-xs font-semibold transition-colors ${
@@ -93,7 +109,10 @@ export function ReportRangePicker({
           <Input
             type="datetime-local"
             value={fromInput}
-            onChange={(e) => setFromInput(e.target.value)}
+            onChange={(e) => {
+              setFromInput(e.target.value);
+              commit(e.target.value, toInput);
+            }}
             aria-label={t('reports.range.from')}
             wrapperClassName="w-auto"
             className="h-8 px-2 text-[13px]"
@@ -103,7 +122,10 @@ export function ReportRangePicker({
           <Input
             type="datetime-local"
             value={toInput}
-            onChange={(e) => setToInput(e.target.value)}
+            onChange={(e) => {
+              setToInput(e.target.value);
+              commit(fromInput, e.target.value);
+            }}
             aria-label={t('reports.range.to')}
             wrapperClassName="w-auto"
             className="h-8 px-2 text-[13px]"
@@ -112,6 +134,11 @@ export function ReportRangePicker({
             {t('reports.range.apply')}
           </Button>
         </div>
+      )}
+      {isCustom && reversed && (
+        <p role="alert" className="w-full text-xs text-danger-600 dark:text-danger-400">
+          {t('reports.range.invalid')}
+        </p>
       )}
     </div>
   );

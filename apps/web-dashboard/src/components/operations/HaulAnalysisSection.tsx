@@ -42,9 +42,9 @@ import {
   minutesText,
   numText,
   round,
-  stampText,
 } from '@/components/operations/ops-ui';
 import type { Column } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Alert, Badge, Button, Input, SegmentedControl, Skeleton } from '@/components/tailwind-ui';
 import { formatWorkDay, minutesOf } from '@/lib/operations-export';
 import { apex } from '@/theme/palette';
@@ -58,8 +58,26 @@ const TARGET_FIELDS: Array<{ key: keyof AnalysisTargets; label: string }> = [
   { key: 'targetReturnMin', label: 'targetReturn' },
   { key: 'stopMin', label: 'targetStop' },
 ];
-const BUDGET_KEYS = ['origin', 'destination', 'moving', 'idleOutside', 'parked', 'noData'] as const;
-const BUDGET_COLORS = [apex.orange, apex.purple, apex.green, apex.yellow, apex.slate, apex.red];
+const BUDGET_KEYS = [
+  'origin',
+  'destination',
+  'moving',
+  'idleOutside',
+  'parked',
+  'noData',
+  'lunch',
+  'handover',
+] as const;
+const BUDGET_COLORS = [
+  apex.orange,
+  apex.purple,
+  apex.green,
+  apex.yellow,
+  apex.slate,
+  apex.red,
+  apex.blue,
+  apex.magenta,
+];
 /** Findings whose value / reference are seconds and read better as minutes. */
 const MINUTE_FINDINGS: Partial<
   Record<AnalysisFindingCode, { value: boolean; reference: boolean }>
@@ -347,7 +365,7 @@ function Overview({
     tooltip: { y: { formatter: (v: number) => `${numText(v, lang)} ${a('unitMin')}` } },
   } as ApexOptions;
 
-  const budgetValues = BUDGET_KEYS.map((key) => data.timeBudget[`${key}Sec` as const]);
+  const budgetValues = BUDGET_KEYS.map((key) => data.timeBudget[`${key}Sec` as const] ?? 0);
   const budgetTotal = budgetValues.reduce((sum, v) => sum + v, 0);
   const budgetOptions = {
     labels: BUDGET_KEYS.map((key) => a(`budget.${key}`)),
@@ -468,7 +486,7 @@ function Overview({
             <table className="w-full text-sm">
               <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                 {BUDGET_KEYS.map((key, index) => {
-                  const sec = data.timeBudget[`${key}Sec` as const];
+                  const sec = data.timeBudget[`${key}Sec` as const] ?? 0;
                   const share = budgetTotal > 0 ? sec / budgetTotal : 0;
                   return (
                     <tr key={key}>
@@ -838,15 +856,31 @@ function Stops({ data, a, lang, m }: ViewProps) {
   const columns: Array<Column<HaulAnalysisReport['stops'][number]>> = [
     { id: 'vehicle', headerKey: 'operations.colVehicle', render: (r) => r.vehicleName },
     { id: 'driver', headerKey: 'operations.colDriver', render: (r) => r.driverName ?? '—' },
-    {
-      id: 'start',
-      headerKey: 'operations.analysis.colStart',
-      render: (r) => stampText(r.startedAt, lang),
-    },
+    ...startEndColumns(
+      (r: HaulAnalysisReport['stops'][number]) => r.startedAt,
+      (r) => r.endedAt,
+      lang,
+    ),
     {
       id: 'duration',
       headerKey: 'operations.analysis.colDuration',
       render: (r) => m(r.durationSec),
+    },
+    {
+      id: 'category',
+      headerKey: 'operations.analysis.colCategory',
+      render: (r) => {
+        const category = r.category ?? 'OPERATIONAL';
+        return (
+          <Badge
+            color={category === 'LUNCH' ? 'info' : category === 'HANDOVER' ? 'warning' : 'gray'}
+          >
+            {a(
+              category === 'LUNCH' ? 'lunch' : category === 'HANDOVER' ? 'handover' : 'operational',
+            )}
+          </Badge>
+        );
+      },
     },
     {
       id: 'engine',
@@ -868,11 +902,37 @@ function Stops({ data, a, lang, m }: ViewProps) {
       render: (r) => `${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`,
     },
   ];
+  const planned = data.plannedStops;
   return (
     <Panel
       title={a('stopsTitle')}
       hint={`${a('stopsHint')} (${m(data.stopMinSec)} ${a('unitMin')})`}
     >
+      {planned && (
+        <div
+          className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm"
+          data-testid="analysis-planned-stops"
+        >
+          <span className="font-medium text-gray-700 dark:text-graydark-800">
+            {a('categoryTitle')}
+          </span>
+          <span className="tabular-nums text-gray-600 dark:text-graydark-700">
+            {a('operational')}: {numText(data.stopCount, lang, 0)} · {m(data.stopSec)}{' '}
+            {a('unitMin')}
+          </span>
+          <span className="tabular-nums text-gray-600 dark:text-graydark-700">
+            {a('lunch')}: {numText(planned.lunchCount, lang, 0)} · {m(planned.lunchSec)}{' '}
+            {a('unitMin')}
+          </span>
+          <span className="tabular-nums text-gray-600 dark:text-graydark-700">
+            {a('handover')}: {numText(planned.handoverCount, lang, 0)} · {m(planned.handoverSec)}{' '}
+            {a('unitMin')}
+          </span>
+          <span className="w-full text-xs text-gray-500 dark:text-graydark-600">
+            {a('categoryHint')}
+          </span>
+        </div>
+      )}
       {data.stops.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-graydark-600">{a('noStops')}</p>
       ) : (

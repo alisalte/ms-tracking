@@ -21,6 +21,7 @@
  *     duration, utilization without telemetry).
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { type BreakPolicy, type RouteBreakRow, policyOfRoute } from '../../domain/planned-stops.js';
 import type {
   ActivityEvent,
   ActivityPeriodRow,
@@ -51,6 +52,15 @@ export interface VehicleFilter {
 export interface ReportRepositoryDeps {
   readonly knex: Knex;
   readonly queryTimeoutMs: number;
+}
+
+/** A period row reduced to what the planned-stop summary reads. */
+export interface PeriodScanRow {
+  readonly kind: 'IDLE' | 'PARKING';
+  readonly vehicleId: string;
+  readonly startedAt: Date;
+  readonly endedAt: Date | null;
+  readonly durationSec: number;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -760,6 +770,89 @@ export class ReportRepository {
             ? { startedAt: new Date(last.started_at as string).toISOString(), id: String(last.id) }
             : null,
       };
+    });
+  }
+
+  /**
+   * Every idle / parking period of the window with just what is needed to tell
+   * the planned stops apart, capped so a very large fleet cannot make the
+   * summary unbounded. `truncated` says the cap was hit.
+   */
+  public async idleParkingScan(
+    tenantId: string,
+    win: TimeWindow,
+    filter: VehicleFilter,
+    kind: 'IDLE' | 'PARKING' | undefined,
+    cap: number,
+  ): Promise<{ rows: PeriodScanRow[]; truncated: boolean }> {
+    const parts: string[] = [];
+    const vf = vehicleFilterSql(tenantId, 'v', filter);
+    if (kind === undefined || kind === 'IDLE') {
+      parts.push(`
+        SELECT 'IDLE' AS kind, i.vehicle_id, i.started_at, i.ended_at, i.duration_s
+        FROM tracking.idle_periods i
+        JOIN fleet.vehicles v ON v.id = i.vehicle_id AND v.tenant_id = ?::uuid AND v.status = 'ACTIVE' ${vf.clause}
+        WHERE i.tenant_id = ?::uuid AND i.started_at >= ? AND i.started_at < ?`);
+    }
+    if (kind === undefined || kind === 'PARKING') {
+      parts.push(`
+        SELECT 'PARKING' AS kind, p.vehicle_id, p.started_at, p.ended_at, p.duration_s
+        FROM tracking.parking_periods p
+        JOIN fleet.vehicles v ON v.id = p.vehicle_id AND v.tenant_id = ?::uuid AND v.status = 'ACTIVE' ${vf.clause}
+        WHERE p.tenant_id = ?::uuid AND p.started_at >= ? AND p.started_at < ?`);
+    }
+    const perSourceBinds = [tenantId, ...vf.binds, tenantId, win.from, win.to];
+    return this.query(async (trx) => {
+      const rows = (
+        await trx.raw(
+          `SELECT * FROM (${parts.join(' UNION ALL ')}) u ORDER BY started_at DESC LIMIT ?`,
+          [...Array.from({ length: parts.length }, () => perSourceBinds).flat(), cap + 1],
+        )
+      ).rows as Array<Record<string, unknown>>;
+      const page = rows.slice(0, cap);
+      return {
+        truncated: rows.length > cap,
+        rows: page.map((r) => ({
+          kind: String(r.kind) as 'IDLE' | 'PARKING',
+          vehicleId: String(r.vehicle_id),
+          startedAt: new Date(r.started_at as string),
+          endedAt: r.ended_at ? new Date(r.ended_at as string) : null,
+          durationSec: Number(r.duration_s ?? 0),
+        })),
+      };
+    });
+  }
+
+  /**
+   * The lunch / handover schedule of the newest active haul route each
+   * vehicle works on. A vehicle on no route has no entry: all its stops stay
+   * operational.
+   */
+  public async breakPolicies(
+    tenantId: string,
+    vehicleIds: readonly string[],
+    timeZone: string,
+  ): Promise<Map<string, BreakPolicy>> {
+    const ids = [...new Set(vehicleIds)].filter((id) => UUID_RE.test(id));
+    if (ids.length === 0) return new Map();
+    return this.query(async (trx) => {
+      const rows = (
+        await trx.raw(
+          `SELECT DISTINCT ON (vd.vehicle_id)
+                  vd.vehicle_id, r.shift_start_hour, r.shift_start_minute,
+                  r.shift_duration_hours, r.shift_duration_minutes, r.shift_count,
+                  r.lunch_start_minute, r.lunch_end_minute, r.handover_window_minutes
+           FROM fleet.haul_members m
+           JOIN fleet.haul_routes r
+             ON r.id = m.route_id AND r.tenant_id = m.tenant_id AND r.status = 'ACTIVE'
+           JOIN fleet.vehicle_devices vd
+             ON vd.device_id = m.device_id AND vd.tenant_id = m.tenant_id
+           WHERE m.tenant_id = ?::uuid AND vd.vehicle_id = ANY(?::uuid[])
+           ORDER BY vd.vehicle_id, r.updated_at DESC`,
+          [tenantId, ids],
+        )
+      ).rows as Array<RouteBreakRow & { vehicle_id: string }>;
+      return new Map(rows.map((r) => [String(r.vehicle_id), policyOfRoute(r, timeZone)]));
     });
   }
 

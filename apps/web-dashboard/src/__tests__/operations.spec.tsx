@@ -305,6 +305,30 @@ describe('operations page', () => {
     expect(screen.getByTestId('shift-plan').textContent).toMatch(/06:00–18:00.*18:00–06:00/);
   });
 
+  it('takes the minutes of the shift start and length', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('ops-tab-routes'));
+    fireEvent.change(screen.getByLabelText('Shift start time'), { target: { value: '06:30' } });
+    fireEvent.change(screen.getByLabelText('Shift length (hours)'), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Shift length (minutes)'), { target: { value: '15' } });
+    // Two shifts of 8 h 15 min from 06:30.
+    expect(screen.getByTestId('shift-plan').textContent).toMatch(/06:30–14:45.*14:45–23:00/);
+    // 3 shifts of 8 h 15 min do not fit in a day.
+    fireEvent.change(screen.getByLabelText('Shifts per day'), { target: { value: '3' } });
+    expect(screen.queryByTestId('shift-plan')).toBeNull();
+  });
+
+  it('sets the lunch break and the shift handover window of a service', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('ops-tab-routes'));
+    expect(screen.getByTestId('haul-break-fields')).toBeInTheDocument();
+    expect(screen.getByLabelText('Shift handover window (minutes)')).toHaveValue(30);
+    fireEvent.change(screen.getByLabelText('Lunch break from'), { target: { value: '12:00' } });
+    fireEvent.submit(screen.getByTestId('haul-route-form'));
+    // Only one end of the lunch break: the form says so instead of saving.
+    expect(screen.getByText(/both the start and the end of the lunch break/i)).toBeInTheDocument();
+  });
+
   it('asks for a route on the route tabs until one is chosen', () => {
     renderPage();
     fireEvent.click(screen.getByTestId('ops-tab-services'));

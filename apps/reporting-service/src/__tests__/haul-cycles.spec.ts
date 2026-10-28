@@ -165,6 +165,11 @@ describe('haul cycles', () => {
     expect(shiftKey(at('2026-06-02T06:00:00Z'), 6, 12, 'UTC', 2)).toBe('2026-06-02#1');
     // Two 8 h shifts leave a gap from 22:00 to 06:00.
     expect(shiftKey(at('2026-06-01T23:00:00Z'), 6, 8, 'UTC', 2)).toBe('off-shift');
+    // Minute precision: a 06:30 start with 8 h 15 min shifts (6.5 and 8.25 hours).
+    expect(shiftKey(at('2026-06-01T06:29:00Z'), 6.5, 8.25, 'UTC', 2)).toBe('off-shift');
+    expect(shiftKey(at('2026-06-01T06:30:00Z'), 6.5, 8.25, 'UTC', 2)).toBe('2026-06-01#1');
+    expect(shiftKey(at('2026-06-01T14:44:00Z'), 6.5, 8.25, 'UTC', 2)).toBe('2026-06-01#1');
+    expect(shiftKey(at('2026-06-01T14:45:00Z'), 6.5, 8.25, 'UTC', 2)).toBe('2026-06-01#2');
     // Tehran is UTC+03:30: 03:00Z is 06:30 local, the day shift.
     expect(shiftKey(at('2026-06-01T03:00:00Z'), 6, 12, 'Asia/Tehran', 2)).toBe('2026-06-01#1');
   });

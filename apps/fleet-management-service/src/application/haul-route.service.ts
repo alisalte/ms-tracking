@@ -20,8 +20,17 @@ export interface HaulRouteRecord {
   readonly originGeofenceId: string;
   readonly destinationGeofenceId: string;
   readonly shiftStartHour: number;
+  /** Minute past `shiftStartHour` that shift 1 starts at (0-59). */
+  readonly shiftStartMinute: number;
   readonly shiftDurationHours: number;
+  /** Minutes added to `shiftDurationHours` (0-59). */
+  readonly shiftDurationMinutes: number;
   readonly shiftCount: number;
+  /** Lunch break as minutes past local midnight; null = no lunch break. */
+  readonly lunchStartMinute: number | null;
+  readonly lunchEndMinute: number | null;
+  /** Minutes either side of a shift boundary that an engine-off stop is the handover (0 = off). */
+  readonly handoverWindowMinutes: number;
   readonly status: 'ACTIVE' | 'ARCHIVED';
   readonly version: number;
   readonly createdAt: Date;
@@ -42,8 +51,13 @@ export interface CreateHaulRouteInput {
   readonly originGeofenceId: string;
   readonly destinationGeofenceId: string;
   readonly shiftStartHour?: number;
+  readonly shiftStartMinute?: number;
   readonly shiftDurationHours?: number;
+  readonly shiftDurationMinutes?: number;
   readonly shiftCount?: number;
+  readonly lunchStartMinute?: number | null;
+  readonly lunchEndMinute?: number | null;
+  readonly handoverWindowMinutes?: number;
 }
 
 export interface UpdateHaulRouteInput {
@@ -51,8 +65,13 @@ export interface UpdateHaulRouteInput {
   readonly originGeofenceId?: string;
   readonly destinationGeofenceId?: string;
   readonly shiftStartHour?: number;
+  readonly shiftStartMinute?: number;
   readonly shiftDurationHours?: number;
+  readonly shiftDurationMinutes?: number;
   readonly shiftCount?: number;
+  readonly lunchStartMinute?: number | null;
+  readonly lunchEndMinute?: number | null;
+  readonly handoverWindowMinutes?: number;
 }
 
 export interface HaulMemberInput {
@@ -69,8 +88,13 @@ interface RouteRow {
   origin_geofence_id: string;
   destination_geofence_id: string;
   shift_start_hour: number;
+  shift_start_minute: number | null;
   shift_duration_hours: number;
+  shift_duration_minutes: number | null;
   shift_count: number;
+  lunch_start_minute: number | null;
+  lunch_end_minute: number | null;
+  handover_window_minutes: number | null;
   status: 'ACTIVE' | 'ARCHIVED';
   version: number;
   created_at: Date;
@@ -92,6 +116,13 @@ export class HaulRouteService {
       input.shiftStartHour ?? 6,
       input.shiftDurationHours ?? 12,
       input.shiftCount ?? 2,
+      input.shiftStartMinute ?? 0,
+      input.shiftDurationMinutes ?? 0,
+    );
+    const breaks = checkBreaks(
+      input.lunchStartMinute ?? null,
+      input.lunchEndMinute ?? null,
+      input.handoverWindowMinutes ?? 30,
     );
     return withTenantContext(this.knex, ctx.tenantId, async (trx) => {
       const [row] = await trx
@@ -103,8 +134,13 @@ export class HaulRouteService {
           origin_geofence_id: input.originGeofenceId,
           destination_geofence_id: input.destinationGeofenceId,
           shift_start_hour: shifts.startHour,
+          shift_start_minute: shifts.startMinute,
           shift_duration_hours: shifts.durationHours,
+          shift_duration_minutes: shifts.durationMinutes,
           shift_count: shifts.count,
+          lunch_start_minute: breaks.lunchStartMinute,
+          lunch_end_minute: breaks.lunchEndMinute,
+          handover_window_minutes: breaks.handoverWindowMinutes,
         })
         .returning('*');
       const record = toRoute(row as RouteRow);
@@ -129,6 +165,13 @@ export class HaulRouteService {
       input.shiftStartHour ?? before.shiftStartHour,
       input.shiftDurationHours ?? before.shiftDurationHours,
       input.shiftCount ?? before.shiftCount,
+      input.shiftStartMinute ?? before.shiftStartMinute,
+      input.shiftDurationMinutes ?? before.shiftDurationMinutes,
+    );
+    const breaks = checkBreaks(
+      input.lunchStartMinute !== undefined ? input.lunchStartMinute : before.lunchStartMinute,
+      input.lunchEndMinute !== undefined ? input.lunchEndMinute : before.lunchEndMinute,
+      input.handoverWindowMinutes ?? before.handoverWindowMinutes,
     );
     return withTenantContext(this.knex, ctx.tenantId, async (trx) => {
       const [row] = await trx
@@ -141,8 +184,13 @@ export class HaulRouteService {
           origin_geofence_id: origin,
           destination_geofence_id: destination,
           shift_start_hour: shifts.startHour,
+          shift_start_minute: shifts.startMinute,
           shift_duration_hours: shifts.durationHours,
+          shift_duration_minutes: shifts.durationMinutes,
           shift_count: shifts.count,
+          lunch_start_minute: breaks.lunchStartMinute,
+          lunch_end_minute: breaks.lunchEndMinute,
+          handover_window_minutes: breaks.handoverWindowMinutes,
           version: trx.raw('version + 1'),
           updated_at: trx.fn.now(),
         })
@@ -343,20 +391,72 @@ export function checkShifts(
   startHour: number,
   durationHours: number,
   count: number,
-): { startHour: number; durationHours: number; count: number } {
+  startMinute = 0,
+  durationMinutes = 0,
+): {
+  startHour: number;
+  startMinute: number;
+  durationHours: number;
+  durationMinutes: number;
+  count: number;
+} {
   if (!Number.isInteger(startHour) || startHour < 0 || startHour > 23) {
     throw new BadRequestException('Shift start hour must be between 0 and 23.');
   }
-  if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 24) {
-    throw new BadRequestException('Shift length must be between 1 and 24 hours.');
+  if (!Number.isInteger(startMinute) || startMinute < 0 || startMinute > 59) {
+    throw new BadRequestException('Shift start minute must be between 0 and 59.');
+  }
+  if (!Number.isInteger(durationHours) || durationHours < 0 || durationHours > 24) {
+    throw new BadRequestException('Shift length must be between 1 minute and 24 hours.');
+  }
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 0 || durationMinutes > 59) {
+    throw new BadRequestException('Shift length minutes must be between 0 and 59.');
+  }
+  const lengthMinutes = durationHours * 60 + durationMinutes;
+  if (lengthMinutes < 1 || lengthMinutes > 24 * 60) {
+    throw new BadRequestException('Shift length must be between 1 minute and 24 hours.');
   }
   if (!Number.isInteger(count) || count < 1 || count > 4) {
     throw new BadRequestException('A work day has between 1 and 4 shifts.');
   }
-  if (count * durationHours > 24) {
+  if (count * lengthMinutes > 24 * 60) {
     throw new BadRequestException('All shifts together cannot exceed 24 hours.');
   }
-  return { startHour, durationHours, count };
+  return { startHour, startMinute, durationHours, durationMinutes, count };
+}
+
+/** A lunch break is both ends or neither; the handover window is 0-120 minutes. */
+export function checkBreaks(
+  lunchStartMinute: number | null,
+  lunchEndMinute: number | null,
+  handoverWindowMinutes: number,
+): {
+  lunchStartMinute: number | null;
+  lunchEndMinute: number | null;
+  handoverWindowMinutes: number;
+} {
+  if ((lunchStartMinute === null) !== (lunchEndMinute === null)) {
+    throw new BadRequestException(
+      'Give both the start and the end of the lunch break, or neither.',
+    );
+  }
+  if (lunchStartMinute !== null && lunchEndMinute !== null) {
+    const valid = (m: number) => Number.isInteger(m) && m >= 0 && m <= 1439;
+    if (!valid(lunchStartMinute) || !valid(lunchEndMinute)) {
+      throw new BadRequestException('The lunch break must be times of the day.');
+    }
+    if (lunchStartMinute === lunchEndMinute) {
+      throw new BadRequestException('The lunch break must have a length.');
+    }
+  }
+  if (
+    !Number.isInteger(handoverWindowMinutes) ||
+    handoverWindowMinutes < 0 ||
+    handoverWindowMinutes > 120
+  ) {
+    throw new BadRequestException('The handover window must be between 0 and 120 minutes.');
+  }
+  return { lunchStartMinute, lunchEndMinute, handoverWindowMinutes };
 }
 
 /** Trim to the route's shift count; drop trailing empty shifts. */
@@ -377,8 +477,13 @@ function toRoute(row: RouteRow): HaulRouteRecord {
     originGeofenceId: row.origin_geofence_id,
     destinationGeofenceId: row.destination_geofence_id,
     shiftStartHour: row.shift_start_hour,
+    shiftStartMinute: row.shift_start_minute ?? 0,
     shiftDurationHours: row.shift_duration_hours,
+    shiftDurationMinutes: row.shift_duration_minutes ?? 0,
     shiftCount: row.shift_count ?? 1,
+    lunchStartMinute: row.lunch_start_minute ?? null,
+    lunchEndMinute: row.lunch_end_minute ?? null,
+    handoverWindowMinutes: row.handover_window_minutes ?? 30,
     status: row.status,
     version: row.version,
     createdAt: new Date(row.created_at),

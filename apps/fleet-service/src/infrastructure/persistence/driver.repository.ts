@@ -283,13 +283,25 @@ export class DriverRepository {
       .where('vd.vehicle_id', vehicleId)
       .where('r.status', 'ACTIVE')
       .orderBy('r.updated_at', 'desc')
-      .first('r.shift_start_hour', 'r.shift_duration_hours', 'r.shift_count')) as
-      | { shift_start_hour: number; shift_duration_hours: number; shift_count: number }
+      .first(
+        'r.shift_start_hour',
+        'r.shift_start_minute',
+        'r.shift_duration_hours',
+        'r.shift_duration_minutes',
+        'r.shift_count',
+      )) as
+      | {
+          shift_start_hour: number;
+          shift_start_minute: number | null;
+          shift_duration_hours: number;
+          shift_duration_minutes: number | null;
+          shift_count: number;
+        }
       | undefined;
     if (!row) return null;
     return {
-      startHour: row.shift_start_hour,
-      durationHours: row.shift_duration_hours,
+      startHour: row.shift_start_hour + (row.shift_start_minute ?? 0) / 60,
+      durationHours: row.shift_duration_hours + (row.shift_duration_minutes ?? 0) / 60,
       shiftCount: row.shift_count,
       timeZone: SHIFT_TIME_ZONE,
     };

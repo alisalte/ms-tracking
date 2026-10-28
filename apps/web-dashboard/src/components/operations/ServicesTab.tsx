@@ -26,6 +26,7 @@ import {
   stampText,
 } from '@/components/operations/ops-ui';
 import type { Column } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Alert, Badge, Button, SegmentedControl, Skeleton } from '@/components/tailwind-ui';
 import { formatWorkDay } from '@/lib/operations-export';
 import { chart } from '@/theme/palette';
@@ -183,11 +184,11 @@ export function ServicesTab({
   ];
 
   const cycleColumns: Array<Column<HaulCycleReport['cycles'][number]>> = [
-    {
-      id: 'time',
-      headerKey: 'operations.colTime',
-      render: (row) => stampText(row.originEnteredAt, lang),
-    },
+    ...startEndColumns(
+      (row: HaulCycleReport['cycles'][number]) => row.originEnteredAt,
+      (row) => row.destinationEnteredAt,
+      lang,
+    ),
     { id: 'vehicle', headerKey: 'operations.colVehicle', render: (row) => row.vehicleName },
     {
       id: 'driver',

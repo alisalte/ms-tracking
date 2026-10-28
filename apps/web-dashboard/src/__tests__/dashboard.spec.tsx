@@ -274,7 +274,11 @@ const assetApi = vi.hoisted(() => ({
 
 vi.mock('@/api/asset.api', () => assetApi);
 
-const maplibre = vi.hoisted(() => ({ Marker: vi.fn() }));
+const maplibre = vi.hoisted(() => ({
+  Marker: vi.fn(),
+  fitBounds: vi.fn(),
+  extend: vi.fn(),
+}));
 
 vi.mock('maplibre-gl', () => {
   maplibre.Marker = vi.fn().mockImplementation(() => ({
@@ -299,7 +303,14 @@ vi.mock('maplibre-gl', () => {
       removeSource: vi.fn(),
       resize: vi.fn(),
       remove: vi.fn(),
+      fitBounds: maplibre.fitBounds,
     })),
+    LngLatBounds: class {
+      extend(point: [number, number]) {
+        maplibre.extend(point);
+        return this;
+      }
+    },
     Marker: maplibre.Marker,
     NavigationControl: class {},
     Popup: vi.fn().mockImplementation(() => ({ setHTML: vi.fn().mockReturnThis() })),
@@ -577,6 +588,9 @@ describe('FleetDashboard — map preview', () => {
     await waitFor(() => {
       expect(maplibre.Marker).toHaveBeenCalledTimes(mapVehiclesFixture.length);
     });
+    // The map zooms to the vehicles once, instead of staying on the default view.
+    expect(maplibre.fitBounds).toHaveBeenCalledTimes(1);
+    expect(maplibre.extend).toHaveBeenCalledTimes(mapVehiclesFixture.length);
     // Legend pairs presence colors with labels (never color alone).
     expect(screen.getByText('Stale', { selector: 'span' })).toBeTruthy();
     expect(screen.getByText('Online', { selector: 'span' })).toBeTruthy();

@@ -8,13 +8,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getApiErrorMessage } from '@/api/errors';
-import { type ReportRange, exportReportCsv, useTrips } from '@/api/report.api';
+import { type ReportRange, type TripRowWire, exportReportCsv, useTrips } from '@/api/report.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Button } from '@/components/tailwind-ui';
-import { formatDateTime } from '@/lib/format-date';
 import { Download, Map as MapIcon } from 'lucide-react';
 
 export function TripsSection({ range }: { range: ReportRange }) {
@@ -26,16 +26,10 @@ export function TripsSection({ range }: { range: ReportRange }) {
 
   const columns: Column<NonNullable<typeof q.data>['items'][number]>[] = [
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    {
-      id: 'start',
-      headerKey: 'reports.cols.start',
-      render: (r) => formatDateTime(r.startedAt),
-    },
-    {
-      id: 'end',
-      headerKey: 'reports.cols.end',
-      render: (r) => (r.endedAt ? formatDateTime(r.endedAt) : '—'),
-    },
+    ...startEndColumns<TripRowWire>(
+      (r) => r.startedAt,
+      (r) => r.endedAt,
+    ),
     { id: 'duration', headerKey: 'reports.cols.duration', render: (r) => fmtDur(r.durationSec) },
     {
       id: 'distance',

@@ -19,9 +19,9 @@ import {
   hoursText,
   numText,
   round,
-  stampText,
 } from '@/components/operations/ops-ui';
 import type { Column } from '@/components/reports/ReportsTable';
+import { dateTimeColumns } from '@/components/reports/dateTimeColumns';
 import { Badge, Button, Skeleton } from '@/components/tailwind-ui';
 import { chart } from '@/theme/palette';
 
@@ -85,11 +85,18 @@ export function ActivityTab({
       headerKey: 'operations.colVehicle',
       render: (row) => row.vehicleName ?? t('operations.unbound'),
     },
-    {
-      id: 'started',
-      headerKey: 'operations.colStarted',
-      render: (row) => stampText(row.startedAt, lang),
-    },
+    ...dateTimeColumns(
+      'started',
+      { date: 'reports.cols.startDate', time: 'reports.cols.startTime' },
+      (row: DeviceActivityRow) => row.startedAt,
+      lang,
+    ),
+    ...dateTimeColumns(
+      'last-fix',
+      { date: 'reports.cols.lastFixDate', time: 'reports.cols.lastFixTime' },
+      (row: DeviceActivityRow) => row.lastFixAt,
+      lang,
+    ),
     { id: 'fixes', headerKey: 'operations.colFixes', render: (row) => numText(row.fixes, lang, 0) },
     {
       id: 'offline',

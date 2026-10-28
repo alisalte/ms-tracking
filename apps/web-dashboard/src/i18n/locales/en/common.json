@@ -292,7 +292,6 @@
       "openMap": "Open map",
       "vehicleList": "Vehicles",
       "usageTrend": "Fleet usage trend",
-      "maintenanceStatus": "Maintenance & service",
       "upcomingPm": "Upcoming PM items",
       "totalRequests": "Work orders",
       "insights": "More insights",
@@ -332,7 +331,6 @@
       "attention": "Nothing needs attention right now.",
       "performance": "No trip data yet.",
       "activity": "No vehicles to chart yet.",
-      "maintenance": "Maintenance work orders are not connected yet.",
       "upcomingPm": "No preventive-maintenance schedule is available yet.",
       "vehicleList": "No vehicles reporting a location."
     },
@@ -359,13 +357,6 @@
       "fleetScore": "Fleet health score",
       "fleetScoreHint": "Rule-based: 60% device presence + 40% open-alarm headroom (higher is healthier).",
       "attentionVehicles": "{{count}} vehicles need attention (≤70)"
-    },
-    "maintenance": {
-      "inProgress": "In progress",
-      "completed": "Completed",
-      "pending": "Pending",
-      "openPortal": "Open maintenance",
-      "waitingBackend": "Waiting for vehicle-maintenance-service"
     },
     "severities": {
       "critical": "Critical",
@@ -1747,9 +1738,12 @@
       "7d": "Last 7 days",
       "30d": "Last 30 days",
       "custom": "Custom",
-      "from": "From (local → UTC)",
-      "to": "To (local → UTC)",
-      "apply": "Apply"
+      "from": "From",
+      "to": "To",
+      "apply": "Apply",
+      "invalid": "The start must be before the end.",
+      "startLabel": "Start date and time",
+      "endLabel": "End date and time"
     },
     "sections": {
       "overview": "Overview",
@@ -1983,6 +1977,14 @@
       "kind": "Kind",
       "start": "Start (UTC)",
       "end": "End (UTC)",
+      "startDate": "Start date",
+      "startTime": "Start time",
+      "endDate": "End date",
+      "endTime": "End time",
+      "lastFixDate": "Last fix date",
+      "lastFixTime": "Last fix time",
+      "issuedDate": "Issued date",
+      "issuedTime": "Issued time",
       "duration": "Duration",
       "status": "Status",
       "alarmType": "Type",
@@ -2007,7 +2009,8 @@
       "lastSeen": "Last seen",
       "command": "Command",
       "reply": "Reply",
-      "device": "Device"
+      "device": "Device",
+      "stopCategory": "Stop type"
     },
     "labels": {
       "distance": "Distance (km)",
@@ -2021,6 +2024,16 @@
       "idle": "Idle",
       "parked": "Parked",
       "noTelemetry": "No telemetry"
+    },
+    "stopCategory": {
+      "title": "Stops by type",
+      "OPERATIONAL": "Machine stop",
+      "LUNCH": "Lunch",
+      "HANDOVER": "Shift handover",
+      "all": "All types",
+      "count": "{{count}} stops",
+      "hint": "Lunch and handover follow the lunch window and shift schedule of the vehicle’s haul service; vehicles on no service count as machine stops.",
+      "truncated": "Only the newest periods were read, so these totals are partial."
     }
   },
   "admin": {
@@ -2978,8 +2991,10 @@
     "routeName": "Service name",
     "origin": "Origin",
     "destination": "Destination",
-    "shiftStart": "Shift start hour",
+    "shiftStart": "Shift start time",
     "shiftDuration": "Shift length (hours)",
+    "shiftDurationMinutes": "Shift length (minutes)",
+    "shiftInvalid": "Enter a start time and a shift length of at least one minute.",
     "createRoute": "Create service",
     "pickPlace": "Choose a place",
     "pickRoute": "Choose a service",
@@ -3110,7 +3125,9 @@
         "moving": "Moving",
         "idleOutside": "Standing, engine on, outside origin and destination",
         "parked": "Standing, engine off",
-        "noData": "No data (silent for more than 5 minutes)"
+        "noData": "No data (silent for more than 5 minutes)",
+        "lunch": "Lunch break",
+        "handover": "Shift handover"
       },
       "findingsTitle": "Findings",
       "noFindings": "Nothing notable.",
@@ -3204,7 +3221,13 @@
         "ruleUnload": "Unloading limit",
         "done": "Done.",
         "failed": "Failed:"
-      }
+      },
+      "colCategory": "Stop type",
+      "categoryTitle": "Planned stops",
+      "categoryHint": "Lunch and shift handover are not counted as stops of the machine.",
+      "lunch": "Lunch",
+      "handover": "Shift handover",
+      "operational": "Machine stop"
     },
     "ui": {
       "tabs": {
@@ -3299,6 +3322,15 @@
         "machinesTitle": "Machines and drivers",
         "shiftsSummary": "{{count}} shifts · {{hours}} h from {{start}}"
       }
+    },
+    "plannedStops": "Planned stops",
+    "lunchFrom": "Lunch break from",
+    "lunchTo": "Lunch break to",
+    "handoverWindow": "Shift handover window (minutes)",
+    "handoverWindowHint": "Engine-off stops this close to a shift change count as the handover. 0 turns it off.",
+    "lunchInvalid": {
+      "half": "Give both the start and the end of the lunch break, or leave both empty.",
+      "same": "The lunch break must have a length."
     }
   },
   "navGroups": {

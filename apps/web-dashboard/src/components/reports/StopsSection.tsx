@@ -7,6 +7,8 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  type PeriodRowWire,
+  type PlannedStopSummaryWire,
   type ReportRange,
   useFleetOverview,
   useIdleParking,
@@ -16,10 +18,56 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Badge, Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
-import { formatDateTime } from '@/lib/format-date';
 import { formatDurationSec, hours1, shortLabel } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
+
+type StopCategoryFilter = 'all' | 'OPERATIONAL' | 'LUNCH' | 'HANDOVER';
+const CATEGORY_FILTERS: StopCategoryFilter[] = ['all', 'OPERATIONAL', 'LUNCH', 'HANDOVER'];
+
+function StopCategoryBadge({ category }: { category: PeriodRowWire['category'] }) {
+  const { t } = useTranslation();
+  const value = category ?? 'OPERATIONAL';
+  const tone = value === 'LUNCH' ? 'info' : value === 'HANDOVER' ? 'warning' : 'gray';
+  return <Badge color={tone}>{t(`reports.stopCategory.${value}`)}</Badge>;
+}
+
+/** The stops of the machine apart from lunch and the shift handover. */
+function PlannedStopsPanel({ summary }: { summary: PlannedStopSummaryWire }) {
+  const { t } = useTranslation();
+  const cells: Array<{ id: 'operational' | 'lunch' | 'handover'; label: string }> = [
+    { id: 'operational', label: t('reports.stopCategory.OPERATIONAL') },
+    { id: 'lunch', label: t('reports.stopCategory.LUNCH') },
+    { id: 'handover', label: t('reports.stopCategory.HANDOVER') },
+  ];
+  return (
+    <Card data-testid="report-stops-split">
+      <CardHeader title={t('reports.stopCategory.title')} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {cells.map(({ id, label }) => (
+          <div
+            key={id}
+            className="rounded-xl border border-gray-200 px-4 py-3 dark:border-white/10"
+            data-testid={`stops-split-${id}`}
+          >
+            <p className="text-xs text-gray-500 dark:text-graydark-600">{label}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-gray-800 dark:text-white">
+              {formatDurationSec(summary[id].sec)}
+            </p>
+            <p className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
+              {t('reports.stopCategory.count', { count: summary[id].count })}
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-gray-500 dark:text-graydark-600">
+        {t('reports.stopCategory.hint')}
+        {summary.truncated ? ` ${t('reports.stopCategory.truncated')}` : ''}
+      </p>
+    </Card>
+  );
+}
 
 export function StopsSection({ range }: { range: ReportRange }) {
   const { t } = useTranslation();
@@ -30,6 +78,15 @@ export function StopsSection({ range }: { range: ReportRange }) {
 
   const rows = meters.data?.items ?? [];
   const o = overview.data;
+  const [category, setCategory] = useState<StopCategoryFilter>('all');
+  const planned = periods.data?.summary;
+  const visibleRows = useMemo(
+    () =>
+      (periods.data?.items ?? []).filter(
+        (r) => category === 'all' || (r.category ?? 'OPERATIONAL') === category,
+      ),
+    [periods.data, category],
+  );
 
   const mix = useMemo(() => {
     const idle = hours1(o?.idleDurationSec ?? rows.reduce((s, r) => s + r.idleSec, 0));
@@ -93,20 +150,19 @@ export function StopsSection({ range }: { range: ReportRange }) {
   const columns: Column<NonNullable<typeof periods.data>['items'][number]>[] = [
     { id: 'kind', headerKey: 'reports.cols.kind', render: (r) => r.kind },
     { id: 'label', headerKey: 'reports.cols.vehicle', render: (r) => r.label },
-    {
-      id: 'start',
-      headerKey: 'reports.cols.start',
-      render: (r) => formatDateTime(r.startedAt),
-    },
-    {
-      id: 'end',
-      headerKey: 'reports.cols.end',
-      render: (r) => (r.endedAt ? formatDateTime(r.endedAt) : '—'),
-    },
+    ...startEndColumns<PeriodRowWire>(
+      (r) => r.startedAt,
+      (r) => r.endedAt,
+    ),
     {
       id: 'duration',
       headerKey: 'reports.cols.duration',
       render: (r) => formatDurationSec(r.durationSec),
+    },
+    {
+      id: 'category',
+      headerKey: 'reports.cols.stopCategory',
+      render: (r) => <StopCategoryBadge category={r.category} />,
     },
     {
       id: 'status',
@@ -195,7 +251,9 @@ export function StopsSection({ range }: { range: ReportRange }) {
         </Card>
       </div>
 
-      <div className="flex gap-1.5">
+      {planned && <PlannedStopsPanel summary={planned} />}
+
+      <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
           className={chip(kind === undefined)}
@@ -213,6 +271,19 @@ export function StopsSection({ range }: { range: ReportRange }) {
         >
           {t('reports.idleParking.parking')}
         </button>
+        <span aria-hidden className="mx-1 w-px self-stretch bg-gray-200 dark:bg-white/10" />
+        {CATEGORY_FILTERS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={chip(category === id)}
+            aria-pressed={category === id}
+            onClick={() => setCategory(id)}
+            data-testid={`stop-category-${id}`}
+          >
+            {t(`reports.stopCategory.${id}`)}
+          </button>
+        ))}
       </div>
       {periods.isLoading ? (
         <Skeleton className="h-40 rounded-2xl" />
@@ -221,7 +292,7 @@ export function StopsSection({ range }: { range: ReportRange }) {
       ) : (
         <ReportsTable
           columns={columns}
-          rows={periods.data?.items ?? []}
+          rows={visibleRows}
           rowKey={(r) => r.id}
           emptyKey="reports.empty"
           dense

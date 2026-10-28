@@ -33,6 +33,7 @@ import { DistanceSection } from '@/components/reports/DistanceSection';
 import { DriversSection } from '@/components/reports/DriversSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
+import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
@@ -234,30 +235,101 @@ describe('ReportRangePicker (§16 time ranges)', () => {
     expect(onChange).toHaveBeenCalledWith({ preset: 'yesterday' });
   });
 
-  it('applies a custom range as UTC ISO and rejects from >= to', async () => {
+  it('filters as soon as a valid custom range is picked, as UTC ISO', async () => {
     const onChange = vi.fn();
-    const range = { from: new Date().toISOString(), to: new Date().toISOString() };
+    const range = { from: '2026-08-01T00:00:00.000Z', to: '2026-08-02T00:00:00.000Z' };
     render(<ReportRangePicker range={range} onChange={onChange} />, { wrapper: makeWrapper() });
 
-    // Invalid (from === to): apply does nothing — the last valid range stays.
     fireEvent.change(screen.getByLabelText(/from/i, { selector: 'input' }), {
       target: { value: '2026-08-15T10:00' },
     });
-    fireEvent.change(screen.getByLabelText(/to/i, { selector: 'input' }), {
-      target: { value: '2026-08-15T10:00' },
-    });
-    fireEvent.click(screen.getByTestId('report-range-apply'));
+    // The new start is after the old end: nothing is sent, and the user is told why.
     expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/before/i);
 
-    // Valid: converted to ISO before sending.
     fireEvent.change(screen.getByLabelText(/to/i, { selector: 'input' }), {
       target: { value: '2026-08-16T10:00' },
     });
-    fireEvent.click(screen.getByTestId('report-range-apply'));
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(onChange).toHaveBeenCalledTimes(1);
     const applied = onChange.mock.calls[0][0] as { from: string; to: string };
     expect(new Date(applied.from).toISOString()).toBe(applied.from);
     expect(new Date(applied.from).getTime()).toBeLessThan(new Date(applied.to).getTime());
+    expect(applied.from).toBe(new Date('2026-08-15T10:00').toISOString());
+    expect(applied.to).toBe(new Date('2026-08-16T10:00').toISOString());
+  });
+
+  it('keeps the Apply button for a range typed in before it was committed', () => {
+    const onChange = vi.fn();
+    const range = { from: '2026-08-15T10:00:00.000Z', to: '2026-08-16T10:00:00.000Z' };
+    render(<ReportRangePicker range={range} onChange={onChange} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByTestId('report-range-apply'));
+    // The range on screen is the range in force: nothing new to send.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('StopsSection planned stops', () => {
+  it('splits the stops into machine, lunch and shift handover and filters by type', async () => {
+    const base = {
+      kind: 'PARKING',
+      vehicleId: 'v-1',
+      label: 'T-1',
+      startedAt: '2026-08-15T08:40:00Z',
+      endedAt: '2026-08-15T09:30:00Z',
+      durationSec: 3000,
+      lat: null,
+      lng: null,
+      status: 'ENDED',
+    };
+    apiGetRaw.mockImplementation(async (path: string) => {
+      if (path === '/reports/idle-parking') {
+        return {
+          items: [
+            { ...base, id: 'p-1', category: 'LUNCH' },
+            { ...base, id: 'p-2', label: 'T-2', category: 'OPERATIONAL' },
+          ],
+          nextCursor: null,
+          summary: {
+            operational: { count: 4, sec: 7200 },
+            lunch: { count: 3, sec: 5400 },
+            handover: { count: 2, sec: 3600 },
+            truncated: false,
+          },
+        };
+      }
+      return { items: [], total: 0 };
+    });
+    render(<StopsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+
+    const split = await screen.findByTestId('report-stops-split');
+    expect(screen.getByTestId('stops-split-lunch').textContent).toMatch(/1h 30m.*3 stops/);
+    expect(screen.getByTestId('stops-split-handover').textContent).toMatch(/1h 0m.*2 stops/);
+    expect(screen.getByTestId('stops-split-operational').textContent).toMatch(/2h 0m.*4 stops/);
+    expect(split).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getAllByText('T-1').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByTestId('stop-category-LUNCH'));
+    expect(screen.queryByText('T-2')).toBeNull();
+    expect(screen.getByText('T-1')).toBeInTheDocument();
+  });
+});
+
+describe('RangeSummary', () => {
+  it('shows the start and end date and time of the period apart', () => {
+    render(
+      <RangeSummary
+        range={{ from: '2026-08-15T08:00:00Z', to: '2026-08-16T09:30:00Z' }}
+        from="2026-08-15T08:00:00Z"
+        to="2026-08-16T09:30:00Z"
+      />,
+      { wrapper: makeWrapper() },
+    );
+    const text = screen.getByTestId('report-range-summary').textContent ?? '';
+    expect(text).toMatch(/15\/08\/2026/);
+    expect(text).toMatch(/16\/08\/2026/);
+    expect(text).toMatch(/Start date and time/);
+    expect(text).toMatch(/End date and time/);
   });
 });
 
@@ -297,6 +369,19 @@ describe('TripsSection (§9 + §38 view-on-map)', () => {
       'href',
       '/map?vehicle=v-7&from=2026-08-15T08%3A00%3A00Z&to=2026-08-15T09%3A30%3A00Z',
     );
+  });
+
+  it('keeps the start and end date and time in four separate columns', async () => {
+    apiGetRaw.mockResolvedValue({ items: [tripRow], nextCursor: null });
+    render(<TripsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(screen.getAllByText('11-B-22').length).toBeGreaterThan(0));
+    for (const name of ['Start date', 'Start time', 'End date', 'End time']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
+    const cells = screen.getAllByRole('cell').map((c) => c.textContent);
+    expect(cells).toContain('15/08/2026');
+    expect(cells.filter((c) => /^\d{2}:\d{2}:\d{2}$/.test(c ?? ''))).toHaveLength(2);
   });
 
   it('exports CSV through the blob client with the active filter', async () => {

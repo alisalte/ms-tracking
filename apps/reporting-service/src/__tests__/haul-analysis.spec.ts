@@ -178,6 +178,69 @@ describe('haul analysis', () => {
     expect(measure.budget.parkedSec).toBe(0);
   });
 
+  it('a lunch stop and a shift handover are told apart from the stops of the machine', () => {
+    const breaks = {
+      shiftStartMin: 6 * 60,
+      shiftDurationMin: 12 * 60,
+      shiftCount: 2,
+      lunchStartMin: 6 * 60 + 20,
+      lunchEndMin: 6 * 60 + 50,
+      handoverWindowMin: 30,
+      timeZone: 'UTC',
+    };
+    // Base time is 06:00 UTC. 0-4 min: handover (engine off at the boundary).
+    // 25-45 min: lunch (engine on). 60-75 min: a real stop of the machine.
+    const stand = (from: number, to: number, engineOn: boolean) => {
+      const out: TrackSample[] = [];
+      for (let min = from; min <= to; min += 4) out.push(fix(min, ON_ROAD, 0, engineOn));
+      return out;
+    };
+    const samples = [
+      ...stand(0, 12, false),
+      fix(14, ON_ROAD, 30, true),
+      fix(18, ON_ROAD, 30, true),
+      fix(22, ON_ROAD, 30, true),
+      ...stand(24, 44, true),
+      fix(46, ON_ROAD, 30, true),
+      fix(50, ON_ROAD, 30, true),
+      fix(54, ON_ROAD, 30, true),
+      fix(58, ON_ROAD, 30, true),
+      ...stand(60, 76, true),
+      fix(78, ON_ROAD, 30, true),
+    ];
+    const measure = measureTruck({
+      vehicleId: 't1',
+      samples,
+      cycles: [],
+      origin,
+      destination,
+      minStopSec: 300,
+      breaks,
+      ...context,
+    });
+    const byCategory = (c: string) => measure.stops.filter((s) => s.category === c);
+    expect(byCategory('HANDOVER')).toHaveLength(1);
+    expect(byCategory('LUNCH')).toHaveLength(1);
+    expect(byCategory('OPERATIONAL')).toHaveLength(1);
+    expect(byCategory('OPERATIONAL')[0]?.durationSec).toBe(18 * 60);
+    // Lunch and handover seconds leave the machine's own standing buckets.
+    expect(measure.budget.lunchSec).toBe(22 * 60);
+    expect(measure.budget.handoverSec).toBe(14 * 60);
+    expect(measure.budget.idleOutsideSec).toBe(18 * 60);
+    expect(measure.budget.parkedSec).toBe(0);
+
+    const analysis = analyzeHaul({ measures: [measure], open: [], now: m(100) });
+    expect(analysis.stopCount).toBe(1);
+    expect(analysis.stopSec).toBe(18 * 60);
+    expect(analysis.plannedStops).toEqual({
+      lunchCount: 1,
+      lunchSec: 22 * 60,
+      handoverCount: 1,
+      handoverSec: 14 * 60,
+    });
+    expect(analysis.stops).toHaveLength(3);
+  });
+
   it('a switched-off engine is parked time, not idle', () => {
     const samples = [
       fix(0, ON_ROAD, 0, true),
@@ -322,6 +385,8 @@ describe('haul analysis', () => {
           idleOutsideSec: 0,
           parkedSec: 0,
           noDataSec: 0,
+          lunchSec: 0,
+          handoverSec: 0,
         },
         stops: [],
       },
@@ -336,6 +401,8 @@ describe('haul analysis', () => {
           idleOutsideSec: 0,
           parkedSec: 0,
           noDataSec: 0,
+          lunchSec: 0,
+          handoverSec: 0,
         },
         stops: [],
       },

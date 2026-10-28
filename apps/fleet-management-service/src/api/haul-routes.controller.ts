@@ -36,8 +36,13 @@ const createSchema = z.object({
   originGeofenceId: z.string().uuid(),
   destinationGeofenceId: z.string().uuid(),
   shiftStartHour: z.coerce.number().int().min(0).max(23).optional(),
-  shiftDurationHours: z.coerce.number().int().min(1).max(24).optional(),
+  shiftStartMinute: z.coerce.number().int().min(0).max(59).optional(),
+  shiftDurationHours: z.coerce.number().int().min(0).max(24).optional(),
+  shiftDurationMinutes: z.coerce.number().int().min(0).max(59).optional(),
   shiftCount: z.coerce.number().int().min(1).max(4).optional(),
+  lunchStartMinute: z.coerce.number().int().min(0).max(1439).nullable().optional(),
+  lunchEndMinute: z.coerce.number().int().min(0).max(1439).nullable().optional(),
+  handoverWindowMinutes: z.coerce.number().int().min(0).max(120).optional(),
 });
 
 const updateSchema = createSchema.partial();

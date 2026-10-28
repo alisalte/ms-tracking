@@ -308,6 +308,12 @@ describe('shift drivers on a vehicle', () => {
     expect(shiftNoAt(at('2026-06-02T03:00:00Z'), schedule)).toBe(3);
     // Two 8 h shifts leave the last 8 hours of the day uncovered.
     expect(shiftNoAt(at('2026-06-01T23:00:00Z'), { ...schedule, shiftCount: 2 })).toBeNull();
+    // 06:30 start, 8 h 15 min shifts.
+    const minutes = { ...schedule, startHour: 6.5, durationHours: 8.25, shiftCount: 2 };
+    expect(shiftNoAt(at('2026-06-01T06:29:00Z'), minutes)).toBeNull();
+    expect(shiftNoAt(at('2026-06-01T06:30:00Z'), minutes)).toBe(1);
+    expect(shiftNoAt(at('2026-06-01T14:44:00Z'), minutes)).toBe(1);
+    expect(shiftNoAt(at('2026-06-01T14:45:00Z'), minutes)).toBe(2);
   });
 
   it('credits the driver of the shift, then the any-shift driver', () => {

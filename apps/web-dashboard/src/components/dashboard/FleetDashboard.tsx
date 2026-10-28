@@ -28,7 +28,6 @@ import { FleetHealthPanel } from './FleetHealthPanel';
 import { FleetMapPreviewCard } from './FleetMapPreviewCard';
 import { HourlyActivityChart } from './HourlyActivityChart';
 import { KpiChip, KpiTile } from './KpiTile';
-import { MaintenanceStatusCard } from './MaintenanceStatusCard';
 import { RecentEventsPanel } from './RecentEventsPanel';
 import { ReportsKpiRow } from './ReportsKpiRow';
 import { SpeedLeadersChart } from './SpeedLeadersChart';
@@ -189,13 +188,10 @@ export function FleetDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="min-w-0 xl:col-span-6">
+        <div className="min-w-0 xl:col-span-8">
           <FleetMapPreviewCard />
         </div>
-        <div className="min-w-0 xl:col-span-3">
-          <MaintenanceStatusCard />
-        </div>
-        <div className="min-w-0 xl:col-span-3">
+        <div className="min-w-0 xl:col-span-4">
           <RecentEventsPanel />
         </div>
       </div>

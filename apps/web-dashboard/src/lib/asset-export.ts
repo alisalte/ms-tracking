@@ -1,3 +1,4 @@
+import { fixShamsiYmd } from '@/lib/jalali';
 /**
  * Excel export for the asset registry (`/assets`).
  *
@@ -18,7 +19,7 @@ function cell(value: string | number | null | undefined): string {
 
 function dateCell(value: string | null | undefined): string {
   if (!value) return '';
-  return value.slice(0, 10);
+  return fixShamsiYmd(value).slice(0, 10);
 }
 
 function fullName(d: Pick<Driver, 'firstName' | 'lastName'>): string {

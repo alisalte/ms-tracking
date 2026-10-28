@@ -59,9 +59,18 @@ export interface HaulRoute {
   originGeofenceId: string;
   destinationGeofenceId: string;
   shiftStartHour: number;
+  /** Minute past `shiftStartHour` (0-59). */
+  shiftStartMinute: number;
   shiftDurationHours: number;
+  /** Minutes added to `shiftDurationHours` (0-59). */
+  shiftDurationMinutes: number;
   /** Back-to-back shifts in one work day (two by default). */
   shiftCount: number;
+  /** Lunch break as minutes past local midnight; null = none. */
+  lunchStartMinute: number | null;
+  lunchEndMinute: number | null;
+  /** Minutes either side of a shift boundary that an engine-off stop is the handover. */
+  handoverWindowMinutes: number;
   status: 'ACTIVE' | 'ARCHIVED';
 }
 
@@ -70,8 +79,13 @@ export interface HaulRouteInput {
   originGeofenceId: string;
   destinationGeofenceId: string;
   shiftStartHour: number;
+  shiftStartMinute: number;
   shiftDurationHours: number;
+  shiftDurationMinutes: number;
   shiftCount: number;
+  lunchStartMinute: number | null;
+  lunchEndMinute: number | null;
+  handoverWindowMinutes: number;
 }
 
 export type MachineRole = 'TRUCK' | 'SHOVEL';
@@ -130,7 +144,9 @@ export interface HaulCycleReport {
     id: string;
     name: string;
     shiftStartHour: number;
+    shiftStartMinute?: number;
     shiftDurationHours: number;
+    shiftDurationMinutes?: number;
     shiftCount: number;
     timeZone: string;
   };
@@ -237,6 +253,20 @@ export interface TimeBudget {
   idleOutsideSec: number;
   parkedSec: number;
   noDataSec: number;
+  /** Standing inside the lunch window. */
+  lunchSec?: number;
+  /** Engine off around a shift boundary. */
+  handoverSec?: number;
+}
+
+/** OPERATIONAL = a stop of the machine itself; LUNCH and HANDOVER are planned. */
+export type StopCategory = 'OPERATIONAL' | 'LUNCH' | 'HANDOVER';
+
+export interface PlannedStops {
+  lunchCount: number;
+  lunchSec: number;
+  handoverCount: number;
+  handoverSec: number;
 }
 
 export type AnalysisFindingCode =
@@ -267,6 +297,7 @@ export interface HaulAnalysisReport {
   timeBudget: TimeBudget;
   stopCount: number;
   stopSec: number;
+  plannedStops?: PlannedStops;
   withoutDriver: number;
   controlLimits: { loadSec: number | null; unloadSec: number | null; stopSec: number };
   byVehicle: Array<{
@@ -344,6 +375,7 @@ export interface HaulAnalysisReport {
     lng: number;
     engineOn: boolean;
     phase: 'LOADED' | 'EMPTY';
+    category?: StopCategory;
   }>;
   openHauls: Array<{
     vehicleId: string;

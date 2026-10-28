@@ -11,6 +11,7 @@ import type { TelemetryMetrics } from '@fleetvision/observability';
 import { Logger } from '@nestjs/common';
 import type { ReportingConfig } from '../config/reporting.config.js';
 import { type CsvValue, csvDocument } from '../domain/csv.js';
+import { type BreakPolicy, type StopCategory, classifyStop } from '../domain/planned-stops.js';
 import {
   type CursorPage,
   TRIP_SORT_FIELDS,
@@ -29,6 +30,7 @@ import {
   parseReportWindow,
   reportWindowErrorMessage,
 } from '../domain/report-window.js';
+import { shamsiCells } from '../domain/shamsi.js';
 import { ReportCache } from '../infrastructure/cache/report-cache.js';
 import type { ExportRateLimiter } from '../infrastructure/cache/report-cache.js';
 import type { ReportRepository } from '../infrastructure/persistence/report.repository.js';
@@ -40,6 +42,38 @@ export class ReportInputError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Local time of the CSV exports and of the lunch / handover schedule (same zone as the mine operations reports). */
+const LOCAL_TIME_ZONE = 'Asia/Tehran';
+
+/** Idle / parking periods in a window, split into the machine's own stops and the planned ones. */
+export interface PlannedStopSummary {
+  operational: { count: number; sec: number };
+  lunch: { count: number; sec: number };
+  handover: { count: number; sec: number };
+  /** The scan hit its cap: the totals cover only the newest periods. */
+  truncated: boolean;
+}
+
+/** Periods read to build the split; beyond this the summary says it is partial. */
+const PLANNED_SUMMARY_CAP = 20_000;
+
+/**
+ * Category of an idle / parking period. Parking has the engine off, idle has
+ * it on, and only an engine-off stop can be a shift handover. A period still
+ * open ends at the end of the window.
+ */
+function periodCategory(
+  kind: 'IDLE' | 'PARKING',
+  startedAt: Date,
+  endedAt: string | null,
+  windowEnd: Date,
+  policy: BreakPolicy | undefined,
+): StopCategory {
+  if (!policy) return 'OPERATIONAL';
+  const end = endedAt ? new Date(endedAt) : new Date(Math.min(windowEnd.getTime(), Date.now()));
+  return classifyStop(startedAt, end, kind === 'PARKING', policy);
 }
 
 export interface ReportQueryBase {
@@ -401,10 +435,83 @@ export class ReportService {
         cursor,
       ),
     );
+    const policies = await this.deps.repository.breakPolicies(
+      tenantId,
+      rows.map((r) => r.vehicleId),
+      LOCAL_TIME_ZONE,
+    );
+    const items = rows.map((r) => ({
+      ...r,
+      category: periodCategory(
+        r.kind,
+        new Date(r.startedAt),
+        r.endedAt,
+        win.to,
+        policies.get(r.vehicleId),
+      ),
+    }));
+    // The first page also carries the split of the whole window.
+    const summary = cursor
+      ? undefined
+      : await this.timed('idle-parking-summary', () =>
+          this.plannedStopSummary(
+            tenantId,
+            win,
+            { vehicleId: q.vehicleId, fleetId: q.fleetId },
+            kind,
+          ),
+        );
     return {
-      items: rows,
+      items,
       nextCursor: nextCursor ? ReportService.encodeCursor(nextCursor) : null,
+      ...(summary ? { summary } : {}),
     };
+  }
+
+  /** Count and time of the machine's own stops, lunch and shift handover over the window. */
+  private async plannedStopSummary(
+    tenantId: string,
+    win: Windowed,
+    filter: { vehicleId?: string | undefined; fleetId?: string | undefined },
+    kind: 'IDLE' | 'PARKING' | undefined,
+  ): Promise<PlannedStopSummary> {
+    const { rows, truncated } = await this.deps.repository.idleParkingScan(
+      tenantId,
+      win,
+      filter,
+      kind,
+      PLANNED_SUMMARY_CAP,
+    );
+    const policies = await this.deps.repository.breakPolicies(
+      tenantId,
+      rows.map((r) => r.vehicleId),
+      LOCAL_TIME_ZONE,
+    );
+    const empty = () => ({ count: 0, sec: 0 });
+    const summary: PlannedStopSummary = {
+      operational: empty(),
+      lunch: empty(),
+      handover: empty(),
+      truncated,
+    };
+    for (const r of rows) {
+      const category = periodCategory(
+        r.kind,
+        r.startedAt,
+        r.endedAt?.toISOString() ?? null,
+        win.to,
+        policies.get(r.vehicleId),
+      );
+      const bucket =
+        category === 'LUNCH'
+          ? summary.lunch
+          : category === 'HANDOVER'
+            ? summary.handover
+            : summary.operational;
+      bucket.count += 1;
+      bucket.sec += r.durationSec;
+    }
+    return summary;
   }
 
   public async alarms(
@@ -541,6 +648,18 @@ export class ReportService {
       const maxRows = this.deps.config.REPORT_EXPORT_MAX_ROWS;
       let header: string[];
       let rows: CsvValue[][];
+      // Aggregate reports have no per-row dates; every row carries the period instead.
+      const win = this.window(q);
+      const periodHeader = [
+        'period_start_date_shamsi',
+        'period_start_time',
+        'period_end_date_shamsi',
+        'period_end_time',
+      ];
+      const periodCells: CsvValue[] = [
+        ...shamsiCells(win.from, LOCAL_TIME_ZONE),
+        ...shamsiCells(win.to, LOCAL_TIME_ZONE),
+      ];
       if (report === 'trips') {
         const collected: CsvValue[][] = [];
         let cursor: string | undefined;
@@ -552,8 +671,8 @@ export class ReportService {
           for (const t of page.items) {
             collected.push([
               String(t.label),
-              String(t.startedAt),
-              t.endedAt ? String(t.endedAt) : '',
+              ...shamsiCells(t.startedAt, LOCAL_TIME_ZONE),
+              ...shamsiCells(t.endedAt, LOCAL_TIME_ZONE),
               Number(t.durationSec),
               Number(t.distanceKm),
               t.avgSpeedKph === null || t.avgSpeedKph === undefined ? '' : Number(t.avgSpeedKph),
@@ -567,8 +686,10 @@ export class ReportService {
         rows = collected.slice(0, maxRows);
         header = [
           'vehicle',
-          'started_at_utc',
-          'ended_at_utc',
+          'start_date_shamsi',
+          'start_time',
+          'end_date_shamsi',
+          'end_time',
           'duration_s',
           'distance_km',
           'avg_speed_kph',
@@ -587,6 +708,7 @@ export class ReportService {
           'utilization_pct',
           'distance_km',
           'trips',
+          ...periodHeader,
         ];
         rows = (page.items as unknown as Array<Record<string, unknown>>).map((r) => [
           String(r.label),
@@ -599,10 +721,20 @@ export class ReportService {
             : Number(r.utilizationPct),
           Number(r.distanceKm),
           Number(r.trips),
+          ...periodCells,
         ]);
       } else {
         const page = await this.alarms(tenantId, { ...q, limit: 200 });
-        header = ['vehicle', 'type', 'severity', 'total', 'open', 'acknowledged', 'resolved'];
+        header = [
+          'vehicle',
+          'type',
+          'severity',
+          'total',
+          'open',
+          'acknowledged',
+          'resolved',
+          ...periodHeader,
+        ];
         rows = (page.items as unknown as Array<Record<string, unknown>>).map((r) => [
           r.label ? String(r.label) : '',
           String(r.type),
@@ -611,6 +743,7 @@ export class ReportService {
           Number(r.open),
           Number(r.acknowledged),
           Number(r.resolved),
+          ...periodCells,
         ]);
       }
       const csv = csvDocument(header, rows);

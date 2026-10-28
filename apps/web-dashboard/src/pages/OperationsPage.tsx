@@ -29,6 +29,7 @@ import { HaulAnalysisSection } from '@/components/operations/HaulAnalysisSection
 import { PeriodsTab } from '@/components/operations/PeriodsTab';
 import { RoutesTab } from '@/components/operations/RoutesTab';
 import { ServicesTab } from '@/components/operations/ServicesTab';
+import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import {
   Alert,
@@ -109,6 +110,19 @@ export function OperationsPage() {
               </Select>
             )}
           </div>
+          <RangeSummary
+            range={range}
+            from={
+              tab === 'activity'
+                ? activity.data?.from
+                : tab === 'services'
+                  ? cycles.data?.from
+                  : null
+            }
+            to={
+              tab === 'activity' ? activity.data?.to : tab === 'services' ? cycles.data?.to : null
+            }
+          />
           <p className="text-xs text-gray-500 dark:text-graydark-600">
             {t('operations.presetHint')}
           </p>

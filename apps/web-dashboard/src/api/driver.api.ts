@@ -19,6 +19,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { DriverImportDraft } from '@/lib/asset-import';
+import { fixShamsiYmd } from '@/lib/jalali';
 import { resolveMock, shouldUseMock, withMockFallback } from '@/lib/mock-gate';
 import { MAX_PAGE_SIZE } from '@/lib/pagination';
 import { mockDrivers } from '@/mock/driver-data';
@@ -123,7 +124,8 @@ export function dateInputToDatetime(value: string | undefined | null): string | 
 /** ISO / date string → YYYY-MM-DD for `<input type="date">`. */
 export function datetimeToDateInput(value: string | null | undefined): string {
   if (!value) return '';
-  return value.slice(0, 10);
+  // A Shamsi date saved as Gregorian is corrected when the record is opened for editing.
+  return fixShamsiYmd(value).slice(0, 10);
 }
 
 function toWire(payload: CreateDriverPayload | UpdateDriverPayload): Record<string, unknown> {

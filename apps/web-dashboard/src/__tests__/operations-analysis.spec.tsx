@@ -173,8 +173,36 @@ const report: HaulAnalysisReport = {
       lng: 51.03,
       engineOn: true,
       phase: 'LOADED',
+      category: 'OPERATIONAL',
+    },
+    {
+      vehicleId: 'v1',
+      vehicleName: 'Truck 1',
+      driverName: 'Ali Day',
+      startedAt: '2026-06-01T08:40:00Z',
+      endedAt: '2026-06-01T09:30:00Z',
+      durationSec: 3000,
+      lat: 35.03,
+      lng: 51.03,
+      engineOn: true,
+      phase: 'EMPTY',
+      category: 'LUNCH',
+    },
+    {
+      vehicleId: 'v1',
+      vehicleName: 'Truck 1',
+      driverName: null,
+      startedAt: '2026-06-01T02:20:00Z',
+      endedAt: '2026-06-01T02:55:00Z',
+      durationSec: 2100,
+      lat: 35.03,
+      lng: 51.03,
+      engineOn: false,
+      phase: 'EMPTY',
+      category: 'HANDOVER',
     },
   ],
+  plannedStops: { lunchCount: 1, lunchSec: 3000, handoverCount: 1, handoverSec: 2100 },
   openHauls: [
     {
       vehicleId: 'v1',
@@ -303,7 +331,7 @@ describe('haul analysis section', () => {
     expect(screen.getByTestId('kpi-waste').textContent).toMatch(/^2\.08/);
     expect(screen.getByTestId('kpi-lost').textContent).toBe('4.2');
     expect(screen.getByTestId('analysis-phases').querySelectorAll('tbody tr')).toHaveLength(4);
-    expect(screen.getByTestId('analysis-budget').querySelectorAll('tbody tr')).toHaveLength(6);
+    expect(screen.getByTestId('analysis-budget').querySelectorAll('tbody tr')).toHaveLength(8);
   });
 
   it('words each finding in minutes and lists the driver and the stop', () => {
@@ -317,7 +345,22 @@ describe('haul analysis section', () => {
     openView('Drivers');
     expect(screen.getByTestId('analysis-drivers').querySelectorAll('tbody tr')).toHaveLength(1);
     openView('Long stops');
-    expect(screen.getByTestId('analysis-stops').querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(screen.getByTestId('analysis-stops').querySelectorAll('tbody tr')).toHaveLength(3);
+  });
+
+  it('tells lunch and shift handover apart from the stops of the machine', () => {
+    renderSection();
+    openView('Long stops');
+    const split = screen.getByTestId('analysis-planned-stops').textContent ?? '';
+    expect(split).toMatch(/Machine stop: 1 · 15/);
+    expect(split).toMatch(/Lunch: 1 · 50/);
+    expect(split).toMatch(/Shift handover: 1 · 35/);
+    const rows = Array.from(
+      screen.getByTestId('analysis-stops').querySelectorAll('tbody tr'),
+      (tr) => tr.textContent ?? '',
+    );
+    expect(rows.filter((r) => r.includes('Lunch'))).toHaveLength(1);
+    expect(rows.filter((r) => r.includes('Shift handover'))).toHaveLength(1);
   });
 
   it('turns the control limits into alert advice', () => {
@@ -393,6 +436,6 @@ describe('analysis workbook', () => {
     expect(drivers?.rows[1]?.[3]).toBe(9); // 540 s
     expect(minutesOf(null)).toBeNull();
     const cycles = sheets[6];
-    expect(cycles?.rows[1]?.[8]).toBeNull(); // last service of a truck has no return
+    expect(cycles?.rows[1]?.[11]).toBeNull(); // last service of a truck has no return
   });
 });

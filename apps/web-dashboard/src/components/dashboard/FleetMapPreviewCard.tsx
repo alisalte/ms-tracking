@@ -1,5 +1,10 @@
 import { MapPin } from 'lucide-react';
-import { Map as MaplibreMap, Marker as MaplibreMarker, Popup as MaplibrePopup } from 'maplibre-gl';
+import {
+  LngLatBounds,
+  Map as MaplibreMap,
+  Marker as MaplibreMarker,
+  Popup as MaplibrePopup,
+} from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -38,6 +43,8 @@ export function FleetMapPreviewCard() {
   const mapRef = useRef<MaplibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const markersRef = useRef<MaplibreMarker[]>([]);
+  // The first batch of vehicles frames the map; later refreshes must not undo a pan or zoom.
+  const framedRef = useRef(false);
   const { data, isLoading, isError, refetch } = useMapVehicles();
   const vehicles = data ?? [];
   useFollowBasemap(mapRef, NO_OVERLAY_LAYERS, mapReady);
@@ -74,6 +81,7 @@ export function FleetMapPreviewCard() {
       markersRef.current = [];
       map.remove();
       mapRef.current = null;
+      framedRef.current = false;
       setMapReady(false);
     };
   }, []);
@@ -109,6 +117,25 @@ export function FleetMapPreviewCard() {
         marker.addTo(map);
         return marker;
       });
+      frameVehicles(map);
+    };
+
+    const frameVehicles = (target: MaplibreMap) => {
+      if (framedRef.current) return;
+      const located = vehicles.filter(
+        (v) =>
+          Number.isFinite(v.lat) &&
+          Number.isFinite(v.lng) &&
+          !(v.lat === 0 && v.lng === 0) &&
+          Math.abs(v.lat) <= 90 &&
+          Math.abs(v.lng) <= 180,
+      );
+      if (located.length === 0) return;
+      framedRef.current = true;
+      const bounds = new LngLatBounds();
+      for (const v of located) bounds.extend([v.lng, v.lat]);
+      // A single vehicle (or a tight group) would zoom to street level; cap it.
+      target.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 0 });
     };
 
     if (map.loaded()) apply();
