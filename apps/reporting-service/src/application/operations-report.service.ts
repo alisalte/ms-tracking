@@ -35,6 +35,7 @@ import {
   periodsBetween,
   summarizePeriods,
 } from '../domain/haul-periods.js';
+import { policyOfRoute } from '../domain/planned-stops.js';
 import {
   type ReportWindow,
   parseReportWindow,
@@ -87,6 +88,9 @@ interface RouteRow {
   shift_duration_hours: number;
   shift_duration_minutes: number | null;
   shift_count: number;
+  lunch_start_minute: number | null;
+  lunch_end_minute: number | null;
+  handover_window_minutes: number | null;
 }
 
 /** Start of shift 1 as fractional local hours (06:30 → 6.5). */
@@ -343,6 +347,9 @@ export class OperationsReportService {
       shiftDurationHours: haul.route.shift_duration_hours,
       shiftDurationMinutes: haul.route.shift_duration_minutes ?? 0,
       shiftCount: haul.shiftCount,
+      lunchStartMinute: haul.route.lunch_start_minute,
+      lunchEndMinute: haul.route.lunch_end_minute,
+      handoverWindowMinutes: haul.route.handover_window_minutes ?? 30,
       timeZone: TIME_ZONE,
     };
   }
@@ -450,6 +457,7 @@ export class OperationsReportService {
             shiftCount,
             timeZone: TIME_ZONE,
             minStopSec: options.minStopSec,
+            breaks: policyOfRoute(route, TIME_ZONE),
           }),
         );
       }
@@ -569,6 +577,8 @@ export class OperationsReportService {
       idleOutsideSec: Math.round(b.idleOutsideSec),
       parkedSec: Math.round(b.parkedSec),
       noDataSec: Math.round(b.noDataSec),
+      lunchSec: Math.round(b.lunchSec),
+      handoverSec: Math.round(b.handoverSec),
     });
     const iso = (d: Date | null) => (d ? d.toISOString() : null);
     return {
@@ -588,6 +598,7 @@ export class OperationsReportService {
       timeBudget: budget(analysis.budget),
       stopCount: analysis.stopCount,
       stopSec: analysis.stopSec,
+      plannedStops: analysis.plannedStops,
       withoutDriver: analysis.withoutDriver,
       controlLimits: {
         loadSec:
@@ -678,6 +689,7 @@ export class OperationsReportService {
         lng: stop.lng,
         engineOn: stop.engineOn,
         phase: stop.phase,
+        category: stop.category,
       })),
       openHauls: analysis.openHauls.map((row) => ({
         vehicleId: row.vehicleId,
@@ -731,7 +743,8 @@ export class OperationsReportService {
       trx.raw(
         `SELECT id, name, origin_geofence_id, destination_geofence_id,
                 shift_start_hour, shift_start_minute,
-                shift_duration_hours, shift_duration_minutes, shift_count
+                shift_duration_hours, shift_duration_minutes, shift_count,
+                lunch_start_minute, lunch_end_minute, handover_window_minutes
          FROM fleet.haul_routes
          WHERE tenant_id = ?::uuid AND id = ?::uuid AND status = 'ACTIVE'`,
         [tenantId, routeId],

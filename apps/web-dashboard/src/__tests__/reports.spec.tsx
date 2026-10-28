@@ -269,6 +269,52 @@ describe('ReportRangePicker (§16 time ranges)', () => {
   });
 });
 
+describe('StopsSection planned stops', () => {
+  it('splits the stops into machine, lunch and shift handover and filters by type', async () => {
+    const base = {
+      kind: 'PARKING',
+      vehicleId: 'v-1',
+      label: 'T-1',
+      startedAt: '2026-08-15T08:40:00Z',
+      endedAt: '2026-08-15T09:30:00Z',
+      durationSec: 3000,
+      lat: null,
+      lng: null,
+      status: 'ENDED',
+    };
+    apiGetRaw.mockImplementation(async (path: string) => {
+      if (path === '/reports/idle-parking') {
+        return {
+          items: [
+            { ...base, id: 'p-1', category: 'LUNCH' },
+            { ...base, id: 'p-2', label: 'T-2', category: 'OPERATIONAL' },
+          ],
+          nextCursor: null,
+          summary: {
+            operational: { count: 4, sec: 7200 },
+            lunch: { count: 3, sec: 5400 },
+            handover: { count: 2, sec: 3600 },
+            truncated: false,
+          },
+        };
+      }
+      return { items: [], total: 0 };
+    });
+    render(<StopsSection range={{ preset: '7d' }} />, { wrapper: makeWrapper() });
+
+    const split = await screen.findByTestId('report-stops-split');
+    expect(screen.getByTestId('stops-split-lunch').textContent).toMatch(/1h 30m.*3 stops/);
+    expect(screen.getByTestId('stops-split-handover').textContent).toMatch(/1h 0m.*2 stops/);
+    expect(screen.getByTestId('stops-split-operational').textContent).toMatch(/2h 0m.*4 stops/);
+    expect(split).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getAllByText('T-1').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByTestId('stop-category-LUNCH'));
+    expect(screen.queryByText('T-2')).toBeNull();
+    expect(screen.getByText('T-1')).toBeInTheDocument();
+  });
+});
+
 describe('RangeSummary', () => {
   it('shows the start and end date and time of the period apart', () => {
     render(

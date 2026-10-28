@@ -49,6 +49,25 @@ function parseTime(value: string): { hour: number; minute: number } | null {
   return { hour: Number(match[1]), minute: Number(match[2]) };
 }
 
+/** Minutes past midnight of an `HH:MM` value; null while the field is empty. */
+function minuteOfDay(value: string): number | null {
+  const time = parseTime(value);
+  return time ? time.hour * 60 + time.minute : null;
+}
+
+/** The lunch break of a form: both ends, neither, or an error when only one is given. */
+function lunchOf(
+  start: string,
+  end: string,
+): { start: number | null; end: number | null; error: 'half' | 'same' | null } {
+  const from = minuteOfDay(start);
+  const to = minuteOfDay(end);
+  if (from === null && to === null) return { start: null, end: null, error: null };
+  if (from === null || to === null) return { start: from, end: to, error: 'half' };
+  if (from === to) return { start: from, end: to, error: 'same' };
+  return { start: from, end: to, error: null };
+}
+
 /** `[start, end)` local times of every shift in the work day. */
 export function shiftPlan(
   startMinute: number,
@@ -95,6 +114,9 @@ export function RoutesTab({
   const [shiftHours, setShiftHours] = useState(12);
   const [shiftMinutes, setShiftMinutes] = useState(0);
   const [shiftCount, setShiftCount] = useState(2);
+  const [lunchFrom, setLunchFrom] = useState('');
+  const [lunchTo, setLunchTo] = useState('');
+  const [handoverWindow, setHandoverWindow] = useState(30);
   const [roles, setRoles] = useState<Record<string, '' | MachineRole>>({});
   const [rosters, setRosters] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -185,6 +207,11 @@ export function RoutesTab({
       setFormError(t('operations.shiftInvalid'));
       return;
     }
+    const createLunch = lunchOf(lunchFrom, lunchTo);
+    if (createLunch.error) {
+      setFormError(t(`operations.lunchInvalid.${createLunch.error}`));
+      return;
+    }
     try {
       const created = await createRoute.mutateAsync({
         name: name.trim(),
@@ -195,8 +222,13 @@ export function RoutesTab({
         shiftDurationHours: shiftHours,
         shiftDurationMinutes: shiftMinutes,
         shiftCount,
+        lunchStartMinute: createLunch.start,
+        lunchEndMinute: createLunch.end,
+        handoverWindowMinutes: handoverWindow,
       });
       setName('');
+      setLunchFrom('');
+      setLunchTo('');
       onSelect(created.id);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t('operations.saveFailed'));
@@ -387,6 +419,14 @@ export function RoutesTab({
                 max={maxShifts(createLength)}
                 value={shiftCount}
                 onChange={(event) => setShiftCount(Number(event.target.value))}
+              />
+              <BreakFields
+                lunchFrom={lunchFrom}
+                lunchTo={lunchTo}
+                handoverWindow={handoverWindow}
+                onLunchFrom={setLunchFrom}
+                onLunchTo={setLunchTo}
+                onHandoverWindow={setHandoverWindow}
               />
               <ShiftPlanNote
                 startMinute={createStart ? createStart.hour * 60 + createStart.minute : 0}
@@ -580,6 +620,59 @@ export function RoutesTab({
   );
 }
 
+/**
+ * The planned stops of a service: the lunch break and the shift handover. A
+ * stop inside the lunch window, or an engine-off stop within the handover
+ * window of a shift boundary, is reported apart from the machine's own stops.
+ */
+function BreakFields({
+  lunchFrom,
+  lunchTo,
+  handoverWindow,
+  onLunchFrom,
+  onLunchTo,
+  onHandoverWindow,
+}: {
+  lunchFrom: string;
+  lunchTo: string;
+  handoverWindow: number;
+  onLunchFrom: (value: string) => void;
+  onLunchTo: (value: string) => void;
+  onHandoverWindow: (value: number) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <fieldset className="grid gap-3 sm:col-span-2 sm:grid-cols-3" data-testid="haul-break-fields">
+      <legend className="mb-1 text-sm font-medium text-gray-700 dark:text-graydark-800">
+        {t('operations.plannedStops')}
+      </legend>
+      <Input
+        label={t('operations.lunchFrom')}
+        type="time"
+        step={60}
+        value={lunchFrom}
+        onChange={(event) => onLunchFrom(event.target.value)}
+      />
+      <Input
+        label={t('operations.lunchTo')}
+        type="time"
+        step={60}
+        value={lunchTo}
+        onChange={(event) => onLunchTo(event.target.value)}
+      />
+      <Input
+        label={t('operations.handoverWindow')}
+        type="number"
+        min={0}
+        max={120}
+        value={handoverWindow}
+        onChange={(event) => onHandoverWindow(Number(event.target.value))}
+        hint={t('operations.handoverWindowHint')}
+      />
+    </fieldset>
+  );
+}
+
 /** Shift length as an hours field and a minutes field. */
 function ShiftLengthFields({
   hours,
@@ -660,6 +753,17 @@ function RouteSettings({
   const [hours, setHours] = useState(route.shiftDurationHours);
   const [minutes, setMinutes] = useState(route.shiftDurationMinutes ?? 0);
   const [count, setCount] = useState(route.shiftCount ?? 1);
+  const [lunchFrom, setLunchFrom] = useState(
+    route.lunchStartMinute === null || route.lunchStartMinute === undefined
+      ? ''
+      : clock(route.lunchStartMinute),
+  );
+  const [lunchTo, setLunchTo] = useState(
+    route.lunchEndMinute === null || route.lunchEndMinute === undefined
+      ? ''
+      : clock(route.lunchEndMinute),
+  );
+  const [handoverWindow, setHandoverWindow] = useState(route.handoverWindowMinutes ?? 30);
   const startAt = parseTime(start);
   const length = hours * 60 + minutes;
   const tooLong = count * length > DAY_MINUTES;
@@ -674,6 +778,11 @@ function RouteSettings({
       onError(t('operations.shiftInvalid'));
       return;
     }
+    const lunch = lunchOf(lunchFrom, lunchTo);
+    if (lunch.error) {
+      onError(t(`operations.lunchInvalid.${lunch.error}`));
+      return;
+    }
     try {
       await update.mutateAsync({
         name: name.trim(),
@@ -682,6 +791,9 @@ function RouteSettings({
         shiftDurationHours: hours,
         shiftDurationMinutes: minutes,
         shiftCount: count,
+        lunchStartMinute: lunch.start,
+        lunchEndMinute: lunch.end,
+        handoverWindowMinutes: handoverWindow,
       });
       onSaved();
     } catch (err) {
@@ -725,6 +837,14 @@ function RouteSettings({
           max={maxShifts(length)}
           value={count}
           onChange={(event) => setCount(Number(event.target.value))}
+        />
+        <BreakFields
+          lunchFrom={lunchFrom}
+          lunchTo={lunchTo}
+          handoverWindow={handoverWindow}
+          onLunchFrom={setLunchFrom}
+          onLunchTo={setLunchTo}
+          onHandoverWindow={setHandoverWindow}
         />
         <ShiftPlanNote
           startMinute={startAt ? startAt.hour * 60 + startAt.minute : 0}

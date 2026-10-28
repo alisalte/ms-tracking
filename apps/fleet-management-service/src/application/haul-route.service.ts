@@ -26,6 +26,11 @@ export interface HaulRouteRecord {
   /** Minutes added to `shiftDurationHours` (0-59). */
   readonly shiftDurationMinutes: number;
   readonly shiftCount: number;
+  /** Lunch break as minutes past local midnight; null = no lunch break. */
+  readonly lunchStartMinute: number | null;
+  readonly lunchEndMinute: number | null;
+  /** Minutes either side of a shift boundary that an engine-off stop is the handover (0 = off). */
+  readonly handoverWindowMinutes: number;
   readonly status: 'ACTIVE' | 'ARCHIVED';
   readonly version: number;
   readonly createdAt: Date;
@@ -50,6 +55,9 @@ export interface CreateHaulRouteInput {
   readonly shiftDurationHours?: number;
   readonly shiftDurationMinutes?: number;
   readonly shiftCount?: number;
+  readonly lunchStartMinute?: number | null;
+  readonly lunchEndMinute?: number | null;
+  readonly handoverWindowMinutes?: number;
 }
 
 export interface UpdateHaulRouteInput {
@@ -61,6 +69,9 @@ export interface UpdateHaulRouteInput {
   readonly shiftDurationHours?: number;
   readonly shiftDurationMinutes?: number;
   readonly shiftCount?: number;
+  readonly lunchStartMinute?: number | null;
+  readonly lunchEndMinute?: number | null;
+  readonly handoverWindowMinutes?: number;
 }
 
 export interface HaulMemberInput {
@@ -81,6 +92,9 @@ interface RouteRow {
   shift_duration_hours: number;
   shift_duration_minutes: number | null;
   shift_count: number;
+  lunch_start_minute: number | null;
+  lunch_end_minute: number | null;
+  handover_window_minutes: number | null;
   status: 'ACTIVE' | 'ARCHIVED';
   version: number;
   created_at: Date;
@@ -105,6 +119,11 @@ export class HaulRouteService {
       input.shiftStartMinute ?? 0,
       input.shiftDurationMinutes ?? 0,
     );
+    const breaks = checkBreaks(
+      input.lunchStartMinute ?? null,
+      input.lunchEndMinute ?? null,
+      input.handoverWindowMinutes ?? 30,
+    );
     return withTenantContext(this.knex, ctx.tenantId, async (trx) => {
       const [row] = await trx
         .withSchema('fleet')
@@ -119,6 +138,9 @@ export class HaulRouteService {
           shift_duration_hours: shifts.durationHours,
           shift_duration_minutes: shifts.durationMinutes,
           shift_count: shifts.count,
+          lunch_start_minute: breaks.lunchStartMinute,
+          lunch_end_minute: breaks.lunchEndMinute,
+          handover_window_minutes: breaks.handoverWindowMinutes,
         })
         .returning('*');
       const record = toRoute(row as RouteRow);
@@ -146,6 +168,11 @@ export class HaulRouteService {
       input.shiftStartMinute ?? before.shiftStartMinute,
       input.shiftDurationMinutes ?? before.shiftDurationMinutes,
     );
+    const breaks = checkBreaks(
+      input.lunchStartMinute !== undefined ? input.lunchStartMinute : before.lunchStartMinute,
+      input.lunchEndMinute !== undefined ? input.lunchEndMinute : before.lunchEndMinute,
+      input.handoverWindowMinutes ?? before.handoverWindowMinutes,
+    );
     return withTenantContext(this.knex, ctx.tenantId, async (trx) => {
       const [row] = await trx
         .withSchema('fleet')
@@ -161,6 +188,9 @@ export class HaulRouteService {
           shift_duration_hours: shifts.durationHours,
           shift_duration_minutes: shifts.durationMinutes,
           shift_count: shifts.count,
+          lunch_start_minute: breaks.lunchStartMinute,
+          lunch_end_minute: breaks.lunchEndMinute,
+          handover_window_minutes: breaks.handoverWindowMinutes,
           version: trx.raw('version + 1'),
           updated_at: trx.fn.now(),
         })
@@ -395,6 +425,40 @@ export function checkShifts(
   return { startHour, startMinute, durationHours, durationMinutes, count };
 }
 
+/** A lunch break is both ends or neither; the handover window is 0-120 minutes. */
+export function checkBreaks(
+  lunchStartMinute: number | null,
+  lunchEndMinute: number | null,
+  handoverWindowMinutes: number,
+): {
+  lunchStartMinute: number | null;
+  lunchEndMinute: number | null;
+  handoverWindowMinutes: number;
+} {
+  if ((lunchStartMinute === null) !== (lunchEndMinute === null)) {
+    throw new BadRequestException(
+      'Give both the start and the end of the lunch break, or neither.',
+    );
+  }
+  if (lunchStartMinute !== null && lunchEndMinute !== null) {
+    const valid = (m: number) => Number.isInteger(m) && m >= 0 && m <= 1439;
+    if (!valid(lunchStartMinute) || !valid(lunchEndMinute)) {
+      throw new BadRequestException('The lunch break must be times of the day.');
+    }
+    if (lunchStartMinute === lunchEndMinute) {
+      throw new BadRequestException('The lunch break must have a length.');
+    }
+  }
+  if (
+    !Number.isInteger(handoverWindowMinutes) ||
+    handoverWindowMinutes < 0 ||
+    handoverWindowMinutes > 120
+  ) {
+    throw new BadRequestException('The handover window must be between 0 and 120 minutes.');
+  }
+  return { lunchStartMinute, lunchEndMinute, handoverWindowMinutes };
+}
+
 /** Trim to the route's shift count; drop trailing empty shifts. */
 export function normalizeRoster(
   drivers: ReadonlyArray<string | null> | undefined,
@@ -417,6 +481,9 @@ function toRoute(row: RouteRow): HaulRouteRecord {
     shiftDurationHours: row.shift_duration_hours,
     shiftDurationMinutes: row.shift_duration_minutes ?? 0,
     shiftCount: row.shift_count ?? 1,
+    lunchStartMinute: row.lunch_start_minute ?? null,
+    lunchEndMinute: row.lunch_end_minute ?? null,
+    handoverWindowMinutes: row.handover_window_minutes ?? 30,
     status: row.status,
     version: row.version,
     createdAt: new Date(row.created_at),

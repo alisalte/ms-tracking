@@ -27,6 +27,12 @@ import {
   resolveDriver,
   zoneContains,
 } from './haul-cycles.js';
+import {
+  type BreakPolicy,
+  type StopCategory,
+  categoryOf,
+  plannedOverlap,
+} from './planned-stops.js';
 
 /** At or below this speed a machine counts as standing. */
 export const DEFAULT_STANDING_KMH = 3;
@@ -69,6 +75,10 @@ export interface TimeBudget {
   parkedSec: number;
   /** Gaps between fixes longer than the no-data gap. */
   noDataSec: number;
+  /** Standing inside the lunch window (not counted in the other standing buckets). */
+  lunchSec: number;
+  /** Standing with the engine off around a shift boundary (not counted in the others). */
+  handoverSec: number;
 }
 
 export interface StopEvent {
@@ -84,6 +94,8 @@ export interface StopEvent {
   readonly phase: 'LOADED' | 'EMPTY';
   readonly driverId: string | null;
   readonly driverName: string | null;
+  /** OPERATIONAL = a stop of the machine; LUNCH / HANDOVER are planned stops. */
+  readonly category: StopCategory;
 }
 
 export interface TruckMeasure {
@@ -103,6 +115,8 @@ export interface MeasureTruckInput extends DriverContext {
   readonly standingKmh?: number;
   readonly noDataGapSec?: number;
   readonly minStopSec?: number;
+  /** Lunch and shift-handover windows of the route; null leaves every stop operational. */
+  readonly breaks?: BreakPolicy | null;
 }
 
 export function emptyBudget(): TimeBudget {
@@ -113,6 +127,8 @@ export function emptyBudget(): TimeBudget {
     idleOutsideSec: 0,
     parkedSec: 0,
     noDataSec: 0,
+    lunchSec: 0,
+    handoverSec: 0,
   };
 }
 
@@ -123,6 +139,8 @@ export function addBudget(into: TimeBudget, add: TimeBudget): void {
   into.idleOutsideSec += add.idleOutsideSec;
   into.parkedSec += add.parkedSec;
   into.noDataSec += add.noDataSec;
+  into.lunchSec += add.lunchSec;
+  into.handoverSec += add.handoverSec;
 }
 
 /** Everything one truck's own track says: unload / return times, where its time went, its stops. */
@@ -148,6 +166,8 @@ export function measureTruck(input: MeasureTruckInput): TruckMeasure {
     end: Date;
     sec: number;
     engineOn: boolean;
+    lunchSec: number;
+    handoverSec: number;
   } | null = null;
   const flush = () => {
     if (stop && stop.sec >= minStopSec) {
@@ -163,6 +183,7 @@ export function measureTruck(input: MeasureTruckInput): TruckMeasure {
         phase: isLoadedLeg(cycles, stop.start.at) ? 'LOADED' : 'EMPTY',
         driverId: driver?.driverId ?? null,
         driverName: driver?.driverName ?? null,
+        category: categoryOf({ lunchSec: stop.lunchSec, handoverSec: stop.handoverSec }, stop.sec),
       });
     }
     stop = null;
@@ -182,22 +203,32 @@ export function measureTruck(input: MeasureTruckInput): TruckMeasure {
     const standing = isStanding(a, b, dt, standingKmh);
     const engineOff = a.ignitionOn === false;
     const zone = inOrigin[i] ? 'origin' : inDest[i] ? 'destination' : null;
+    // Lunch and handover are carved out of the standing time first.
+    const planned = standing
+      ? plannedOverlap(a.at, b.at, engineOff, input.breaks ?? null)
+      : { lunchSec: 0, handoverSec: 0 };
+    const plannedSec = Math.min(dt, planned.lunchSec + planned.handoverSec);
+    budget.lunchSec += planned.lunchSec;
+    budget.handoverSec += planned.handoverSec;
+    const rest = dt - plannedSec;
     if (standing && engineOff) {
-      budget.parkedSec += dt;
+      budget.parkedSec += rest;
     } else if (zone === 'origin') {
-      budget.originSec += dt;
+      budget.originSec += rest;
     } else if (zone === 'destination') {
-      budget.destinationSec += dt;
+      budget.destinationSec += rest;
     } else if (!standing) {
-      budget.movingSec += dt;
+      budget.movingSec += rest;
     } else {
-      budget.idleOutsideSec += dt;
+      budget.idleOutsideSec += rest;
     }
 
     if (standing && zone === null) {
-      stop ??= { start: a, end: b.at, sec: 0, engineOn: false };
+      stop ??= { start: a, end: b.at, sec: 0, engineOn: false, lunchSec: 0, handoverSec: 0 };
       stop.sec += dt;
       stop.end = b.at;
+      stop.lunchSec += planned.lunchSec;
+      stop.handoverSec += planned.handoverSec;
       if (!engineOff) stop.engineOn = true;
     } else {
       flush();
@@ -380,12 +411,23 @@ export interface HaulAnalysis {
   readonly byDriver: DriverScore[];
   readonly byShift: ShiftScore[];
   readonly byShovel: ShovelScore[];
+  /** Every reported stop, longest first; `category` tells the machine's own from the planned ones. */
   readonly stops: StopEvent[];
+  /** Stops of the machine itself (lunch and handover are counted apart). */
   readonly stopCount: number;
   readonly stopSec: number;
+  /** Planned stops: lunch and shift handover. */
+  readonly plannedStops: PlannedStops;
   readonly openHauls: OpenHaulStatus[];
   readonly withoutDriver: number;
   readonly findings: Finding[];
+}
+
+export interface PlannedStops {
+  readonly lunchCount: number;
+  readonly lunchSec: number;
+  readonly handoverCount: number;
+  readonly handoverSec: number;
 }
 
 export interface AnalyzeHaulInput {
@@ -398,9 +440,15 @@ export interface AnalyzeHaulInput {
 export function analyzeHaul(input: AnalyzeHaulInput): HaulAnalysis {
   const timings = input.measures.flatMap((m) => m.timings);
   timings.sort((a, b) => a.cycle.originEnteredAt.getTime() - b.cycle.originEnteredAt.getTime());
-  const stops = input.measures
+  const allStops = input.measures
     .flatMap((m) => m.stops)
     .sort((a, b) => b.durationSec - a.durationSec);
+  // Lunch and shift handover are not the machine's own stops: they stay out of
+  // the stop totals and out of the driver scores.
+  const stops = allStops.filter((s) => s.category === 'OPERATIONAL');
+  const lunch = allStops.filter((s) => s.category === 'LUNCH');
+  const handover = allStops.filter((s) => s.category === 'HANDOVER');
+  const sumSec = (list: readonly StopEvent[]) => list.reduce((sum, s) => sum + s.durationSec, 0);
 
   const values = (phase: Phase) =>
     timings
@@ -439,7 +487,7 @@ export function analyzeHaul(input: AnalyzeHaulInput): HaulAnalysis {
     return { ...row, elapsedSec, overdue: limit !== null && elapsedSec > limit };
   });
   const withoutDriver = timings.filter((t) => !t.cycle.driverId).length;
-  const stopSec = stops.reduce((sum, s) => sum + s.durationSec, 0);
+  const stopSec = sumSec(stops);
 
   return {
     services: timings.length,
@@ -454,9 +502,15 @@ export function analyzeHaul(input: AnalyzeHaulInput): HaulAnalysis {
     byDriver,
     byShift,
     byShovel,
-    stops: stops.slice(0, MAX_STOPS),
+    stops: allStops.slice(0, MAX_STOPS),
     stopCount: stops.length,
     stopSec,
+    plannedStops: {
+      lunchCount: lunch.length,
+      lunchSec: sumSec(lunch),
+      handoverCount: handover.length,
+      handoverSec: sumSec(handover),
+    },
     openHauls,
     withoutDriver,
     findings: findingsOf({
@@ -577,7 +631,7 @@ function vehicleScores(
       avgUnloadSec: mean(rows.map((r) => r.timing.unloadSec)),
       waste: sumWaste(rows),
       budget: m.budget,
-      stopCount: m.stops.length,
+      stopCount: m.stops.filter((s) => s.category === 'OPERATIONAL').length,
     });
   }
   return scores.sort((a, b) => b.waste.totalSec - a.waste.totalSec);

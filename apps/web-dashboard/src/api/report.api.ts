@@ -145,6 +145,17 @@ export interface PeriodRowWire {
   lat: number | null;
   lng: number | null;
   status: string | null;
+  /** OPERATIONAL = a stop of the machine; LUNCH / HANDOVER follow the route's schedule. */
+  category?: 'OPERATIONAL' | 'LUNCH' | 'HANDOVER';
+}
+
+/** Idle / parking periods split into the machine's own stops and the planned ones. */
+export interface PlannedStopSummaryWire {
+  operational: { count: number; sec: number };
+  lunch: { count: number; sec: number };
+  handover: { count: number; sec: number };
+  /** The scan hit its cap: the totals cover only the newest periods. */
+  truncated: boolean;
 }
 
 export interface AlarmAggRowWire {
@@ -289,10 +300,11 @@ export function useIdleParking(
   return useQuery({
     queryKey: ['reports', 'idle-parking', range, filters],
     queryFn: () =>
-      apiGetRaw<{ items: PeriodRowWire[]; nextCursor: string | null }>(
-        '/reports/idle-parking',
-        rangeParams(range, { ...filters, limit: 50 }),
-      ),
+      apiGetRaw<{
+        items: PeriodRowWire[];
+        nextCursor: string | null;
+        summary?: PlannedStopSummaryWire;
+      }>('/reports/idle-parking', rangeParams(range, { ...filters, limit: 50 })),
   });
 }
 

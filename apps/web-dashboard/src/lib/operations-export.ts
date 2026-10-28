@@ -347,9 +347,11 @@ export function analysisSheets(
     'idleOutside',
     'parked',
     'noData',
+    'lunch',
+    'handover',
   ] as const;
   const budgetSec = (key: (typeof budgetKeys)[number]) =>
-    budget[`${key}Sec` as keyof typeof budget];
+    budget[`${key}Sec` as keyof typeof budget] ?? 0;
 
   return [
     {
@@ -366,6 +368,8 @@ export function analysisSheets(
         ],
         [a('kpiLost'), report.lostServices],
         [a('kpiStops'), report.stopCount],
+        [`${a('lunch')} (${a('unitMin')})`, minutesOf(report.plannedStops?.lunchSec ?? 0)],
+        [`${a('handover')} (${a('unitMin')})`, minutesOf(report.plannedStops?.handoverSec ?? 0)],
         [a('kpiWithoutDriver'), report.withoutDriver],
         [],
         [
@@ -506,6 +510,7 @@ export function analysisSheets(
           t('reports.cols.endDate'),
           t('reports.cols.endTime'),
           a('colDuration'),
+          a('colCategory'),
           a('colEngine'),
           a('colLeg'),
           'lat',
@@ -519,6 +524,13 @@ export function analysisSheets(
           datePart(row.endedAt, lang),
           timePart(row.endedAt, lang),
           minutesOf(row.durationSec),
+          a(
+            row.category === 'LUNCH'
+              ? 'lunch'
+              : row.category === 'HANDOVER'
+                ? 'handover'
+                : 'operational',
+          ),
           row.engineOn ? a('engineOn') : a('engineOff'),
           row.phase === 'LOADED' ? a('legLoaded') : a('legEmpty'),
           row.lat,
