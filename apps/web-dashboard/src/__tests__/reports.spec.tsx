@@ -255,8 +255,32 @@ describe('ReportRangePicker (§16 time ranges)', () => {
     const applied = onChange.mock.calls[0][0] as { from: string; to: string };
     expect(new Date(applied.from).toISOString()).toBe(applied.from);
     expect(new Date(applied.from).getTime()).toBeLessThan(new Date(applied.to).getTime());
-    expect(applied.from).toBe(new Date('2026-08-15T10:00').toISOString());
-    expect(applied.to).toBe(new Date('2026-08-16T10:00').toISOString());
+    // A newly picked day starts at 00:00 and ends at 23:59.
+    expect(applied.from).toBe(new Date('2026-08-15T00:00').toISOString());
+    expect(applied.to).toBe(new Date('2026-08-16T23:59').toISOString());
+  });
+
+  it('makes one picked day a whole-day range instead of an empty one', () => {
+    const onChange = vi.fn();
+    const range = { from: '2026-08-01T00:00:00.000Z', to: '2026-08-02T00:00:00.000Z' };
+    render(<ReportRangePicker range={range} onChange={onChange} />, { wrapper: makeWrapper() });
+
+    // The same day picked for both ends keeps its own time of day: 00:00 → 23:59.
+    fireEvent.change(screen.getByLabelText(/to/i, { selector: 'input' }), {
+      target: { value: '2026-08-15T10:30' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      from: range.from,
+      to: new Date('2026-08-15T23:59').toISOString(),
+    });
+    fireEvent.change(screen.getByLabelText(/from/i, { selector: 'input' }), {
+      target: { value: '2026-08-15T10:30' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      from: new Date('2026-08-15T00:00').toISOString(),
+      to: new Date('2026-08-15T23:59').toISOString(),
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('keeps the Apply button for a range typed in before it was committed', () => {
