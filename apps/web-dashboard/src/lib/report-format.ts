@@ -12,7 +12,8 @@ const DAY_MS = 86_400_000;
 
 /**
  * Resolve a report range to UTC instants — same UTC-day strategy as
- * reporting-service presets (`today` / `yesterday` start at 00:00 UTC).
+ * reporting-service presets (`today` / `yesterday` start at 00:00 UTC, `7d` / `30d`
+ * at the UTC midnight that many days back).
  */
 export function reportRangeBounds(range: ReportRange, now = new Date()): { from: Date; to: Date } {
   if (range.from && range.to) {
@@ -26,9 +27,9 @@ export function reportRangeBounds(range: ReportRange, now = new Date()): { from:
     case 'yesterday':
       return { from: new Date(utcMidnight - DAY_MS), to: new Date(utcMidnight) };
     case '30d':
-      return { from: new Date(to.getTime() - 30 * DAY_MS), to };
+      return { from: new Date(utcMidnight - 30 * DAY_MS), to };
     default:
-      return { from: new Date(to.getTime() - 7 * DAY_MS), to };
+      return { from: new Date(utcMidnight - 7 * DAY_MS), to };
   }
 }
 

@@ -545,6 +545,18 @@ export class ReportService {
       const maxRows = this.deps.config.REPORT_EXPORT_MAX_ROWS;
       let header: string[];
       let rows: CsvValue[][];
+      // Aggregate reports have no per-row dates; every row carries the period instead.
+      const win = this.window(q);
+      const periodHeader = [
+        'period_start_date_shamsi',
+        'period_start_time',
+        'period_end_date_shamsi',
+        'period_end_time',
+      ];
+      const periodCells: CsvValue[] = [
+        ...shamsiCells(win.from, EXPORT_TIME_ZONE),
+        ...shamsiCells(win.to, EXPORT_TIME_ZONE),
+      ];
       if (report === 'trips') {
         const collected: CsvValue[][] = [];
         let cursor: string | undefined;
@@ -593,6 +605,7 @@ export class ReportService {
           'utilization_pct',
           'distance_km',
           'trips',
+          ...periodHeader,
         ];
         rows = (page.items as unknown as Array<Record<string, unknown>>).map((r) => [
           String(r.label),
@@ -605,10 +618,20 @@ export class ReportService {
             : Number(r.utilizationPct),
           Number(r.distanceKm),
           Number(r.trips),
+          ...periodCells,
         ]);
       } else {
         const page = await this.alarms(tenantId, { ...q, limit: 200 });
-        header = ['vehicle', 'type', 'severity', 'total', 'open', 'acknowledged', 'resolved'];
+        header = [
+          'vehicle',
+          'type',
+          'severity',
+          'total',
+          'open',
+          'acknowledged',
+          'resolved',
+          ...periodHeader,
+        ];
         rows = (page.items as unknown as Array<Record<string, unknown>>).map((r) => [
           r.label ? String(r.label) : '',
           String(r.type),
@@ -617,6 +640,7 @@ export class ReportService {
           Number(r.open),
           Number(r.acknowledged),
           Number(r.resolved),
+          ...periodCells,
         ]);
       }
       const csv = csvDocument(header, rows);

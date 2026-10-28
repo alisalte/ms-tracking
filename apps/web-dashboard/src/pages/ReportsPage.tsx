@@ -20,6 +20,7 @@ import { DriversSection } from '@/components/reports/DriversSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
 import { OperationSection } from '@/components/reports/OperationSection';
+import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { SchedulesSection } from '@/components/reports/SchedulesSection';
@@ -51,7 +52,12 @@ export function ReportsPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t('reports.title')} description={t('reports.subtitle')} />
-      {section !== 'schedules' && <ReportRangePicker range={range} onChange={setRange} />}
+      {section !== 'schedules' && (
+        <>
+          <ReportRangePicker range={range} onChange={setRange} />
+          {section !== 'devices' && <RangeSummary range={range} />}
+        </>
+      )}
 
       <Tabs
         aria-label={t('reports.title')}

@@ -33,6 +33,7 @@ import { DistanceSection } from '@/components/reports/DistanceSection';
 import { DriversSection } from '@/components/reports/DriversSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
+import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
@@ -265,6 +266,24 @@ describe('ReportRangePicker (§16 time ranges)', () => {
     fireEvent.click(screen.getByTestId('report-range-apply'));
     // The range on screen is the range in force: nothing new to send.
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('RangeSummary', () => {
+  it('shows the start and end date and time of the period apart', () => {
+    render(
+      <RangeSummary
+        range={{ from: '2026-08-15T08:00:00Z', to: '2026-08-16T09:30:00Z' }}
+        from="2026-08-15T08:00:00Z"
+        to="2026-08-16T09:30:00Z"
+      />,
+      { wrapper: makeWrapper() },
+    );
+    const text = screen.getByTestId('report-range-summary').textContent ?? '';
+    expect(text).toMatch(/15\/08\/2026/);
+    expect(text).toMatch(/16\/08\/2026/);
+    expect(text).toMatch(/Start date and time/);
+    expect(text).toMatch(/End date and time/);
   });
 });
 
