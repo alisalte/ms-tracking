@@ -36,9 +36,14 @@ export interface DeviceActivityRow {
   vehicleName: string | null;
   vehicleCode: string | null;
   plate: string | null;
+  /** Tehran calendar day of this row (YYYY-MM-DD); null when the machine sent nothing in the range. */
+  day: string | null;
+  /** First position of that day inside the range. */
   startedAt: string | null;
+  /** Last position of that day inside the range. */
+  endedAt: string | null;
+  driverName: string | null;
   fixes: number;
-  lastFixAt: string | null;
   offlineSec: number | null;
   distanceKm: number;
   silent: boolean;

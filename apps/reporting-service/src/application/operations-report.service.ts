@@ -62,7 +62,8 @@ interface ActivityRow {
   vehicle_name: string | null;
   vehicle_code: string | null;
   plate: string | null;
-  started_at: Date | string | null;
+  day: string | null;
+  first_fix: Date | string | null;
   fixes: number | string;
   last_fix: Date | string | null;
   distance_m: number | string;
@@ -227,22 +228,29 @@ export class OperationsReportService {
         window.from,
         window.to,
         window.to,
+        window.to,
       ]),
     );
-    const devices = rows.map(toActivity);
+    const vehicleIds = [...new Set(rows.map((row) => row.vehicle_id).filter(isString))];
+    const drivers = await this.loadDrivers(tenantId, vehicleIds, window);
+    const devices = rows.map((row) => toActivity(row, drivers)).sort(byMachineThenDay);
     const counted = new Set<string>();
     let totalDistanceM = 0;
     for (const row of rows) {
-      if (!row.vehicle_id || counted.has(row.vehicle_id)) continue;
-      counted.add(row.vehicle_id);
+      if (!row.vehicle_id || !row.day) continue;
+      const key = `${row.vehicle_id}|${row.day}`;
+      if (counted.has(key)) continue;
+      counted.add(key);
       totalDistanceM += num(row.distance_m);
     }
+    const reporting = new Set(devices.filter((row) => row.fixes > 0).map((row) => row.deviceId));
+    const allDevices = new Set(devices.map((row) => row.deviceId));
     return {
       from: window.from.toISOString(),
       to: window.to.toISOString(),
       totalDistanceKm: km(totalDistanceM),
-      silentCount: devices.filter((row) => row.silent).length,
-      reportingCount: devices.filter((row) => row.fixes > 0).length,
+      silentCount: allDevices.size - reporting.size,
+      reportingCount: reporting.size,
       devices,
     };
   }
@@ -898,6 +906,7 @@ window_fixes AS (
 ),
 step AS (
   SELECT vehicle_id, captured_at,
+         (captured_at AT TIME ZONE '${TIME_ZONE}')::date AS day,
          CASE WHEN prev_at IS NULL THEN NULL
               ELSE EXTRACT(EPOCH FROM (captured_at - prev_at)) END AS dt_sec,
          CASE WHEN prev_at IS NULL THEN NULL
@@ -908,16 +917,17 @@ step AS (
               ))) END AS meters
   FROM window_fixes
 ),
-agg AS (
-  SELECT vehicle_id,
+per_day AS (
+  SELECT vehicle_id, day,
          COUNT(*)::int AS fixes,
+         MIN(captured_at) AS first_fix,
          MAX(captured_at) AS last_fix,
          COALESCE(SUM(CASE WHEN dt_sec > 300 THEN dt_sec - 300 ELSE 0 END), 0) AS gap_offline_sec,
          COALESCE(SUM(CASE
            WHEN dt_sec > 1 AND meters > 1 AND (meters * 3.6 / dt_sec) <= 100 THEN meters
            ELSE 0 END), 0) AS distance_m
   FROM step
-  GROUP BY vehicle_id
+  GROUP BY vehicle_id, day
 ),
 lifetime AS (
   SELECT pos.vehicle_id, MIN(pos.captured_at) AS started_at
@@ -929,26 +939,63 @@ lifetime AS (
 )
 SELECT r.device_id, r.imei, r.protocol, r.status,
        r.vehicle_id, r.vehicle_name, r.vehicle_code, r.plate,
-       l.started_at,
-       COALESCE(a.fixes, 0) AS fixes,
-       a.last_fix,
-       COALESCE(a.distance_m, 0) AS distance_m,
+       to_char(p.day, 'YYYY-MM-DD') AS day,
+       p.first_fix,
+       COALESCE(p.fixes, 0) AS fixes,
+       p.last_fix,
+       COALESCE(p.distance_m, 0) AS distance_m,
        CASE
          WHEN r.vehicle_id IS NULL OR l.started_at IS NULL THEN NULL
-         WHEN a.last_fix IS NULL THEN GREATEST(0, EXTRACT(EPOCH FROM (?::timestamptz - ?::timestamptz)) - 300)
-         ELSE COALESCE(a.gap_offline_sec, 0) + CASE
-           WHEN EXTRACT(EPOCH FROM (?::timestamptz - a.last_fix)) > 300
-           THEN EXTRACT(EPOCH FROM (?::timestamptz - a.last_fix)) - 300
+         WHEN p.last_fix IS NULL THEN GREATEST(0, EXTRACT(EPOCH FROM (?::timestamptz - ?::timestamptz)) - 300)
+         ELSE COALESCE(p.gap_offline_sec, 0) + CASE
+           WHEN p.day = (?::timestamptz AT TIME ZONE '${TIME_ZONE}')::date
+             AND EXTRACT(EPOCH FROM (?::timestamptz - p.last_fix)) > 300
+           THEN EXTRACT(EPOCH FROM (?::timestamptz - p.last_fix)) - 300
            ELSE 0 END
        END AS offline_sec
 FROM roster r
 LEFT JOIN lifetime l ON l.vehicle_id = r.vehicle_id
-LEFT JOIN agg a ON a.vehicle_id = r.vehicle_id
-ORDER BY r.imei
+LEFT JOIN per_day p ON p.vehicle_id = r.vehicle_id
+ORDER BY r.vehicle_name NULLS LAST, r.imei, p.day
 `;
 
-function toActivity(row: ActivityRow) {
-  const startedAt = row.started_at ? asDate(row.started_at).toISOString() : null;
+const NATURAL = new Intl.Collator('fa', { numeric: true, sensitivity: 'base' });
+
+function isString(value: string | null): value is string {
+  return value !== null;
+}
+
+/** Machine name in natural order (712 before 1251), then the day. */
+function byMachineThenDay(
+  a: { vehicleName: string | null; imei: string; day: string | null },
+  b: { vehicleName: string | null; imei: string; day: string | null },
+): number {
+  if ((a.vehicleName === null) !== (b.vehicleName === null)) return a.vehicleName === null ? 1 : -1;
+  return (
+    NATURAL.compare(a.vehicleName ?? '', b.vehicleName ?? '') ||
+    a.imei.localeCompare(b.imei) ||
+    (a.day ?? '').localeCompare(b.day ?? '')
+  );
+}
+
+function toActivity(row: ActivityRow, drivers: readonly DriverInterval[]) {
+  const startedAt = row.first_fix ? asDate(row.first_fix) : null;
+  const endedAt = row.last_fix ? asDate(row.last_fix) : null;
+  const names =
+    row.vehicle_id && startedAt && endedAt
+      ? [
+          ...new Set(
+            drivers
+              .filter(
+                (d) =>
+                  d.vehicleId === row.vehicle_id &&
+                  d.startedAt <= endedAt &&
+                  (d.endedAt === null || d.endedAt >= startedAt),
+              )
+              .map((d) => d.driverName),
+          ),
+        ]
+      : [];
   return {
     deviceId: row.device_id,
     imei: row.imei,
@@ -958,12 +1005,14 @@ function toActivity(row: ActivityRow) {
     vehicleName: row.vehicle_name,
     vehicleCode: row.vehicle_code,
     plate: row.plate,
-    startedAt,
+    day: row.day,
+    startedAt: startedAt ? startedAt.toISOString() : null,
+    endedAt: endedAt ? endedAt.toISOString() : null,
+    driverName: names.length > 0 ? names.join('، ') : null,
     fixes: Math.round(num(row.fixes)),
-    lastFixAt: row.last_fix ? asDate(row.last_fix).toISOString() : null,
     offlineSec: row.offline_sec === null ? null : Math.round(num(row.offline_sec)),
     distanceKm: km(num(row.distance_m)),
-    silent: row.vehicle_id === null || startedAt === null,
+    silent: row.vehicle_id === null || row.first_fix === null,
   };
 }
 

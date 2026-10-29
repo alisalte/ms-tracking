@@ -26,6 +26,10 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** The reporting service refuses a longer window (a half-typed year would ask for centuries). */
+const MAX_RANGE_DAYS = 92;
+const MIN_YEAR = 2000;
+
 /** `[from, to)` of two datetime-local values, or null while they do not form a range. */
 function parseCustom(fromValue: string, toValue: string): { from: Date; to: Date } | null {
   const from = fromValue ? new Date(fromValue) : null;
@@ -42,6 +46,13 @@ function parseCustom(fromValue: string, toValue: string): { from: Date; to: Date
 function onNewDay(next: string, previous: string, time: string): string {
   if (!next || next.slice(0, 10) === previous.slice(0, 10)) return next;
   return `${next.slice(0, 10)}T${time}`;
+}
+
+function tooLong(range: { from: Date; to: Date }): boolean {
+  return (
+    range.to.getTime() - range.from.getTime() > MAX_RANGE_DAYS * 86_400_000 ||
+    range.from.getFullYear() < MIN_YEAR
+  );
 }
 
 export function ReportRangePicker({
@@ -61,13 +72,15 @@ export function ReportRangePicker({
     if (range.to) setToInput(toLocalInput(range.to));
   }, [range.from, range.to]);
 
-  const reversed = Boolean(fromInput && toInput && !parseCustom(fromInput, toInput));
+  const pair = parseCustom(fromInput, toInput);
+  const reversed = Boolean(fromInput && toInput && !pair);
+  const long = Boolean(pair && tooLong(pair));
 
   // A valid pair filters the reports at once; an invalid one keeps the last
   // valid range and says why (the message below), instead of silently doing nothing.
   const commit = (fromValue: string, toValue: string) => {
     const next = parseCustom(fromValue, toValue);
-    if (!next) return;
+    if (!next || tooLong(next)) return;
     const from = next.from.toISOString();
     const to = next.to.toISOString();
     if (from === range.from && to === range.to) return;
@@ -146,6 +159,11 @@ export function ReportRangePicker({
             {t('reports.range.apply')}
           </Button>
         </div>
+      )}
+      {isCustom && long && (
+        <p role="alert" className="w-full text-xs text-danger-600 dark:text-danger-400">
+          {t('reports.range.tooLong', { days: MAX_RANGE_DAYS })}
+        </p>
       )}
       {isCustom && reversed && (
         <p role="alert" className="w-full text-xs text-danger-600 dark:text-danger-400">

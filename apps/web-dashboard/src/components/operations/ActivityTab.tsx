@@ -1,9 +1,10 @@
 /**
- * Device activity tab: when each machine started sending data, how much
- * arrived, how long it was offline and how far it travelled.
+ * Device activity tab: one row per machine per day inside the range, grouped
+ * by machine and sorted by day: when it started and stopped sending data, who
+ * drove, how long it was offline and how far it travelled.
  */
 import type { ApexOptions } from 'apexcharts';
-import { Download, MapPin, Radio, RadioTower, WifiOff } from 'lucide-react';
+import { Download, MapPin, RadioTower, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +22,7 @@ import {
   round,
 } from '@/components/operations/ops-ui';
 import type { Column } from '@/components/reports/ReportsTable';
-import { dateTimeColumns } from '@/components/reports/dateTimeColumns';
+import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Badge, Button, Skeleton } from '@/components/tailwind-ui';
 import { chart } from '@/theme/palette';
 
@@ -51,7 +52,17 @@ export function ActivityTab({
         .slice(0, TOP_MACHINES),
     [rows],
   );
-  const totalFixes = rows.reduce((sum, row) => sum + row.fixes, 0);
+  // The machine is named once, on the first row of its group.
+  const groupHeads = useMemo(() => {
+    const seen = new Set<string>();
+    const heads = new Set<DeviceActivityRow>();
+    for (const row of rows) {
+      if (seen.has(row.deviceId)) continue;
+      seen.add(row.deviceId);
+      heads.add(row);
+    }
+    return heads;
+  }, [rows]);
 
   const distanceOptions = useMemo<ApexOptions>(
     () => ({
@@ -79,25 +90,29 @@ export function ActivityTab({
   );
 
   const columns: Array<Column<DeviceActivityRow>> = [
-    { id: 'imei', headerKey: 'operations.colImei', render: (row) => row.imei },
     {
       id: 'vehicle',
       headerKey: 'operations.colVehicle',
-      render: (row) => row.vehicleName ?? t('operations.unbound'),
+      render: (row) =>
+        groupHeads.has(row) ? (
+          <span className="font-semibold">{row.vehicleName ?? t('operations.unbound')}</span>
+        ) : null,
     },
-    ...dateTimeColumns(
-      'started',
-      { date: 'reports.cols.startDate', time: 'reports.cols.startTime' },
+    {
+      id: 'imei',
+      headerKey: 'operations.colImei',
+      render: (row) => (groupHeads.has(row) ? row.imei : null),
+    },
+    ...startEndColumns(
       (row: DeviceActivityRow) => row.startedAt,
+      (row: DeviceActivityRow) => row.endedAt,
       lang,
     ),
-    ...dateTimeColumns(
-      'last-fix',
-      { date: 'reports.cols.lastFixDate', time: 'reports.cols.lastFixTime' },
-      (row: DeviceActivityRow) => row.lastFixAt,
-      lang,
-    ),
-    { id: 'fixes', headerKey: 'operations.colFixes', render: (row) => numText(row.fixes, lang, 0) },
+    {
+      id: 'driver',
+      headerKey: 'operations.colDriver',
+      render: (row) => row.driverName ?? '—',
+    },
     {
       id: 'offline',
       headerKey: 'operations.colOffline',
@@ -138,7 +153,7 @@ export function ActivityTab({
         }
       >
         {failed && <p className="text-sm text-danger-600">{t('operations.loadFailed')}</p>}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="activity-totals">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3" data-testid="activity-totals">
           <StatCard
             label={t('operations.totalDistance')}
             value={data ? numText(data.totalDistanceKm, lang) : '—'}
@@ -159,13 +174,6 @@ export function ActivityTab({
             value={data ? numText(data.silentCount, lang, 0) : '—'}
             icon={WifiOff}
             tone={data && data.silentCount > 0 ? 'danger' : 'info'}
-            loading={loading && !data}
-          />
-          <StatCard
-            label={t('operations.ui.activity.kpiFixes')}
-            value={data ? numText(totalFixes, lang, 0) : '—'}
-            icon={Radio}
-            tone="info"
             loading={loading && !data}
           />
         </div>
@@ -200,7 +208,11 @@ export function ActivityTab({
         </div>
       )}
 
-      <OpsTable columns={columns} rows={rows} rowKey={(row) => row.deviceId} />
+      <OpsTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => `${row.deviceId}|${row.day ?? ''}`}
+      />
     </div>
   );
 }
