@@ -7,6 +7,7 @@
  *   GET /api/v1/reports/trips                — trip report (§9, cursor + sort whitelist)
  *   GET /api/v1/reports/distance             — distance report (§8)
  *   GET /api/v1/reports/speed                — speed report (§10)
+ *   GET /api/v1/reports/speeding-events      — per-episode speeding evidence of one vehicle
  *   GET /api/v1/reports/idle-parking         — idle/parking periods (§11)
  *   GET /api/v1/reports/alarms               — alarm aggregates (§12)
  *   GET /api/v1/reports/alarm-trend          — daily alarm buckets (§13)
@@ -138,6 +139,21 @@ export class ReportsController {
   ) {
     return this.guard(async () =>
       this.reports.speed(tenantId, { preset, from, to, vehicleId, fleetId, limit, offset }),
+    );
+  }
+
+  @Get('speeding-events')
+  @RequirePermissions('report.read')
+  public async speedingEvents(
+    @CurrentTenant() tenantId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('limitKmh') limitKmh?: string,
+  ) {
+    return this.guard(async () =>
+      this.reports.speedingEvents(tenantId, { preset, from, to, vehicleId, limitKmh }),
     );
   }
 

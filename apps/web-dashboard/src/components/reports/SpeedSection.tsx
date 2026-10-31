@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { ApexChart } from '@/components/dashboard/ApexChart';
 import { KpiTile } from '@/components/dashboard/KpiTile';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
+import { SpeedingEventsCard } from '@/components/reports/SpeedingEventsCard';
 import { Card, CardHeader, Skeleton } from '@/components/tailwind-ui';
 import { shortLabel } from '@/lib/report-format';
 import { chart } from '@/theme/palette';
@@ -147,6 +148,8 @@ export function SpeedSection({ range }: { range: ReportRange }) {
         emptyKey="reports.empty"
         dense
       />
+
+      <SpeedingEventsCard range={range} vehicles={rows} />
     </div>
   );
 }
