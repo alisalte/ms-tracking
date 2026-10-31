@@ -552,6 +552,7 @@ describe('expanded report sections', () => {
     render(<ReportsPage />, { wrapper: makeWrapper() });
     expect(screen.getByTestId('report-section-distance')).toBeInTheDocument();
     expect(screen.getByTestId('report-section-speed')).toBeInTheDocument();
+    expect(screen.getByTestId('report-section-speeding')).toBeInTheDocument();
     expect(screen.getByTestId('report-section-drivers')).toBeInTheDocument();
     expect(screen.getByTestId('report-section-devices')).toBeInTheDocument();
     expect(screen.getByTestId('report-section-commands')).toBeInTheDocument();

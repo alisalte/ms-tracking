@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 
 import {
   type ReportRange,
-  type SpeedRowWire,
   type SpeedingEpisodeWire,
   exportReportCsv,
   useSpeedingEvents,
@@ -33,7 +32,7 @@ export function SpeedingEventsCard({
   vehicles,
 }: {
   range: ReportRange;
-  vehicles: readonly SpeedRowWire[];
+  vehicles: ReadonlyArray<{ vehicleId: string; label: string }>;
 }) {
   const { t } = useTranslation();
   const [vehicleId, setVehicleId] = useState('');

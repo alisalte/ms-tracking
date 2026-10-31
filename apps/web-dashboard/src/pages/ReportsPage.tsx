@@ -25,6 +25,7 @@ import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { SchedulesSection } from '@/components/reports/SchedulesSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
+import { SpeedingSection } from '@/components/reports/SpeedingSection';
 import { StopsSection } from '@/components/reports/StopsSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { VehiclesSection } from '@/components/reports/VehiclesSection';
@@ -77,6 +78,7 @@ export function ReportsPage() {
       {section === 'devices' && <DevicesSection />}
       {section === 'distance' && <DistanceSection range={range} />}
       {section === 'speed' && <SpeedSection range={range} />}
+      {section === 'speeding' && <SpeedingSection range={range} />}
       {section === 'stops' && <StopsSection range={range} />}
       {section === 'operation' && <OperationSection range={range} />}
       {section === 'odometer' && <OdometerSection range={range} />}

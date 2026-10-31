@@ -36,6 +36,7 @@ const ICONS: Record<Exclude<ReportSection, 'overview'>, LucideIcon> = {
   devices: Radio,
   distance: Route,
   speed: Gauge,
+  speeding: AlertTriangle,
   stops: Clock,
   operation: Timer,
   odometer: Gauge,
