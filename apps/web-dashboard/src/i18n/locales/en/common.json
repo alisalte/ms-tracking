@@ -1969,6 +1969,14 @@
       "maxReported": "Top speed reported in range",
       "alarms": "Recorded alarms",
       "none": "No GPS fix above {{limit}} km/h was stored in this range. The device's top reported speed: {{max}}.",
+      "noneValid": "Every fix above {{limit}} km/h in this range was a GPS error (listed above); no speeding is backed by the track.",
+      "discarded_one": "{{count}} fix above the limit was set aside as a GPS error",
+      "discarded_other": "{{count}} fixes above the limit were set aside as GPS errors",
+      "discardReason": {
+        "ACCEL": "Impossible jump from the previous fix",
+        "DECEL": "Impossible drop to the next fix",
+        "TRACK": "Positions show only {{track}}"
+      },
       "noFixes": "No valid GPS fix was stored for this vehicle in this range.",
       "truncated": "More fixes exist than the report cap; only the oldest are shown. Narrow the range.",
       "start": "Start",

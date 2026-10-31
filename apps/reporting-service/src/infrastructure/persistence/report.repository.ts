@@ -38,7 +38,11 @@ import type {
   VehicleMetersRow,
   VehicleUtilizationRow,
 } from '../../domain/report-types.js';
-import { MAX_PLAUSIBLE_KMH, type SpeedFix } from '../../domain/speeding-events.js';
+import {
+  MAX_PLAUSIBLE_KMH,
+  type SpeedFix,
+  TRACK_WINDOW_SEC,
+} from '../../domain/speeding-events.js';
 
 export interface TimeWindow {
   readonly from: Date;
@@ -1460,18 +1464,37 @@ export class ReportRepository {
       ).rows as Array<Record<string, unknown>>;
 
       const truncated = fixRows.length > fixCap;
-      const fixes: SpeedFix[] = fixRows.slice(0, fixCap).map((r) => ({
-        at: new Date(r.captured_at as string | Date),
-        lat: Number(r.latitude),
-        lng: Number(r.longitude),
-        speedKmh: Number(r.speed_kmh),
-      }));
+      const fixes: SpeedFix[] = fixRows.slice(0, fixCap).map(toSpeedFix);
+
+      // VALID fixes (any speed) around the over-limit ones: the screen judges each
+      // over-limit fix against them. Overlapping windows are merged first.
+      const spans = contextSpans(fixes, TRACK_WINDOW_SEC * 1000);
+      const contextRows =
+        spans.length === 0
+          ? []
+          : ((
+              await trx.raw(
+                `SELECT DISTINCT ON (p.captured_at) p.captured_at, p.latitude, p.longitude, p.speed_kmh
+                 FROM unnest(?::timestamptz[], ?::timestamptz[]) AS w(s, e)
+                 JOIN tracking.vehicle_positions p
+                   ON p.tenant_id = ?::uuid AND p.vehicle_id = ?::uuid AND p.quality = 1
+                  AND p.captured_at BETWEEN w.s AND w.e
+                 ORDER BY p.captured_at`,
+                [
+                  spans.map((w) => w.from.toISOString()),
+                  spans.map((w) => w.to.toISOString()),
+                  tenantId,
+                  vehicleId,
+                ],
+              )
+            ).rows as Array<Record<string, unknown>>);
       return {
         vehicleId: vehicle.id,
         label: vehicle.label ?? vehicle.id,
         positionCount: Number(summary.fix_count ?? 0),
         maxReportedKmh: summary.max_speed === null ? null : Number(summary.max_speed),
         fixes,
+        context: contextRows.map(toSpeedFix),
         truncated,
         alerts: alertRows.map((r) => ({
           id: String(r.id),
@@ -1502,6 +1525,8 @@ export interface SpeedingEvidenceData {
   /** Fastest plausible fix of the window; null when there is no fix at all. */
   readonly maxReportedKmh: number | null;
   readonly fixes: readonly SpeedFix[];
+  /** VALID fixes (any speed) within the screen window around the over-limit ones. */
+  readonly context: readonly SpeedFix[];
   /** More over-limit fixes exist than were read. */
   readonly truncated: boolean;
   readonly alerts: ReadonlyArray<{
@@ -1519,6 +1544,28 @@ export interface SpeedingEvidenceData {
     readonly endedAt: Date | null;
     readonly name: string;
   }>;
+}
+
+function toSpeedFix(r: Record<string, unknown>): SpeedFix {
+  return {
+    at: new Date(r.captured_at as string | Date),
+    lat: Number(r.latitude),
+    lng: Number(r.longitude),
+    speedKmh: Number(r.speed_kmh),
+  };
+}
+
+/** ±padMs around each fix (sorted input), overlapping spans merged. */
+function contextSpans(fixes: readonly SpeedFix[], padMs: number): Array<{ from: Date; to: Date }> {
+  const spans: Array<{ from: Date; to: Date }> = [];
+  for (const f of fixes) {
+    const from = f.at.getTime() - padMs;
+    const to = f.at.getTime() + padMs;
+    const last = spans[spans.length - 1];
+    if (last && from <= last.to.getTime()) last.to = new Date(Math.max(to, last.to.getTime()));
+    else spans.push({ from: new Date(from), to: new Date(to) });
+  }
+  return spans;
 }
 
 /** Speed the alarm engine stored on an overspeed alert, when it did. */

@@ -37,6 +37,7 @@ import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
+import { SpeedingEventsCard } from '@/components/reports/SpeedingEventsCard';
 import { StopsSection } from '@/components/reports/StopsSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { i18n } from '@/i18n';
@@ -830,5 +831,65 @@ describe('expanded report sections', () => {
     expect(screen.getByLabelText(i18n.t('reports.filters.vehicleId'))).toBeInTheDocument();
     expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(i18n.t('reports.geofence.viewAlarms'))).toBeInTheDocument();
+  });
+});
+
+describe('speeding events card', () => {
+  it('lists over-limit fixes set aside as GPS errors instead of counting them', async () => {
+    apiGetRaw.mockResolvedValue({
+      vehicleId: 'v1',
+      label: 'Truck 1',
+      limitKmh: 80,
+      from: '2026-10-24T00:00:00Z',
+      to: '2026-10-31T00:00:00Z',
+      summary: {
+        episodeCount: 0,
+        overLimitFixCount: 0,
+        maxSpeedKmh: null,
+        totalDurationSec: 0,
+        maxReportedKmh: 144,
+        positionCount: 7400,
+        alarmCount: 0,
+        discardedFixCount: 2,
+      },
+      episodes: [],
+      discarded: [
+        {
+          at: '2026-10-27T07:50:23Z',
+          lat: 33.9,
+          lng: 50.6,
+          speedKmh: 144,
+          reason: 'ACCEL',
+          trackKmh: null,
+        },
+        {
+          at: '2026-10-30T06:09:26Z',
+          lat: 33.9,
+          lng: 50.6,
+          speedKmh: 90,
+          reason: 'TRACK',
+          trackKmh: 32,
+        },
+      ],
+      truncated: false,
+      freshness: 'RAW',
+    });
+    render(
+      <SpeedingEventsCard
+        range={{ preset: '7d' }}
+        vehicles={[{ vehicleId: 'v1', label: 'Truck 1' }]}
+      />,
+      { wrapper: makeWrapper() },
+    );
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'v1' } });
+    const list = await screen.findByTestId('speeding-discarded');
+    expect(list).toHaveTextContent(i18n.t('reports.speeding.discarded', { count: 2 }));
+    expect(list).toHaveTextContent(
+      i18n.t('reports.speeding.discardReason.TRACK', { track: '32 km/h' }),
+    );
+    expect(screen.queryByTestId('speeding-episode')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('reports.speeding.noneValid', { limit: 80 })),
+    ).toBeInTheDocument();
   });
 });

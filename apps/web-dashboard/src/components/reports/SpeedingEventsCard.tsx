@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   type ReportRange,
+  type SpeedingDiscardedFixWire,
   type SpeedingEpisodeWire,
   exportReportCsv,
   useSpeedingEvents,
@@ -126,14 +127,18 @@ export function SpeedingEventsCard({
               <p className="text-xs text-warning-600">{t('reports.speeding.truncated')}</p>
             )}
 
+            {data.discarded.length > 0 && <DiscardedFixes fixes={data.discarded} />}
+
             {data.episodes.length === 0 ? (
               <p className="rounded-lg bg-gray-50 p-3 text-sm dark:bg-white/5">
                 {data.summary.positionCount === 0
                   ? t('reports.speeding.noFixes')
-                  : t('reports.speeding.none', {
-                      limit: data.limitKmh,
-                      max: kmh(data.summary.maxReportedKmh),
-                    })}
+                  : data.discarded.length > 0
+                    ? t('reports.speeding.noneValid', { limit: data.limitKmh })
+                    : t('reports.speeding.none', {
+                        limit: data.limitKmh,
+                        max: kmh(data.summary.maxReportedKmh),
+                      })}
               </p>
             ) : (
               <div className="flex flex-col gap-2">
@@ -156,6 +161,35 @@ export function SpeedingEventsCard({
 
 function kmh(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(0)} km/h`;
+}
+
+/** Over-limit fixes set aside as GPS errors — shown, not hidden, with the reason. */
+function DiscardedFixes({ fixes }: { fixes: readonly SpeedingDiscardedFixWire[] }) {
+  const { t } = useTranslation();
+  return (
+    <details
+      className="rounded-lg border border-gray-200 p-3 text-xs dark:border-white/10"
+      data-testid="speeding-discarded"
+    >
+      <summary className="cursor-pointer text-gray-600 dark:text-graydark-700">
+        {t('reports.speeding.discarded', { count: fixes.length })}
+      </summary>
+      <ul className="mt-2 max-h-56 overflow-auto">
+        {fixes.map((f) => (
+          <li
+            key={f.at}
+            className="flex flex-wrap justify-between gap-3 border-b border-gray-100 py-1 last:border-b-0 dark:border-white/5"
+          >
+            <span>{formatDateTime(f.at)}</span>
+            <span className="font-semibold">{kmh(f.speedKmh)}</span>
+            <span className="text-gray-500">
+              {t(`reports.speeding.discardReason.${f.reason}`, { track: kmh(f.trackKmh) })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
