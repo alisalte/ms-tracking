@@ -38,6 +38,7 @@ import type {
   VehicleMetersRow,
   VehicleUtilizationRow,
 } from '../../domain/report-types.js';
+import { MAX_PLAUSIBLE_KMH, type SpeedFix } from '../../domain/speeding-events.js';
 
 export interface TimeWindow {
   readonly from: Date;
@@ -1386,6 +1387,166 @@ export class ReportRepository {
         })),
       };
     });
+  }
+
+  // ── Speeding-event evidence ──────────────────────────────────────────────
+
+  /**
+   * Raw material for the speeding-event evidence report of ONE vehicle: its
+   * over-limit GPS fixes, the fastest fix of any kind, the overspeed alarms the
+   * alarm engine recorded, and who was assigned as driver. Read-only.
+   */
+  public async speedingEvidence(
+    tenantId: string,
+    win: TimeWindow,
+    vehicleId: string,
+    limitKmh: number,
+    fixCap: number,
+  ): Promise<SpeedingEvidenceData | null> {
+    return this.query(async (trx) => {
+      const vehicle = (
+        await trx.raw(
+          `SELECT v.id, ${VEHICLE_LABEL_SQL} AS label
+           FROM fleet.vehicles v WHERE v.tenant_id = ?::uuid AND v.id = ?::uuid`,
+          [tenantId, vehicleId],
+        )
+      ).rows[0] as { id: string; label: string | null } | undefined;
+      if (!vehicle) return null;
+
+      const summary = (
+        await trx.raw(
+          `SELECT COUNT(*)::bigint AS fix_count,
+                  MAX(speed_kmh) FILTER (WHERE speed_kmh <= ?) AS max_speed
+           FROM tracking.vehicle_positions
+           WHERE tenant_id = ?::uuid AND vehicle_id = ?::uuid AND quality IN (1, 3)
+             AND captured_at >= ? AND captured_at < ?`,
+          [MAX_PLAUSIBLE_KMH, tenantId, vehicleId, win.from, win.to],
+        )
+      ).rows[0] as { fix_count: string | number; max_speed: string | number | null };
+
+      const fixRows = (
+        await trx.raw(
+          `SELECT captured_at, latitude, longitude, speed_kmh
+           FROM tracking.vehicle_positions
+           WHERE tenant_id = ?::uuid AND vehicle_id = ?::uuid AND quality IN (1, 3)
+             AND captured_at >= ? AND captured_at < ?
+             AND speed_kmh > ? AND speed_kmh <= ?
+           ORDER BY captured_at
+           LIMIT ?`,
+          [tenantId, vehicleId, win.from, win.to, limitKmh, MAX_PLAUSIBLE_KMH, fixCap + 1],
+        )
+      ).rows as Array<Record<string, unknown>>;
+
+      const alertRows = (
+        await trx.raw(
+          `SELECT a.id, a.raised_at, a.severity, a.status, a.lat, a.lng, a.message, a.detail
+           FROM notification.alerts a
+           WHERE a.tenant_id = ?::uuid AND a.vehicle_id = ?::uuid AND a.type = 'overspeed'
+             AND a.raised_at >= ? AND a.raised_at < ?
+           ORDER BY a.raised_at`,
+          [tenantId, vehicleId, win.from, win.to],
+        )
+      ).rows as Array<Record<string, unknown>>;
+
+      const driverRows = (
+        await trx.raw(
+          `SELECT a.started_at, a.ended_at, BTRIM(d.first_name || ' ' || d.last_name) AS driver_name
+           FROM fleet.driver_assignments a
+           JOIN fleet.drivers d ON d.id = a.driver_id AND d.tenant_id = a.tenant_id
+           WHERE a.tenant_id = ?::uuid AND a.vehicle_id = ?::uuid
+             AND a.started_at < ? AND (a.ended_at IS NULL OR a.ended_at > ?)`,
+          [tenantId, vehicleId, win.to, win.from],
+        )
+      ).rows as Array<Record<string, unknown>>;
+
+      const truncated = fixRows.length > fixCap;
+      const fixes: SpeedFix[] = fixRows.slice(0, fixCap).map((r) => ({
+        at: new Date(r.captured_at as string | Date),
+        lat: Number(r.latitude),
+        lng: Number(r.longitude),
+        speedKmh: Number(r.speed_kmh),
+      }));
+      return {
+        vehicleId: vehicle.id,
+        label: vehicle.label ?? vehicle.id,
+        positionCount: Number(summary.fix_count ?? 0),
+        maxReportedKmh: summary.max_speed === null ? null : Number(summary.max_speed),
+        fixes,
+        truncated,
+        alerts: alertRows.map((r) => ({
+          id: String(r.id),
+          raisedAt: new Date(r.raised_at as string | Date),
+          severity: String(r.severity),
+          status: String(r.status),
+          lat: r.lat === null ? null : Number(r.lat),
+          lng: r.lng === null ? null : Number(r.lng),
+          message: String(r.message ?? ''),
+          speedKmh: alertSpeed(r.detail) ?? speedFromMessage(String(r.message ?? '')),
+        })),
+        drivers: driverRows.map((r) => ({
+          startedAt: new Date(r.started_at as string | Date),
+          endedAt: r.ended_at ? new Date(r.ended_at as string | Date) : null,
+          name: String(r.driver_name ?? ''),
+        })),
+      };
+    });
+  }
+}
+
+/** Raw data behind the speeding-event evidence report (one vehicle, one window). */
+export interface SpeedingEvidenceData {
+  readonly vehicleId: string;
+  readonly label: string;
+  /** Plausible GPS fixes stored in the window (any speed). */
+  readonly positionCount: number;
+  /** Fastest plausible fix of the window; null when there is no fix at all. */
+  readonly maxReportedKmh: number | null;
+  readonly fixes: readonly SpeedFix[];
+  /** More over-limit fixes exist than were read. */
+  readonly truncated: boolean;
+  readonly alerts: ReadonlyArray<{
+    readonly id: string;
+    readonly raisedAt: Date;
+    readonly severity: string;
+    readonly status: string;
+    readonly lat: number | null;
+    readonly lng: number | null;
+    readonly message: string;
+    readonly speedKmh: number | null;
+  }>;
+  readonly drivers: ReadonlyArray<{
+    readonly startedAt: Date;
+    readonly endedAt: Date | null;
+    readonly name: string;
+  }>;
+}
+
+/** Speed the alarm engine stored on an overspeed alert, when it did. */
+function alertSpeed(detail: unknown): number | null {
+  const d = typeof detail === 'string' ? safeJson(detail) : detail;
+  if (!d || typeof d !== 'object') return null;
+  const o = d as Record<string, unknown>;
+  const direct = o.speedKph ?? o.speedKmh;
+  if (typeof direct === 'number') return direct;
+  const source = o.sourceEvent;
+  if (source && typeof source === 'object') {
+    const v = (source as Record<string, unknown>).speedKph;
+    if (typeof v === 'number') return v;
+  }
+  return null;
+}
+
+/** "Vehicle exceeded speed limit: 90.0 km/h (limit 80 km/h)" → 90. */
+function speedFromMessage(message: string): number | null {
+  const m = /:\s*([0-9]+(?:\.[0-9]+)?)\s*km\/h/i.exec(message);
+  return m ? Number(m[1]) : null;
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
 }
 

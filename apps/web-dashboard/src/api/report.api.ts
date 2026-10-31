@@ -293,6 +293,71 @@ export function useSpeed(
   });
 }
 
+export interface SpeedingFixWire {
+  at: string;
+  lat: number;
+  lng: number;
+  speedKmh: number;
+}
+
+export interface SpeedingAlarmWire {
+  id: string;
+  raisedAt: string;
+  severity: string;
+  status: string;
+  speedKmh: number | null;
+  message: string;
+}
+
+export interface SpeedingEpisodeWire {
+  startedAt: string;
+  endedAt: string;
+  durationSec: number;
+  fixCount: number;
+  maxSpeedKmh: number;
+  avgSpeedKmh: number;
+  overLimitKmh: number;
+  start: { lat: number; lng: number };
+  end: { lat: number; lng: number };
+  peak: { at: string; lat: number; lng: number };
+  driver: string | null;
+  alarms: SpeedingAlarmWire[];
+  fixes: SpeedingFixWire[];
+}
+
+export interface SpeedingEventsResponse {
+  vehicleId: string;
+  label: string;
+  limitKmh: number;
+  from: string;
+  to: string;
+  summary: {
+    episodeCount: number;
+    overLimitFixCount: number;
+    maxSpeedKmh: number | null;
+    totalDurationSec: number;
+    /** Fastest plausible fix of ALL stored fixes in the window — null when none. */
+    maxReportedKmh: number | null;
+    positionCount: number;
+    alarmCount: number;
+  };
+  episodes: SpeedingEpisodeWire[];
+  truncated: boolean;
+}
+
+/** Per-episode speeding evidence of ONE vehicle, built from stored GPS fixes. */
+export function useSpeedingEvents(range: ReportRange, vehicleId: string, limitKmh: number) {
+  return useQuery({
+    queryKey: ['reports', 'speeding-events', range, vehicleId, limitKmh],
+    enabled: vehicleId !== '',
+    queryFn: () =>
+      apiGetRaw<SpeedingEventsResponse>(
+        '/reports/speeding-events',
+        rangeParams(range, { vehicleId, limitKmh }),
+      ),
+  });
+}
+
 export function useIdleParking(
   range: ReportRange,
   filters: { vehicleId?: string; kind?: 'IDLE' | 'PARKING' } = {},
@@ -438,7 +503,7 @@ export function useSafetyScorecard(range: ReportRange) {
 
 /** CSV export (§31): authenticated blob download from the reporting service. */
 export async function exportReportCsv(
-  report: 'trips' | 'vehicle-utilization' | 'alarms',
+  report: 'trips' | 'vehicle-utilization' | 'alarms' | 'speeding-events',
   range: ReportRange,
   filters: Record<string, unknown> = {},
 ): Promise<void> {

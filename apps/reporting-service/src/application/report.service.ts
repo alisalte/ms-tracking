@@ -31,9 +31,10 @@ import {
   reportWindowErrorMessage,
 } from '../domain/report-window.js';
 import { shamsiCells } from '../domain/shamsi.js';
+import { groupSpeedingEpisodes } from '../domain/speeding-events.js';
 import { ReportCache } from '../infrastructure/cache/report-cache.js';
 import type { ExportRateLimiter } from '../infrastructure/cache/report-cache.js';
-import type { ReportRepository } from '../infrastructure/persistence/report.repository.js';
+import { type ReportRepository, UUID_RE } from '../infrastructure/persistence/report.repository.js';
 
 export class ReportInputError extends Error {
   constructor(
@@ -58,6 +59,12 @@ export interface PlannedStopSummary {
 
 /** Periods read to build the split; beyond this the summary says it is partial. */
 const PLANNED_SUMMARY_CAP = 20_000;
+
+/** Limit used by the speeding-event report when the caller gives none. */
+const SPEEDING_DEFAULT_LIMIT_KMH = 80;
+
+/** Over-limit fixes read per request; beyond this the report says it is partial. */
+const SPEEDING_FIX_CAP = 5_000;
 
 /**
  * Category of an idle / parking period. Parking has the engine off, idle has
@@ -414,6 +421,94 @@ export class ReportService {
     };
   }
 
+  /**
+   * Speeding-event evidence for ONE vehicle: every run of GPS fixes above the
+   * limit, with the raw fixes, the driver on duty and the overspeed alarms the
+   * alarm engine recorded. Built only from stored telemetry — when the device
+   * never reported a fix above the limit the list is empty and
+   * `maxReportedKmh` shows the real peak.
+   */
+  public async speedingEvents(tenantId: string, q: ReportQueryBase & { limitKmh?: unknown }) {
+    if (!q.vehicleId || !UUID_RE.test(q.vehicleId)) {
+      throw new ReportInputError('vehicleId is required', 'INVALID_FILTER');
+    }
+    const win = this.window(q);
+    const limitKmh = Number.parseFloat(String(q.limitKmh ?? SPEEDING_DEFAULT_LIMIT_KMH));
+    if (!Number.isFinite(limitKmh) || limitKmh < 1 || limitKmh > 250) {
+      throw new ReportInputError('limitKmh must be between 1 and 250', 'INVALID_FILTER');
+    }
+    const data = await this.timed('speeding-events', () =>
+      this.deps.repository.speedingEvidence(
+        tenantId,
+        win,
+        q.vehicleId as string,
+        limitKmh,
+        SPEEDING_FIX_CAP,
+      ),
+    );
+    if (!data) throw new ReportInputError('Vehicle not found', 'INVALID_FILTER');
+
+    const driverAt = (at: Date): string | null =>
+      data.drivers.find((d) => d.startedAt <= at && (d.endedAt === null || d.endedAt > at))?.name ||
+      null;
+    const episodes = groupSpeedingEpisodes(data.fixes, { limitKmh }).map((e) => {
+      // Alarms the engine raised while this episode was running (± one gap).
+      const lo = e.startedAt.getTime() - 120_000;
+      const hi = e.endedAt.getTime() + 120_000;
+      const alarms = data.alerts.filter(
+        (a) => a.raisedAt.getTime() >= lo && a.raisedAt.getTime() <= hi,
+      );
+      return {
+        startedAt: e.startedAt.toISOString(),
+        endedAt: e.endedAt.toISOString(),
+        durationSec: e.durationSec,
+        fixCount: e.fixCount,
+        maxSpeedKmh: e.maxSpeedKmh,
+        avgSpeedKmh: e.avgSpeedKmh,
+        overLimitKmh: e.overLimitKmh,
+        start: e.start,
+        end: e.end,
+        peak: { at: e.peak.at.toISOString(), lat: e.peak.lat, lng: e.peak.lng },
+        driver: driverAt(e.peak.at),
+        alarms: alarms.map((a) => ({
+          id: a.id,
+          raisedAt: a.raisedAt.toISOString(),
+          severity: a.severity,
+          status: a.status,
+          speedKmh: a.speedKmh,
+          message: a.message,
+        })),
+        fixes: e.fixes.map((f) => ({
+          at: f.at.toISOString(),
+          lat: f.lat,
+          lng: f.lng,
+          speedKmh: f.speedKmh,
+        })),
+      };
+    });
+    const top = episodes.reduce((m, e) => Math.max(m, e.maxSpeedKmh), 0);
+    return {
+      vehicleId: data.vehicleId,
+      label: data.label,
+      limitKmh,
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      summary: {
+        episodeCount: episodes.length,
+        overLimitFixCount: data.fixes.length,
+        maxSpeedKmh: episodes.length > 0 ? top : null,
+        totalDurationSec: episodes.reduce((s, e) => s + e.durationSec, 0),
+        // Peak of ALL stored fixes: lets the reader see what the device really reported.
+        maxReportedKmh: data.maxReportedKmh,
+        positionCount: data.positionCount,
+        alarmCount: data.alerts.length,
+      },
+      episodes,
+      truncated: data.truncated,
+      freshness: 'RAW' as const,
+    };
+  }
+
   public async idleParking(
     tenantId: string,
     q: ReportQueryBase & { kind?: string; limit?: unknown; cursor?: string },
@@ -631,8 +726,13 @@ export class ReportService {
   public async exportCsv(
     tenantId: string,
     userId: string | null,
-    report: 'trips' | 'vehicle-utilization' | 'alarms',
-    q: ReportQueryBase & { sort?: string; type?: string; severity?: string },
+    report: 'trips' | 'vehicle-utilization' | 'alarms' | 'speeding-events',
+    q: ReportQueryBase & {
+      sort?: string;
+      type?: string;
+      severity?: string;
+      limitKmh?: unknown;
+    },
   ): Promise<{ csv: string; filename: string; rows: number }> {
     if (this.deps.exportLimiter && userId) {
       const allowed = await this.deps.exportLimiter.allow(tenantId, userId);
@@ -723,6 +823,42 @@ export class ReportService {
           Number(r.trips),
           ...periodCells,
         ]);
+      } else if (report === 'speeding-events') {
+        // One row per stored over-limit GPS fix — the raw evidence, grouped by episode.
+        const r = await this.speedingEvents(tenantId, q);
+        header = [
+          'vehicle',
+          'episode',
+          'date_shamsi',
+          'time',
+          'speed_kph',
+          'limit_kph',
+          'over_limit_kph',
+          'lat',
+          'lng',
+          'driver',
+          'system_alarm',
+          'episode_max_speed_kph',
+          'episode_duration_s',
+        ];
+        rows = r.episodes
+          .flatMap((e, i) =>
+            e.fixes.map((f): CsvValue[] => [
+              r.label,
+              i + 1,
+              ...shamsiCells(f.at, LOCAL_TIME_ZONE),
+              f.speedKmh,
+              r.limitKmh,
+              Math.round((f.speedKmh - r.limitKmh) * 10) / 10,
+              f.lat,
+              f.lng,
+              e.driver ?? '',
+              e.alarms.length > 0 ? 'yes' : 'no',
+              e.maxSpeedKmh,
+              e.durationSec,
+            ]),
+          )
+          .slice(0, maxRows);
       } else {
         const page = await this.alarms(tenantId, { ...q, limit: 200 });
         header = [
