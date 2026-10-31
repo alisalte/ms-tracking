@@ -3,13 +3,15 @@
  *
  * For one vehicle it lists every run of stored GPS fixes above the limit
  * (start / end, duration, peak, average, place, driver, the alarm the engine
- * recorded) and lets the reader open the raw fixes of each run. It only shows
+ * recorded) and lets the reader open the raw fixes of each run, or the run's
+ * track on the app's own map. It only shows
  * what the device really reported: with no fix above the limit it says so and
  * prints the real top speed instead of an event.
  */
 import { ChevronDown, ChevronUp, Download, MapPin } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import {
   type ReportRange,
@@ -25,8 +27,15 @@ import { formatDurationSec } from '@/lib/report-format';
 
 const DEFAULT_LIMIT_KMH = 80;
 
-const osmUrl = (lat: number, lng: number) =>
-  `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`;
+/** Track shown around an episode on the map, so the approach and exit are visible. */
+const MAP_PAD_MS = 2 * 60_000;
+
+/** The app's own map in history mode, on this vehicle's track around the episode. */
+const episodeMapUrl = (vehicleId: string, e: SpeedingEpisodeWire) => {
+  const from = new Date(Date.parse(e.startedAt) - MAP_PAD_MS).toISOString();
+  const to = new Date(Date.parse(e.endedAt) + MAP_PAD_MS).toISOString();
+  return `/map?vehicle=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+};
 
 export function SpeedingEventsCard({
   range,
@@ -145,6 +154,7 @@ export function SpeedingEventsCard({
                 {data.episodes.map((e) => (
                   <EpisodeRow
                     key={e.startedAt}
+                    vehicleId={data.vehicleId}
                     episode={e}
                     expanded={open === e.startedAt}
                     onToggle={() => setOpen(open === e.startedAt ? null : e.startedAt)}
@@ -202,10 +212,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function EpisodeRow({
+  vehicleId,
   episode: e,
   expanded,
   onToggle,
 }: {
+  vehicleId: string;
   episode: SpeedingEpisodeWire;
   expanded: boolean;
   onToggle: () => void;
@@ -231,15 +243,14 @@ function EpisodeRow({
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <a
-          href={osmUrl(e.peak.lat, e.peak.lng)}
-          target="_blank"
-          rel="noreferrer"
+        <Link
+          to={episodeMapUrl(vehicleId, e)}
+          data-testid="speeding-episode-map"
           className="inline-flex items-center gap-1 text-xs font-semibold text-brand-500"
         >
           <MapPin size={14} aria-hidden="true" />
           {t('reports.speeding.map')}
-        </a>
+        </Link>
         <button
           type="button"
           onClick={onToggle}
