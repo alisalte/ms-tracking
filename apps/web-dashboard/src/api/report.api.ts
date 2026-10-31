@@ -300,6 +300,13 @@ export interface SpeedingFixWire {
   speedKmh: number;
 }
 
+export interface SpeedingDiscardedFixWire extends SpeedingFixWire {
+  /** ACCEL / DECEL: impossible speed change; TRACK: positions show it far slower. */
+  reason: 'ACCEL' | 'DECEL' | 'TRACK';
+  /** Speed the positions show around the fix; null when too few to tell. */
+  trackKmh: number | null;
+}
+
 export interface SpeedingAlarmWire {
   id: string;
   raisedAt: string;
@@ -340,8 +347,12 @@ export interface SpeedingEventsResponse {
     maxReportedKmh: number | null;
     positionCount: number;
     alarmCount: number;
+    /** Over-limit fixes set aside as GPS errors (not counted above). */
+    discardedFixCount: number;
   };
   episodes: SpeedingEpisodeWire[];
+  /** Over-limit fixes the surrounding telemetry contradicts, with the reason. */
+  discarded: SpeedingDiscardedFixWire[];
   truncated: boolean;
 }
 

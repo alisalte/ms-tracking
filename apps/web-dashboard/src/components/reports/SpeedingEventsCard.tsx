@@ -3,16 +3,19 @@
  *
  * For one vehicle it lists every run of stored GPS fixes above the limit
  * (start / end, duration, peak, average, place, driver, the alarm the engine
- * recorded) and lets the reader open the raw fixes of each run. It only shows
+ * recorded) and lets the reader open the raw fixes of each run, or the run's
+ * track on the app's own map. It only shows
  * what the device really reported: with no fix above the limit it says so and
  * prints the real top speed instead of an event.
  */
 import { ChevronDown, ChevronUp, Download, MapPin } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import {
   type ReportRange,
+  type SpeedingDiscardedFixWire,
   type SpeedingEpisodeWire,
   exportReportCsv,
   useSpeedingEvents,
@@ -24,8 +27,15 @@ import { formatDurationSec } from '@/lib/report-format';
 
 const DEFAULT_LIMIT_KMH = 80;
 
-const osmUrl = (lat: number, lng: number) =>
-  `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`;
+/** Track shown around an episode on the map, so the approach and exit are visible. */
+const MAP_PAD_MS = 2 * 60_000;
+
+/** The app's own map in history mode, on this vehicle's track around the episode. */
+const episodeMapUrl = (vehicleId: string, e: SpeedingEpisodeWire) => {
+  const from = new Date(Date.parse(e.startedAt) - MAP_PAD_MS).toISOString();
+  const to = new Date(Date.parse(e.endedAt) + MAP_PAD_MS).toISOString();
+  return `/map?vehicle=${encodeURIComponent(vehicleId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+};
 
 export function SpeedingEventsCard({
   range,
@@ -126,20 +136,25 @@ export function SpeedingEventsCard({
               <p className="text-xs text-warning-600">{t('reports.speeding.truncated')}</p>
             )}
 
+            {data.discarded.length > 0 && <DiscardedFixes fixes={data.discarded} />}
+
             {data.episodes.length === 0 ? (
               <p className="rounded-lg bg-gray-50 p-3 text-sm dark:bg-white/5">
                 {data.summary.positionCount === 0
                   ? t('reports.speeding.noFixes')
-                  : t('reports.speeding.none', {
-                      limit: data.limitKmh,
-                      max: kmh(data.summary.maxReportedKmh),
-                    })}
+                  : data.discarded.length > 0
+                    ? t('reports.speeding.noneValid', { limit: data.limitKmh })
+                    : t('reports.speeding.none', {
+                        limit: data.limitKmh,
+                        max: kmh(data.summary.maxReportedKmh),
+                      })}
               </p>
             ) : (
               <div className="flex flex-col gap-2">
                 {data.episodes.map((e) => (
                   <EpisodeRow
                     key={e.startedAt}
+                    vehicleId={data.vehicleId}
                     episode={e}
                     expanded={open === e.startedAt}
                     onToggle={() => setOpen(open === e.startedAt ? null : e.startedAt)}
@@ -158,6 +173,35 @@ function kmh(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(0)} km/h`;
 }
 
+/** Over-limit fixes set aside as GPS errors — shown, not hidden, with the reason. */
+function DiscardedFixes({ fixes }: { fixes: readonly SpeedingDiscardedFixWire[] }) {
+  const { t } = useTranslation();
+  return (
+    <details
+      className="rounded-lg border border-gray-200 p-3 text-xs dark:border-white/10"
+      data-testid="speeding-discarded"
+    >
+      <summary className="cursor-pointer text-gray-600 dark:text-graydark-700">
+        {t('reports.speeding.discarded', { count: fixes.length })}
+      </summary>
+      <ul className="mt-2 max-h-56 overflow-auto">
+        {fixes.map((f) => (
+          <li
+            key={f.at}
+            className="flex flex-wrap justify-between gap-3 border-b border-gray-100 py-1 last:border-b-0 dark:border-white/5"
+          >
+            <span>{formatDateTime(f.at)}</span>
+            <span className="font-semibold">{kmh(f.speedKmh)}</span>
+            <span className="text-gray-500">
+              {t(`reports.speeding.discardReason.${f.reason}`, { track: kmh(f.trackKmh) })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -168,10 +212,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function EpisodeRow({
+  vehicleId,
   episode: e,
   expanded,
   onToggle,
 }: {
+  vehicleId: string;
   episode: SpeedingEpisodeWire;
   expanded: boolean;
   onToggle: () => void;
@@ -197,15 +243,14 @@ function EpisodeRow({
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <a
-          href={osmUrl(e.peak.lat, e.peak.lng)}
-          target="_blank"
-          rel="noreferrer"
+        <Link
+          to={episodeMapUrl(vehicleId, e)}
+          data-testid="speeding-episode-map"
           className="inline-flex items-center gap-1 text-xs font-semibold text-brand-500"
         >
           <MapPin size={14} aria-hidden="true" />
           {t('reports.speeding.map')}
-        </a>
+        </Link>
         <button
           type="button"
           onClick={onToggle}

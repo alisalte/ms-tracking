@@ -31,7 +31,7 @@ import {
   reportWindowErrorMessage,
 } from '../domain/report-window.js';
 import { shamsiCells } from '../domain/shamsi.js';
-import { groupSpeedingEpisodes } from '../domain/speeding-events.js';
+import { groupSpeedingEpisodes, screenSpeedFixes } from '../domain/speeding-events.js';
 import { ReportCache } from '../infrastructure/cache/report-cache.js';
 import type { ExportRateLimiter } from '../infrastructure/cache/report-cache.js';
 import { type ReportRepository, UUID_RE } from '../infrastructure/persistence/report.repository.js';
@@ -451,7 +451,10 @@ export class ReportService {
     const driverAt = (at: Date): string | null =>
       data.drivers.find((d) => d.startedAt <= at && (d.endedAt === null || d.endedAt > at))?.name ||
       null;
-    const episodes = groupSpeedingEpisodes(data.fixes, { limitKmh }).map((e) => {
+    // GPS errors (impossible speed jumps, speeds the track contradicts) are set
+    // aside — listed with their reason, never counted as speeding.
+    const screened = screenSpeedFixes(data.fixes, data.context, { limitKmh });
+    const episodes = groupSpeedingEpisodes(screened.kept, { limitKmh }).map((e) => {
       // Alarms the engine raised while this episode was running (± one gap).
       const lo = e.startedAt.getTime() - 120_000;
       const hi = e.endedAt.getTime() + 120_000;
@@ -495,7 +498,8 @@ export class ReportService {
       to: win.to.toISOString(),
       summary: {
         episodeCount: episodes.length,
-        overLimitFixCount: data.fixes.length,
+        overLimitFixCount: screened.kept.length,
+        discardedFixCount: screened.discarded.length,
         maxSpeedKmh: episodes.length > 0 ? top : null,
         totalDurationSec: episodes.reduce((s, e) => s + e.durationSec, 0),
         // Peak of ALL stored fixes: lets the reader see what the device really reported.
@@ -504,6 +508,14 @@ export class ReportService {
         alarmCount: data.alerts.length,
       },
       episodes,
+      discarded: screened.discarded.map((f) => ({
+        at: f.at.toISOString(),
+        lat: f.lat,
+        lng: f.lng,
+        speedKmh: f.speedKmh,
+        reason: f.reason,
+        trackKmh: f.trackKmh,
+      })),
       truncated: data.truncated,
       freshness: 'RAW' as const,
     };

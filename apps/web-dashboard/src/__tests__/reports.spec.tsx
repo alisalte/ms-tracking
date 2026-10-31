@@ -37,6 +37,7 @@ import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import { ReportsOverviewSection } from '@/components/reports/ReportsOverviewSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
+import { SpeedingEventsCard } from '@/components/reports/SpeedingEventsCard';
 import { StopsSection } from '@/components/reports/StopsSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { i18n } from '@/i18n';
@@ -830,5 +831,122 @@ describe('expanded report sections', () => {
     expect(screen.getByLabelText(i18n.t('reports.filters.vehicleId'))).toBeInTheDocument();
     expect(screen.getAllByTestId('apex-chart').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(i18n.t('reports.geofence.viewAlarms'))).toBeInTheDocument();
+  });
+});
+
+describe('speeding events card', () => {
+  it('lists over-limit fixes set aside as GPS errors instead of counting them', async () => {
+    apiGetRaw.mockResolvedValue({
+      vehicleId: 'v1',
+      label: 'Truck 1',
+      limitKmh: 80,
+      from: '2026-10-24T00:00:00Z',
+      to: '2026-10-31T00:00:00Z',
+      summary: {
+        episodeCount: 0,
+        overLimitFixCount: 0,
+        maxSpeedKmh: null,
+        totalDurationSec: 0,
+        maxReportedKmh: 144,
+        positionCount: 7400,
+        alarmCount: 0,
+        discardedFixCount: 2,
+      },
+      episodes: [],
+      discarded: [
+        {
+          at: '2026-10-27T07:50:23Z',
+          lat: 33.9,
+          lng: 50.6,
+          speedKmh: 144,
+          reason: 'ACCEL',
+          trackKmh: null,
+        },
+        {
+          at: '2026-10-30T06:09:26Z',
+          lat: 33.9,
+          lng: 50.6,
+          speedKmh: 90,
+          reason: 'TRACK',
+          trackKmh: 32,
+        },
+      ],
+      truncated: false,
+      freshness: 'RAW',
+    });
+    render(
+      <SpeedingEventsCard
+        range={{ preset: '7d' }}
+        vehicles={[{ vehicleId: 'v1', label: 'Truck 1' }]}
+      />,
+      { wrapper: makeWrapper() },
+    );
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'v1' } });
+    const list = await screen.findByTestId('speeding-discarded');
+    expect(list).toHaveTextContent(i18n.t('reports.speeding.discarded', { count: 2 }));
+    expect(list).toHaveTextContent(
+      i18n.t('reports.speeding.discardReason.TRACK', { track: '32 km/h' }),
+    );
+    expect(screen.queryByTestId('speeding-episode')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('reports.speeding.noneValid', { limit: 80 })),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('speeding episode map link', () => {
+  it("opens the episode track on the app's own map, not an external site", async () => {
+    apiGetRaw.mockResolvedValue({
+      vehicleId: 'v1',
+      label: 'Truck 1',
+      limitKmh: 80,
+      from: '2026-10-24T00:00:00Z',
+      to: '2026-10-31T00:00:00Z',
+      summary: {
+        episodeCount: 1,
+        overLimitFixCount: 2,
+        maxSpeedKmh: 95,
+        totalDurationSec: 20,
+        maxReportedKmh: 95,
+        positionCount: 500,
+        alarmCount: 0,
+        discardedFixCount: 0,
+      },
+      episodes: [
+        {
+          startedAt: '2026-10-30T06:00:00.000Z',
+          endedAt: '2026-10-30T06:00:20.000Z',
+          durationSec: 20,
+          fixCount: 2,
+          maxSpeedKmh: 95,
+          avgSpeedKmh: 92,
+          overLimitKmh: 15,
+          start: { lat: 33.9, lng: 50.6 },
+          end: { lat: 33.91, lng: 50.6 },
+          peak: { at: '2026-10-30T06:00:20.000Z', lat: 33.91, lng: 50.6 },
+          driver: null,
+          alarms: [],
+          fixes: [],
+        },
+      ],
+      discarded: [],
+      truncated: false,
+      freshness: 'RAW',
+    });
+    render(
+      <SpeedingEventsCard
+        range={{ preset: '7d' }}
+        vehicles={[{ vehicleId: 'v1', label: 'Truck 1' }]}
+      />,
+      { wrapper: makeWrapper() },
+    );
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'v1' } });
+    const link = await screen.findByTestId('speeding-episode-map');
+    const href = new URL(link.getAttribute('href') ?? '', 'http://x');
+    expect(href.pathname).toBe('/map');
+    expect(href.searchParams.get('vehicle')).toBe('v1');
+    expect(href.searchParams.get('from')).toBe('2026-10-30T05:58:00.000Z');
+    expect(href.searchParams.get('to')).toBe('2026-10-30T06:02:20.000Z');
+    expect(link).not.toHaveAttribute('target');
   });
 });
