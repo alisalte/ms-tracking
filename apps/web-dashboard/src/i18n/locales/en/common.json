@@ -1979,7 +1979,8 @@
       "alarmCol": "System alarm",
       "noAlarm": "None recorded",
       "fixes": "Recorded fixes",
-      "map": "Map"
+      "map": "Map",
+      "exportCsv": "Download CSV"
     },
     "cols": {
       "vehicle": "Vehicle",

@@ -332,10 +332,16 @@ export class ReportsController {
     @Query('sort') sort?: string,
     @Query('type') type?: string,
     @Query('severity') severity?: string,
+    @Query('limitKmh') limitKmh?: string,
   ): Promise<string> {
-    if (report !== 'trips' && report !== 'vehicle-utilization' && report !== 'alarms') {
+    if (
+      report !== 'trips' &&
+      report !== 'vehicle-utilization' &&
+      report !== 'alarms' &&
+      report !== 'speeding-events'
+    ) {
       throw new HttpException(
-        'report must be trips | vehicle-utilization | alarms',
+        'report must be trips | vehicle-utilization | alarms | speeding-events',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -349,6 +355,7 @@ export class ReportsController {
         sort,
         type,
         severity,
+        limitKmh,
       }),
     );
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);

@@ -7,7 +7,7 @@
  * what the device really reported: with no fix above the limit it says so and
  * prints the real top speed instead of an event.
  */
-import { ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, MapPin } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ import {
   type ReportRange,
   type SpeedRowWire,
   type SpeedingEpisodeWire,
+  exportReportCsv,
   useSpeedingEvents,
 } from '@/api/report.api';
 import { ErrorState } from '@/components/common/ErrorState';
@@ -38,6 +39,7 @@ export function SpeedingEventsCard({
   const [vehicleId, setVehicleId] = useState('');
   const [limitKmh, setLimitKmh] = useState(DEFAULT_LIMIT_KMH);
   const [open, setOpen] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const q = useSpeedingEvents(range, vehicleId, limitKmh);
   const data = q.data;
 
@@ -77,6 +79,22 @@ export function SpeedingEventsCard({
               className="h-9 w-20 rounded-lg border border-gray-300 bg-transparent px-2 text-sm dark:border-white/10"
             />
           </label>
+          <button
+            type="button"
+            disabled={vehicleId === '' || exporting}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                await exportReportCsv('speeding-events', range, { vehicleId, limitKmh });
+              } finally {
+                setExporting(false);
+              }
+            }}
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
+          >
+            <Download size={14} aria-hidden="true" />
+            {t('reports.speeding.exportCsv')}
+          </button>
         </div>
 
         {vehicleId === '' ? null : q.isLoading ? (

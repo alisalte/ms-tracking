@@ -726,8 +726,13 @@ export class ReportService {
   public async exportCsv(
     tenantId: string,
     userId: string | null,
-    report: 'trips' | 'vehicle-utilization' | 'alarms',
-    q: ReportQueryBase & { sort?: string; type?: string; severity?: string },
+    report: 'trips' | 'vehicle-utilization' | 'alarms' | 'speeding-events',
+    q: ReportQueryBase & {
+      sort?: string;
+      type?: string;
+      severity?: string;
+      limitKmh?: unknown;
+    },
   ): Promise<{ csv: string; filename: string; rows: number }> {
     if (this.deps.exportLimiter && userId) {
       const allowed = await this.deps.exportLimiter.allow(tenantId, userId);
@@ -818,6 +823,42 @@ export class ReportService {
           Number(r.trips),
           ...periodCells,
         ]);
+      } else if (report === 'speeding-events') {
+        // One row per stored over-limit GPS fix — the raw evidence, grouped by episode.
+        const r = await this.speedingEvents(tenantId, q);
+        header = [
+          'vehicle',
+          'episode',
+          'date_shamsi',
+          'time',
+          'speed_kph',
+          'limit_kph',
+          'over_limit_kph',
+          'lat',
+          'lng',
+          'driver',
+          'system_alarm',
+          'episode_max_speed_kph',
+          'episode_duration_s',
+        ];
+        rows = r.episodes
+          .flatMap((e, i) =>
+            e.fixes.map((f): CsvValue[] => [
+              r.label,
+              i + 1,
+              ...shamsiCells(f.at, LOCAL_TIME_ZONE),
+              f.speedKmh,
+              r.limitKmh,
+              Math.round((f.speedKmh - r.limitKmh) * 10) / 10,
+              f.lat,
+              f.lng,
+              e.driver ?? '',
+              e.alarms.length > 0 ? 'yes' : 'no',
+              e.maxSpeedKmh,
+              e.durationSec,
+            ]),
+          )
+          .slice(0, maxRows);
       } else {
         const page = await this.alarms(tenantId, { ...q, limit: 200 });
         header = [

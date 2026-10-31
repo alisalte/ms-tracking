@@ -503,7 +503,7 @@ export function useSafetyScorecard(range: ReportRange) {
 
 /** CSV export (§31): authenticated blob download from the reporting service. */
 export async function exportReportCsv(
-  report: 'trips' | 'vehicle-utilization' | 'alarms',
+  report: 'trips' | 'vehicle-utilization' | 'alarms' | 'speeding-events',
   range: ReportRange,
   filters: Record<string, unknown> = {},
 ): Promise<void> {
