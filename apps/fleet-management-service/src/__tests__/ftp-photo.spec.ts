@@ -2,6 +2,7 @@ import net from 'node:net';
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
 import { FtpPhotoIngest, ftpPasswordFor } from '../application/ftp-photo-ingest.js';
+import { PHOTO_ATTACHABLE_STATUSES } from '../domain/evidence-photo.js';
 import { FtpPhotoServer, type FtpUploadedFile } from '../infrastructure/ftp/ftp-photo-server.js';
 
 const IMEI = '864507031234567';
@@ -215,5 +216,14 @@ describe('FtpPhotoIngest', () => {
     await ingest.onFile({ user: '111111111111111', path: '/a.jpg', bytes: JPEG });
     expect(markPhotoReadyByName).not.toHaveBeenCalled();
     ingest.stop();
+  });
+});
+
+describe('photo attach targets', () => {
+  it('lets a delivered photo fill cooldown-skipped rows, not just pending/failed ones', () => {
+    expect(PHOTO_ATTACHABLE_STATUSES).toEqual(
+      expect.arrayContaining(['PENDING', 'FETCHING', 'PHOTO_FAILED', 'SKIPPED_COOLDOWN']),
+    );
+    expect(PHOTO_ATTACHABLE_STATUSES).not.toContain('PHOTO_READY');
   });
 });
