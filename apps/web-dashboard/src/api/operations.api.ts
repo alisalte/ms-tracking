@@ -8,7 +8,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ReportRange } from './report.api';
 
-import { apiDeleteNoContent, apiGet, apiGetRaw, apiPatch, apiPost, apiPut } from './client';
+import { downloadBlob } from '@/lib/video-stream';
+
+import {
+  apiDeleteNoContent,
+  apiGet,
+  apiGetBlob,
+  apiGetRaw,
+  apiPatch,
+  apiPost,
+  apiPut,
+} from './client';
 
 export type ReportPreset = 'today' | 'yesterday' | '7d' | '30d';
 
@@ -402,6 +412,74 @@ export interface HaulAnalysisReport {
 }
 
 /** Targets in minutes; a blank field uses the fleet's own best time. */
+/**
+ * One shift of the combined work day (every shift of every chosen route);
+ * `kind` names one day and one night shift that together cover the clock.
+ */
+export interface HaulShiftInfo {
+  no: number;
+  startMinute: number;
+  durationMinutes: number;
+  kind: 'day' | 'night' | null;
+  routeId: string;
+  routeName: string;
+  routeShiftNo: number;
+  routeShiftCount: number;
+}
+
+/** One truck in one shift of one work day. */
+export interface HaulTruckShiftRow {
+  day: string;
+  vehicleId: string;
+  vehicleName: string;
+  shiftNo: number;
+  services: number;
+  serviceDistanceKm: number;
+  workSec: number;
+  movingSec: number;
+  distanceKm: number;
+  driverNames: string[];
+}
+
+export interface HaulDriverWorkRow {
+  driverId: string;
+  driverName: string;
+  services: number;
+  serviceDistanceKm: number;
+  /** Engine on or moving. */
+  workSec: number;
+  movingSec: number;
+  /** GPS distance driven while this driver had the truck. */
+  distanceKm: number;
+  days: number;
+  shifts: number;
+  vehicleNames: string[];
+  servicesByShift: Record<string, number>;
+}
+
+export interface HaulDriverPeriodRow extends HaulDriverWorkRow {
+  /** `YYYY-MM-DD` for a day, `1405-08` / `2026-11` for a month. */
+  period: string;
+  from: string;
+  to: string;
+}
+
+export interface HaulShiftReport {
+  routes: Array<{ id: string; name: string }>;
+  from: string;
+  to: string;
+  calendar: PeriodCalendar;
+  truncated: boolean;
+  shifts: HaulShiftInfo[];
+  services: number;
+  workSec: number;
+  distanceKm: number;
+  trucks: HaulTruckShiftRow[];
+  drivers: HaulDriverWorkRow[];
+  driverDays: HaulDriverPeriodRow[];
+  driverMonths: HaulDriverPeriodRow[];
+}
+
 export interface AnalysisTargets {
   targetLoadMin?: string;
   targetTravelMin?: string;
@@ -456,6 +534,43 @@ export function useHaulPeriods(
       ),
     enabled: Boolean(routeId),
   });
+}
+
+/** Several routes (a day-shift and a night-shift route, say) are read as one work day. */
+export function useHaulShifts(
+  routeIds: readonly string[],
+  range: OperationsRange,
+  calendar: PeriodCalendar,
+) {
+  return useQuery({
+    queryKey: ['reports', 'haul-shifts', routeIds, range, calendar],
+    queryFn: () =>
+      apiGetRaw<HaulShiftReport>(
+        '/reports/haul-shifts',
+        rangeParams(range, { routeId: routeIds.join(','), calendar }),
+      ),
+    enabled: routeIds.length > 0,
+  });
+}
+
+/** The driver / shift report as the same multi-sheet Excel file the scheduled email carries. */
+export async function downloadHaulShiftsExcel(
+  routeIds: readonly string[],
+  range: OperationsRange,
+  calendar: PeriodCalendar,
+  lang: string,
+  baseName: string,
+): Promise<void> {
+  const blob = await apiGetBlob(
+    '/reports/haul-shifts/export',
+    rangeParams(range, {
+      routeId: routeIds.join(','),
+      calendar,
+      lang: lang === 'fa' ? 'fa' : 'en',
+    }),
+  );
+  const name = baseName.replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '') || 'shifts';
+  downloadBlob(blob, `${name}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 export function useHaulAnalysis(

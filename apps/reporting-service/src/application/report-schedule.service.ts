@@ -4,6 +4,7 @@
 import { Logger } from '@nestjs/common';
 import { buildReportEmail } from '../domain/report-email.js';
 import {
+  MAX_SCHEDULE_ROUTES,
   type ReportJob,
   type ReportSchedule,
   type SchedulableReport,
@@ -14,11 +15,21 @@ import {
   isScheduleCadence,
   isSchedulePreset,
   normalizeRecipients,
+  reportNeedsRoute,
 } from '../domain/report-schedule.js';
+import { XLSX_MIME } from '../domain/xlsx.js';
 import type { ReportMailer } from '../infrastructure/mail/report-mailer.js';
 import type { ReportScheduleRepository } from '../infrastructure/persistence/report-schedule.repository.js';
 import type { OperationsReportService } from './operations-report.service.js';
 import type { ReportService } from './report.service.js';
+
+/** A finished report file: CSV text, or the bytes of an .xlsx workbook. */
+interface ReportArtifact {
+  readonly filename: string;
+  readonly rows: number;
+  readonly csv?: string;
+  readonly bytes?: Uint8Array;
+}
 
 export class ReportScheduleInputError extends Error {
   constructor(
@@ -36,6 +47,8 @@ export interface CreateScheduleInput {
   cadence: string;
   preset?: string;
   routeId?: string | null;
+  /** 'haul-shifts' only: several routes read as one work day. */
+  routeIds?: string[];
   enabled?: boolean;
   recipients?: string[];
 }
@@ -45,6 +58,7 @@ export interface UpdateScheduleInput {
   cadence?: string;
   preset?: string;
   routeId?: string | null;
+  routeIds?: string[];
   enabled?: boolean;
   recipients?: string[];
 }
@@ -52,9 +66,26 @@ export interface UpdateScheduleInput {
 export interface ReportScheduleServiceDeps {
   readonly schedules: ReportScheduleRepository;
   readonly reports: ReportService;
-  /** Needed for 'haul-cycles' schedules. */
+  /** Needed for 'haul-cycles' and 'haul-shifts' schedules. */
   readonly operations?: OperationsReportService;
   readonly mailer: ReportMailer;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Distinct route ids, 1 to MAX_SCHEDULE_ROUTES of them. */
+function parseRouteIds(input: readonly string[]): string[] {
+  const ids = [...new Set(input.map((id) => id.trim()).filter(Boolean))];
+  if (
+    ids.length === 0 ||
+    ids.length > MAX_SCHEDULE_ROUTES ||
+    !ids.every((id) => UUID_RE.test(id))
+  ) {
+    throw new ReportScheduleInputError(
+      `routeIds must be 1 to ${MAX_SCHEDULE_ROUTES} haul route ids`,
+    );
+  }
+  return ids;
 }
 
 function parseRecipients(input: string[]): string[] {
@@ -73,6 +104,7 @@ function toApiSchedule(s: ReportSchedule) {
     cadence: s.cadence,
     preset: s.preset,
     routeId: s.routeId,
+    routeIds: s.routeIds,
     enabled: s.enabled,
     recipients: s.recipients,
     nextRunAt: s.nextRunAt.toISOString(),
@@ -118,12 +150,17 @@ export class ReportScheduleService {
     }
     if (!isSchedulableReport(input.reportType)) {
       throw new ReportScheduleInputError(
-        'reportType must be trips | vehicle-utilization | alarms | haul-cycles',
+        'reportType must be trips | vehicle-utilization | alarms | haul-cycles | haul-shifts',
       );
     }
-    const routeId = input.reportType === 'haul-cycles' ? (input.routeId ?? null) : null;
-    if (input.reportType === 'haul-cycles' && !routeId) {
-      throw new ReportScheduleInputError('routeId is required for haul-cycles schedules');
+    const needsRoute = reportNeedsRoute(input.reportType);
+    const routeIds =
+      input.reportType === 'haul-shifts'
+        ? parseRouteIds([...(input.routeIds ?? []), ...(input.routeId ? [input.routeId] : [])])
+        : [];
+    const routeId = needsRoute ? (routeIds[0] ?? input.routeId ?? null) : null;
+    if (needsRoute && !routeId) {
+      throw new ReportScheduleInputError(`routeId is required for ${input.reportType} schedules`);
     }
     if (!isScheduleCadence(input.cadence)) {
       throw new ReportScheduleInputError('cadence must be daily | weekly');
@@ -139,6 +176,7 @@ export class ReportScheduleService {
       cadence: input.cadence,
       preset,
       routeId,
+      routeIds,
       enabled: input.enabled !== false,
       recipients: parseRecipients(input.recipients ?? []),
       // Due immediately so the worker (or run-now) produces the first artifact.
@@ -157,6 +195,7 @@ export class ReportScheduleService {
       cadence?: ScheduleCadence;
       preset?: SchedulePreset;
       routeId?: string | null;
+      routeIds?: string[];
       enabled?: boolean;
       recipients?: string[];
       nextRunAt?: Date;
@@ -181,10 +220,20 @@ export class ReportScheduleService {
       patch.preset = input.preset;
     }
     if (input.routeId !== undefined) {
-      if (existing.reportType !== 'haul-cycles' || !input.routeId) {
-        throw new ReportScheduleInputError('routeId applies to haul-cycles schedules only');
+      if (!reportNeedsRoute(existing.reportType) || !input.routeId) {
+        throw new ReportScheduleInputError('routeId applies to haul route schedules only');
       }
       patch.routeId = input.routeId;
+      if (existing.reportType === 'haul-shifts' && input.routeIds === undefined) {
+        patch.routeIds = [input.routeId];
+      }
+    }
+    if (input.routeIds !== undefined) {
+      if (existing.reportType !== 'haul-shifts') {
+        throw new ReportScheduleInputError('routeIds applies to haul-shifts schedules only');
+      }
+      patch.routeIds = parseRouteIds(input.routeIds);
+      patch.routeId = patch.routeIds[0] ?? null;
     }
     if (input.enabled !== undefined) patch.enabled = input.enabled;
     if (input.recipients !== undefined) patch.recipients = parseRecipients(input.recipients);
@@ -209,14 +258,22 @@ export class ReportScheduleService {
   public async downloadJob(
     tenantId: string,
     jobId: string,
-  ): Promise<{ csv: string; filename: string }> {
+  ): Promise<{ content: string | Uint8Array; contentType: string; filename: string }> {
     const job = await this.deps.schedules.getJobWithArtifact(tenantId, jobId);
     if (!job) throw new ReportScheduleInputError('Job not found', 'NOT_FOUND');
+    if (job.status === 'SUCCEEDED' && job.artifactBytes) {
+      return {
+        content: job.artifactBytes,
+        contentType: XLSX_MIME,
+        filename: job.filename ?? `${job.reportType}-scheduled.xlsx`,
+      };
+    }
     if (job.status !== 'SUCCEEDED' || !job.artifactCsv) {
       throw new ReportScheduleInputError('Job has no downloadable artifact');
     }
     return {
-      csv: job.artifactCsv,
+      content: job.artifactCsv,
+      contentType: 'text/csv; charset=utf-8',
       filename: job.filename ?? `${job.reportType}-scheduled.csv`,
     };
   }
@@ -248,15 +305,13 @@ export class ReportScheduleService {
   }
 
   /**
-   * Email the CSV to the schedule's recipients. A mail failure never fails the
+   * Email the report file to the schedule's recipients. A mail failure never fails the
    * job — the artifact stays downloadable and the outcome is recorded on the job.
    */
   private async emailResult(
     schedule: ReportSchedule,
     jobId: string,
-    filename: string,
-    csv: string,
-    rows: number,
+    artifact: ReportArtifact,
   ): Promise<{ status: 'SENT' | 'FAILED' | 'SKIPPED'; error?: string }> {
     if (schedule.recipients.length === 0) return { status: 'SKIPPED' };
     let outcome: { status: 'SENT' | 'FAILED' | 'SKIPPED'; error?: string };
@@ -268,15 +323,16 @@ export class ReportScheduleService {
           name: schedule.name,
           reportType: schedule.reportType,
           preset: schedule.preset,
-          rows,
+          rows: artifact.rows,
           generatedAt: new Date(),
           timeZone: 'Asia/Tehran',
         });
         await this.deps.mailer.send(schedule.tenantId, {
           to: schedule.recipients,
           ...content,
-          filename,
-          csv,
+          filename: artifact.filename,
+          content: artifact.bytes ?? artifact.csv ?? '',
+          contentType: artifact.bytes ? XLSX_MIME : 'text/csv; charset=utf-8',
         });
         outcome = { status: 'SENT' };
       } catch (err) {
@@ -293,24 +349,28 @@ export class ReportScheduleService {
     return outcome;
   }
 
-  private exportReport(schedule: ReportSchedule) {
-    if (schedule.reportType === 'haul-cycles') {
-      if (!this.deps.operations || !schedule.routeId) {
-        throw new Error('haul-cycles schedule needs a route');
+  /** Scheduled files go to people (opened in Excel), so titles and codes are Persian. */
+  private async exportReport(schedule: ReportSchedule): Promise<ReportArtifact> {
+    const { reportType, tenantId, routeId, routeIds } = schedule;
+    const query = { preset: schedule.preset };
+    if (reportType === 'haul-cycles' || reportType === 'haul-shifts') {
+      if (!this.deps.operations || !routeId) {
+        throw new Error(`${reportType} schedule needs a route`);
       }
-      return this.deps.operations.haulCyclesCsv(
-        schedule.tenantId,
-        schedule.routeId,
-        { preset: schedule.preset },
-        'fa',
-      );
+      return reportType === 'haul-shifts'
+        ? this.deps.operations.haulShiftsWorkbook(
+            tenantId,
+            routeIds.length > 0 ? routeIds : [routeId],
+            query,
+            'fa',
+          )
+        : this.deps.operations.haulCyclesCsv(tenantId, routeId, query, 'fa');
     }
-    // Scheduled files go to people (opened in Excel), so titles and codes are Persian.
     return this.deps.reports.exportCsv(
-      schedule.tenantId,
+      tenantId,
       null, // scheduled jobs skip per-user export rate limit
-      schedule.reportType,
-      { preset: schedule.preset },
+      reportType,
+      query,
       'fa',
     );
   }
@@ -330,15 +390,10 @@ export class ReportScheduleService {
         status: 'SUCCEEDED',
         filename: result.filename,
         artifactCsv: result.csv,
+        artifactBytes: result.bytes,
         rowCount: result.rows,
       });
-      const emailed = await this.emailResult(
-        schedule,
-        job.id,
-        result.filename,
-        result.csv,
-        result.rows,
-      );
+      const emailed = await this.emailResult(schedule, job.id, result);
       const base = completed ?? {
         ...job,
         status: 'SUCCEEDED' as const,

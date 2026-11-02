@@ -6,7 +6,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { downloadBlob } from '@/lib/video-stream';
 import { apiDeleteNoContent, apiGetBlob, apiGetRaw, apiPatchRaw, apiPostRaw } from './client';
 
-export type SchedulableReportType = 'trips' | 'vehicle-utilization' | 'alarms' | 'haul-cycles';
+export type SchedulableReportType =
+  | 'trips'
+  | 'vehicle-utilization'
+  | 'alarms'
+  | 'haul-cycles'
+  | 'haul-shifts';
 export type ScheduleCadence = 'daily' | 'weekly';
 export type SchedulePreset = 'today' | 'yesterday' | '7d' | '30d';
 
@@ -17,6 +22,8 @@ export interface ReportScheduleWire {
   cadence: ScheduleCadence;
   preset: SchedulePreset;
   routeId: string | null;
+  /** 'haul-shifts': every route read as one work day (day and night routes together). */
+  routeIds: string[];
   enabled: boolean;
   recipients: string[];
   nextRunAt: string;
@@ -47,8 +54,10 @@ export interface CreateReportSchedulePayload {
   reportType: SchedulableReportType;
   cadence: ScheduleCadence;
   preset?: SchedulePreset;
-  /** Required when reportType is 'haul-cycles'. */
+  /** Required when reportType is 'haul-cycles' or 'haul-shifts'. */
   routeId?: string | null;
+  /** 'haul-shifts' only: several routes read as one work day. */
+  routeIds?: string[];
   enabled?: boolean;
   recipients?: string[];
 }

@@ -19,6 +19,7 @@ import {
   measureTruck,
 } from '../domain/haul-analysis.js';
 import {
+  type DriverContext,
   type DriverInterval,
   type HaulCycle,
   type OpenHaul,
@@ -37,6 +38,16 @@ import {
   periodsBetween,
   summarizePeriods,
 } from '../domain/haul-periods.js';
+import { type HaulShiftReport, haulShiftSheets } from '../domain/haul-shifts-workbook.js';
+import {
+  type PlanRoute,
+  type WorkSlice,
+  measureShiftWork,
+  planCycles,
+  shiftPlan,
+  shiftResolver,
+  summarizeShiftReport,
+} from '../domain/haul-shifts.js';
 import { policyOfRoute } from '../domain/planned-stops.js';
 import {
   type ReportWindow,
@@ -44,6 +55,7 @@ import {
   reportWindowErrorMessage,
 } from '../domain/report-window.js';
 import { shamsiCells } from '../domain/shamsi.js';
+import { buildXlsxWorkbook } from '../domain/xlsx.js';
 import { ReportInputError, type ReportQueryBase } from './report.service.js';
 
 /**
@@ -185,6 +197,42 @@ interface HaulComputation {
   readonly vehicleName: ReadonlyMap<string, string>;
   readonly shovelLabel: ReadonlyMap<string, string>;
   readonly unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }>;
+}
+
+interface HaulSetup {
+  readonly route: RouteRow;
+  readonly shiftCount: number;
+  readonly window: ReportWindow;
+  readonly origin: Zone;
+  readonly destination: Zone;
+  readonly drivers: DriverInterval[];
+  readonly rosters: ReadonlyMap<string, ReadonlyArray<RosterDriver | null>>;
+  readonly trucks: string[];
+  readonly shovels: string[];
+  readonly shovelTracks: ReadonlyMap<string, readonly TrackSample[]>;
+  readonly vehicleName: ReadonlyMap<string, string>;
+  readonly shovelLabel: ReadonlyMap<string, string>;
+  readonly unbound: Array<{ deviceId: string; imei: string | null; role: 'TRUCK' | 'SHOVEL' }>;
+  readonly truncated: boolean;
+}
+
+/** At most this many routes are read as one work day. */
+const MAX_SHIFT_ROUTES = 6;
+
+/** Route ids from `a,b` or a repeated query parameter; distinct, in order. */
+export function parseRouteIds(value: string | readonly string[] | undefined): string[] {
+  const raw = (Array.isArray(value) ? value : [value ?? ''])
+    .flatMap((part) => String(part).split(','))
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const ids = [...new Set(raw)];
+  if (ids.length === 0 || ids.length > MAX_SHIFT_ROUTES || !ids.every((id) => UUID_RE.test(id))) {
+    throw new ReportInputError(
+      `routeId must be 1 to ${MAX_SHIFT_ROUTES} haul route ids`,
+      'INVALID_FILTER',
+    );
+  }
+  return ids;
 }
 
 /** Minutes from a query string → seconds; blank = unset, anything else must be a positive number. */
@@ -397,6 +445,138 @@ export class OperationsReportService {
     };
   }
 
+  /**
+   * Per-shift work of trucks and drivers on one or more routes read as one
+   * work day (a day-shift route and a night-shift route, for example):
+   * services and working hours of every truck in each shift, and each
+   * driver's services, hours, distance and trucks per day, per month and over
+   * the whole range. Each truck's track is read once for all routes.
+   */
+  public async haulShifts(
+    tenantId: string,
+    routeIds: string | readonly string[] | undefined,
+    input: ReportQueryBase & { calendar?: string },
+  ): Promise<HaulShiftReport> {
+    const calendar = parseOption(input.calendar, PERIOD_CALENDARS, 'jalali');
+    const routes: RouteRow[] = [];
+    for (const id of parseRouteIds(routeIds)) routes.push(await this.loadRoute(tenantId, id));
+    // The work day starts with the earliest route, so a preset holds the
+    // night shift that follows the day shift.
+    const startHour = Math.min(...routes.map(routeStartHour));
+    const setups: HaulSetup[] = [];
+    for (const route of routes)
+      setups.push(await this.prepareHaul(tenantId, route, input, startHour));
+    const window = setups[0]?.window ?? this.window(input);
+
+    // Assignments are looked up across every route's trucks.
+    const seenAssignment = new Set<string>();
+    const drivers = setups
+      .flatMap((setup) => setup.drivers)
+      .filter((d) => {
+        const key = `${d.vehicleId}|${d.driverId}|${d.startedAt.getTime()}|${d.shiftNo ?? ''}`;
+        if (seenAssignment.has(key)) return false;
+        seenAssignment.add(key);
+        return true;
+      });
+    const planRoutes: PlanRoute[] = setups.map((setup) => ({
+      routeId: setup.route.id,
+      routeName: setup.route.name,
+      ctx: this.driverContext(setup, drivers),
+    }));
+    const plan = shiftPlan(planRoutes);
+    const resolve = shiftResolver(planRoutes, plan, TIME_ZONE);
+
+    const vehicleName = new Map<string, string>();
+    for (const setup of setups)
+      for (const [id, name] of setup.vehicleName) vehicleName.set(id, name);
+    const trucks = [...new Set(setups.flatMap((setup) => setup.trucks))];
+    let truncated = setups.some((setup) => setup.truncated);
+    const found: HaulCycle[] = [];
+    const work: WorkSlice[] = [];
+    for (const truck of trucks) {
+      const loaded = await this.loadTrack(tenantId, truck, window);
+      truncated ||= loaded.truncated;
+      for (const setup of setups) {
+        if (setup.trucks.includes(truck)) {
+          found.push(...this.detectTruck(setup, truck, loaded.samples).cycles);
+        }
+      }
+      work.push(...measureShiftWork({ vehicleId: truck, samples: loaded.samples, resolve }));
+    }
+    const cycles = planCycles(found, resolve);
+    const report = summarizeShiftReport({ cycles, work, timeZone: TIME_ZONE, calendar });
+
+    const name = (id: string) => vehicleName.get(id) ?? id;
+    const names = (ids: readonly string[]) => ids.map(name).sort(NATURAL.compare);
+    const driver = (row: (typeof report.drivers)[number]) => ({
+      driverId: row.driverId,
+      driverName: row.driverName,
+      services: row.services,
+      serviceDistanceKm: km(row.serviceDistanceM),
+      workSec: row.workSec,
+      movingSec: row.movingSec,
+      distanceKm: km(row.distanceM),
+      days: row.days,
+      shifts: row.shifts,
+      vehicleNames: names(row.vehicleIds),
+      servicesByShift: row.servicesByShift,
+    });
+    const period = (row: (typeof report.driverDays)[number]) => ({
+      period: row.period,
+      from: row.from,
+      to: row.to,
+      ...driver(row),
+    });
+    return {
+      routes: routes.map((route) => ({ id: route.id, name: route.name })),
+      from: window.from.toISOString(),
+      to: window.to.toISOString(),
+      calendar,
+      truncated,
+      shifts: plan,
+      services: cycles.length,
+      workSec: report.trucks.reduce((sum, row) => sum + row.workSec, 0),
+      distanceKm: km(report.trucks.reduce((sum, row) => sum + row.distanceM, 0)),
+      trucks: report.trucks
+        .map((row) => ({
+          day: row.day,
+          vehicleId: row.vehicleId,
+          vehicleName: name(row.vehicleId),
+          shiftNo: row.shiftNo,
+          services: row.services,
+          serviceDistanceKm: km(row.serviceDistanceM),
+          workSec: row.workSec,
+          movingSec: row.movingSec,
+          distanceKm: km(row.distanceM),
+          driverNames: row.driverNames,
+        }))
+        .sort(
+          (a, b) =>
+            a.day.localeCompare(b.day) ||
+            NATURAL.compare(a.vehicleName, b.vehicleName) ||
+            a.shiftNo - b.shiftNo,
+        ),
+      drivers: report.drivers.map(driver),
+      driverDays: report.driverDays.map(period),
+      driverMonths: report.driverMonths.map(period),
+    };
+  }
+
+  /** The shift report as a multi-sheet Excel workbook (Persian by default, for email). */
+  public async haulShiftsWorkbook(
+    tenantId: string,
+    routeIds: string | readonly string[] | undefined,
+    input: ReportQueryBase & { calendar?: string },
+    locale: CsvLocale = 'fa',
+  ): Promise<{ bytes: Uint8Array; filename: string; rows: number }> {
+    const report = await this.haulShifts(tenantId, routeIds, input);
+    return {
+      bytes: buildXlsxWorkbook(haulShiftSheets(report, locale)),
+      filename: `driver-shift-report-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      rows: report.trucks.length + report.drivers.length,
+    };
+  }
+
   private routeInfo(haul: HaulComputation) {
     return {
       id: haul.route.id,
@@ -413,22 +593,23 @@ export class OperationsReportService {
     };
   }
 
-  private async computeHaul(
+  /**
+   * Everything a route's detection needs except the trucks' own tracks: the
+   * route, its window, zones, drivers, rosters and the shovels' tracks.
+   * `startHour` aligns a preset to another work-day start (several routes).
+   */
+  private async prepareHaul(
     tenantId: string,
-    routeId: string | undefined,
+    route: RouteRow,
     input: ReportQueryBase,
-    options: { analysis: boolean; minStopSec?: number } = { analysis: false },
-  ): Promise<HaulComputation> {
-    if (!routeId || !UUID_RE.test(routeId)) {
-      throw new ReportInputError('routeId must be a haul route id', 'INVALID_FILTER');
-    }
-    const route = await this.loadRoute(tenantId, routeId);
-    const window = this.haulWindow(input, routeStartHour(route));
+    startHour = routeStartHour(route),
+  ): Promise<HaulSetup> {
+    const window = this.haulWindow(input, startHour);
     const shiftCount = Math.min(
       maxShiftCount(routeDurationHours(route)),
       Math.max(1, route.shift_count),
     );
-    const members = await this.loadMembers(tenantId, routeId);
+    const members = await this.loadMembers(tenantId, route.id);
     const origin = await this.loadZone(tenantId, route.origin_geofence_id);
     const destination = await this.loadZone(tenantId, route.destination_geofence_id);
     const vehicleIds = [
@@ -478,43 +659,80 @@ export class OperationsReportService {
       truncated ||= loaded.truncated;
       tracks.set(deviceId, loaded.samples);
     }
+    return {
+      route,
+      shiftCount,
+      window,
+      origin,
+      destination,
+      drivers,
+      rosters,
+      trucks,
+      shovels,
+      shovelTracks: tracks,
+      vehicleName,
+      shovelLabel,
+      unbound,
+      truncated,
+    };
+  }
+
+  /** The route's driver context: who drives which truck in which shift. */
+  private driverContext(setup: HaulSetup, drivers = setup.drivers): DriverContext {
+    return {
+      drivers,
+      rosters: setup.rosters,
+      shiftStartHour: routeStartHour(setup.route),
+      shiftDurationHours: routeDurationHours(setup.route),
+      shiftCount: setup.shiftCount,
+      timeZone: TIME_ZONE,
+    };
+  }
+
+  /** One truck's services on one route, from a track already in memory. */
+  private detectTruck(setup: HaulSetup, truck: string, samples: readonly TrackSample[]) {
+    return detectHaulCycles({
+      ...this.driverContext(setup),
+      trucks: [truck],
+      shovels: setup.shovels,
+      tracks: new Map([...setup.shovelTracks, [truck, samples]]),
+      origin: setup.origin,
+      destination: setup.destination,
+    });
+  }
+
+  private async computeHaul(
+    tenantId: string,
+    routeId: string | undefined,
+    input: ReportQueryBase,
+    options: { analysis?: boolean; minStopSec?: number } = {},
+  ): Promise<HaulComputation> {
+    if (!routeId || !UUID_RE.test(routeId)) {
+      throw new ReportInputError('routeId must be a haul route id', 'INVALID_FILTER');
+    }
+    const route = await this.loadRoute(tenantId, routeId);
+    const setup = await this.prepareHaul(tenantId, route, input);
+    let truncated = setup.truncated;
     // Trucks are detected one at a time: each service lives on a single
     // truck's track, and only that track is held in memory at once.
     const cycles: HaulCycle[] = [];
     const open: OpenHaul[] = [];
     const measures: TruckMeasure[] = [];
-    for (const truck of trucks) {
-      const loaded = await this.loadTrack(tenantId, truck, window);
+    for (const truck of setup.trucks) {
+      const loaded = await this.loadTrack(tenantId, truck, setup.window);
       truncated ||= loaded.truncated;
-      const found = detectHaulCycles({
-        trucks: [truck],
-        shovels,
-        tracks: new Map([...tracks, [truck, loaded.samples]]),
-        origin,
-        destination,
-        drivers,
-        rosters,
-        shiftStartHour: routeStartHour(route),
-        shiftDurationHours: routeDurationHours(route),
-        shiftCount,
-        timeZone: TIME_ZONE,
-      });
+      const found = this.detectTruck(setup, truck, loaded.samples);
       cycles.push(...found.cycles);
       open.push(...found.open);
       if (options.analysis) {
         measures.push(
           measureTruck({
+            ...this.driverContext(setup),
             vehicleId: truck,
             samples: loaded.samples,
             cycles: found.cycles,
-            origin,
-            destination,
-            drivers,
-            rosters,
-            shiftStartHour: routeStartHour(route),
-            shiftDurationHours: routeDurationHours(route),
-            shiftCount,
-            timeZone: TIME_ZONE,
+            origin: setup.origin,
+            destination: setup.destination,
             minStopSec: options.minStopSec,
             breaks: policyOfRoute(route, TIME_ZONE),
           }),
@@ -524,14 +742,14 @@ export class OperationsReportService {
     cycles.sort((a, b) => a.originEnteredAt.getTime() - b.originEnteredAt.getTime());
     return {
       route,
-      shiftCount,
-      window,
+      shiftCount: setup.shiftCount,
+      window: setup.window,
       detected: { cycles, open },
       measures,
       truncated,
-      vehicleName,
-      shovelLabel,
-      unbound,
+      vehicleName: setup.vehicleName,
+      shovelLabel: setup.shovelLabel,
+      unbound: setup.unbound,
     };
   }
 

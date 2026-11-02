@@ -1,8 +1,9 @@
 /**
  * Report schedule domain helpers (Phase 1 / F-05).
  *
- * Fixed-report schedules only — trips | vehicle-utilization | alarms.
- * Delivery is a downloadable CSV artifact, optionally emailed to the schedule's recipients.
+ * Fixed-report schedules only — trips | vehicle-utilization | alarms | haul-cycles | haul-shifts.
+ * Delivery is a downloadable CSV (or, for haul-shifts, .xlsx) artifact, optionally
+ * emailed to the schedule's recipients.
  */
 
 import { REPORT_UTC_OFFSET_MINUTES } from './report-window.js';
@@ -12,8 +13,14 @@ export const SCHEDULABLE_REPORTS = [
   'vehicle-utilization',
   'alarms',
   'haul-cycles',
+  'haul-shifts',
 ] as const;
 export type SchedulableReport = (typeof SCHEDULABLE_REPORTS)[number];
+
+/** Haul reports run on one route; the others cover the whole tenant. */
+export function reportNeedsRoute(type: SchedulableReport): boolean {
+  return type === 'haul-cycles' || type === 'haul-shifts';
+}
 
 export const SCHEDULE_CADENCES = ['daily', 'weekly'] as const;
 export type ScheduleCadence = (typeof SCHEDULE_CADENCES)[number];
@@ -25,6 +32,7 @@ export type ReportJobStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
 export type ReportEmailStatus = 'SENT' | 'FAILED' | 'SKIPPED';
 
 export const MAX_SCHEDULE_RECIPIENTS = 10;
+export const MAX_SCHEDULE_ROUTES = 6;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Trim, lowercase, dedupe; returns null if any address is invalid or the list is too long. */
@@ -46,8 +54,10 @@ export interface ReportSchedule {
   readonly reportType: SchedulableReport;
   readonly cadence: ScheduleCadence;
   readonly preset: SchedulePreset;
-  /** Haul route for 'haul-cycles' schedules; null for the other report types. */
+  /** Haul route for 'haul-cycles' / 'haul-shifts' schedules; null for the other report types. */
   readonly routeId: string | null;
+  /** Every route of a 'haul-shifts' schedule (day and night routes together); [] otherwise. */
+  readonly routeIds: readonly string[];
   readonly enabled: boolean;
   readonly recipients: readonly string[];
   readonly nextRunAt: Date;
@@ -65,6 +75,8 @@ export interface ReportJob {
   readonly status: ReportJobStatus;
   readonly filename: string | null;
   readonly artifactCsv: string | null;
+  /** Binary artifact (.xlsx) for reports that are not CSV. */
+  readonly artifactBytes: Uint8Array | null;
   readonly rowCount: number | null;
   readonly error: string | null;
   readonly emailStatus: ReportEmailStatus | null;

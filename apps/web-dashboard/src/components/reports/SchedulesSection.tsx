@@ -23,7 +23,7 @@ import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/feedback/ToastProvider';
 import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
-import { Badge, Button, Input, Select } from '@/components/tailwind-ui';
+import { Badge, Button, Checkbox, Input, Select } from '@/components/tailwind-ui';
 import { formatDateTime } from '@/lib/format-date';
 
 const REPORT_TYPES: SchedulableReportType[] = [
@@ -31,6 +31,7 @@ const REPORT_TYPES: SchedulableReportType[] = [
   'vehicle-utilization',
   'alarms',
   'haul-cycles',
+  'haul-shifts',
 ];
 
 export function SchedulesSection() {
@@ -236,6 +237,33 @@ function SchedulesPanel() {
             data-testid="report-schedule-route"
           />
         )}
+        {form.reportType === 'haul-shifts' && (
+          <fieldset className="md:col-span-6" data-testid="report-schedule-routes">
+            <legend className="mb-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('reports.schedules.routes')}
+            </legend>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {(routes.data ?? [])
+                .filter((r) => r.status === 'ACTIVE')
+                .map((r) => (
+                  <Checkbox
+                    key={r.id}
+                    label={r.name}
+                    checked={(form.routeIds ?? []).includes(r.id)}
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const others = (f.routeIds ?? []).filter((id) => id !== r.id);
+                        return { ...f, routeIds: e.target.checked ? [...others, r.id] : others };
+                      })
+                    }
+                  />
+                ))}
+            </div>
+            <p className="mt-1 text-xs text-gray-500 dark:text-graydark-600">
+              {t('reports.schedules.routesHint')}
+            </p>
+          </fieldset>
+        )}
         <Select
           label={t('reports.schedules.colCadence')}
           value={form.cadence}
@@ -274,6 +302,7 @@ function SchedulesPanel() {
             disabled={
               !form.name.trim() ||
               (form.reportType === 'haul-cycles' && !form.routeId) ||
+              (form.reportType === 'haul-shifts' && !form.routeIds?.length) ||
               create.isPending
             }
             data-testid="report-schedule-create"

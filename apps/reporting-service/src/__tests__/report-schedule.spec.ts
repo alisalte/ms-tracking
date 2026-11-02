@@ -53,6 +53,8 @@ describe('ReportScheduleService email delivery', () => {
     reportType: 'trips',
     cadence: 'daily',
     preset: '7d',
+    routeId: null,
+    routeIds: [],
     enabled: true,
     recipients: ['a@x.com'],
     nextRunAt: new Date(),
@@ -62,12 +64,18 @@ describe('ReportScheduleService email delivery', () => {
     updatedAt: new Date(),
   } as const;
 
-  function build(opts: { mailerEnabled: boolean; sendFails?: boolean; recipients?: string[] }) {
+  function build(opts: {
+    mailerEnabled: boolean;
+    sendFails?: boolean;
+    recipients?: string[];
+    schedule?: Partial<{ reportType: string; routeId: string; routeIds: string[] }>;
+  }) {
     const recorded: Array<{ status: string; error?: string }> = [];
     const sent: unknown[] = [];
     const repo = {
       getSchedule: async () => ({
         ...schedule,
+        ...opts.schedule,
         recipients: opts.recipients ?? schedule.recipients,
       }),
       updateSchedule: async () => null,
@@ -100,9 +108,16 @@ describe('ReportScheduleService email delivery', () => {
         sent.push(e);
       },
     };
+    const operations = {
+      haulShiftsWorkbook: async (...args: unknown[]) => {
+        exportCalls.push(args);
+        return { filename: 'driver-shift-report.xlsx', bytes: new Uint8Array([80, 75]), rows: 4 };
+      },
+    };
     const service = new ReportScheduleService({
       schedules: repo as never,
       reports: reports as never,
+      operations: operations as never,
       mailer,
     });
     return { service, recorded, sent, exportCalls };
@@ -120,6 +135,21 @@ describe('ReportScheduleService email delivery', () => {
     const { service, exportCalls } = build({ mailerEnabled: true });
     await service.runNow('t1', 's1');
     expect(exportCalls[0]?.[4]).toBe('fa');
+  });
+
+  it('emails the driver / shift report as an Excel workbook', async () => {
+    const { service, sent, exportCalls } = build({
+      mailerEnabled: true,
+      schedule: { reportType: 'haul-shifts', routeId: 'r1', routeIds: ['r1', 'r2'] },
+    });
+    const job = await service.runNow('t1', 's1');
+    expect(job.status).toBe('SUCCEEDED');
+    // The day and the night route go into one report.
+    expect(exportCalls[0]?.slice(1)).toEqual([['r1', 'r2'], { preset: '7d' }, 'fa']);
+    const email = sent[0] as { filename: string; contentType: string; content: unknown };
+    expect(email.filename).toBe('driver-shift-report.xlsx');
+    expect(email.contentType).toContain('spreadsheetml');
+    expect(email.content).toBeInstanceOf(Uint8Array);
   });
 
   it('sends a Persian RTL email', async () => {

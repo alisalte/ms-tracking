@@ -12,7 +12,7 @@
  *      route with the trip window (§38), CSV export button works
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
@@ -48,12 +48,16 @@ import { ReportsPage } from '@/pages/ReportsPage';
 
 const apiGetRaw = vi.fn();
 const apiGetBlob = vi.fn();
+const apiGet = vi.fn();
+const apiPostRaw = vi.fn();
 const downloadBlob = vi.fn();
 
 vi.mock('@/api/client', () => ({
   apiClient: { interceptors: { request: { use: () => {} }, response: { use: () => {} } } },
   apiGetRaw: (...a: unknown[]) => apiGetRaw(...a),
   apiGetBlob: (...a: unknown[]) => apiGetBlob(...a),
+  apiGet: (...a: unknown[]) => apiGet(...a),
+  apiPostRaw: (...a: unknown[]) => apiPostRaw(...a),
 }));
 vi.mock('@/lib/video-stream', () => ({
   downloadBlob: (...a: unknown[]) => downloadBlob(...a),
@@ -577,6 +581,41 @@ describe('expanded report sections', () => {
     });
     await waitFor(() => expect(screen.getByTestId('report-schedules')).toBeInTheDocument());
     expect(screen.getByTestId('report-schedule-create')).toBeInTheDocument();
+  });
+
+  it('schedules the driver / shift report on the day and the night route together', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u1',
+        email: 'op@fleet.test',
+        tenantId: 't1',
+        roles: ['fleet-admin'],
+        permissions: ['report.read', 'report.export', 'report.schedule'],
+      },
+    });
+    apiGetRaw.mockResolvedValue({ items: [] });
+    apiGet.mockResolvedValue([
+      { id: 'r-day', name: 'Day pit', status: 'ACTIVE' },
+      { id: 'r-night', name: 'Night pit', status: 'ACTIVE' },
+    ]);
+    apiPostRaw.mockResolvedValue({ id: 's1' });
+    render(<ReportsPage />, { wrapper: makeWrapper('/reports?section=schedules') });
+    await waitFor(() => expect(screen.getByTestId('report-schedule-create')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Shifts daily' } });
+    fireEvent.change(screen.getByLabelText('Report'), { target: { value: 'haul-shifts' } });
+    const routes = await screen.findByTestId('report-schedule-routes');
+    expect(screen.getByTestId('report-schedule-create')).toBeDisabled();
+    fireEvent.click(await within(routes).findByLabelText('Day pit'));
+    fireEvent.click(within(routes).getByLabelText('Night pit'));
+    fireEvent.click(screen.getByTestId('report-schedule-create'));
+
+    await waitFor(() =>
+      expect(apiPostRaw).toHaveBeenCalledWith(
+        '/reports/schedules',
+        expect.objectContaining({ reportType: 'haul-shifts', routeIds: ['r-day', 'r-night'] }),
+      ),
+    );
   });
 
   it('hides schedule management without report.schedule', async () => {

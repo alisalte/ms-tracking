@@ -1,5 +1,5 @@
 /**
- * Report mailer — sends a scheduled report's CSV as an email attachment.
+ * Report mailer — sends a scheduled report's file (CSV or .xlsx) as an email attachment.
  *
  * SMTP is resolved per tenant: the tenant's own settings (managed in
  * tenant-admin) win, else the server-wide REPORT_SMTP_* default. With neither,
@@ -24,7 +24,9 @@ export interface ReportEmail {
   readonly text: string;
   readonly html?: string;
   readonly filename: string;
-  readonly csv: string;
+  /** CSV text, or the bytes of a binary attachment (.xlsx). */
+  readonly content: string | Uint8Array;
+  readonly contentType: string;
 }
 
 export interface ReportMailer {
@@ -82,10 +84,15 @@ export class TenantSmtpReportMailer implements ReportMailer {
       attachments: [
         {
           filename: email.filename,
-          // UTF-8 BOM so Excel opens Persian text correctly (exactly one —
-          // csvDocument already adds it, and a second shows up in the first header).
-          content: email.csv.startsWith('\uFEFF') ? email.csv : `\uFEFF${email.csv}`,
-          contentType: 'text/csv; charset=utf-8',
+          content:
+            typeof email.content === 'string'
+              ? // UTF-8 BOM so Excel opens Persian text correctly (exactly one —
+                // csvDocument already adds it, and a second shows up in the first header).
+                email.content.startsWith('\uFEFF')
+                ? email.content
+                : `\uFEFF${email.content}`
+              : Buffer.from(email.content),
+          contentType: email.contentType,
         },
       ],
     });

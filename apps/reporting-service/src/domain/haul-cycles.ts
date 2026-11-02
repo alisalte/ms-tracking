@@ -546,20 +546,32 @@ export function localDate(at: Date, timeZone: string): string {
   return localParts(at, timeZone).date;
 }
 
+/** Building an Intl formatter is slow; one per time zone is reused for every fix. */
+const LOCAL_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+function localFormat(timeZone: string): Intl.DateTimeFormat {
+  let fmt = LOCAL_FORMATS.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    LOCAL_FORMATS.set(timeZone, fmt);
+  }
+  return fmt;
+}
+
 function localParts(
   at: Date,
   timeZone: string,
 ): { date: string; hour: number; minute: number; second: number } {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const fmt = localFormat(timeZone);
   const bag: Record<string, string> = {};
   for (const part of fmt.formatToParts(at)) {
     if (part.type !== 'literal') bag[part.type] = part.value;

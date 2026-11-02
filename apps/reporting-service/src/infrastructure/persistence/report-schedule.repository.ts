@@ -20,6 +20,7 @@ interface ScheduleRow {
   cadence: string;
   preset: string;
   route_id: string | null;
+  route_ids?: string[] | string | null;
   enabled: boolean;
   recipients: string[] | null;
   next_run_at: Date | string;
@@ -37,6 +38,7 @@ interface JobRow {
   status: string;
   filename: string | null;
   artifact_csv: string | null;
+  artifact_bytes?: Buffer | null;
   row_count: number | null;
   error: string | null;
   email_status: string | null;
@@ -54,6 +56,17 @@ function asDateOrNull(v: Date | string | null): Date | null {
   return v == null ? null : asDate(v);
 }
 
+/** node-postgres may hand uuid[] back as an array or as `{a,b}` text. */
+function uuidList(value: string[] | string | null | undefined): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value
+    .replace(/^{|}$/g, '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id && id !== 'NULL');
+}
+
 function mapSchedule(r: ScheduleRow): ReportSchedule {
   return {
     id: r.id,
@@ -63,6 +76,7 @@ function mapSchedule(r: ScheduleRow): ReportSchedule {
     cadence: r.cadence as ScheduleCadence,
     preset: r.preset as SchedulePreset,
     routeId: r.route_id ?? null,
+    routeIds: uuidList(r.route_ids),
     enabled: r.enabled,
     recipients: r.recipients ?? [],
     nextRunAt: asDate(r.next_run_at),
@@ -82,6 +96,7 @@ function mapJob(r: JobRow, includeArtifact = false): ReportJob {
     status: r.status as ReportJobStatus,
     filename: r.filename,
     artifactCsv: includeArtifact ? r.artifact_csv : null,
+    artifactBytes: includeArtifact && r.artifact_bytes ? new Uint8Array(r.artifact_bytes) : null,
     rowCount: r.row_count,
     error: r.error,
     emailStatus: r.email_status as ReportEmailStatus | null,
@@ -121,6 +136,7 @@ export class ReportScheduleRepository {
     cadence: ScheduleCadence;
     preset: SchedulePreset;
     routeId: string | null;
+    routeIds: readonly string[];
     enabled: boolean;
     recipients: readonly string[];
     nextRunAt: Date;
@@ -135,6 +151,7 @@ export class ReportScheduleRepository {
           cadence: input.cadence,
           preset: input.preset,
           route_id: input.routeId,
+          route_ids: input.routeIds.length > 0 ? [...input.routeIds] : null,
           enabled: input.enabled,
           recipients: [...input.recipients],
           next_run_at: input.nextRunAt,
@@ -155,6 +172,7 @@ export class ReportScheduleRepository {
       cadence: ScheduleCadence;
       preset: SchedulePreset;
       routeId: string | null;
+      routeIds: readonly string[];
       enabled: boolean;
       recipients: readonly string[];
       nextRunAt: Date;
@@ -167,6 +185,9 @@ export class ReportScheduleRepository {
       if (patch.cadence !== undefined) updates.cadence = patch.cadence;
       if (patch.preset !== undefined) updates.preset = patch.preset;
       if (patch.routeId !== undefined) updates.route_id = patch.routeId;
+      if (patch.routeIds !== undefined) {
+        updates.route_ids = patch.routeIds.length > 0 ? [...patch.routeIds] : null;
+      }
       if (patch.enabled !== undefined) updates.enabled = patch.enabled;
       if (patch.recipients !== undefined) updates.recipients = [...patch.recipients];
       if (patch.nextRunAt !== undefined) updates.next_run_at = patch.nextRunAt;
@@ -244,7 +265,13 @@ export class ReportScheduleRepository {
     tenantId: string,
     jobId: string,
     result:
-      | { status: 'SUCCEEDED'; filename: string; artifactCsv: string; rowCount: number }
+      | {
+          status: 'SUCCEEDED';
+          filename: string;
+          artifactCsv?: string;
+          artifactBytes?: Uint8Array;
+          rowCount: number;
+        }
       | { status: 'FAILED'; error: string },
   ): Promise<ReportJob | null> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
@@ -254,7 +281,8 @@ export class ReportScheduleRepository {
       };
       if (result.status === 'SUCCEEDED') {
         updates.filename = result.filename;
-        updates.artifact_csv = result.artifactCsv;
+        updates.artifact_csv = result.artifactCsv ?? null;
+        updates.artifact_bytes = result.artifactBytes ? Buffer.from(result.artifactBytes) : null;
         updates.row_count = result.rowCount;
         updates.error = null;
       } else {
@@ -305,7 +333,7 @@ export class ReportScheduleRepository {
           'finished_at',
           'created_at',
         );
-      // artifact_csv omitted from select — map with null
+      // artifacts omitted from select — map with null
       return rows.map((r) => mapJob({ ...r, artifact_csv: null }));
     });
   }

@@ -1766,7 +1766,7 @@
       "schedules": "Schedules"
     },
     "schedules": {
-      "note": "Schedule existing CSV exports (trips, utilization, alarms). Artifacts are stored for download and emailed to the recipients (needs SMTP configured on the server).",
+      "note": "Schedule reports (trips, utilization, alarms, haul services, and driver & truck work). Files are stored for download and emailed to the recipients (requires SMTP to be configured).",
       "denied": "You need report.schedule permission to manage scheduled reports.",
       "create": "Create schedule",
       "created": "Schedule created",
@@ -1778,7 +1778,7 @@
       "runNow": "Run now",
       "runStarted": "Report run started",
       "runFailed": "Could not run schedule",
-      "download": "Download CSV",
+      "download": "Download file",
       "downloadFailed": "Download failed",
       "enable": "Enable",
       "disable": "Disable",
@@ -1810,10 +1810,13 @@
         "trips": "Trips",
         "vehicle-utilization": "Vehicle utilization",
         "alarms": "Alarms",
-        "haul-cycles": "Haul services (per truck)"
+        "haul-cycles": "Haul services (per truck)",
+        "haul-shifts": "Driver & truck work (day / night shift, Excel)"
       },
       "route": "Haul route",
-      "routePlaceholder": "Select a route"
+      "routePlaceholder": "Select a route",
+      "routes": "Routes",
+      "routesHint": "Pick the day-shift and the night-shift route together to get both shifts in one Excel file."
     },
     "catalog": {
       "title": "Report catalog",
@@ -3279,6 +3282,7 @@
         "activity": "Device activity",
         "services": "Haul services",
         "periods": "Periods",
+        "shifts": "Drivers & shifts",
         "analysis": "Waste analysis",
         "routes": "Services setup"
       },
@@ -3375,6 +3379,39 @@
     "lunchInvalid": {
       "half": "Give both the start and the end of the lunch break, or leave both empty.",
       "same": "The lunch break must have a length."
+    },
+    "shifts": {
+      "title": "Driver and truck work",
+      "hint": "Services and working hours of each truck in the day and night shift, and each driver’s services, working hours, distance and trucks per day and per month. Working hours are the time the engine was on or the truck moved; parked with the engine off and gaps without data do not count. The Excel file is the same one a scheduled report emails.",
+      "viewsLabel": "Report view",
+      "views": {
+        "drivers": "Driver services",
+        "trucks": "Trucks by shift",
+        "driverDays": "Driver daily work",
+        "driverMonths": "Monthly work & trucks"
+      },
+      "day": "Day shift",
+      "night": "Night shift",
+      "colShifts": "Shifts",
+      "colPerShift": "Services per shift",
+      "colWorkHours": "Working hours",
+      "colDistance": "Distance (km)",
+      "colTrucks": "Trucks",
+      "colDate": "Date",
+      "colTruck": "Truck",
+      "colTotalServices": "Total services",
+      "colTotalHours": "Total working hours",
+      "colMonth": "Month",
+      "colDays": "Work days",
+      "colTruckCount": "Truck count",
+      "kpiServices": "Services",
+      "kpiHours": "Truck working hours",
+      "kpiDistance": "Distance",
+      "kpiDrivers": "Active drivers",
+      "chartTitle": "Services per driver by shift",
+      "empty": "No work recorded in this range.",
+      "routesLabel": "Routes in this report",
+      "routesHint": "The route picked above is always included. Tick the night-shift route next to the day-shift route, for example, to see both shifts in one report; every moment counts in one shift only."
     }
   },
   "navGroups": {

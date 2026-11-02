@@ -97,7 +97,8 @@ export class TenantEmailSettingsService {
       subject: '[FleetVision] SMTP test',
       text: 'This is a test message from FleetVision scheduled-report email settings.',
       filename: 'test.csv',
-      csv: 'ok\n',
+      content: 'ok\n',
+      contentType: 'text/csv; charset=utf-8',
     });
   }
 }

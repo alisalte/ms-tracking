@@ -10,6 +10,7 @@ const REPORT_LABELS: Readonly<Record<SchedulableReport, string>> = {
   'vehicle-utilization': 'بهره‌وری خودروها',
   alarms: 'هشدارها',
   'haul-cycles': 'سرویس‌های حمل',
+  'haul-shifts': 'کارکرد رانندگان و تراک‌ها (شیفت روز و شب)',
 };
 
 const PRESET_LABELS: Readonly<Record<SchedulePreset, string>> = {
@@ -49,7 +50,7 @@ export function buildReportEmail(input: {
     ['زمان تهیه', `${stamp.date} ساعت ${stamp.time.slice(0, 5)}`],
   ];
   const intro = `گزارش زمان‌بندی‌شدهٔ «${input.name}» آماده است.`;
-  const outro = 'فایل اکسل (CSV) گزارش پیوست این ایمیل است.';
+  const outro = 'فایل اکسل گزارش پیوست این ایمیل است.';
   const text = [intro, '', ...lines.map(([k, v]) => `${k}: ${v}`), '', outro].join('\n');
   const html = [
     '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;text-align:right">',
