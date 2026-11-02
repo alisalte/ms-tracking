@@ -10,6 +10,13 @@ import type { TelemetryMetrics } from '@fleetvision/observability';
  */
 import { Logger } from '@nestjs/common';
 import type { ReportingConfig } from '../config/reporting.config.js';
+import {
+  type CsvLocale,
+  localizeAlarmType,
+  localizeCsvHeader,
+  localizeSeverity,
+  localizeYesNo,
+} from '../domain/csv-locale.js';
 import { type CsvValue, csvDocument } from '../domain/csv.js';
 import { type BreakPolicy, type StopCategory, classifyStop } from '../domain/planned-stops.js';
 import {
@@ -745,6 +752,7 @@ export class ReportService {
       severity?: string;
       limitKmh?: unknown;
     },
+    locale: CsvLocale = 'en',
   ): Promise<{ csv: string; filename: string; rows: number }> {
     if (this.deps.exportLimiter && userId) {
       const allowed = await this.deps.exportLimiter.allow(tenantId, userId);
@@ -865,7 +873,7 @@ export class ReportService {
               f.lat,
               f.lng,
               e.driver ?? '',
-              e.alarms.length > 0 ? 'yes' : 'no',
+              localizeYesNo(e.alarms.length > 0, locale),
               e.maxSpeedKmh,
               e.durationSec,
             ]),
@@ -885,8 +893,8 @@ export class ReportService {
         ];
         rows = (page.items as unknown as Array<Record<string, unknown>>).map((r) => [
           r.label ? String(r.label) : '',
-          String(r.type),
-          String(r.severity),
+          localizeAlarmType(String(r.type), locale),
+          localizeSeverity(String(r.severity), locale),
           Number(r.total),
           Number(r.open),
           Number(r.acknowledged),
@@ -894,7 +902,7 @@ export class ReportService {
           ...periodCells,
         ]);
       }
-      const csv = csvDocument(header, rows);
+      const csv = csvDocument(localizeCsvHeader(header, locale), rows);
       this.metrics?.reportExports.inc({ result: 'ok' });
       // Audit (§48): action only — never the report contents.
       void this.deps.audit?.appendBestEffort({

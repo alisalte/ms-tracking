@@ -9,6 +9,7 @@
  * start, local time), so a night shift that runs past midnight is not split.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { type CsvLocale, localizeCsvHeader } from '../domain/csv-locale.js';
 import { type CsvValue, csvDocument } from '../domain/csv.js';
 import {
   DEFAULT_MIN_STOP_SEC,
@@ -267,6 +268,7 @@ export class OperationsReportService {
     tenantId: string,
     routeId: string,
     input: ReportQueryBase,
+    locale: CsvLocale = 'en',
   ): Promise<{ csv: string; filename: string; rows: number }> {
     const report = await this.haulCycles(tenantId, routeId, input);
     const header = [
@@ -303,7 +305,7 @@ export class OperationsReportService {
       c.distanceKm,
     ]);
     return {
-      csv: csvDocument(header, rows),
+      csv: csvDocument(localizeCsvHeader(header, locale), rows),
       filename: `haul-cycles-${new Date().toISOString().slice(0, 10)}.csv`,
       rows: rows.length,
     };
