@@ -143,12 +143,18 @@ export class ReportingModule {
       },
       {
         provide: REPORT_SCHEDULE_SERVICE,
-        inject: [REPORT_SCHEDULE_REPOSITORY, REPORT_SERVICE, REPORT_MAILER],
+        inject: [
+          REPORT_SCHEDULE_REPOSITORY,
+          REPORT_SERVICE,
+          REPORT_MAILER,
+          OPERATIONS_REPORT_SERVICE,
+        ],
         useFactory: (
           schedules: ReportScheduleRepository,
           reports: ReportService,
           mailer: ReportMailer,
-        ) => new ReportScheduleService({ schedules, reports, mailer }),
+          operations: OperationsReportService,
+        ) => new ReportScheduleService({ schedules, reports, mailer, operations }),
       },
       {
         provide: REPORT_SCHEDULE_WORKER,

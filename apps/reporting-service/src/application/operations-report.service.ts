@@ -9,6 +9,7 @@
  * start, local time), so a night shift that runs past midnight is not split.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { type CsvValue, csvDocument } from '../domain/csv.js';
 import {
   DEFAULT_MIN_STOP_SEC,
   type PhaseTargets,
@@ -41,6 +42,7 @@ import {
   parseReportWindow,
   reportWindowErrorMessage,
 } from '../domain/report-window.js';
+import { shamsiCells } from '../domain/shamsi.js';
 import { ReportInputError, type ReportQueryBase } from './report.service.js';
 
 /**
@@ -258,6 +260,53 @@ export class OperationsReportService {
   public async haulCycles(tenantId: string, routeId: string | undefined, input: ReportQueryBase) {
     const haul = await this.computeHaul(tenantId, routeId, input);
     return this.formatHaul(haul);
+  }
+
+  /** Every service (origin → destination run) in the window as a CSV, for scheduled email. */
+  public async haulCyclesCsv(
+    tenantId: string,
+    routeId: string,
+    input: ReportQueryBase,
+  ): Promise<{ csv: string; filename: string; rows: number }> {
+    const report = await this.haulCycles(tenantId, routeId, input);
+    const header = [
+      'route',
+      'vehicle',
+      'driver',
+      'shovel',
+      'shift_date',
+      'shift_no',
+      'origin_entered_date_shamsi',
+      'origin_entered_time',
+      'origin_left_date_shamsi',
+      'origin_left_time',
+      'destination_entered_date_shamsi',
+      'destination_entered_time',
+      'load_dwell_sec',
+      'travel_sec',
+      'duration_sec',
+      'distance_km',
+    ];
+    const rows: CsvValue[][] = report.cycles.map((c) => [
+      report.route.name,
+      c.vehicleName,
+      c.driverName ?? '',
+      c.shovelLabel ?? '',
+      c.shiftDate ?? '',
+      c.shiftNo ?? '',
+      ...shamsiCells(c.originEnteredAt, TIME_ZONE),
+      ...shamsiCells(c.originLeftAt, TIME_ZONE),
+      ...shamsiCells(c.destinationEnteredAt, TIME_ZONE),
+      c.loadDwellSec,
+      c.travelSec,
+      c.durationSec,
+      c.distanceKm,
+    ]);
+    return {
+      csv: csvDocument(header, rows),
+      filename: `haul-cycles-${new Date().toISOString().slice(0, 10)}.csv`,
+      rows: rows.length,
+    };
   }
 
   /**

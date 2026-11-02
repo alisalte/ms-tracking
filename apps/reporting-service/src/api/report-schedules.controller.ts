@@ -41,7 +41,8 @@ import { REPORT_SCHEDULE_SERVICE } from './tokens.js';
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
-  reportType: z.enum(['trips', 'vehicle-utilization', 'alarms']),
+  reportType: z.enum(['trips', 'vehicle-utilization', 'alarms', 'haul-cycles']),
+  routeId: z.string().uuid().nullable().optional(),
   cadence: z.enum(['daily', 'weekly']),
   preset: z.enum(['today', 'yesterday', '7d', '30d']).optional(),
   enabled: z.boolean().optional(),
@@ -52,6 +53,7 @@ type CreateDto = z.infer<typeof createSchema>;
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   cadence: z.enum(['daily', 'weekly']).optional(),
+  routeId: z.string().uuid().nullable().optional(),
   preset: z.enum(['today', 'yesterday', '7d', '30d']).optional(),
   enabled: z.boolean().optional(),
   recipients: z.array(z.string().max(254)).max(10).optional(),

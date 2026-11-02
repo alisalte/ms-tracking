@@ -19,6 +19,7 @@ interface ScheduleRow {
   report_type: string;
   cadence: string;
   preset: string;
+  route_id: string | null;
   enabled: boolean;
   recipients: string[] | null;
   next_run_at: Date | string;
@@ -61,6 +62,7 @@ function mapSchedule(r: ScheduleRow): ReportSchedule {
     reportType: r.report_type as SchedulableReport,
     cadence: r.cadence as ScheduleCadence,
     preset: r.preset as SchedulePreset,
+    routeId: r.route_id ?? null,
     enabled: r.enabled,
     recipients: r.recipients ?? [],
     nextRunAt: asDate(r.next_run_at),
@@ -118,6 +120,7 @@ export class ReportScheduleRepository {
     reportType: SchedulableReport;
     cadence: ScheduleCadence;
     preset: SchedulePreset;
+    routeId: string | null;
     enabled: boolean;
     recipients: readonly string[];
     nextRunAt: Date;
@@ -131,6 +134,7 @@ export class ReportScheduleRepository {
           report_type: input.reportType,
           cadence: input.cadence,
           preset: input.preset,
+          route_id: input.routeId,
           enabled: input.enabled,
           recipients: [...input.recipients],
           next_run_at: input.nextRunAt,
@@ -150,6 +154,7 @@ export class ReportScheduleRepository {
       name: string;
       cadence: ScheduleCadence;
       preset: SchedulePreset;
+      routeId: string | null;
       enabled: boolean;
       recipients: readonly string[];
       nextRunAt: Date;
@@ -161,6 +166,7 @@ export class ReportScheduleRepository {
       if (patch.name !== undefined) updates.name = patch.name;
       if (patch.cadence !== undefined) updates.cadence = patch.cadence;
       if (patch.preset !== undefined) updates.preset = patch.preset;
+      if (patch.routeId !== undefined) updates.route_id = patch.routeId;
       if (patch.enabled !== undefined) updates.enabled = patch.enabled;
       if (patch.recipients !== undefined) updates.recipients = [...patch.recipients];
       if (patch.nextRunAt !== undefined) updates.next_run_at = patch.nextRunAt;

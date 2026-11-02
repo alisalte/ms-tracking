@@ -1809,8 +1809,11 @@
       "reportTypes": {
         "trips": "Trips",
         "vehicle-utilization": "Vehicle utilization",
-        "alarms": "Alarms"
-      }
+        "alarms": "Alarms",
+        "haul-cycles": "Haul services (per truck)"
+      },
+      "route": "Haul route",
+      "routePlaceholder": "Select a route"
     },
     "catalog": {
       "title": "Report catalog",

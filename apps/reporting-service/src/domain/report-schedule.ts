@@ -7,7 +7,12 @@
 
 import { REPORT_UTC_OFFSET_MINUTES } from './report-window.js';
 
-export const SCHEDULABLE_REPORTS = ['trips', 'vehicle-utilization', 'alarms'] as const;
+export const SCHEDULABLE_REPORTS = [
+  'trips',
+  'vehicle-utilization',
+  'alarms',
+  'haul-cycles',
+] as const;
 export type SchedulableReport = (typeof SCHEDULABLE_REPORTS)[number];
 
 export const SCHEDULE_CADENCES = ['daily', 'weekly'] as const;
@@ -41,6 +46,8 @@ export interface ReportSchedule {
   readonly reportType: SchedulableReport;
   readonly cadence: ScheduleCadence;
   readonly preset: SchedulePreset;
+  /** Haul route for 'haul-cycles' schedules; null for the other report types. */
+  readonly routeId: string | null;
   readonly enabled: boolean;
   readonly recipients: readonly string[];
   readonly nextRunAt: Date;

@@ -16,6 +16,7 @@ import {
 } from '../domain/report-schedule.js';
 import type { ReportMailer } from '../infrastructure/mail/report-mailer.js';
 import type { ReportScheduleRepository } from '../infrastructure/persistence/report-schedule.repository.js';
+import type { OperationsReportService } from './operations-report.service.js';
 import type { ReportService } from './report.service.js';
 
 export class ReportScheduleInputError extends Error {
@@ -33,6 +34,7 @@ export interface CreateScheduleInput {
   reportType: string;
   cadence: string;
   preset?: string;
+  routeId?: string | null;
   enabled?: boolean;
   recipients?: string[];
 }
@@ -41,6 +43,7 @@ export interface UpdateScheduleInput {
   name?: string;
   cadence?: string;
   preset?: string;
+  routeId?: string | null;
   enabled?: boolean;
   recipients?: string[];
 }
@@ -48,6 +51,8 @@ export interface UpdateScheduleInput {
 export interface ReportScheduleServiceDeps {
   readonly schedules: ReportScheduleRepository;
   readonly reports: ReportService;
+  /** Needed for 'haul-cycles' schedules. */
+  readonly operations?: OperationsReportService;
   readonly mailer: ReportMailer;
 }
 
@@ -66,6 +71,7 @@ function toApiSchedule(s: ReportSchedule) {
     reportType: s.reportType,
     cadence: s.cadence,
     preset: s.preset,
+    routeId: s.routeId,
     enabled: s.enabled,
     recipients: s.recipients,
     nextRunAt: s.nextRunAt.toISOString(),
@@ -110,7 +116,13 @@ export class ReportScheduleService {
       throw new ReportScheduleInputError('name is required (max 120 chars)');
     }
     if (!isSchedulableReport(input.reportType)) {
-      throw new ReportScheduleInputError('reportType must be trips | vehicle-utilization | alarms');
+      throw new ReportScheduleInputError(
+        'reportType must be trips | vehicle-utilization | alarms | haul-cycles',
+      );
+    }
+    const routeId = input.reportType === 'haul-cycles' ? (input.routeId ?? null) : null;
+    if (input.reportType === 'haul-cycles' && !routeId) {
+      throw new ReportScheduleInputError('routeId is required for haul-cycles schedules');
     }
     if (!isScheduleCadence(input.cadence)) {
       throw new ReportScheduleInputError('cadence must be daily | weekly');
@@ -125,6 +137,7 @@ export class ReportScheduleService {
       reportType: input.reportType,
       cadence: input.cadence,
       preset,
+      routeId,
       enabled: input.enabled !== false,
       recipients: parseRecipients(input.recipients ?? []),
       // Due immediately so the worker (or run-now) produces the first artifact.
@@ -142,6 +155,7 @@ export class ReportScheduleService {
       name?: string;
       cadence?: ScheduleCadence;
       preset?: SchedulePreset;
+      routeId?: string | null;
       enabled?: boolean;
       recipients?: string[];
       nextRunAt?: Date;
@@ -164,6 +178,12 @@ export class ReportScheduleService {
         throw new ReportScheduleInputError('preset must be today | yesterday | 7d | 30d');
       }
       patch.preset = input.preset;
+    }
+    if (input.routeId !== undefined) {
+      if (existing.reportType !== 'haul-cycles' || !input.routeId) {
+        throw new ReportScheduleInputError('routeId applies to haul-cycles schedules only');
+      }
+      patch.routeId = input.routeId;
     }
     if (input.enabled !== undefined) patch.enabled = input.enabled;
     if (input.recipients !== undefined) patch.recipients = parseRecipients(input.recipients);
@@ -265,6 +285,23 @@ export class ReportScheduleService {
     return outcome;
   }
 
+  private exportReport(schedule: ReportSchedule) {
+    if (schedule.reportType === 'haul-cycles') {
+      if (!this.deps.operations || !schedule.routeId) {
+        throw new Error('haul-cycles schedule needs a route');
+      }
+      return this.deps.operations.haulCyclesCsv(schedule.tenantId, schedule.routeId, {
+        preset: schedule.preset,
+      });
+    }
+    return this.deps.reports.exportCsv(
+      schedule.tenantId,
+      null, // scheduled jobs skip per-user export rate limit
+      schedule.reportType,
+      { preset: schedule.preset },
+    );
+  }
+
   private async executeSchedule(schedule: ReportSchedule): Promise<ReportJob> {
     const startedAt = new Date();
     const job = await this.deps.schedules.insertJob({
@@ -275,12 +312,7 @@ export class ReportScheduleService {
       startedAt,
     });
     try {
-      const result = await this.deps.reports.exportCsv(
-        schedule.tenantId,
-        null, // scheduled jobs skip per-user export rate limit
-        schedule.reportType,
-        { preset: schedule.preset },
-      );
+      const result = await this.exportReport(schedule);
       const completed = await this.deps.schedules.completeJob(schedule.tenantId, job.id, {
         status: 'SUCCEEDED',
         filename: result.filename,

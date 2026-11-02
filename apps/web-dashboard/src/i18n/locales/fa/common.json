@@ -1807,8 +1807,11 @@
       "reportTypes": {
         "trips": "سفرها",
         "vehicle-utilization": "بهره‌وری خودرو",
-        "alarms": "آلارم‌ها"
-      }
+        "alarms": "آلارم‌ها",
+        "haul-cycles": "سرویس‌های حمل (به تفکیک ماشین)"
+      },
+      "route": "مسیر حمل",
+      "routePlaceholder": "یک مسیر انتخاب کنید"
     },
     "catalog": {
       "title": "فهرست گزارش‌ها",

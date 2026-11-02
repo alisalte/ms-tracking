@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getApiErrorMessage } from '@/api/errors';
+import { useHaulRoutes } from '@/api/operations.api';
 import {
   type CreateReportSchedulePayload,
   type ReportScheduleWire,
@@ -25,7 +26,12 @@ import { type Column, ReportsTable } from '@/components/reports/ReportsTable';
 import { Badge, Button, Input, Select } from '@/components/tailwind-ui';
 import { formatDateTime } from '@/lib/format-date';
 
-const REPORT_TYPES: SchedulableReportType[] = ['trips', 'vehicle-utilization', 'alarms'];
+const REPORT_TYPES: SchedulableReportType[] = [
+  'trips',
+  'vehicle-utilization',
+  'alarms',
+  'haul-cycles',
+];
 
 export function SchedulesSection() {
   return (
@@ -55,6 +61,7 @@ function SchedulesPanel() {
   const update = useUpdateReportSchedule();
   const remove = useDeleteReportSchedule();
   const run = useRunReportSchedule();
+  const routes = useHaulRoutes();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const jobs = useReportScheduleJobs(selectedId);
 
@@ -215,6 +222,20 @@ function SchedulesPanel() {
             label: t(`reports.schedules.reportTypes.${rt}`),
           }))}
         />
+        {form.reportType === 'haul-cycles' && (
+          <Select
+            label={t('reports.schedules.route')}
+            value={form.routeId ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, routeId: e.target.value || null }))}
+            options={[
+              { value: '', label: t('reports.schedules.routePlaceholder') },
+              ...(routes.data ?? [])
+                .filter((r) => r.status === 'ACTIVE')
+                .map((r) => ({ value: r.id, label: r.name })),
+            ]}
+            data-testid="report-schedule-route"
+          />
+        )}
         <Select
           label={t('reports.schedules.colCadence')}
           value={form.cadence}
@@ -250,7 +271,11 @@ function SchedulesPanel() {
         <div className="flex items-end">
           <Button
             onClick={() => void onCreate()}
-            disabled={!form.name.trim() || create.isPending}
+            disabled={
+              !form.name.trim() ||
+              (form.reportType === 'haul-cycles' && !form.routeId) ||
+              create.isPending
+            }
             data-testid="report-schedule-create"
           >
             <Plus size={16} aria-hidden />

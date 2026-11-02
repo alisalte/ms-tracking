@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { downloadBlob } from '@/lib/video-stream';
 import { apiDeleteNoContent, apiGetBlob, apiGetRaw, apiPatchRaw, apiPostRaw } from './client';
 
-export type SchedulableReportType = 'trips' | 'vehicle-utilization' | 'alarms';
+export type SchedulableReportType = 'trips' | 'vehicle-utilization' | 'alarms' | 'haul-cycles';
 export type ScheduleCadence = 'daily' | 'weekly';
 export type SchedulePreset = 'today' | 'yesterday' | '7d' | '30d';
 
@@ -16,6 +16,7 @@ export interface ReportScheduleWire {
   reportType: SchedulableReportType;
   cadence: ScheduleCadence;
   preset: SchedulePreset;
+  routeId: string | null;
   enabled: boolean;
   recipients: string[];
   nextRunAt: string;
@@ -46,6 +47,8 @@ export interface CreateReportSchedulePayload {
   reportType: SchedulableReportType;
   cadence: ScheduleCadence;
   preset?: SchedulePreset;
+  /** Required when reportType is 'haul-cycles'. */
+  routeId?: string | null;
   enabled?: boolean;
   recipients?: string[];
 }
