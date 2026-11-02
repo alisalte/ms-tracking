@@ -34,6 +34,7 @@ import type { UserDirectory } from '../infrastructure/persistence/user-directory
 import type { ChannelProvider } from './channels/channel-provider.js';
 import type { NotificationProviderRegistry } from './channels/provider-registry.js';
 import type { DeliveryExecutor } from './delivery-executor.js';
+import type { RuleEmailNotifier } from './rule-email-notifier.js';
 import {
   type NotificationLocale,
   renderNotificationContent,
@@ -47,6 +48,8 @@ export interface NotificationDispatcherDeps {
   readonly userDirectory: UserDirectory;
   readonly rateLimiter: NotificationRateLimiter;
   readonly executor: DeliveryExecutor;
+  /** Emails the rule's extra recipients (optional — absent in tests/legacy wiring). */
+  readonly ruleEmail?: RuleEmailNotifier;
   readonly metrics: TelemetryMetrics | null;
   readonly defaultLocale: NotificationLocale;
   /** Master switch (NOTIFICATION_ENABLED) — false disables all dispatch. */
@@ -60,13 +63,20 @@ export class NotificationDispatcherService {
   constructor(private readonly deps: NotificationDispatcherDeps) {}
 
   /** Dispatch per-user notifications for an alarm occurrence (ON_OPEN only). */
-  public async dispatchAlarm(alarm: AlarmOccurrence): Promise<void> {
+  public async dispatchAlarm(
+    alarm: AlarmOccurrence,
+    options: { readonly ruleRecipients?: readonly string[] } = {},
+  ): Promise<void> {
     if (!this.deps.enabled) {
       this.logger.debug('Notification dispatch disabled (NOTIFICATION_ENABLED=false).');
       return;
     }
     const severity = mapAlarmSeverity(alarm.severity);
     const templateData = this.extractTemplateData(alarm);
+
+    // Rule-level email recipients are independent of tenant users/preferences
+    // and must not depend on (or be blocked by) the per-user fan-out below.
+    await this.emailRuleRecipients(alarm, templateData, options.ruleRecipients ?? []);
 
     // Recipients come from the trusted backend directory — never from the
     // alarm payload (Sprint H §20).
@@ -134,30 +144,7 @@ export class NotificationDispatcherService {
     if (allowedChannels.length === 0) return;
 
     // 3. Render localized content (fa/en templates; fallback = alarm message).
-    // Never interpolate a raw vehicle UUID into the title — operators cannot
-    // read GUIDs. Prefer a resolved name, then IMEI, then omit the vehicle.
-    const locale = this.deps.defaultLocale;
-    const vehicleName = humanVehicleCaption(templateData, alarm.vehicleId);
-    let content = renderNotificationContent(
-      alarm.type,
-      locale,
-      { ...templateData, vehicleName },
-      {
-        title: `Alarm: ${alarm.type.replace(/_/g, ' ')}`,
-        body: alarm.message,
-      },
-    );
-    // Device-alarm templates often use {{alarmDetail}} which is empty for
-    // non-DMS codes — fall back to the persisted English message so the UI
-    // always has something to localize (e.g. "Device alarm INPUT_2_INACTIVE").
-    if (!content.body.trim()) {
-      content = { title: content.title, body: alarm.message };
-    }
-    // Strip any GUID that still snuck into the rendered title/body.
-    content = {
-      title: stripUuidTokens(content.title),
-      body: stripUuidTokens(content.body),
-    };
+    const content = this.renderContent(alarm, templateData);
 
     // 4. Create the per-user notification (idempotent — duplicate alarm
     //    sources, incl. Kafka redeliveries, do not duplicate rows, §17).
@@ -197,6 +184,59 @@ export class NotificationDispatcherService {
     }
   }
 
+  /** Email the alarm to the rule's recipients; never throws. */
+  private async emailRuleRecipients(
+    alarm: AlarmOccurrence,
+    templateData: TemplateData,
+    recipients: readonly string[],
+  ): Promise<void> {
+    if (recipients.length === 0 || !this.deps.ruleEmail) return;
+    try {
+      const content = this.renderContent(alarm, templateData);
+      await this.deps.ruleEmail.notify({
+        tenantId: alarm.tenantId,
+        alarmId: alarm.id,
+        to: recipients,
+        subject: content.title,
+        text: `${content.body}\n\n${formatTehranTime(alarm.raisedAt)}`,
+      });
+    } catch (err) {
+      this.logger.error(`Rule email failed for alarm ${alarm.id}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Localized title/body for an alarm (no raw UUIDs — operators cannot read GUIDs). */
+  private renderContent(
+    alarm: AlarmOccurrence,
+    templateData: TemplateData,
+  ): { title: string; body: string } {
+    // Never interpolate a raw vehicle UUID into the title — operators cannot
+    // read GUIDs. Prefer a resolved name, then IMEI, then omit the vehicle.
+    const locale = this.deps.defaultLocale;
+    const vehicleName = humanVehicleCaption(templateData, alarm.vehicleId);
+    let content = renderNotificationContent(
+      alarm.type,
+      locale,
+      { ...templateData, vehicleName },
+      {
+        title: `Alarm: ${alarm.type.replace(/_/g, ' ')}`,
+        body: alarm.message,
+      },
+    );
+    // Device-alarm templates often use {{alarmDetail}} which is empty for
+    // non-DMS codes — fall back to the persisted English message so the UI
+    // always has something to localize (e.g. "Device alarm INPUT_2_INACTIVE").
+    if (!content.body.trim()) {
+      content = { title: content.title, body: alarm.message };
+    }
+    // Strip any GUID that still snuck into the rendered title/body.
+    content = {
+      title: stripUuidTokens(content.title),
+      body: stripUuidTokens(content.body),
+    };
+    return content;
+  }
+
   /**
    * Whitelisted template context from the alarm's server-side detail —
    * only TEMPLATE_DATA_KEYS may reach templates (Sprint H §28).
@@ -234,6 +274,17 @@ export class NotificationDispatcherService {
     }
     return data as TemplateData;
   }
+}
+
+/** Display time for emails — Asia/Tehran (UTC+3:30). */
+export function formatTehranTime(at: Date | null | undefined): string {
+  if (!at) return '';
+  const text = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tehran',
+    dateStyle: 'medium',
+    timeStyle: 'medium',
+  }).format(at);
+  return `${text} (Asia/Tehran)`;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

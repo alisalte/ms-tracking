@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/auth/auth.store';
 import { ToastProvider } from '@/components/feedback/ToastProvider';
 import { i18n } from '@/i18n';
-import { AlarmRulesPage } from '@/pages/AlarmRulesPage';
+import { AlarmRulesPage, parseRecipients } from '@/pages/AlarmRulesPage';
 import type { User } from '@/types/auth.types';
 import type { AlarmRule } from '@/types/rule.types';
 
@@ -26,6 +26,7 @@ const rules: AlarmRule[] = [
     cooldownSec: 300,
     dedupWindowSec: 600,
     repeatPolicy: 'COOLDOWN',
+    recipients: [],
     version: 1,
   },
 ];
@@ -127,5 +128,23 @@ describe('AlarmRulesPage', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/Name/)).toBeInTheDocument();
     });
+  });
+
+  it('shows the email recipients field, prefilled when editing', async () => {
+    renderRules();
+    fireEvent.click(await screen.findByRole('button', { name: 'Add rule' }));
+    expect(await screen.findByTestId('rule-recipients')).toHaveValue('');
+  });
+});
+
+describe('parseRecipients', () => {
+  it('splits on commas, semicolons and whitespace and drops blanks', () => {
+    expect(parseRecipients(' a@x.io, b@y.io;c@z.io\n d@w.io ,, ')).toEqual([
+      'a@x.io',
+      'b@y.io',
+      'c@z.io',
+      'd@w.io',
+    ]);
+    expect(parseRecipients('')).toEqual([]);
   });
 });

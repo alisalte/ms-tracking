@@ -58,6 +58,8 @@ export interface AlarmRule {
   cooldownSec: number;
   dedupWindowSec: number;
   repeatPolicy: RepeatPolicy;
+  /** Extra email recipients notified when the rule fires (max 10). */
+  recipients: string[];
   version: number;
 }
 
@@ -70,6 +72,7 @@ export interface CreateAlarmRulePayload {
   cooldownSec: number;
   dedupWindowSec: number;
   repeatPolicy: RepeatPolicy;
+  recipients?: string[];
 }
 
 export type UpdateAlarmRulePayload = Partial<Omit<CreateAlarmRulePayload, 'type'>>;

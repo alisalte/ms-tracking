@@ -2962,6 +2962,8 @@
     "cooldown": "Cooldown (seconds)",
     "dedup": "Dedup window (seconds)",
     "repeat": "Repeat policy",
+    "recipients": "Email recipients",
+    "recipientsHint": "a@x.com, b@y.com (max 10)",
     "thresholdKmh": "Speed limit (km/h)",
     "gracePeriodSec": "Grace period (seconds)",
     "minDurationSec": "Minimum duration (seconds)",

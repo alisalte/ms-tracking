@@ -69,6 +69,17 @@ export const notificationConfigSchema = baseConfigSchema.merge(
     NOTIF_SMTP_USER: z.string().optional(),
     NOTIF_SMTP_PASS: z.string().optional(),
     NOTIF_SMTP_FROM: z.string().email().optional(),
+    /** Implicit TLS for the server-wide SMTP ("true"/"false" — not z.coerce.boolean, "false" would be truthy). */
+    NOTIF_SMTP_SECURE: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    /**
+     * base64 of 32 bytes — the SAME key reporting-service uses to encrypt
+     * per-tenant SMTP passwords. Needed to decrypt tenant SMTP for alarm-rule
+     * email; without it rule email falls back to the server-wide NOTIF_SMTP_*.
+     */
+    REPORT_SECRETS_KEY: z.string().optional(),
 
     // --- Sprint H: Notification Center ---------------------------------------
     /**

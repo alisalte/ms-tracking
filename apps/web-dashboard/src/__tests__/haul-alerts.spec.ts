@@ -43,6 +43,7 @@ function rule(over: Partial<AlarmRule>): AlarmRule {
     cooldownSec: 0,
     dedupWindowSec: 60,
     repeatPolicy: 'ALWAYS',
+    recipients: [],
     version: 1,
     ...over,
   };

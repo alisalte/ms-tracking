@@ -55,6 +55,9 @@ export function mapAlarmRule(raw: Record<string, unknown>): AlarmRule {
     cooldownSec: Number(raw.cooldownSec ?? raw.cooldown_sec ?? 300),
     dedupWindowSec: Number(raw.dedupWindowSec ?? raw.dedup_window_sec ?? 600),
     repeatPolicy: String(raw.repeatPolicy ?? raw.repeat_policy ?? 'COOLDOWN') as RepeatPolicy,
+    recipients: Array.isArray(raw.recipients)
+      ? raw.recipients.filter((e): e is string => typeof e === 'string')
+      : [],
     version: Number(raw.version ?? 1),
   };
 }
@@ -69,6 +72,7 @@ function toCreateWire(payload: CreateAlarmRulePayload): Record<string, unknown> 
     cooldown_sec: payload.cooldownSec,
     dedup_window_sec: payload.dedupWindowSec,
     repeat_policy: payload.repeatPolicy,
+    recipients: payload.recipients ?? [],
   };
 }
 
@@ -80,6 +84,7 @@ function toUpdateWire(payload: UpdateAlarmRulePayload): Record<string, unknown> 
     ...(payload.cooldownSec !== undefined ? { cooldown_sec: payload.cooldownSec } : {}),
     ...(payload.dedupWindowSec !== undefined ? { dedup_window_sec: payload.dedupWindowSec } : {}),
     ...(payload.repeatPolicy !== undefined ? { repeat_policy: payload.repeatPolicy } : {}),
+    ...(payload.recipients !== undefined ? { recipients: payload.recipients } : {}),
   };
 }
 
@@ -97,6 +102,7 @@ const MOCK_RULES: AlarmRule[] = [
     cooldownSec: 300,
     dedupWindowSec: 600,
     repeatPolicy: 'COOLDOWN',
+    recipients: [],
     version: 1,
   },
 ];

@@ -50,6 +50,8 @@ export class InAppChannel implements ChannelProvider {
 export interface SmtpConfig {
   readonly host: string;
   readonly port: number;
+  /** Implicit TLS (port 465). Optional for the server-wide default. */
+  readonly secure?: boolean;
   readonly user: string;
   readonly pass: string;
   readonly from: string;
@@ -91,6 +93,7 @@ export class SmtpEmailProvider implements ChannelProvider {
       const transporter = nodemailer.createTransport({
         host: this.smtpConfig.host,
         port: this.smtpConfig.port,
+        secure: this.smtpConfig.secure ?? false,
         auth:
           this.smtpConfig.user && this.smtpConfig.pass
             ? { user: this.smtpConfig.user, pass: this.smtpConfig.pass }

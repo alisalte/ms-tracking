@@ -90,6 +90,7 @@ export class RulesController {
       cooldownSec: body.cooldown_sec,
       dedupWindowSec: body.dedup_window_sec,
       repeatPolicy: body.repeat_policy,
+      recipients: body.recipients,
     });
     await this.rules.create(rule);
     return { data: { id: rule.id } };
@@ -120,6 +121,7 @@ export class RulesController {
     if (body.cooldown_sec !== undefined) rule.cooldownSec = body.cooldown_sec;
     if (body.dedup_window_sec !== undefined) rule.dedupWindowSec = body.dedup_window_sec;
     if (body.repeat_policy !== undefined) rule.repeatPolicy = body.repeat_policy;
+    if (body.recipients !== undefined) rule.recipients = body.recipients;
     await this.rules.update(rule);
     return { data: { id: rule.id } };
   }

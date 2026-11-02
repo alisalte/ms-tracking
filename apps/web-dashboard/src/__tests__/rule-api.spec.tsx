@@ -8,7 +8,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useAlarmRules } from '@/api/rule.api';
+import { mapAlarmRule, useAlarmRules } from '@/api/rule.api';
 import { MAX_PAGE_SIZE } from '@/lib/pagination';
 
 const apiGetRaw = vi.fn();
@@ -45,6 +45,7 @@ const ruleWire = {
   cooldownSec: 300,
   dedupWindowSec: 600,
   repeatPolicy: 'COOLDOWN',
+  recipients: [],
   version: 1,
 };
 
@@ -75,5 +76,15 @@ describe('alarm rule list pagination (pageRequestSchema max 100)', () => {
       limit: MAX_PAGE_SIZE,
       cursor: 'cur-1',
     });
+  });
+});
+
+describe('alarm rule recipients', () => {
+  it('maps recipients from the wire, defaulting to []', () => {
+    expect(mapAlarmRule({ ...ruleWire, recipients: ['a@x.io', 7, 'b@x.io'] }).recipients).toEqual([
+      'a@x.io',
+      'b@x.io',
+    ]);
+    expect(mapAlarmRule(ruleWire).recipients).toEqual([]);
   });
 });
