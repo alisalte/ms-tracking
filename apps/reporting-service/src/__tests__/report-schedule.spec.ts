@@ -86,7 +86,13 @@ describe('ReportScheduleService email delivery', () => {
         recorded.push(r);
       },
     };
-    const reports = { exportCsv: async () => ({ filename: 'trips.csv', csv: 'a,b', rows: 1 }) };
+    const exportCalls: unknown[][] = [];
+    const reports = {
+      exportCsv: async (...args: unknown[]) => {
+        exportCalls.push(args);
+        return { filename: 'trips.csv', csv: 'a,b', rows: 1 };
+      },
+    };
     const mailer = {
       isEnabled: async () => opts.mailerEnabled,
       send: async (_tenantId: string, e: unknown) => {
@@ -99,7 +105,7 @@ describe('ReportScheduleService email delivery', () => {
       reports: reports as never,
       mailer,
     });
-    return { service, recorded, sent };
+    return { service, recorded, sent, exportCalls };
   }
 
   it('emails the CSV and records SENT', async () => {
@@ -108,6 +114,21 @@ describe('ReportScheduleService email delivery', () => {
     expect(sent).toHaveLength(1);
     expect(recorded).toEqual([{ status: 'SENT' }]);
     expect(job.emailStatus).toBe('SENT');
+  });
+
+  it('exports with Persian headers and values', async () => {
+    const { service, exportCalls } = build({ mailerEnabled: true });
+    await service.runNow('t1', 's1');
+    expect(exportCalls[0]?.[4]).toBe('fa');
+  });
+
+  it('sends a Persian RTL email', async () => {
+    const { service, sent } = build({ mailerEnabled: true });
+    await service.runNow('t1', 's1');
+    const email = sent[0] as { subject: string; text: string; html: string };
+    expect(email.text).toContain('گزارش زمان‌بندی‌شدهٔ');
+    expect(email.text).toContain('تعداد ردیف: ۱');
+    expect(email.html).toContain('dir="rtl"');
   });
 
   it('keeps the job SUCCEEDED when email fails', async () => {

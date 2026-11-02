@@ -2,6 +2,7 @@
  * Report schedule application service — CRUD + run-now + worker execution.
  */
 import { Logger } from '@nestjs/common';
+import { buildReportEmail } from '../domain/report-email.js';
 import {
   type ReportJob,
   type ReportSchedule,
@@ -263,10 +264,17 @@ export class ReportScheduleService {
       outcome = { status: 'SKIPPED', error: 'SMTP is not configured for this tenant' };
     } else {
       try {
+        const content = buildReportEmail({
+          name: schedule.name,
+          reportType: schedule.reportType,
+          preset: schedule.preset,
+          rows,
+          generatedAt: new Date(),
+          timeZone: 'Asia/Tehran',
+        });
         await this.deps.mailer.send(schedule.tenantId, {
           to: schedule.recipients,
-          subject: `[FleetVision] ${schedule.name}`,
-          text: `Scheduled report "${schedule.name}" (${schedule.reportType}, ${schedule.preset}) — ${rows} rows. The CSV is attached.`,
+          ...content,
           filename,
           csv,
         });
@@ -290,15 +298,20 @@ export class ReportScheduleService {
       if (!this.deps.operations || !schedule.routeId) {
         throw new Error('haul-cycles schedule needs a route');
       }
-      return this.deps.operations.haulCyclesCsv(schedule.tenantId, schedule.routeId, {
-        preset: schedule.preset,
-      });
+      return this.deps.operations.haulCyclesCsv(
+        schedule.tenantId,
+        schedule.routeId,
+        { preset: schedule.preset },
+        'fa',
+      );
     }
+    // Scheduled files go to people (opened in Excel), so titles and codes are Persian.
     return this.deps.reports.exportCsv(
       schedule.tenantId,
       null, // scheduled jobs skip per-user export rate limit
       schedule.reportType,
       { preset: schedule.preset },
+      'fa',
     );
   }
 

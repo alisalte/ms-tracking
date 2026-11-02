@@ -22,6 +22,7 @@ export interface ReportEmail {
   readonly to: readonly string[];
   readonly subject: string;
   readonly text: string;
+  readonly html?: string;
   readonly filename: string;
   readonly csv: string;
 }
@@ -77,11 +78,13 @@ export class TenantSmtpReportMailer implements ReportMailer {
       to: [...email.to],
       subject: email.subject,
       text: email.text,
+      html: email.html,
       attachments: [
         {
           filename: email.filename,
-          // UTF-8 BOM so Excel opens Persian text correctly.
-          content: `﻿${email.csv}`,
+          // UTF-8 BOM so Excel opens Persian text correctly (exactly one —
+          // csvDocument already adds it, and a second shows up in the first header).
+          content: email.csv.startsWith('\uFEFF') ? email.csv : `\uFEFF${email.csv}`,
           contentType: 'text/csv; charset=utf-8',
         },
       ],
