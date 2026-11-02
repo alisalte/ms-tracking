@@ -13,7 +13,7 @@
  * report takes a ready-made or custom date range, shows charts beside its
  * tables and can be exported to Excel.
  */
-import { Activity, BarChart3, CalendarRange, Settings2, Truck } from 'lucide-react';
+import { Activity, BarChart3, CalendarRange, Settings2, Truck, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +29,7 @@ import { HaulAnalysisSection } from '@/components/operations/HaulAnalysisSection
 import { PeriodsTab } from '@/components/operations/PeriodsTab';
 import { RoutesTab } from '@/components/operations/RoutesTab';
 import { ServicesTab } from '@/components/operations/ServicesTab';
+import { ShiftsTab } from '@/components/operations/ShiftsTab';
 import { RangeSummary } from '@/components/reports/RangeSummary';
 import { ReportRangePicker } from '@/components/reports/ReportRangePicker';
 import {
@@ -48,7 +49,7 @@ import {
   periodSheets,
 } from '@/lib/operations-export';
 
-type Tab = 'activity' | 'services' | 'periods' | 'analysis' | 'routes';
+type Tab = 'activity' | 'services' | 'periods' | 'shifts' | 'analysis' | 'routes';
 
 export function OperationsPage() {
   const { t, i18n } = useTranslation();
@@ -80,7 +81,8 @@ export function OperationsPage() {
   };
 
   const showToolbar = tab !== 'routes';
-  const needsRoute = tab === 'services' || tab === 'periods' || tab === 'analysis';
+  const needsRoute =
+    tab === 'services' || tab === 'periods' || tab === 'shifts' || tab === 'analysis';
 
   return (
     <div className="flex flex-col gap-4" data-testid="operations-page">
@@ -154,6 +156,12 @@ export function OperationsPage() {
             label: t('operations.ui.tabs.periods'),
             icon: <CalendarRange />,
             testid: 'ops-tab-periods',
+          },
+          {
+            value: 'shifts',
+            label: t('operations.ui.tabs.shifts'),
+            icon: <Users />,
+            testid: 'ops-tab-shifts',
           },
           {
             value: 'analysis',
@@ -231,6 +239,14 @@ export function OperationsPage() {
                 `${report.route.name}-${report.granularity}`,
               )
             }
+          />
+        )}
+
+        {tab === 'shifts' && routeId && (
+          <ShiftsTab
+            routeId={routeId}
+            routes={(routes.data ?? []).filter((route) => route.status === 'ACTIVE')}
+            range={range}
           />
         )}
 

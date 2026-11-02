@@ -7,6 +7,8 @@ import { OperationsPage } from '@/pages/OperationsPage';
 
 const rangeSeen = vi.hoisted(() => ({ activity: [] as unknown[], periods: [] as unknown[][] }));
 const downloads = vi.hoisted(() => ({ calls: [] as Array<{ blob: Blob; name: string }> }));
+const shiftExports = vi.hoisted(() => ({ calls: [] as unknown[][] }));
+const shiftRoutes = vi.hoisted(() => ({ calls: [] as string[][] }));
 
 // ApexCharts mounts a canvas — stub the wrapper (charts are covered by the reports tests).
 vi.mock('@/components/dashboard/ApexChart', () => ({
@@ -18,6 +20,98 @@ vi.mock('@/lib/video-stream', () => ({
 }));
 
 vi.mock('@/api/operations.api', () => ({
+  useHaulShifts: (routeIds: string[]) => {
+    shiftRoutes.calls.push(routeIds);
+    return {
+      data: routeIds.length
+        ? {
+            routes: routeIds.map((id) => ({
+              id,
+              name: id === 'route-1' ? 'Pit to dump' : 'Night pit',
+            })),
+            from: '2026-06-01T02:30:00Z',
+            to: '2026-06-02T02:30:00Z',
+            calendar: 'jalali',
+            truncated: false,
+            shifts: [
+              {
+                no: 1,
+                startMinute: 360,
+                durationMinutes: 720,
+                kind: 'day',
+                routeId: 'route-1',
+                routeName: 'Pit to dump',
+                routeShiftNo: 1,
+                routeShiftCount: 2,
+              },
+              {
+                no: 2,
+                startMinute: 1080,
+                durationMinutes: 720,
+                kind: 'night',
+                routeId: 'route-1',
+                routeName: 'Pit to dump',
+                routeShiftNo: 2,
+                routeShiftCount: 2,
+              },
+            ],
+            services: 7,
+            workSec: 36_000,
+            distanceKm: 120,
+            trucks: [
+              { shiftNo: 1, services: 4, workSec: 21_600, driverNames: ['Ali Day'] },
+              { shiftNo: 2, services: 3, workSec: 14_400, driverNames: ['Reza Night'] },
+            ].map((row) => ({
+              ...row,
+              day: '2026-06-01',
+              vehicleId: 'veh-1',
+              vehicleName: 'Truck 1',
+              serviceDistanceKm: 20,
+              movingSec: 0,
+              distanceKm: 60,
+            })),
+            drivers: [
+              {
+                driverId: 'drv-1',
+                driverName: 'Ali Day',
+                services: 4,
+                serviceDistanceKm: 20,
+                workSec: 21_600,
+                movingSec: 10_000,
+                distanceKm: 60,
+                days: 1,
+                shifts: 1,
+                vehicleNames: ['Truck 1'],
+                servicesByShift: { 1: 4 },
+              },
+            ],
+            driverDays: [],
+            driverMonths: [
+              {
+                period: '1405-03',
+                from: '2026-05-22',
+                to: '2026-06-21',
+                driverId: 'drv-1',
+                driverName: 'Ali Day',
+                services: 4,
+                serviceDistanceKm: 20,
+                workSec: 21_600,
+                movingSec: 10_000,
+                distanceKm: 60,
+                days: 1,
+                shifts: 1,
+                vehicleNames: ['Truck 1', 'Truck 2'],
+                servicesByShift: { 1: 4 },
+              },
+            ],
+          }
+        : undefined,
+      isError: false,
+    };
+  },
+  downloadHaulShiftsExcel: async (...args: unknown[]) => {
+    shiftExports.calls.push(args);
+  },
   useHaulPeriods: (...args: unknown[]) => {
     rangeSeen.periods.push(args);
     return {
@@ -127,6 +221,16 @@ vi.mock('@/api/operations.api', () => ({
         shiftStartHour: 6,
         shiftDurationHours: 12,
         shiftCount: 2,
+        status: 'ACTIVE',
+      },
+      {
+        id: 'route-2',
+        name: 'Night pit',
+        originGeofenceId: 'geo-1',
+        destinationGeofenceId: 'geo-2',
+        shiftStartHour: 19,
+        shiftDurationHours: 9,
+        shiftCount: 1,
         status: 'ACTIVE',
       },
     ],
@@ -269,7 +373,7 @@ function renderPage() {
 }
 
 /** Pick the route in the toolbar, then open another tab (the choice is kept). */
-function openRouteTab(tab: 'services' | 'periods' | 'analysis' | 'routes') {
+function openRouteTab(tab: 'services' | 'periods' | 'shifts' | 'analysis' | 'routes') {
   fireEvent.click(screen.getByTestId('ops-tab-services'));
   fireEvent.change(screen.getByTestId('haul-route-select'), { target: { value: 'route-1' } });
   fireEvent.click(screen.getByTestId(`ops-tab-${tab}`));
@@ -280,6 +384,9 @@ describe('operations page', () => {
     rangeSeen.activity.length = 0;
     rangeSeen.periods.length = 0;
     downloads.calls.length = 0;
+    shiftExports.calls.length = 0;
+    shiftRoutes.calls.length = 0;
+    localStorage.clear();
   });
 
   it('opens on the device activity tab with charts and the silent device', () => {
@@ -399,5 +506,37 @@ describe('operations page', () => {
     fireEvent.click(screen.getByTestId('export-periods'));
     expect(downloads.calls).toHaveLength(1);
     expect(downloads.calls[0]?.name).toMatch(/Pit-to-dump-monthly-.*\.xlsx$/);
+  });
+
+  it('shows driver and truck work per day / night shift and exports it from the server', () => {
+    renderPage();
+    openRouteTab('shifts');
+    const drivers = screen.getByTestId('shift-drivers');
+    expect(within(drivers).getByText('Services · Day shift')).toBeInTheDocument();
+    expect(within(drivers).getByText('Ali Day')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Trucks by shift' }));
+    const trucks = screen.getByTestId('shift-trucks');
+    // Both shifts of one truck on one day share a row.
+    expect(trucks.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(within(trucks).getByText('Working hours · Night shift')).toBeInTheDocument();
+    expect(trucks.textContent).toMatch(/Ali Day, Reza Night/);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Monthly work & trucks' }));
+    expect(screen.getByTestId('shift-driver-months').textContent).toMatch(/Truck 1, Truck 2/);
+
+    fireEvent.click(screen.getByTestId('export-shifts'));
+    expect(shiftExports.calls[0]?.[0]).toEqual(['route-1']);
+  });
+
+  it('reads a night-shift route together with the day route', () => {
+    renderPage();
+    openRouteTab('shifts');
+    const picker = screen.getByTestId('shift-routes');
+    expect(within(picker).getByLabelText('Pit to dump')).toBeDisabled();
+    fireEvent.click(within(picker).getByLabelText('Night pit'));
+    expect(shiftRoutes.calls.at(-1)).toEqual(['route-1', 'route-2']);
+    // The choice is remembered for the next visit.
+    expect(localStorage.getItem('fleetvision.operations.shiftRoutes')).toBe('["route-2"]');
   });
 });

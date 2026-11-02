@@ -21,7 +21,6 @@ import {
   Controller,
   Delete,
   Get,
-  Header,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -30,6 +29,7 @@ import {
   Patch,
   Post,
   Res,
+  StreamableFile,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -41,8 +41,9 @@ import { REPORT_SCHEDULE_SERVICE } from './tokens.js';
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
-  reportType: z.enum(['trips', 'vehicle-utilization', 'alarms', 'haul-cycles']),
+  reportType: z.enum(['trips', 'vehicle-utilization', 'alarms', 'haul-cycles', 'haul-shifts']),
   routeId: z.string().uuid().nullable().optional(),
+  routeIds: z.array(z.string().uuid()).max(6).optional(),
   cadence: z.enum(['daily', 'weekly']),
   preset: z.enum(['today', 'yesterday', '7d', '30d']).optional(),
   enabled: z.boolean().optional(),
@@ -54,6 +55,7 @@ const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   cadence: z.enum(['daily', 'weekly']).optional(),
   routeId: z.string().uuid().nullable().optional(),
+  routeIds: z.array(z.string().uuid()).max(6).optional(),
   preset: z.enum(['today', 'yesterday', '7d', '30d']).optional(),
   enabled: z.boolean().optional(),
   recipients: z.array(z.string().max(254)).max(10).optional(),
@@ -111,15 +113,17 @@ export class ReportSchedulesController {
 
   @Get('jobs/:jobId/download')
   @RequirePermissions('report.schedule')
-  @Header('Content-Type', 'text/csv; charset=utf-8')
   public async download(
     @CurrentTenant() tenantId: string,
     @Param('jobId') jobId: string,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<string> {
+  ): Promise<string | StreamableFile> {
     const result = await this.guard(() => this.schedules.downloadJob(tenantId, jobId));
+    res.setHeader('Content-Type', result.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-    return result.csv;
+    return typeof result.content === 'string'
+      ? result.content
+      : new StreamableFile(Buffer.from(result.content));
   }
 
   private async guard<T>(fn: () => Promise<T>): Promise<T> {
