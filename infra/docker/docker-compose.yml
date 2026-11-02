@@ -458,6 +458,13 @@ services:
       REPORT_MAX_RANGE_DAYS: ${REPORT_MAX_RANGE_DAYS:-92}
       # base64 of 32 bytes (openssl rand -base64 32) — encrypts per-tenant SMTP passwords.
       REPORT_SECRETS_KEY: ${REPORT_SECRETS_KEY:-}
+      # Server-wide SMTP fallback for tenants without their own report-email settings.
+      REPORT_SMTP_HOST: ${REPORT_SMTP_HOST:-}
+      REPORT_SMTP_PORT: ${REPORT_SMTP_PORT:-587}
+      REPORT_SMTP_USER: ${REPORT_SMTP_USER:-}
+      REPORT_SMTP_PASS: ${REPORT_SMTP_PASS:-}
+      REPORT_SMTP_FROM: ${REPORT_SMTP_FROM:-}
+      REPORT_SMTP_SECURE: ${REPORT_SMTP_SECURE:-false}
       REPORT_QUERY_TIMEOUT_MS: ${REPORT_QUERY_TIMEOUT_MS:-15000}
       REPORT_CACHE_TTL_SECONDS: ${REPORT_CACHE_TTL_SECONDS:-30}
       REPORT_EXPORT_RATE_LIMIT: ${REPORT_EXPORT_RATE_LIMIT:-30}

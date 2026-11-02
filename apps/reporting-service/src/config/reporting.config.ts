@@ -2,6 +2,17 @@ import { authConfigSchema } from '@fleetvision/auth';
 import { baseConfigSchema } from '@fleetvision/config';
 import { z } from 'zod';
 
+/** docker-compose passes unset vars as '' — treat that as "not provided". */
+const optionalEnv = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+
+/** z.coerce.boolean() turns the string 'false' into true; parse env booleans explicitly. */
+const envBool = (fallback: boolean) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' ? ['true', '1', 'yes'].includes(v.trim().toLowerCase()) : v),
+    z.boolean().default(fallback),
+  );
+
 /**
  * reporting-service config schema.
  *
@@ -54,14 +65,14 @@ export const reportingConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     REPORT_SCHEDULE_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).default(10),
 
     // --- Scheduled-report email delivery (optional — disabled when REPORT_SMTP_HOST is unset) ---
-    REPORT_SMTP_HOST: z.string().optional(),
+    REPORT_SMTP_HOST: optionalEnv(z.string()),
     REPORT_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
-    REPORT_SMTP_USER: z.string().optional(),
-    REPORT_SMTP_PASS: z.string().optional(),
-    REPORT_SMTP_FROM: z.string().email().optional(),
-    REPORT_SMTP_SECURE: z.coerce.boolean().default(false),
+    REPORT_SMTP_USER: optionalEnv(z.string()),
+    REPORT_SMTP_PASS: optionalEnv(z.string()),
+    REPORT_SMTP_FROM: optionalEnv(z.string().email()),
+    REPORT_SMTP_SECURE: envBool(false),
     /** base64 of 32 bytes — encrypts per-tenant SMTP passwords at rest. Required to store them. */
-    REPORT_SECRETS_KEY: z.string().optional(),
+    REPORT_SECRETS_KEY: optionalEnv(z.string()),
   }),
 );
 
