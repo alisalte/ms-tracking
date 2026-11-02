@@ -5,6 +5,8 @@
  * Delivery is a downloadable CSV artifact, optionally emailed to the schedule's recipients.
  */
 
+import { REPORT_UTC_OFFSET_MINUTES } from './report-window.js';
+
 export const SCHEDULABLE_REPORTS = ['trips', 'vehicle-utilization', 'alarms'] as const;
 export type SchedulableReport = (typeof SCHEDULABLE_REPORTS)[number];
 
@@ -67,10 +69,21 @@ export interface ReportJob {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Advance next_run_at by one cadence step from `from` (defaults to now). */
+/** Scheduled reports run at this local hour (Asia/Tehran, UTC+3:30). */
+export const SCHEDULE_RUN_HOUR_LOCAL = 6;
+
+/**
+ * Next run at SCHEDULE_RUN_HOUR_LOCAL local time: daily = the next such instant
+ * strictly after `from`; weekly = 7 days after the most recent one (a run that
+ * fires at 06:00 local reschedules to exactly one week later).
+ */
 export function computeNextRunAt(cadence: ScheduleCadence, from: Date = new Date()): Date {
-  const step = cadence === 'daily' ? DAY_MS : 7 * DAY_MS;
-  return new Date(from.getTime() + step);
+  const offMs = REPORT_UTC_OFFSET_MINUTES * 60_000;
+  const runMs = SCHEDULE_RUN_HOUR_LOCAL * 3_600_000;
+  const localDay = Math.floor((from.getTime() + offMs) / DAY_MS) * DAY_MS;
+  let next = localDay + runMs - offMs;
+  if (next <= from.getTime()) next += DAY_MS;
+  return new Date(cadence === 'daily' ? next : next + 6 * DAY_MS);
 }
 
 export function isSchedulableReport(v: string): v is SchedulableReport {

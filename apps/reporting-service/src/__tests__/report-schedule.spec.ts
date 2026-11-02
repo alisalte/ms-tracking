@@ -9,10 +9,15 @@ import {
 } from '../domain/report-schedule.js';
 
 describe('report-schedule domain', () => {
-  it('advances daily and weekly next_run_at', () => {
-    const from = new Date('2026-09-09T12:00:00.000Z');
-    expect(computeNextRunAt('daily', from).toISOString()).toBe('2026-09-10T12:00:00.000Z');
-    expect(computeNextRunAt('weekly', from).toISOString()).toBe('2026-09-16T12:00:00.000Z');
+  it('schedules daily and weekly next_run_at at 06:00 Tehran (UTC+3:30)', () => {
+    const from = new Date('2026-09-09T12:00:00.000Z'); // 15:30 local
+    expect(computeNextRunAt('daily', from).toISOString()).toBe('2026-09-10T02:30:00.000Z');
+    expect(computeNextRunAt('weekly', from).toISOString()).toBe('2026-09-16T02:30:00.000Z');
+  });
+
+  it('before 06:00 local the daily run is still today', () => {
+    const from = new Date('2026-09-09T20:45:00.000Z'); // 00:15 local on the 10th
+    expect(computeNextRunAt('daily', from).toISOString()).toBe('2026-09-10T02:30:00.000Z');
   });
 
   it('validates schedulable enums', () => {

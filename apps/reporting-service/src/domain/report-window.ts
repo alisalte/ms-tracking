@@ -2,8 +2,9 @@
  * Report window parsing (Sprint J §16/§18) — pure + unit-testable.
  *
  * Every report accepts EITHER a preset OR a custom [from, to) range:
- *   - presets: today | yesterday | 7d | 30d, resolved in **UTC** (day
- *     boundaries are UTC midnights — see REPORTING-KPI-DEFINITIONS.md §Timezone).
+ *   - presets: today | yesterday | 7d | 30d, resolved in the report's local
+ *     day (Asia/Tehran, fixed UTC+3:30 — Iran has no DST — so day boundaries
+ *     are local midnights, i.e. 20:30Z the evening before).
  *   - custom: ISO timestamps, from < to, duration ≤ maxRangeDays.
  *
  * Providing both is ambiguous → error. Boundaries: start INCLUSIVE, end
@@ -27,9 +28,18 @@ export type ReportWindowError =
 
 const DAY_MS = 86_400_000;
 
+/** Asia/Tehran = UTC+3:30 year-round (no DST since 2022). */
+export const REPORT_UTC_OFFSET_MINUTES = 210;
+
 /** UTC day start (midnight) of the given instant. */
 export function utcDayStart(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** Local-day start (midnight at the given fixed UTC offset) of the given instant. */
+export function localDayStart(d: Date, offsetMinutes: number = REPORT_UTC_OFFSET_MINUTES): Date {
+  const offMs = offsetMinutes * 60_000;
+  return new Date(Math.floor((d.getTime() + offMs) / DAY_MS) * DAY_MS - offMs);
 }
 
 export function parseReportWindow(input: {
@@ -50,17 +60,17 @@ export function parseReportWindow(input: {
   if (preset) {
     switch (preset) {
       case 'today': {
-        const start = utcDayStart(now);
+        const start = localDayStart(now);
         return { window: { from: start, to: now } };
       }
       case 'yesterday': {
-        const todayStart = utcDayStart(now);
+        const todayStart = localDayStart(now);
         return { window: { from: new Date(todayStart.getTime() - DAY_MS), to: todayStart } };
       }
       case '7d':
       case '30d': {
         const days = preset === '7d' ? 7 : 30;
-        const start = utcDayStart(new Date(now.getTime() - days * DAY_MS));
+        const start = localDayStart(new Date(now.getTime() - days * DAY_MS));
         return { window: { from: start, to: now } };
       }
       default:

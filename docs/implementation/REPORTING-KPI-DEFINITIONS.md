@@ -17,6 +17,10 @@ explicitly stated.
   UTC midnight boundaries); the UI labels timestamps as UTC and the date-picker
   converts the user's local wall-clock selection to UTC ISO before sending.
   Documented UI behavior, no silent mixing.
+  **Update:** report *presets* (today/yesterday/7d/30d) and scheduled-report run
+  times now use Asia/Tehran (fixed UTC+3:30, no DST): day boundaries are local
+  midnights (20:30Z), schedules run at 06:00 local. Custom `from`/`to` remain UTC
+  ISO instants, and `time_bucket` aggregation inside SQL is still UTC.
 - **Tenant** — always from the verified JWT (`@CurrentTenant`); request tenantId is
   never read. Vehicle authorization = tenant scope (the platform's only
   vehicle-visibility model; no per-user vehicle ACL exists — no new membership invented).

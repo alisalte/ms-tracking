@@ -12,6 +12,7 @@ import {
   resolveSort,
 } from '../domain/report-types.js';
 import {
+  localDayStart,
   parseReportWindow,
   reportWindowErrorMessage,
   utcDayStart,
@@ -21,24 +22,24 @@ import { ReportCache } from '../infrastructure/cache/report-cache.js';
 const NOW = new Date('2026-08-16T14:23:45Z');
 
 describe('parseReportWindow (§16/§18)', () => {
-  it('1/8. today = [UTC midnight, now)', () => {
+  it('1/8. today = [Tehran midnight, now)', () => {
     const r = parseReportWindow({ preset: 'today', now: NOW });
     expect(r.error).toBeUndefined();
-    expect(r.window?.from).toEqual(new Date('2026-08-16T00:00:00Z'));
+    expect(r.window?.from).toEqual(new Date('2026-08-15T20:30:00Z'));
     expect(r.window?.to).toEqual(NOW);
   });
 
-  it('yesterday = exactly one UTC calendar day (start inclusive, end exclusive)', () => {
+  it('yesterday = exactly one Tehran calendar day (start inclusive, end exclusive)', () => {
     const r = parseReportWindow({ preset: 'yesterday', now: NOW });
-    expect(r.window?.from).toEqual(new Date('2026-08-15T00:00:00Z'));
-    expect(r.window?.to).toEqual(new Date('2026-08-16T00:00:00Z'));
+    expect(r.window?.from).toEqual(new Date('2026-08-14T20:30:00Z'));
+    expect(r.window?.to).toEqual(new Date('2026-08-15T20:30:00Z'));
   });
 
-  it('7d/30d start at a UTC day boundary', () => {
+  it('7d/30d start at a Tehran day boundary', () => {
     const r7 = parseReportWindow({ preset: '7d', now: NOW });
-    expect(r7.window?.from).toEqual(new Date('2026-08-09T00:00:00Z'));
+    expect(r7.window?.from).toEqual(new Date('2026-08-08T20:30:00Z'));
     const r30 = parseReportWindow({ preset: '30d', now: NOW });
-    expect(r30.window?.from).toEqual(new Date('2026-07-17T00:00:00Z'));
+    expect(r30.window?.from).toEqual(new Date('2026-07-16T20:30:00Z'));
   });
 
   it('8. rejects preset AND from/to (ambiguous)', () => {
@@ -88,6 +89,15 @@ describe('parseReportWindow (§16/§18)', () => {
 
   it('error messages are actionable', () => {
     expect(reportWindowErrorMessage('RANGE_TOO_LARGE', 92)).toContain('92');
+  });
+
+  it('localDayStart truncates to Tehran midnight (20:30Z)', () => {
+    expect(localDayStart(new Date('2026-08-16T20:29:59Z'))).toEqual(
+      new Date('2026-08-15T20:30:00Z'),
+    );
+    expect(localDayStart(new Date('2026-08-16T20:30:00Z'))).toEqual(
+      new Date('2026-08-16T20:30:00Z'),
+    );
   });
 
   it('utcDayStart truncates to UTC midnight', () => {
