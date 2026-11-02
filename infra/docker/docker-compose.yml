@@ -456,6 +456,8 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
       REPORT_MAX_RANGE_DAYS: ${REPORT_MAX_RANGE_DAYS:-92}
+      # base64 of 32 bytes (openssl rand -base64 32) — encrypts per-tenant SMTP passwords.
+      REPORT_SECRETS_KEY: ${REPORT_SECRETS_KEY:-}
       REPORT_QUERY_TIMEOUT_MS: ${REPORT_QUERY_TIMEOUT_MS:-15000}
       REPORT_CACHE_TTL_SECONDS: ${REPORT_CACHE_TTL_SECONDS:-30}
       REPORT_EXPORT_RATE_LIMIT: ${REPORT_EXPORT_RATE_LIMIT:-30}

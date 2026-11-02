@@ -2,7 +2,7 @@
  * Report schedule domain helpers (Phase 1 / F-05).
  *
  * Fixed-report schedules only — trips | vehicle-utilization | alarms.
- * Delivery is downloadable CSV artifacts (email deferred).
+ * Delivery is a downloadable CSV artifact, optionally emailed to the schedule's recipients.
  */
 
 export const SCHEDULABLE_REPORTS = ['trips', 'vehicle-utilization', 'alarms'] as const;
@@ -15,6 +15,22 @@ export const SCHEDULE_PRESETS = ['today', 'yesterday', '7d', '30d'] as const;
 export type SchedulePreset = (typeof SCHEDULE_PRESETS)[number];
 
 export type ReportJobStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+export type ReportEmailStatus = 'SENT' | 'FAILED' | 'SKIPPED';
+
+export const MAX_SCHEDULE_RECIPIENTS = 10;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Trim, lowercase, dedupe; returns null if any address is invalid or the list is too long. */
+export function normalizeRecipients(input: readonly string[]): string[] | null {
+  const out: string[] = [];
+  for (const raw of input) {
+    const email = raw.trim().toLowerCase();
+    if (!email) continue;
+    if (email.length > 254 || !EMAIL_RE.test(email)) return null;
+    if (!out.includes(email)) out.push(email);
+  }
+  return out.length > MAX_SCHEDULE_RECIPIENTS ? null : out;
+}
 
 export interface ReportSchedule {
   readonly id: string;
@@ -24,6 +40,7 @@ export interface ReportSchedule {
   readonly cadence: ScheduleCadence;
   readonly preset: SchedulePreset;
   readonly enabled: boolean;
+  readonly recipients: readonly string[];
   readonly nextRunAt: Date;
   readonly lastRunAt: Date | null;
   readonly createdBy: string | null;
@@ -41,6 +58,8 @@ export interface ReportJob {
   readonly artifactCsv: string | null;
   readonly rowCount: number | null;
   readonly error: string | null;
+  readonly emailStatus: ReportEmailStatus | null;
+  readonly emailError: string | null;
   readonly startedAt: Date | null;
   readonly finishedAt: Date | null;
   readonly createdAt: Date;

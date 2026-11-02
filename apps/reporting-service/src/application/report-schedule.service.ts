@@ -12,7 +12,9 @@ import {
   isSchedulableReport,
   isScheduleCadence,
   isSchedulePreset,
+  normalizeRecipients,
 } from '../domain/report-schedule.js';
+import type { ReportMailer } from '../infrastructure/mail/report-mailer.js';
 import type { ReportScheduleRepository } from '../infrastructure/persistence/report-schedule.repository.js';
 import type { ReportService } from './report.service.js';
 
@@ -32,6 +34,7 @@ export interface CreateScheduleInput {
   cadence: string;
   preset?: string;
   enabled?: boolean;
+  recipients?: string[];
 }
 
 export interface UpdateScheduleInput {
@@ -39,11 +42,21 @@ export interface UpdateScheduleInput {
   cadence?: string;
   preset?: string;
   enabled?: boolean;
+  recipients?: string[];
 }
 
 export interface ReportScheduleServiceDeps {
   readonly schedules: ReportScheduleRepository;
   readonly reports: ReportService;
+  readonly mailer: ReportMailer;
+}
+
+function parseRecipients(input: string[]): string[] {
+  const list = normalizeRecipients(input);
+  if (!list) {
+    throw new ReportScheduleInputError('recipients must be up to 10 valid email addresses');
+  }
+  return list;
 }
 
 function toApiSchedule(s: ReportSchedule) {
@@ -54,6 +67,7 @@ function toApiSchedule(s: ReportSchedule) {
     cadence: s.cadence,
     preset: s.preset,
     enabled: s.enabled,
+    recipients: s.recipients,
     nextRunAt: s.nextRunAt.toISOString(),
     lastRunAt: s.lastRunAt?.toISOString() ?? null,
     createdBy: s.createdBy,
@@ -71,6 +85,8 @@ function toApiJob(j: ReportJob) {
     filename: j.filename,
     rowCount: j.rowCount,
     error: j.error,
+    emailStatus: j.emailStatus,
+    emailError: j.emailError,
     startedAt: j.startedAt?.toISOString() ?? null,
     finishedAt: j.finishedAt?.toISOString() ?? null,
     createdAt: j.createdAt.toISOString(),
@@ -110,6 +126,7 @@ export class ReportScheduleService {
       cadence: input.cadence,
       preset,
       enabled: input.enabled !== false,
+      recipients: parseRecipients(input.recipients ?? []),
       // Due immediately so the worker (or run-now) produces the first artifact.
       nextRunAt: new Date(),
       createdBy: userId,
@@ -126,6 +143,7 @@ export class ReportScheduleService {
       cadence?: ScheduleCadence;
       preset?: SchedulePreset;
       enabled?: boolean;
+      recipients?: string[];
       nextRunAt?: Date;
     } = {};
     if (input.name !== undefined) {
@@ -148,6 +166,7 @@ export class ReportScheduleService {
       patch.preset = input.preset;
     }
     if (input.enabled !== undefined) patch.enabled = input.enabled;
+    if (input.recipients !== undefined) patch.recipients = parseRecipients(input.recipients);
 
     const updated = await this.deps.schedules.updateSchedule(tenantId, id, patch);
     if (!updated) throw new ReportScheduleInputError('Schedule not found', 'NOT_FOUND');
@@ -207,6 +226,45 @@ export class ReportScheduleService {
     return due.length;
   }
 
+  /**
+   * Email the CSV to the schedule's recipients. A mail failure never fails the
+   * job — the artifact stays downloadable and the outcome is recorded on the job.
+   */
+  private async emailResult(
+    schedule: ReportSchedule,
+    jobId: string,
+    filename: string,
+    csv: string,
+    rows: number,
+  ): Promise<{ status: 'SENT' | 'FAILED' | 'SKIPPED'; error?: string }> {
+    if (schedule.recipients.length === 0) return { status: 'SKIPPED' };
+    let outcome: { status: 'SENT' | 'FAILED' | 'SKIPPED'; error?: string };
+    if (!(await this.deps.mailer.isEnabled(schedule.tenantId))) {
+      outcome = { status: 'SKIPPED', error: 'SMTP is not configured for this tenant' };
+    } else {
+      try {
+        await this.deps.mailer.send(schedule.tenantId, {
+          to: schedule.recipients,
+          subject: `[FleetVision] ${schedule.name}`,
+          text: `Scheduled report "${schedule.name}" (${schedule.reportType}, ${schedule.preset}) — ${rows} rows. The CSV is attached.`,
+          filename,
+          csv,
+        });
+        outcome = { status: 'SENT' };
+      } catch (err) {
+        const message = (err as Error)?.message ?? 'email failed';
+        this.logger.warn(`Report email for schedule ${schedule.id} failed: ${message}`);
+        outcome = { status: 'FAILED', error: message };
+      }
+    }
+    await this.deps.schedules
+      .recordEmailResult(schedule.tenantId, jobId, outcome)
+      .catch((err) =>
+        this.logger.error(`Could not record email result: ${(err as Error).message}`),
+      );
+    return outcome;
+  }
+
   private async executeSchedule(schedule: ReportSchedule): Promise<ReportJob> {
     const startedAt = new Date();
     const job = await this.deps.schedules.insertJob({
@@ -229,14 +287,20 @@ export class ReportScheduleService {
         artifactCsv: result.csv,
         rowCount: result.rows,
       });
-      return (
-        completed ?? {
-          ...job,
-          status: 'SUCCEEDED',
-          filename: result.filename,
-          rowCount: result.rows,
-        }
+      const emailed = await this.emailResult(
+        schedule,
+        job.id,
+        result.filename,
+        result.csv,
+        result.rows,
       );
+      const base = completed ?? {
+        ...job,
+        status: 'SUCCEEDED' as const,
+        filename: result.filename,
+        rowCount: result.rows,
+      };
+      return { ...base, emailStatus: emailed.status, emailError: emailed.error ?? null };
     } catch (err) {
       const message = (err as Error)?.message ?? 'export failed';
       const failed = await this.deps.schedules.completeJob(schedule.tenantId, job.id, {

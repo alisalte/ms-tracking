@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { QuotaMeterCard } from '@/components/QuotaMeter';
 import { TenantAccessPanel } from '@/components/TenantAccessPanel';
 import { TenantApiKeysPanel } from '@/components/TenantApiKeysPanel';
+import { TenantEmailPanel } from '@/components/TenantEmailPanel';
 import { TenantFleetsPanel } from '@/components/TenantFleetsPanel';
 import { TenantSettingsPanel } from '@/components/TenantSettingsPanel';
 import { PLAN_CODES, bytesToGib, gibToBytes, isoDateOnly } from '@/lib/license';
@@ -53,7 +54,7 @@ export function TenantDetailPage() {
   }, [id]);
 
   const [tab, setTab] = useState<
-    'overview' | 'rates' | 'invoices' | 'fleets' | 'access' | 'apikeys' | 'settings'
+    'overview' | 'rates' | 'invoices' | 'fleets' | 'access' | 'apikeys' | 'settings' | 'email'
   >('overview');
 
   if (!id) return null;
@@ -66,6 +67,7 @@ export function TenantDetailPage() {
     { id: 'access' as const, label: t('detail.tabAccess') },
     { id: 'apikeys' as const, label: t('detail.tabApiKeys') },
     { id: 'settings' as const, label: t('detail.tabSettings') },
+    { id: 'email' as const, label: t('detail.tabEmail') },
   ];
 
   return (
@@ -271,6 +273,7 @@ export function TenantDetailPage() {
       {tab === 'access' && <TenantAccessPanel tenantId={id} tenantName={tenant?.name ?? ''} />}
       {tab === 'apikeys' && <TenantApiKeysPanel tenantId={id} />}
       {tab === 'settings' && <TenantSettingsPanel tenantId={id} />}
+      {tab === 'email' && <TenantEmailPanel tenantId={id} />}
     </div>
   );
 }

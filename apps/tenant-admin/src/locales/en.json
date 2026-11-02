@@ -149,7 +149,8 @@
     "usageSaved": "Usage counters saved.",
     "sessionPolicy": "License, rates, and sign-in policy",
     "tabApiKeys": "API keys",
-    "tabSettings": "Settings"
+    "tabSettings": "Settings",
+    "tabEmail": "Report email"
   },
   "invoices": {
     "title": "Invoices",
@@ -330,6 +331,28 @@
     "save": "Save",
     "reset": "Reset",
     "saved": "Settings saved."
+  },
+  "email": {
+    "hint": "SMTP server used to email this tenant's scheduled reports. Each tenant has its own; the password is stored encrypted and never shown again.",
+    "usingDefault": "No settings yet — the server-wide default SMTP (if any) is used.",
+    "noEncryptionKey": "The server has no REPORT_SECRETS_KEY, so an SMTP password cannot be stored.",
+    "host": "SMTP host",
+    "port": "Port",
+    "username": "Username",
+    "password": "Password",
+    "passwordKept": "Saved — leave blank to keep",
+    "clearPassword": "Clear saved password",
+    "from": "From address",
+    "secure": "Use TLS (usually port 465)",
+    "enabled": "Enabled",
+    "save": "Save",
+    "remove": "Remove settings",
+    "saved": "Email settings saved.",
+    "removed": "Email settings removed.",
+    "testTo": "Send a test email to",
+    "sendTest": "Send test",
+    "testSent": "Test email sent.",
+    "testNote": "The test uses the saved settings (or the server default if none are saved)."
   },
   "apikeys": {
     "hint": "API keys for this organisation are issued and revoked here.",

@@ -17,6 +17,7 @@ export interface ReportScheduleWire {
   cadence: ScheduleCadence;
   preset: SchedulePreset;
   enabled: boolean;
+  recipients: string[];
   nextRunAt: string;
   lastRunAt: string | null;
   createdBy: string | null;
@@ -32,6 +33,8 @@ export interface ReportJobWire {
   filename: string | null;
   rowCount: number | null;
   error: string | null;
+  emailStatus: 'SENT' | 'FAILED' | 'SKIPPED' | null;
+  emailError: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
@@ -44,6 +47,7 @@ export interface CreateReportSchedulePayload {
   cadence: ScheduleCadence;
   preset?: SchedulePreset;
   enabled?: boolean;
+  recipients?: string[];
 }
 
 export interface UpdateReportSchedulePayload {
@@ -51,6 +55,7 @@ export interface UpdateReportSchedulePayload {
   cadence?: ScheduleCadence;
   preset?: SchedulePreset;
   enabled?: boolean;
+  recipients?: string[];
 }
 
 export function useReportSchedules(enabled = true) {

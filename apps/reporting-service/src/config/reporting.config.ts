@@ -52,6 +52,16 @@ export const reportingConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     REPORT_SCHEDULE_WORKER_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
     /** Max due schedules claimed per worker tick. */
     REPORT_SCHEDULE_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).default(10),
+
+    // --- Scheduled-report email delivery (optional — disabled when REPORT_SMTP_HOST is unset) ---
+    REPORT_SMTP_HOST: z.string().optional(),
+    REPORT_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    REPORT_SMTP_USER: z.string().optional(),
+    REPORT_SMTP_PASS: z.string().optional(),
+    REPORT_SMTP_FROM: z.string().email().optional(),
+    REPORT_SMTP_SECURE: z.coerce.boolean().default(false),
+    /** base64 of 32 bytes — encrypts per-tenant SMTP passwords at rest. Required to store them. */
+    REPORT_SECRETS_KEY: z.string().optional(),
   }),
 );
 

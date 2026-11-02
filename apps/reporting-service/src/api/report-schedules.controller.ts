@@ -45,6 +45,7 @@ const createSchema = z.object({
   cadence: z.enum(['daily', 'weekly']),
   preset: z.enum(['today', 'yesterday', '7d', '30d']).optional(),
   enabled: z.boolean().optional(),
+  recipients: z.array(z.string().max(254)).max(10).optional(),
 });
 type CreateDto = z.infer<typeof createSchema>;
 
@@ -53,6 +54,7 @@ const updateSchema = z.object({
   cadence: z.enum(['daily', 'weekly']).optional(),
   preset: z.enum(['today', 'yesterday', '7d', '30d']).optional(),
   enabled: z.boolean().optional(),
+  recipients: z.array(z.string().max(254)).max(10).optional(),
 });
 type UpdateDto = z.infer<typeof updateSchema>;
 

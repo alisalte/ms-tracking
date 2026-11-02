@@ -1766,7 +1766,7 @@
       "schedules": "Schedules"
     },
     "schedules": {
-      "note": "Schedule existing CSV exports (trips, utilization, alarms). Artifacts are stored for download — email delivery comes later.",
+      "note": "Schedule existing CSV exports (trips, utilization, alarms). Artifacts are stored for download and emailed to the recipients (needs SMTP configured on the server).",
       "denied": "You need report.schedule permission to manage scheduled reports.",
       "create": "Create schedule",
       "created": "Schedule created",
@@ -1794,6 +1794,14 @@
       "colStatus": "Status",
       "colNext": "Next run",
       "colActions": "Actions",
+      "colRecipients": "Recipients",
+      "recipients": "Email recipients",
+      "recipientsHint": "a@x.com, b@y.com",
+      "email": {
+        "SENT": "Emailed",
+        "FAILED": "Email failed",
+        "SKIPPED": "Email skipped"
+      },
       "cadences": {
         "daily": "Daily",
         "weekly": "Weekly"

@@ -58,6 +58,7 @@ function SchedulesPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const jobs = useReportScheduleJobs(selectedId);
 
+  const [recipientsText, setRecipientsText] = useState('');
   const [form, setForm] = useState<CreateReportSchedulePayload>({
     name: '',
     reportType: 'trips',
@@ -67,8 +68,13 @@ function SchedulesPanel() {
 
   const onCreate = async () => {
     try {
-      const created = await create.mutateAsync(form);
+      const recipients = recipientsText
+        .split(/[\s,;]+/)
+        .map((e) => e.trim())
+        .filter(Boolean);
+      const created = await create.mutateAsync({ ...form, recipients });
       setForm({ name: '', reportType: 'trips', cadence: 'daily', preset: '7d' });
+      setRecipientsText('');
       setSelectedId(created.id);
       toast.success(t('reports.schedules.created'));
     } catch (err) {
@@ -134,6 +140,11 @@ function SchedulesPanel() {
       render: (r) => t(`reports.range.${r.preset}`),
     },
     {
+      id: 'recipients',
+      header: t('reports.schedules.colRecipients'),
+      render: (r) => (r.recipients.length > 0 ? r.recipients.join(', ') : '—'),
+    },
+    {
       id: 'enabled',
       header: t('reports.schedules.colStatus'),
       render: (r) => (
@@ -186,7 +197,7 @@ function SchedulesPanel() {
     <div className="flex flex-col gap-4" data-testid="report-schedules">
       <p className="text-sm text-gray-500 dark:text-graydark-600">{t('reports.schedules.note')}</p>
 
-      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-graydark-300 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-graydark-300 md:grid-cols-6">
         <Input
           label={t('reports.schedules.colName')}
           value={form.name}
@@ -228,6 +239,13 @@ function SchedulesPanel() {
             value: p,
             label: t(`reports.range.${p}`),
           }))}
+        />
+        <Input
+          label={t('reports.schedules.recipients')}
+          placeholder={t('reports.schedules.recipientsHint')}
+          value={recipientsText}
+          onChange={(e) => setRecipientsText(e.target.value)}
+          data-testid="report-schedule-recipients"
         />
         <div className="flex items-end">
           <Button
@@ -283,6 +301,9 @@ function SchedulesPanel() {
                   {job.finishedAt ? formatDateTime(job.finishedAt) : '—'}
                   {job.rowCount != null ? ` · ${job.rowCount} rows` : ''}
                   {job.error ? ` · ${job.error}` : ''}
+                  {job.emailStatus
+                    ? ` · ${t(`reports.schedules.email.${job.emailStatus}`)}${job.emailError ? ` (${job.emailError})` : ''}`
+                    : ''}
                 </span>
                 {job.downloadable && (
                   <Button

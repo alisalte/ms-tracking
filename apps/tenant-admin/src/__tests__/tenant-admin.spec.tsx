@@ -9,6 +9,7 @@ import {
   listInbox,
   listTenantDevices,
 } from '@/api/platform-assets';
+import { saveTenantEmailSettings } from '@/api/report-email';
 import {
   createTenantApiKey,
   createTenantUser,
@@ -21,6 +22,13 @@ import { LoginPage } from '@/pages/LoginPage';
 import { TenantCreatePage } from '@/pages/TenantCreatePage';
 import { TenantDetailPage } from '@/pages/TenantDetailPage';
 import '@/i18n';
+
+vi.mock('@/api/report-email', () => ({
+  getTenantEmailSettings: vi.fn(async () => ({ settings: null, encryptionAvailable: true })),
+  saveTenantEmailSettings: vi.fn(async () => ({})),
+  deleteTenantEmailSettings: vi.fn(async () => undefined),
+  sendTenantEmailTest: vi.fn(async () => undefined),
+}));
 
 vi.mock('@/api/tenants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/tenants')>();
@@ -314,6 +322,34 @@ describe('tenant detail tabs', () => {
       });
     });
     expect(await screen.findByText('fv_live_secret')).toBeInTheDocument();
+  });
+
+  it('saves per-tenant SMTP settings for report email', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tenants/t1']}>
+        <Routes>
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /ایمیل گزارش|Report email/i }));
+    fireEvent.change(await screen.findByTestId('email-host'), {
+      target: { value: 'smtp.acme.test' },
+    });
+    fireEvent.change(screen.getByTestId('email-from'), { target: { value: 'r@acme.test' } });
+    fireEvent.change(screen.getByTestId('email-password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByTestId('email-save'));
+    await waitFor(() => {
+      expect(saveTenantEmailSettings).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          host: 'smtp.acme.test',
+          fromAddress: 'r@acme.test',
+          password: 'pw',
+          port: 587,
+        }),
+      );
+    });
   });
 
   it('opens fleet registration and device assignment for the tenant', async () => {

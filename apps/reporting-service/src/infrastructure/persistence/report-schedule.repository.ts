@@ -3,6 +3,7 @@
  */
 import { type Knex, withPlatformContext, withTenantContext } from '@fleetvision/persistence-knex';
 import type {
+  ReportEmailStatus,
   ReportJob,
   ReportJobStatus,
   ReportSchedule,
@@ -19,6 +20,7 @@ interface ScheduleRow {
   cadence: string;
   preset: string;
   enabled: boolean;
+  recipients: string[] | null;
   next_run_at: Date | string;
   last_run_at: Date | string | null;
   created_by: string | null;
@@ -36,6 +38,8 @@ interface JobRow {
   artifact_csv: string | null;
   row_count: number | null;
   error: string | null;
+  email_status: string | null;
+  email_error: string | null;
   started_at: Date | string | null;
   finished_at: Date | string | null;
   created_at: Date | string;
@@ -58,6 +62,7 @@ function mapSchedule(r: ScheduleRow): ReportSchedule {
     cadence: r.cadence as ScheduleCadence,
     preset: r.preset as SchedulePreset,
     enabled: r.enabled,
+    recipients: r.recipients ?? [],
     nextRunAt: asDate(r.next_run_at),
     lastRunAt: asDateOrNull(r.last_run_at),
     createdBy: r.created_by,
@@ -77,6 +82,8 @@ function mapJob(r: JobRow, includeArtifact = false): ReportJob {
     artifactCsv: includeArtifact ? r.artifact_csv : null,
     rowCount: r.row_count,
     error: r.error,
+    emailStatus: r.email_status as ReportEmailStatus | null,
+    emailError: r.email_error,
     startedAt: asDateOrNull(r.started_at),
     finishedAt: asDateOrNull(r.finished_at),
     createdAt: asDate(r.created_at),
@@ -112,6 +119,7 @@ export class ReportScheduleRepository {
     cadence: ScheduleCadence;
     preset: SchedulePreset;
     enabled: boolean;
+    recipients: readonly string[];
     nextRunAt: Date;
     createdBy: string | null;
   }): Promise<ReportSchedule> {
@@ -124,6 +132,7 @@ export class ReportScheduleRepository {
           cadence: input.cadence,
           preset: input.preset,
           enabled: input.enabled,
+          recipients: [...input.recipients],
           next_run_at: input.nextRunAt,
           created_by: input.createdBy,
         })
@@ -142,6 +151,7 @@ export class ReportScheduleRepository {
       cadence: ScheduleCadence;
       preset: SchedulePreset;
       enabled: boolean;
+      recipients: readonly string[];
       nextRunAt: Date;
       lastRunAt: Date | null;
     }>,
@@ -152,6 +162,7 @@ export class ReportScheduleRepository {
       if (patch.cadence !== undefined) updates.cadence = patch.cadence;
       if (patch.preset !== undefined) updates.preset = patch.preset;
       if (patch.enabled !== undefined) updates.enabled = patch.enabled;
+      if (patch.recipients !== undefined) updates.recipients = [...patch.recipients];
       if (patch.nextRunAt !== undefined) updates.next_run_at = patch.nextRunAt;
       if (patch.lastRunAt !== undefined) updates.last_run_at = patch.lastRunAt;
       const [row] = await trx('reporting.report_schedules')
@@ -251,6 +262,22 @@ export class ReportScheduleRepository {
     });
   }
 
+  public async recordEmailResult(
+    tenantId: string,
+    jobId: string,
+    result: { status: ReportEmailStatus; error?: string },
+  ): Promise<void> {
+    await withTenantContext(this.knex, tenantId, async (trx) => {
+      await trx('reporting.report_jobs')
+        .where({ tenant_id: tenantId, id: jobId })
+        .update({
+          email_status: result.status,
+          email_error: result.error ? result.error.slice(0, 2000) : null,
+          emailed_at: result.status === 'SENT' ? trx.fn.now() : null,
+        });
+    });
+  }
+
   public async listJobs(tenantId: string, scheduleId: string, limit = 20): Promise<ReportJob[]> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
       const rows = await trx('reporting.report_jobs')
@@ -266,6 +293,8 @@ export class ReportScheduleRepository {
           'filename',
           'row_count',
           'error',
+          'email_status',
+          'email_error',
           'started_at',
           'finished_at',
           'created_at',
