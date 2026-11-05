@@ -267,9 +267,12 @@ export class OperationsReportService {
   ) {}
 
   public async deviceActivity(tenantId: string, input: ReportQueryBase) {
-    const window = this.window(input);
+    // Days follow the work day (from the earliest shift start), so a night
+    // shift stays on the day it belongs to instead of splitting at midnight.
+    const dayStartMinute = await this.workDayStartMinute(tenantId);
+    const window = this.haulWindow(input, dayStartMinute / 60);
     const { rows } = await this.query<{ rows: ActivityRow[] }>((trx) =>
-      trx.raw(ACTIVITY_SQL, [
+      trx.raw(activitySql(dayStartMinute), [
         tenantId,
         tenantId,
         window.from,
@@ -297,6 +300,7 @@ export class OperationsReportService {
     const reporting = new Set(devices.filter((row) => row.fixes > 0).map((row) => row.deviceId));
     const allDevices = new Set(devices.map((row) => row.deviceId));
     return {
+      workDayStartMinute: dayStartMinute,
       from: window.from.toISOString(),
       to: window.to.toISOString(),
       totalDistanceKm: km(totalDistanceM),
@@ -1015,6 +1019,25 @@ export class OperationsReportService {
     });
   }
 
+  /**
+   * Minute of the day the tenant's work day starts: the earliest shift start
+   * of its active routes (a day route at 07:00 and a night route at 19:00 →
+   * 07:00). Midnight when the tenant has no route.
+   */
+  private async workDayStartMinute(tenantId: string): Promise<number> {
+    const { rows } = await this.query<{ rows: Array<{ start_minute: number | string | null }> }>(
+      (trx) =>
+        trx.raw(
+          `SELECT MIN(shift_start_hour * 60 + COALESCE(shift_start_minute, 0)) AS start_minute
+           FROM fleet.haul_routes
+           WHERE tenant_id = ?::uuid AND status = 'ACTIVE'`,
+          [tenantId],
+        ),
+    );
+    const minute = Number(rows[0]?.start_minute ?? 0);
+    return Number.isInteger(minute) && minute >= 0 && minute < 24 * 60 ? minute : 0;
+  }
+
   private async loadRoute(tenantId: string, routeId: string) {
     const { rows } = await this.query<{ rows: RouteRow[] }>((trx) =>
       trx.raw(
@@ -1151,7 +1174,15 @@ export class OperationsReportService {
   }
 }
 
-const ACTIVITY_SQL = `
+/**
+ * Device activity per machine per work day. `dayStartMinute` (0–1439, an
+ * integer checked by the caller) shifts the day boundary from midnight to the
+ * first shift start; a day is named by the date it starts on.
+ */
+export function activitySql(dayStartMinute: number): string {
+  const workDay = (instant: string) =>
+    `((${instant} AT TIME ZONE '${TIME_ZONE}') - interval '${Math.trunc(dayStartMinute)} minutes')::date`;
+  return `
 WITH roster AS (
   SELECT d.id AS device_id, d.imei, d.protocol, d.status,
          vd.vehicle_id, v.name AS vehicle_name, v.code AS vehicle_code, v.plate
@@ -1175,7 +1206,7 @@ window_fixes AS (
 ),
 step AS (
   SELECT vehicle_id, captured_at,
-         (captured_at AT TIME ZONE '${TIME_ZONE}')::date AS day,
+         ${workDay('captured_at')} AS day,
          CASE WHEN prev_at IS NULL THEN NULL
               ELSE EXTRACT(EPOCH FROM (captured_at - prev_at)) END AS dt_sec,
          CASE WHEN prev_at IS NULL THEN NULL
@@ -1217,7 +1248,7 @@ SELECT r.device_id, r.imei, r.protocol, r.status,
          WHEN r.vehicle_id IS NULL OR l.started_at IS NULL THEN NULL
          WHEN p.last_fix IS NULL THEN GREATEST(0, EXTRACT(EPOCH FROM (?::timestamptz - ?::timestamptz)) - 300)
          ELSE COALESCE(p.gap_offline_sec, 0) + CASE
-           WHEN p.day = (?::timestamptz AT TIME ZONE '${TIME_ZONE}')::date
+           WHEN p.day = ${workDay('?::timestamptz')}
              AND EXTRACT(EPOCH FROM (?::timestamptz - p.last_fix)) > 300
            THEN EXTRACT(EPOCH FROM (?::timestamptz - p.last_fix)) - 300
            ELSE 0 END
@@ -1227,6 +1258,7 @@ LEFT JOIN lifetime l ON l.vehicle_id = r.vehicle_id
 LEFT JOIN per_day p ON p.vehicle_id = r.vehicle_id
 ORDER BY r.vehicle_name NULLS LAST, r.imei, p.day
 `;
+}
 
 const NATURAL = new Intl.Collator('fa', { numeric: true, sensitivity: 'base' });
 
