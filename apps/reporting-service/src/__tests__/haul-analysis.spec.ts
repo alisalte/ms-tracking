@@ -262,6 +262,50 @@ describe('haul analysis', () => {
     expect(measure.stops[0]?.engineOn).toBe(true);
   });
 
+  it('a long silent gap after the engine is switched off is parked time, not lost data', () => {
+    // MD300 reports rarely with the engine off: a 75-minute gap, same spot.
+    const samples = [
+      fix(0, ON_ROAD, 0, true),
+      fix(4, ON_ROAD, 0, false),
+      fix(79, ON_ROAD, 0, true),
+      fix(83, ON_ROAD, 30, true),
+    ];
+    const measure = measureTruck({
+      vehicleId: 't1',
+      samples,
+      cycles: [],
+      origin,
+      destination,
+      ...context,
+    });
+    expect(measure.budget.noDataSec).toBe(0);
+    expect(measure.budget.parkedSec).toBe(75 * 60);
+    expect(measure.stops).toHaveLength(1);
+    expect(measure.stops[0]?.durationSec).toBe(83 * 60);
+  });
+
+  it('a long gap with the engine on, or ending somewhere else, is still lost data', () => {
+    const engineOn = measureTruck({
+      vehicleId: 't1',
+      samples: [fix(0, ON_ROAD, 0, true), fix(75, ON_ROAD, 0, true)],
+      cycles: [],
+      origin,
+      destination,
+      ...context,
+    });
+    expect(engineOn.budget.noDataSec).toBe(75 * 60);
+    const moved = measureTruck({
+      vehicleId: 't1',
+      samples: [fix(0, ON_ROAD, 0, false), fix(75, IN_DEST, 0, false)],
+      cycles: [],
+      origin,
+      destination,
+      ...context,
+    });
+    expect(moved.budget.noDataSec).toBe(75 * 60);
+    expect(moved.budget.parkedSec).toBe(0);
+  });
+
   it('flags a driver who is much slower than the fleet and counts services without a driver', () => {
     const fast = (id: string, start: number) => {
       const samples = [
