@@ -562,6 +562,7 @@
       "unavailable": "Map matching unavailable — showing raw GPS"
     },
     "emptyCta": "Go to Asset Management",
+    "legendToggle": "Status legend",
     "roster": {
       "open": "Show fleet list",
       "close": "Hide fleet list"

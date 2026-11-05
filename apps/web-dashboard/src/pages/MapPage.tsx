@@ -24,6 +24,7 @@ import { useTrackPlayback } from '@/components/map/useTrackPlayback';
 import { Button, EmptyState, Spinner } from '@/components/tailwind-ui';
 import { useBasemap } from '@/hooks/useBasemap';
 import { mergeLivePositions, useLiveTracking } from '@/hooks/useLiveTracking';
+import { useIsPhone } from '@/hooks/useMediaQuery';
 import { splitTrackIntoSegments } from '@/lib/track-utils';
 import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 
@@ -50,13 +51,11 @@ function MapChip({
   tone = 'gray',
   onClick,
   testid,
-  style,
 }: {
   children: React.ReactNode;
   tone?: 'success' | 'warning' | 'danger' | 'gray';
   onClick?: () => void;
   testid?: string;
-  style?: React.CSSProperties;
 }) {
   const tones = {
     success:
@@ -67,7 +66,7 @@ function MapChip({
       'bg-danger-50 text-danger-700 border-danger-200 dark:bg-danger-500/10 dark:text-danger-400 dark:border-danger-500/20',
     gray: 'bg-white/90 text-gray-600 border-gray-200 dark:bg-graydark-300/90 dark:text-graydark-700 dark:border-white/10',
   } as const;
-  const cls = `absolute end-2 z-10 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-sm backdrop-blur-sm ${tones[tone]}`;
+  const cls = `pointer-events-auto inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-sm backdrop-blur-sm ${tones[tone]}`;
   // Interactive chips (retry-on-error) render as buttons for keyboard a11y.
   if (onClick) {
     return (
@@ -75,7 +74,6 @@ function MapChip({
         type="button"
         onClick={onClick}
         data-testid={testid}
-        style={style}
         className={`${cls} cursor-pointer`}
       >
         {children}
@@ -83,7 +81,7 @@ function MapChip({
     );
   }
   return (
-    <span data-testid={testid} style={style} className={cls}>
+    <span data-testid={testid} className={cls}>
       {children}
     </span>
   );
@@ -192,7 +190,12 @@ export function MapPage() {
   // Defaults OPEN so the vehicle list is visible on first load at any viewport
   // width — narrow/zoomed windows were landing with the roster off-canvas and
   // no visible affordance pointing at the toggle button.
-  const [rosterOpen, setRosterOpen] = useState(true);
+  // Phones: the roster is an overlay over most of the screen, so start with
+  // the map visible; desktop pins it open regardless of this flag.
+  const isPhone = useIsPhone();
+  const [rosterOpen, setRosterOpen] = useState(() => !isPhone);
+  /** Height of the history playback bar (0 when hidden) — floating controls sit above it. */
+  const [playbackBarH, setPlaybackBarH] = useState(0);
   const [routeGeometry, setRouteGeometry] = useState<ReadonlyArray<{
     lat: number;
     lng: number;
@@ -325,12 +328,17 @@ export function MapPage() {
     lat?: number;
     lng?: number;
   } | null>(null);
-  const selectFromList = useCallback((id: string) => {
-    setSelectedId(id);
-    setFollowing(false);
-    setPopupOpen(true);
-    setFocus((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
-  }, []);
+  const selectFromList = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      setFollowing(false);
+      setPopupOpen(true);
+      setFocus((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
+      // Phones: get the overlay roster out of the way so the vehicle is visible.
+      if (isPhone) setRosterOpen(false);
+    },
+    [isPhone],
+  );
 
   // vehicleId → fleetId join (registry) for the §20 fleet filter.
   const fleetOfVehicle = useMemo(() => {
@@ -399,6 +407,13 @@ export function MapPage() {
       // The AppLayout <main> is position:relative, so inset:0 covers the
       // padding box edge-to-edge regardless of box-sizing quirks.
       className="absolute inset-0 overflow-hidden"
+      style={
+        {
+          // Zoom/compass (CSS) and the settings button stay above the playback
+          // bar; on phones they also clear the roster toggle in the corner.
+          '--map-nav-bottom': `${Math.max(72, playbackBarH + (isPhone ? 60 : 8))}px`,
+        } as React.CSSProperties
+      }
     >
       {/* ── Background: the map fills the whole viewport; the roster floats
             over it as a frosted glass column (start side) so the fleet is
@@ -436,47 +451,52 @@ export function MapPage() {
 
       {/* ── Center: map + toolbar overlay (full background) ── */}
       <div className="absolute inset-0">
-        <MapToolbar
-          visibleCount={filtered.length}
-          total={vehicles.length}
-          paused={paused}
-          onTogglePause={() => setPaused((p) => !p)}
-          mode={mode}
-          onModeChange={setMode}
-          historyPreset={historyPreset}
-          onHistoryPresetChange={setHistoryPreset}
-          customRange={customRange}
-          onCustomRangeChange={setCustomRange}
-          hasSelection={selectedId !== null}
-          onOpenRoutePlanner={() => setRoutePlannerOpen(true)}
-          mapMatching={mapMatching}
-          onMapMatchingChange={setMapMatching}
-        />
-        {/* History mode states (§22/§24): loading / error / no data. */}
-        {mode === 'history' && selectedId && trackQuery.isLoading && (
-          <MapChip style={{ top: 92 }}>{t('map.history.loading')}</MapChip>
-        )}
-        {mode === 'history' && selectedId && trackQuery.isError && (
-          <MapChip tone="danger" onClick={() => trackQuery.refetch()} style={{ top: 92 }}>
-            {t('map.history.error')}
-          </MapChip>
-        )}
-        {mode === 'history' && selectedId && !trackQuery.isLoading && !trackQuery.isError && (
-          <MapChip style={{ top: 92 }}>
-            {t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
-          </MapChip>
-        )}
-        {/* Sprint I §39 — explicit fallback indicator; the raw track is NOT
-            presented as map-matched. */}
-        {mode === 'history' && mapMatching && matchingUnavailable && (
-          <MapChip tone="warning" testid="map-matching-unavailable" style={{ top: 120 }}>
-            {t('map.matching.unavailable')}
-          </MapChip>
-        )}
-        {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
-        <MapChip tone={chip.tone} style={{ top: 60 }} onClick={undefined}>
-          {t(chip.labelKey)}
-        </MapChip>
+        <div className="pointer-events-none absolute top-2 start-2 end-2 z-[5] flex flex-col gap-2 md:start-[316px]">
+          <MapToolbar
+            visibleCount={filtered.length}
+            total={vehicles.length}
+            paused={paused}
+            onTogglePause={() => setPaused((p) => !p)}
+            mode={mode}
+            onModeChange={setMode}
+            historyPreset={historyPreset}
+            onHistoryPresetChange={setHistoryPreset}
+            customRange={customRange}
+            onCustomRangeChange={setCustomRange}
+            hasSelection={selectedId !== null}
+            onOpenRoutePlanner={() => setRoutePlannerOpen(true)}
+            mapMatching={mapMatching}
+            onMapMatchingChange={setMapMatching}
+          />
+          <div className="flex items-start justify-between gap-2">
+            <MapStatusLegend />
+            <div className="flex flex-col items-end gap-1.5">
+              {/* Live WS connection state (§2.2): Connected / Connecting / Reconnecting / Disconnected. */}
+              <MapChip tone={chip.tone}>{t(chip.labelKey)}</MapChip>
+              {/* History mode states (§22/§24): loading / error / no data. */}
+              {mode === 'history' && selectedId && trackQuery.isLoading && (
+                <MapChip>{t('map.history.loading')}</MapChip>
+              )}
+              {mode === 'history' && selectedId && trackQuery.isError && (
+                <MapChip tone="danger" onClick={() => trackQuery.refetch()}>
+                  {t('map.history.error')}
+                </MapChip>
+              )}
+              {mode === 'history' && selectedId && !trackQuery.isLoading && !trackQuery.isError && (
+                <MapChip>
+                  {t('map.history.points', { count: trackQuery.data?.length ?? 0 })}
+                </MapChip>
+              )}
+              {/* Sprint I §39 — explicit fallback indicator; the raw track is NOT
+                presented as map-matched. */}
+              {mode === 'history' && mapMatching && matchingUnavailable && (
+                <MapChip tone="warning" testid="map-matching-unavailable">
+                  {t('map.matching.unavailable')}
+                </MapChip>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="absolute inset-0">
           <FleetMap
             vehicles={filtered}
@@ -507,7 +527,6 @@ export function MapPage() {
             geofences={geofencesData ?? []}
           />
         </div>
-        <MapStatusLegend />
         {/* Map display settings (basemap modes) — a control SEPARATE from the
          * tracking toolbar: floating button + popover at the bottom-end
          * (opposite the vehicle roster), lifted with the zoom cluster while
@@ -516,6 +535,7 @@ export function MapPage() {
           basemap={basemap}
           onBasemapChange={setBasemap}
           raised={mode === 'history' && displayPoints != null && displayPoints.length >= 2}
+          bottomOffset="calc(var(--map-nav-bottom) + 0.25rem)"
         />
         {/* Mobile roster toggle (below md the roster is a slide-in overlay). */}
         <button
@@ -524,7 +544,8 @@ export function MapPage() {
           aria-label={rosterOpen ? t('map.roster.close') : t('map.roster.open')}
           aria-expanded={rosterOpen}
           data-testid="map-roster-toggle"
-          className="absolute bottom-3 end-3 z-30 inline-flex size-10 cursor-pointer items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-lg transition-colors hover:bg-gray-50 md:hidden dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-700 dark:hover:bg-white/10"
+          style={{ bottom: playbackBarH + 12 }}
+          className="absolute end-3 z-30 inline-flex size-10 cursor-pointer items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-lg transition-colors hover:bg-gray-50 md:hidden dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-700 dark:hover:bg-white/10"
         >
           {rosterOpen ? <X size={18} aria-hidden /> : <List size={18} aria-hidden />}
         </button>
@@ -558,7 +579,7 @@ export function MapPage() {
         )}
         {/* Sprint I §32/§33 — playback transport + timeline (history mode only). */}
         {mode === 'history' && displayPoints && displayPoints.length >= 2 && (
-          <PlaybackControls playback={playback} />
+          <PlaybackControls playback={playback} onHeightChange={setPlaybackBarH} />
         )}
       </div>
 

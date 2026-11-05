@@ -17,6 +17,8 @@ interface MapSettingsPanelProps {
    * without those controls (geofence / trip / alarm).
    */
   placement?: 'beside-nav' | 'corner';
+  /** CSS `bottom` override; wins over `raised` when the host tracks the bottom inset. */
+  bottomOffset?: string;
 }
 
 /**
@@ -29,6 +31,7 @@ export function MapSettingsPanel({
   onBasemapChange,
   raised = false,
   placement = 'beside-nav',
+  bottomOffset,
 }: MapSettingsPanelProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -64,7 +67,8 @@ export function MapSettingsPanel({
   return (
     <div
       ref={rootRef}
-      className={`pointer-events-auto absolute z-30 ${inset} ${bottom} transition-[bottom] duration-200`}
+      className={`pointer-events-auto absolute z-30 ${inset} ${bottomOffset ? '' : bottom} transition-[bottom] duration-200`}
+      style={bottomOffset ? { bottom: bottomOffset } : undefined}
     >
       <button
         type="button"
