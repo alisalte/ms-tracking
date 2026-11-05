@@ -9,6 +9,8 @@
  *   tenant:<tid>:event_dedup:<eventId>            — FleetEvent idempotency (Sprint G Part 6).
  *   tenant:<tid>:overspeed_since:<ruleId>:<vid>   — overspeed grace-period state (Part 13).
  *   tenant:<tid>:occ_count:<ruleId>:<vid>         — suppressed-occurrence counter (Part 12).
+ *   tenant:<tid>:vehicle:<vid>:last_fix          — last trusted fix (GPS fix gate).
+ *   tenant:<tid>:vehicle:<vid>:ignition          — last seen ignition state (edge detection).
  */
 import type { Redis } from '@fleetvision/cache-redis';
 
@@ -137,6 +139,66 @@ export class AlarmStateCache {
       return n;
     } catch {
       return 1;
+    }
+  }
+
+  // ── GPS fix gate: last trusted fix per vehicle ──
+
+  public async getLastFix(
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<{ lat: number; lng: number; capturedAtMs: number } | null> {
+    try {
+      const raw = await this.redis.get(`tenant:${tenantId}:vehicle:${vehicleId}:last_fix`);
+      if (raw === null) return null;
+      const [lat, lng, ts] = raw.split(',').map(Number);
+      if (![lat, lng, ts].every((n) => Number.isFinite(n))) return null;
+      return { lat: lat as number, lng: lng as number, capturedAtMs: ts as number };
+    } catch {
+      return null;
+    }
+  }
+
+  public async setLastFix(
+    tenantId: string,
+    vehicleId: string,
+    fix: { lat: number; lng: number; capturedAtMs: number },
+  ): Promise<void> {
+    try {
+      await this.redis.set(
+        `tenant:${tenantId}:vehicle:${vehicleId}:last_fix`,
+        `${fix.lat},${fix.lng},${fix.capturedAtMs}`,
+        'EX',
+        3_600,
+      );
+    } catch {
+      // best-effort
+    }
+  }
+
+  // ── Ignition edge detection ──
+
+  /**
+   * Record the vehicle's ignition state at `atMs` and return the previous
+   * state. Returns 'stale' (state untouched) for a fix older than the stored
+   * one — a replayed buffer must not fabricate on/off edges — and null when
+   * the previous state is unknown (first sighting or Redis down).
+   */
+  public async swapIgnitionState(
+    tenantId: string,
+    vehicleId: string,
+    on: boolean,
+    atMs: number,
+  ): Promise<boolean | null | 'stale'> {
+    const key = `tenant:${tenantId}:vehicle:${vehicleId}:ignition`;
+    try {
+      const raw = await this.redis.get(key);
+      const [prevState, prevTs] = (raw ?? '').split(',');
+      if (raw !== null && Number(prevTs) > atMs) return 'stale';
+      await this.redis.set(key, `${on ? '1' : '0'},${atMs}`, 'EX', 7 * 86_400);
+      return raw === null ? null : prevState === '1';
+    } catch {
+      return null;
     }
   }
 

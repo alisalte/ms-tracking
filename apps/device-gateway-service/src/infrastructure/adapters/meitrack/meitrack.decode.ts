@@ -151,6 +151,9 @@ const MEITRACK_TRACK_EVENTS = new Set([0, 31, 33, 34, 35]);
 /** Live CCE/A10: if the GPS clock is this far off, stamp the packet with receive time. */
 const GPS_CLOCK_SKEW_MS = 5 * 60_000;
 
+/** CCE input bit carrying the ACC/ignition line on MD300 wiring (input 2). */
+const CCE_ACC_INPUT_MASK = 0x02;
+
 function stampIfSkewed(gpsTs: Date, receivedAt: Date): Date {
   if (Number.isNaN(gpsTs.getTime())) return new Date(receivedAt);
   if (Math.abs(gpsTs.getTime() - receivedAt.getTime()) > GPS_CLOCK_SKEW_MS) {
@@ -950,9 +953,10 @@ function messagesFromCcePacket(
         altitudeM: cce.status.altitudeM ?? null,
         satellites: u8(0x06),
         timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
-        // Not taken from input 1: it is unverified on MD300 wiring. The raw
-        // input bits are in cce.status.inputs.
-        ignitionOn: true,
+        // MD300 fleets wire ACC to input 2 (bit 1); input 1 is unused. Field
+        // data: with input 2 low the machine is stationary 99% of the time.
+        ignitionOn:
+          cce.status.inputs === undefined ? null : (cce.status.inputs & CCE_ACC_INPUT_MASK) !== 0,
       }
     : undefined;
 

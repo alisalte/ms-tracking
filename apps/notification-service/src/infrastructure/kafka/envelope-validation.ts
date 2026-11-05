@@ -95,8 +95,22 @@ export function parsePositionSignalEnvelope(raw: Buffer): InputSignal & { kind: 
       typeof pos.headingDeg === 'number' && Number.isFinite(pos.headingDeg) ? pos.headingDeg : 0,
     capturedAt: parseTimestamp(env.timestamp, 'timestamp', null),
     ignitionOn: typeof ignition === 'boolean' ? ignition : null,
+    satellites: finiteOrNull(pos.satellites),
+    hdop: finiteOrNull(cceStatus(env.telemetry)?.hdop),
     sourceEventId: typeof env.messageId === 'string' ? env.messageId : null,
   };
+}
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Decoded Meitrack CCE status block (`telemetry.cce.status`), if any. */
+function cceStatus(telemetry: unknown): Record<string, unknown> | null {
+  if (!telemetry || typeof telemetry !== 'object') return null;
+  const cce = (telemetry as { cce?: { status?: unknown } }).cce;
+  const status = cce?.status;
+  return status && typeof status === 'object' ? (status as Record<string, unknown>) : null;
 }
 
 /**

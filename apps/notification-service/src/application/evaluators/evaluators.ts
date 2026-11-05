@@ -41,10 +41,14 @@ export class OverspeedEvaluator implements RuleEvaluator {
   }
 }
 
-/** Ignition on/off: fires on ignition state change (needs ignitionOn from the envelope). */
+/**
+ * Ignition on/off: fires on the off→on / on→off transition only (the service
+ * derives `ignitionEdge` from the previous state) — never on every position
+ * reported with the ignition on.
+ */
 export class IgnitionOnEvaluator implements RuleEvaluator {
   public evaluate(signal: InputSignal, rule: AlarmRule): AlarmEvent | null {
-    if (signal.kind !== 'position' || signal.ignitionOn !== true) return null;
+    if (signal.kind !== 'position' || signal.ignitionEdge !== 'on') return null;
     return {
       ruleId: rule.id,
       type: 'ignition_on',
@@ -67,7 +71,7 @@ export class IgnitionOnEvaluator implements RuleEvaluator {
 
 export class IgnitionOffEvaluator implements RuleEvaluator {
   public evaluate(signal: InputSignal, rule: AlarmRule): AlarmEvent | null {
-    if (signal.kind !== 'position' || signal.ignitionOn !== false) return null;
+    if (signal.kind !== 'position' || signal.ignitionEdge !== 'off') return null;
     return {
       ruleId: rule.id,
       type: 'ignition_off',
@@ -214,6 +218,36 @@ export class ProlongedIdleEvaluator implements RuleEvaluator {
 }
 
 /**
+ * Excessive stop duration: a stationary period (idle.ended with the engine
+ * running, or parking.ended with it off) longer than maxStopDurationSec.
+ */
+export class ExcessiveStopDurationEvaluator implements RuleEvaluator {
+  public evaluate(signal: InputSignal, rule: AlarmRule): AlarmEvent | null {
+    if (signal.kind !== 'idle' && signal.kind !== 'parking') return null;
+    if (signal.type !== 'idle.ended' && signal.type !== 'parking.ended') return null;
+    const max = rule.conditionNum('maxStopDurationSec', 1_800); // default 30 min
+    if (signal.durationSec <= max) return null;
+    return {
+      ruleId: rule.id,
+      type: 'excessive_stop_duration',
+      tenantId: signal.tenantId,
+      vehicleId: signal.vehicleId,
+      severity: rule.severity,
+      lat: null,
+      lng: null,
+      message: `Stop duration exceeded limit: ${Math.round(signal.durationSec / 60)} min (limit ${Math.round(max / 60)} min)`,
+      sourceEvent: {
+        kind: signal.kind,
+        type: signal.type,
+        durationSec: signal.durationSec,
+        sourceEventId: signal.sourceEventId,
+      },
+      detectedAt: new Date(signal.endedAt),
+    };
+  }
+}
+
+/**
  * Parking: parking.ended whose duration met/exceeded the rule's
  * minDurationSec (Sprint G — fed by the gps-engine parking FSM).
  */
@@ -255,6 +289,7 @@ export function buildEvaluatorRegistry(): Map<string, RuleEvaluator> {
     excessive_trip_duration: new ExcessiveTripDurationEvaluator(),
     prolonged_idle: new ProlongedIdleEvaluator(),
     parking: new ParkingEvaluator(),
+    excessive_stop_duration: new ExcessiveStopDurationEvaluator(),
   };
   for (const [type, evalInstance] of Object.entries(typeMap)) {
     map.set(type, evalInstance);

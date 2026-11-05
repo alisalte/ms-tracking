@@ -512,6 +512,23 @@ describe('Meitrack CCE (MDVR binary telemetry + DMS alarms)', () => {
     expect(first(msgs).serialOrImei).toBe(IMEI);
   });
 
+  it('takes ignition from input 2 (MD300 ACC wiring), not a constant', () => {
+    const position = (inputs: number | null) => {
+      const fourByte: Array<[number, number]> = [
+        [0x02, LAT],
+        [0x03, LNG],
+        [0x04, T0],
+      ];
+      if (inputs !== null) fourByte.push([0x42, inputs]);
+      return first(decodeFrame(cceFrame(cceParams([[0x40, 0]], fourByte)))).position;
+    };
+    expect(position(0x02)?.ignitionOn).toBe(true);
+    expect(position(0x03)?.ignitionOn).toBe(true);
+    expect(position(0x01)?.ignitionOn).toBe(false); // input 1 is not ACC
+    expect(position(0x00)?.ignitionOn).toBe(false);
+    expect(position(null)?.ignitionOn).toBeNull(); // no input param → unknown
+  });
+
   it('decodes an event-126 DMS alarm with 0xFE31 detail (protocol 2, type 7 = phone call)', () => {
     const photo = Buffer.from('240822120001_CH2_E126S7_0.jpg\0', 'ascii');
     const fe31 = Buffer.concat([Buffer.from([photo.length + 2, 0x02, 0x07]), photo]);

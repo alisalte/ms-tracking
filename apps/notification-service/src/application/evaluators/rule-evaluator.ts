@@ -28,6 +28,14 @@ export type InputSignal =
       headingDeg: number;
       capturedAt: string;
       ignitionOn: boolean | null;
+      /** GPS fix quality — null when the device does not report it. */
+      satellites?: number | null;
+      hdop?: number | null;
+      /**
+       * Ignition transition carried by this position — set by the evaluator
+       * service from the per-vehicle state; null/absent = no change.
+       */
+      ignitionEdge?: 'on' | 'off' | null;
       sourceEventId: string | null;
     }
   | {
