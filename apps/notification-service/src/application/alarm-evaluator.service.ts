@@ -176,7 +176,9 @@ export class AlarmEvaluatorService {
         return;
       }
 
-      const severity = DEVICE_ALARM_SEVERITY[alarm.severity] ?? 'MEDIUM';
+      const severity = RECORD_ONLY_DEVICE_CODES.has(alarm.code)
+        ? 'INFO'
+        : (DEVICE_ALARM_SEVERITY[alarm.severity] ?? 'MEDIUM');
       const id = randomUUID();
       const dmsDetail = alarm.detail?.dmsDetail ? String(alarm.detail.dmsDetail) : '';
       const message = `Device alarm ${alarm.code}${dmsDetail ? ` — ${dmsDetail}` : ''}`;
@@ -240,6 +242,10 @@ export class AlarmEvaluatorService {
         this.logger.log(
           `Recorded stale device alarm ${alarm.code} alarmId=${id} detectedAt=${alarm.detectedAt.toISOString()} — not notified`,
         );
+        return;
+      }
+      if (RECORD_ONLY_DEVICE_CODES.has(alarm.code)) {
+        this.logger.log(`Recorded device notice ${alarm.code} alarmId=${id} — not notified`);
         return;
       }
       this.deps.gateway?.emitAlarmCreated(alarm.tenantId, occurrence);
@@ -794,6 +800,14 @@ function isStaleDetection(detectedAt: Date): boolean {
 
 /** Dedup window for device alarms (device resends + DMS bursts). */
 const DEVICE_ALARM_DEDUP_WINDOW_SEC = 60;
+
+/**
+ * Kept in the alarm history but never pushed. STORAGE_FULL is the MDVR's
+ * loop-recording notice ("card full, overwriting the oldest footage"): in the
+ * field, evidence video kept downloading after it on 10 of 12 captures. A
+ * broken or missing card still notifies as STORAGE_FAILURE.
+ */
+const RECORD_ONLY_DEVICE_CODES: ReadonlySet<string> = new Set(['STORAGE_FULL']);
 
 /** An open device alarm last seen within this window absorbs a repeat (burst). */
 const DEVICE_ALARM_COALESCE_MS = 10 * 60_000;
