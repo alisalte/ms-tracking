@@ -1,5 +1,5 @@
 /**
- * DeviceParameterAlertsPanel — Parameter → Alerts+ (B07 / B10 / D79 / C03).
+ * DeviceParameterAlertsPanel — Parameter → Alerts+ (B07 / B10 / D79 / CB4 / C03).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +14,8 @@ import {
   composeAlertsCommands,
   defaultAlertsSett,
   loadAlertsSnapshot,
-  mergeDb4ReplyIntoAlertsSett,
   mergeHistoryIntoAlertsSett,
+  mergeProbeReplyIntoAlertsSett,
   saveCachedAlertsSett,
   validateAlertsSett,
 } from '@/lib/device-parameter-alerts';
@@ -94,8 +94,8 @@ export function DeviceParameterAlertsPanel({
         probes: alertsReadbackCommands(),
         issue: (payload) => sendMutation.mutateAsync(payload),
         onProgress: (_step, _total, label) => setProgress(label),
-        onAcked: (_probe, done) => {
-          const merged = mergeDb4ReplyIntoAlertsSett(next, done.responseText);
+        onAcked: (probe, done) => {
+          const merged = mergeProbeReplyIntoAlertsSett(next, probe.commandCode, done.responseText);
           next = merged.sett;
           return merged.changed;
         },
@@ -118,7 +118,7 @@ export function DeviceParameterAlertsPanel({
       if (gotLive || again.changed) {
         toast.success(
           t('commands.parameter.alerts.refreshedDevice', {
-            defaultValue: 'Merged DB4 / history into Alerts settings.',
+            defaultValue: 'Merged DB4 / CB4 / history into Alerts settings.',
           }),
         );
       } else {
@@ -182,6 +182,15 @@ export function DeviceParameterAlertsPanel({
       );
       return;
     }
+    if (err === 'impact') {
+      toast.error(
+        t('commands.parameter.alerts.impactInvalid', {
+          defaultValue:
+            'Impact detection needs both values (threshold 500–65535 mG, duration 0–255), or both empty to leave it unchanged.',
+        }),
+      );
+      return;
+    }
     if (err) {
       toast.error(
         t('commands.parameter.alerts.invalid', {
@@ -239,7 +248,7 @@ export function DeviceParameterAlertsPanel({
       <Alert variant="info">
         {t('commands.parameter.alerts.intro', {
           defaultValue:
-            'On-device Alerts Parameter — speeding (B07), towing (B10), harsh accel/brake (D79), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.',
+            'On-device Alerts Parameter — speeding (B07), towing (B10), harsh accel/brake (D79), impact detection (CB4), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.',
         })}
       </Alert>
 
@@ -340,6 +349,42 @@ export function DeviceParameterAlertsPanel({
             defaultValue: 'Negative value (e.g. −180).',
           })}
         />
+        <Input
+          label={t('commands.parameter.alerts.impactThreshold', {
+            defaultValue: 'Impact threshold (mG)',
+          })}
+          type="number"
+          min={500}
+          max={65535}
+          value={sett.impactThresholdMg === null ? '' : String(sett.impactThresholdMg)}
+          placeholder={t('commands.parameter.alerts.impactUnknown', {
+            defaultValue: 'Unknown — Refresh to read',
+          })}
+          onChange={(e) => patch({ impactThresholdMg: optionalNumber(e.target.value) })}
+          hint={t('commands.parameter.alerts.impactHint', {
+            defaultValue:
+              'Event 78 (accident). Higher = only harder hits alert. Empty = left unchanged.',
+          })}
+          data-testid="device-parameter-alerts-impact-threshold"
+        />
+        <Input
+          label={t('commands.parameter.alerts.impactDuration', {
+            defaultValue: 'Impact duration (×10 ms)',
+          })}
+          type="number"
+          min={0}
+          max={255}
+          value={sett.impactDuration10ms === null ? '' : String(sett.impactDuration10ms)}
+          placeholder={t('commands.parameter.alerts.impactUnknown', {
+            defaultValue: 'Unknown — Refresh to read',
+          })}
+          onChange={(e) => patch({ impactDuration10ms: optionalNumber(e.target.value) })}
+          hint={t('commands.parameter.alerts.impactDurationHint', {
+            defaultValue:
+              'How long the hit must last; 15 = 150 ms. Higher ignores short road bumps.',
+          })}
+          data-testid="device-parameter-alerts-impact-duration"
+        />
       </div>
 
       <div className="flex justify-end">
@@ -354,4 +399,11 @@ export function DeviceParameterAlertsPanel({
       </div>
     </div>
   );
+}
+
+/** Empty input → null (leave the device setting unchanged). */
+function optionalNumber(value: string): number | null {
+  if (value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }

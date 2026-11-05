@@ -6,6 +6,7 @@ import {
   loadCachedAlertsSett,
   mergeDb4ReplyIntoAlertsSett,
   mergeHistoryIntoAlertsSett,
+  mergeProbeReplyIntoAlertsSett,
   saveCachedAlertsSett,
   validateAlertsSett,
 } from '@/lib/device-parameter-alerts';
@@ -91,5 +92,67 @@ describe('alerts validation + cache', () => {
     sett.speedKmh = 90;
     saveCachedAlertsSett('d1', sett, 'history');
     expect(loadCachedAlertsSett('d1').speedKmh).toBe(90);
+  });
+});
+
+describe('CB4 impact detection', () => {
+  it('leaves CB4 out of Apply while the device value is unknown', () => {
+    expect(composeAlertsCommands(defaultAlertsSett()).map((c) => c.commandCode)).not.toContain(
+      'CB4',
+    );
+  });
+
+  it('sends CB4 once both values are known', () => {
+    const sett = { ...defaultAlertsSett(), impactThresholdMg: 2500, impactDuration10ms: 15 };
+    const cb4 = composeAlertsCommands(sett).find((c) => c.commandCode === 'CB4');
+    expect(cb4?.params).toEqual({ thresholdMg: 2500, duration10ms: 15 });
+  });
+
+  it('reads the CB4 reply into the impact fields', () => {
+    const { sett, changed } = mergeProbeReplyIntoAlertsSett(
+      defaultAlertsSett(),
+      'CB4',
+      'CB4,1000,10',
+    );
+    expect(changed).toBe(true);
+    expect(sett.impactThresholdMg).toBe(1000);
+    expect(sett.impactDuration10ms).toBe(10);
+  });
+
+  it('a CB4 reply never leaks into other alert fields, nor a DB4 dump into CB4', () => {
+    const base = defaultAlertsSett();
+    const { sett: fromHistory } = mergeHistoryIntoAlertsSett(base, [
+      { commandCode: 'CB4', status: 'ACKED', params: {}, responseText: 'CB4,1000,10' },
+    ]);
+    expect({ ...fromHistory, impactThresholdMg: null, impactDuration10ms: null }).toEqual(base);
+    expect(fromHistory.impactThresholdMg).toBe(1000);
+    const dump =
+      'DB4,TCP,IP1:178.131.31.231,PORT1:6180,IP2:,PORT2:,420,mcinet,2,10,0,6,6,300,80,30,0,114';
+    const fromDump = mergeDb4ReplyIntoAlertsSett(base, dump).sett;
+    expect(fromDump.impactThresholdMg).toBeNull();
+  });
+
+  it('restores CB4 from a past SET in history', () => {
+    const { sett } = mergeHistoryIntoAlertsSett(defaultAlertsSett(), [
+      {
+        commandCode: 'CB4',
+        status: 'ACKED',
+        params: { thresholdMg: 3000, duration10ms: 20 },
+        responseText: 'CB4,OK',
+      },
+    ]);
+    expect(sett.impactThresholdMg).toBe(3000);
+    expect(sett.impactDuration10ms).toBe(20);
+  });
+
+  it('rejects half a pair or out-of-range values', () => {
+    const sett = defaultAlertsSett();
+    expect(validateAlertsSett({ ...sett, impactThresholdMg: 2500 })).toBe('impact');
+    expect(validateAlertsSett({ ...sett, impactThresholdMg: 100, impactDuration10ms: 15 })).toBe(
+      'impact',
+    );
+    expect(
+      validateAlertsSett({ ...sett, impactThresholdMg: 2500, impactDuration10ms: 15 }),
+    ).toBeNull();
   });
 });
