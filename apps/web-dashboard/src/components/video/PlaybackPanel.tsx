@@ -361,7 +361,7 @@ export function PlaybackPanel({
               : 'none';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden p-1.5 md:p-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-1.5 md:overflow-hidden md:p-2">
       {!hasMdvr && (
         <Alert
           variant="warning"
@@ -379,7 +379,7 @@ export function PlaybackPanel({
           value={channelId}
           onChange={(e) => setChannelId(e.target.value)}
           aria-label={t('video.playback.channel', { defaultValue: 'Camera / channel' })}
-          className="h-7 max-w-48 min-w-36 cursor-pointer rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
+          className="h-9 w-full cursor-pointer rounded-md border border-gray-300 bg-white px-2 text-base sm:h-7 sm:w-auto sm:max-w-48 sm:min-w-36 sm:text-xs text-gray-700 focus:border-brand-500 focus:outline-none dark:border-white/10 dark:bg-graydark-300 dark:text-graydark-800"
         >
           <option value="">
             {t('video.playback.channel', { defaultValue: 'Camera / channel' })}
@@ -397,16 +397,16 @@ export function PlaybackPanel({
           aria-label={t('notifications.center.filters.from', { defaultValue: 'From' })}
           value={fromInput}
           onChange={(e) => setFromInput(e.target.value)}
-          wrapperClassName="w-[12.5rem]"
-          className="!h-7 px-2 text-xs"
+          wrapperClassName="min-w-0 flex-1 basis-36 sm:w-[12.5rem] sm:flex-none"
+          className="!h-9 px-2 text-base sm:!h-7 sm:text-xs"
         />
         <Input
           type="datetime-local"
           aria-label={t('notifications.center.filters.to', { defaultValue: 'To' })}
           value={toInput}
           onChange={(e) => setToInput(e.target.value)}
-          wrapperClassName="w-[12.5rem]"
-          className="!h-7 px-2 text-xs"
+          wrapperClassName="min-w-0 flex-1 basis-36 sm:w-[12.5rem] sm:flex-none"
+          className="!h-9 px-2 text-base sm:!h-7 sm:text-xs"
         />
         {mdvr && (
           <button
@@ -415,7 +415,7 @@ export function PlaybackPanel({
             disabled={!rangeValid || !channel || busy}
             data-testid="playback-search"
             title={t('video.playback.mdvrHint')}
-            className="h-7 cursor-pointer rounded-md border border-brand-500 px-2.5 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
+            className="h-9 flex-1 sm:h-7 sm:flex-none cursor-pointer rounded-md border border-brand-500 px-2.5 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
           >
             {t('video.playback.search', { defaultValue: 'Search' })}
           </button>
@@ -425,7 +425,7 @@ export function PlaybackPanel({
           onClick={load}
           disabled={!rangeValid || !channel || busy}
           data-testid="playback-load"
-          className="h-7 cursor-pointer rounded-md bg-brand-500 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-9 flex-1 sm:h-7 sm:flex-none cursor-pointer rounded-md bg-brand-500 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t('video.playback.load', { defaultValue: 'Load' })}
         </button>
@@ -439,18 +439,18 @@ export function PlaybackPanel({
               defaultValue:
                 'Experimental: the unit dials the media TCP port and streams the recording (A9D). Do not run live video on this unit at the same time.',
             })}
-            className="h-7 cursor-pointer rounded-md border border-dashed border-warning-500 px-2.5 text-xs font-semibold text-warning-600 transition-colors hover:bg-warning-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-warning-500/10"
+            className="h-9 flex-1 sm:h-7 sm:flex-none cursor-pointer rounded-md border border-dashed border-warning-500 px-2.5 text-xs font-semibold text-warning-600 transition-colors hover:bg-warning-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-warning-500/10"
           >
             {t('video.playback.loadA9d', { defaultValue: 'A9D (test)' })}
           </button>
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 md:flex-row">
+      <div className="flex shrink-0 flex-col gap-1.5 md:min-h-0 md:flex-1 md:shrink md:flex-row">
         {mdvr && (
           <aside
             data-testid="playback-resource-list"
-            className="flex min-h-40 w-full shrink-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-white/10 dark:bg-graydark-300 md:h-auto md:min-h-0 md:w-64 xl:w-72"
+            className="flex max-h-80 min-h-40 w-full shrink-0 flex-col overflow-hidden rounded-lg md:max-h-none border border-gray-200 bg-white dark:border-white/10 dark:bg-graydark-300 md:h-auto md:min-h-0 md:w-64 xl:w-72"
           >
             <div className="border-b border-gray-100 px-2 py-1 text-xs font-semibold text-gray-800 dark:border-white/10 dark:text-graydark-800">
               {t('video.playback.listTitle', { defaultValue: 'Recordings' })}
@@ -499,9 +499,9 @@ export function PlaybackPanel({
         <div
           ref={stageRef}
           data-testid="playback-video-area"
-          className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-black dark:border-white/10"
+          className="relative order-first flex w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-black md:order-none md:min-h-0 md:flex-1 md:shrink dark:border-white/10"
         >
-          <div className="relative min-h-0 flex-1">
+          <div className="relative aspect-video md:aspect-auto md:min-h-0 md:flex-1">
             {viewingA9d && (
               <div data-testid="playback-a9d-stage" className="absolute inset-0 bg-black">
                 {a9d.wsUrl && <JSMpegLivePlayer wsUrl={a9d.wsUrl} />}
@@ -616,7 +616,7 @@ export function PlaybackPanel({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 bg-black/80 px-2 py-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 bg-black/80 px-2 py-1.5">
             <button
               type="button"
               onClick={() => (playing ? setPlaying(false) : cursorMs !== null && setPlaying(true))}
@@ -656,7 +656,7 @@ export function PlaybackPanel({
               disabled={cursorMs === null}
               aria-label={t('video.playback.timeline', { defaultValue: 'Playback timeline' })}
               data-testid="video-playback-timeline"
-              className="h-1.5 min-w-32 flex-1 cursor-pointer appearance-none rounded-full bg-white/15 accent-brand-500 disabled:opacity-50"
+              className="order-first h-1.5 w-full basis-full cursor-pointer appearance-none sm:order-none sm:w-auto sm:min-w-32 sm:flex-1 sm:basis-0 rounded-full bg-white/15 accent-brand-500 disabled:opacity-50"
             />
 
             <select
@@ -701,7 +701,7 @@ export function PlaybackPanel({
             </button>
 
             <span
-              className="flex items-center gap-1.5 text-[11px] tabular-nums text-gray-400"
+              className="ms-auto flex items-center gap-1.5 text-[11px] tabular-nums text-gray-400 sm:ms-0"
               title={t('video.playback.window', {
                 defaultValue: '{{min}} min window',
                 min: Math.max(1, Math.round(windowMs / 60_000)),
