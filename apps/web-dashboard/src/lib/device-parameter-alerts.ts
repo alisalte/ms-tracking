@@ -1,10 +1,10 @@
 /**
- * Device Parameter → Alerts+ (B07 / B10 / D79 / CB4 / C03).
+ * Device Parameter → Alerts+ (B07 / B10 / B09 / D79 / CB4 / C03).
  *
- * Speeding, towing (fast B10), harsh accel/brake, impact detection, GPRS
- * event mode. B08 is covered by B10's vibration seconds. Live readback is
- * limited — B07 overspeed comes from DB4, CB4 from its own reply; others
- * from last SET history.
+ * Speeding, towing (fast B10), vibration sensitivity, harsh accel/brake,
+ * impact detection, GPRS event mode. B08 is covered by B10's vibration
+ * seconds. Live readback is limited — B07 overspeed comes from DB4, CB4 from
+ * its own reply; others (B09 is set-only) from last SET history.
  */
 
 import {
@@ -30,6 +30,12 @@ export interface AlertsParameterSett {
   towingSeconds: number;
   /** B10 idle minutes before power-save. */
   towingIdleMinutes: number;
+  /**
+   * B09 vibration sensitivity, 1–65535 (smaller = more sensitive; factory
+   * default 1). Set-only, so null until set from here or found in history —
+   * B09 is left out of Apply while null.
+   */
+  vibrationSensitivity: number | null;
   /** D79 harsh acceleration (mG), 90–1000. */
   harshAcceleration: number;
   /** D79 harsh braking (mG), −1500…−100. */
@@ -60,6 +66,7 @@ export function defaultAlertsSett(): AlertsParameterSett {
     speedKmh: 60,
     towingSeconds: 3,
     towingIdleMinutes: 2,
+    vibrationSensitivity: null,
     harshAcceleration: 150,
     harshBraking: -180,
     impactThresholdMg: null,
@@ -69,6 +76,18 @@ export function defaultAlertsSett(): AlertsParameterSett {
 }
 
 export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlertsCommand[] {
+  const vibration: ComposedAlertsCommand[] =
+    sett.vibrationSensitivity !== null
+      ? [
+          {
+            commandCode: 'B09',
+            params: {
+              sensitivity: Math.max(1, Math.min(65535, Math.round(sett.vibrationSensitivity))),
+            },
+            label: 'B09 vibration sensitivity',
+          },
+        ]
+      : [];
   const impact: ComposedAlertsCommand[] =
     sett.impactThresholdMg !== null && sett.impactDuration10ms !== null
       ? [
@@ -96,6 +115,7 @@ export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlerts
       },
       label: 'B10 towing',
     },
+    ...vibration,
     {
       commandCode: 'D79',
       params: {
@@ -179,6 +199,13 @@ export function mergeFieldsIntoAlertsSett(
         }
       }
       break;
+    case 'B09': {
+      const n = Number(fields.sensitivity);
+      if (fields.sensitivity !== undefined && Number.isFinite(n) && n >= 1) {
+        next.vibrationSensitivity = Math.min(65535, Math.round(n));
+      }
+      break;
+    }
     case 'CB4': {
       const threshold = Number(fields.thresholdMg);
       const duration = Number(fields.duration10ms);
@@ -208,7 +235,7 @@ export function mergeHistoryIntoAlertsSett(
 ): { sett: AlertsParameterSett; changed: boolean } {
   let sett = { ...base };
   let changed = false;
-  for (const code of ['B07', 'B10', 'B08', 'D79', 'CB4', 'C03'] as const) {
+  for (const code of ['B07', 'B10', 'B08', 'B09', 'D79', 'CB4', 'C03'] as const) {
     const fields = lastStoredSettings(code, history);
     if (!fields) continue;
     const before = JSON.stringify(sett);
@@ -284,6 +311,10 @@ export function validateAlertsSett(sett: AlertsParameterSett): string | null {
     sett.harshBraking > -100
   ) {
     return 'harshBraking';
+  }
+  const vibration = sett.vibrationSensitivity ?? null;
+  if (vibration !== null && (!Number.isInteger(vibration) || vibration < 1 || vibration > 65535)) {
+    return 'vibrationSensitivity';
   }
   const threshold = sett.impactThresholdMg ?? null;
   const duration = sett.impactDuration10ms ?? null;

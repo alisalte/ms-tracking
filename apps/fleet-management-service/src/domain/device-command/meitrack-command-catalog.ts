@@ -803,6 +803,32 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     supportsReadback: false,
   },
   {
+    // MEITRACK GPRS Total Command V1.3 §3.54 (MD300 supported per the model
+    // table). Set-only: the protocol documents no read form.
+    code: 'B09',
+    name: 'Vibration Sensitivity',
+    nameFa: 'حساسیت لرزش',
+    category: 'alerts',
+    description:
+      'Vibration sensitivity for parked-movement detection, vibration wake-up and the towing alert (36). 1–65535; smaller = more sensitive; factory default 1.',
+    descriptionFa:
+      'حساسیت لرزش برای تشخیص جابه‌جایی در حالت پارک، بیدار شدن با لرزش و هشدار یدک‌کشی (۳۶). ۱ تا ۶۵۵۳۵؛ عدد کوچک‌تر = حساس‌تر؛ پیش‌فرض کارخانه ۱.',
+    params: [
+      {
+        key: 'sensitivity',
+        label: 'Sensitivity',
+        labelFa: 'حساسیت',
+        type: 'number',
+        min: 1,
+        max: 65535,
+        required: true,
+        defaultValue: 1,
+      },
+    ],
+    expectResponse: true,
+    supportsReadback: false,
+  },
+  {
     code: 'B10',
     name: 'Fast Towing Alert',
     nameFa: 'هشدار سریع یدک‌کشی',
@@ -3554,6 +3580,8 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       return text(`B07,${num(raw, 'speed')}`);
     case 'B08':
       return text(`B08,${num(raw, 'seconds')}`);
+    case 'B09':
+      return text(`B09,${num(raw, 'sensitivity')}`);
     case 'B10':
       return text(`B10,${num(raw, 'seconds')},${num(raw, 'idleMinutes') ?? 2}`);
     case 'C47':

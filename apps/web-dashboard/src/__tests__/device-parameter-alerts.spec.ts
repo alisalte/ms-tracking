@@ -156,3 +156,31 @@ describe('CB4 impact detection', () => {
     ).toBeNull();
   });
 });
+
+describe('B09 vibration sensitivity', () => {
+  it('is left out of Apply until set, then sent', () => {
+    expect(composeAlertsCommands(defaultAlertsSett()).map((c) => c.commandCode)).not.toContain(
+      'B09',
+    );
+    const cmds = composeAlertsCommands({ ...defaultAlertsSett(), vibrationSensitivity: 20 });
+    expect(cmds.map((c) => c.commandCode)).toEqual(['B07', 'B10', 'B09', 'D79', 'C03']);
+    expect(cmds[2]?.params).toEqual({ sensitivity: 20 });
+  });
+
+  it('restores the last value set from history (B09 has no read form)', () => {
+    const { sett } = mergeHistoryIntoAlertsSett(defaultAlertsSett(), [
+      { commandCode: 'B09', status: 'ACKED', params: { sensitivity: 30 }, responseText: 'B09,OK' },
+    ]);
+    expect(sett.vibrationSensitivity).toBe(30);
+  });
+
+  it('rejects 0, fractions and values above 65535', () => {
+    const base = defaultAlertsSett();
+    for (const bad of [0, 1.5, 70000]) {
+      expect(validateAlertsSett({ ...base, vibrationSensitivity: bad })).toBe(
+        'vibrationSensitivity',
+      );
+    }
+    expect(validateAlertsSett({ ...base, vibrationSensitivity: 1 })).toBeNull();
+  });
+});

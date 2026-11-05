@@ -2615,7 +2615,7 @@
       },
       "alerts": {
         "title": "Alert settings",
-        "intro": "On-device Alerts Parameter — speeding (B07), towing (B10), harsh accel/brake (D79), impact detection (CB4), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.",
+        "intro": "On-device Alerts Parameter — speeding (B07), towing (B10), vibration sensitivity (B09), harsh accel/brake (D79), impact detection (CB4), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.",
         "speed": "Speeding (km/h)",
         "speedHint": "0 disables. Event 19.",
         "gprsMode": "GPRS event mode",
@@ -2641,7 +2641,11 @@
         "impactUnknown": "Unknown — Refresh to read",
         "impactHint": "Event 78 (accident). Higher = only harder hits alert. Empty = left unchanged.",
         "impactDurationHint": "How long the hit must last; 15 = 150 ms. Higher ignores short road bumps.",
-        "impactInvalid": "Impact detection needs both values (threshold 500–65535 mG, duration 0–255), or both empty to leave it unchanged."
+        "impactInvalid": "Impact detection needs both values (threshold 500–65535 mG, duration 0–255), or both empty to leave it unchanged.",
+        "vibration": "Vibration sensitivity",
+        "vibrationUnknown": "Not set from here (factory default 1)",
+        "vibrationHint": "B09: drives towing (36) and vibration wake-up. Smaller = more sensitive; higher cuts false towing alerts. Device cannot report it. Empty = left unchanged.",
+        "vibrationInvalid": "Vibration sensitivity must be a whole number from 1 to 65535, or empty."
       },
       "media": {
         "title": "Media settings",
