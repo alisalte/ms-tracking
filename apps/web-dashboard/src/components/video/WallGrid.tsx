@@ -108,12 +108,13 @@ export function WallGrid({
     );
   }
 
-  // Spotlight layout: one big tile + a thumbnail column of the rest.
+  // Spotlight layout: one big tile + a thumbnail column of the rest (phones:
+  // a horizontal strip under the big tile, so it keeps the full width).
   if (inSpotlight) {
     const bigSlot = spotlightSlot;
     const thumbs = tiles.filter((t) => t.slot !== bigSlot);
     return (
-      <div className="flex h-full w-full gap-2">
+      <div className="flex h-full w-full flex-col gap-2 sm:flex-row">
         <div className="min-h-0 min-w-0 flex-1">
           <TileForSlot
             tile={tiles.find((t) => t.slot === bigSlot) ?? tiles[0]}
@@ -125,9 +126,9 @@ export function WallGrid({
             onRemove={onRemove}
           />
         </div>
-        <div className="fv-scroll flex w-[200px] min-w-[200px] flex-col gap-2 overflow-y-auto">
+        <div className="fv-scroll flex h-24 w-full shrink-0 gap-2 overflow-x-auto sm:h-auto sm:w-[200px] sm:min-w-[200px] sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto">
           {thumbs.map((t) => (
-            <div key={t.slot} className="aspect-video w-full shrink-0">
+            <div key={t.slot} className="aspect-video h-full shrink-0 sm:h-auto sm:w-full">
               <TileForSlot
                 tile={t}
                 channelById={channelById}

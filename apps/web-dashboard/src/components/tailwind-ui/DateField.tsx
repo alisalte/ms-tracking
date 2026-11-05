@@ -11,6 +11,7 @@ import {
   forwardRef,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -96,6 +97,7 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
   const parsed = parseValue(value, withTime);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   const selected = parsed ? dateToJalali(parsed) : null;
   const selectedJy = selected?.jy;
@@ -119,6 +121,22 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  // The popover hangs off the field's start edge; a field near the far edge
+  // of a narrow screen would push it off-screen, so slide it back in.
+  useLayoutEffect(() => {
+    const el = popoverRef.current;
+    if (!open || !el) return;
+    el.style.transform = '';
+    const vw = document.documentElement.clientWidth;
+    if (vw <= 0) return;
+    const margin = 8;
+    const { left, right } = el.getBoundingClientRect();
+    let dx = 0;
+    if (right > vw - margin) dx = vw - margin - right;
+    if (left + dx < margin) dx = margin - left;
+    if (dx) el.style.transform = `translateX(${dx}px)`;
   }, [open]);
 
   const emit = (next: Date) => {
@@ -245,6 +263,7 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
         // biome-ignore lint/a11y/useSemanticElements: popover (not a modal); native <dialog> is poorly supported in jsdom tests.
         <div
           role="dialog"
+          ref={popoverRef}
           aria-label={t('common.datePicker.title', { defaultValue: 'تقویم شمسی' })}
           className="absolute start-0 top-full z-50 mt-1 w-[272px] rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-white/10 dark:bg-graydark-300"
         >
