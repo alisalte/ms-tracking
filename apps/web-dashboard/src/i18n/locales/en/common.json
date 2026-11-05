@@ -3027,7 +3027,7 @@
       "30d": "30 days"
     },
     "activityTitle": "Device activity",
-    "activityHint": "Each row is one machine on one day, sorted by machine and then date. Start and end are the first and last position of that day inside the chosen range. The driver comes from the driver assignment on the machine during those hours. Distance ignores jumps faster than 100 km/h. Offline time is the gap beyond five minutes between fixes (and up to the end of the range on the last day). A machine that sent no position in the range is marked no data.",
+    "activityHint": "Each row is one machine on one work day: from the first shift start (e.g. 07:00) to the same time next day, so a night shift is not split. Rows are sorted by machine and then date. Start and end are the first and last position of that day inside the chosen range. The driver comes from the driver assignment on the machine during those hours. Distance ignores jumps faster than 100 km/h. Offline time is the gap beyond five minutes between fixes (and up to the end of the range on the last day). A machine that sent no position in the range is marked no data.",
     "totalDistance": "Total distance",
     "reportingCount": "Sending data",
     "silentCount": "Never sent data",
