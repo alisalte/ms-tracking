@@ -57,6 +57,9 @@ export function parseMeitrackReadback(
         acceleration: body[0] ?? '',
         braking: body[1] ?? '',
       };
+    case 'CB4':
+      if (body.length < 2) return {};
+      return { thresholdMg: body[0] ?? '', duration10ms: body[1] ?? '' };
     case 'C03':
       return body[0] !== undefined && !/^ok$/i.test(body[0]) ? { mode: body[0] } : null;
     case 'A21':

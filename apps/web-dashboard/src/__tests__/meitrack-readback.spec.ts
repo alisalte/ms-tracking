@@ -51,6 +51,14 @@ describe('parseMeitrackReadback', () => {
     expect(lastStoredSettings('A21', history)?.host).toBe('178.131.31.231');
   });
 
+  it('fills CB4 impact threshold + duration from device ACK', () => {
+    expect(parseMeitrackReadback('CB4', 'CB4,1000,10')).toEqual({
+      thresholdMg: '1000',
+      duration10ms: '10',
+    });
+    expect(parseMeitrackReadback('CB4', 'CB4,OK')).toEqual({});
+  });
+
   it('fills BB8 volume and B64 FTP from device ACK', () => {
     expect(parseMeitrackReadback('BB8', 'BB8,42')).toEqual({ volume: '42' });
     expect(parseMeitrackReadback('B64', 'B64,1,u,p,ftp.example,21,/cam')).toEqual({

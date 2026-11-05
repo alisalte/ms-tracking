@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  CommandValidationError,
   MEITRACK_COMMAND_CATALOG,
   buildPayload,
   getCommandDef,
@@ -73,6 +74,7 @@ describe('meitrack command catalog', () => {
       'C61',
       'C90',
       'CD1',
+      'CB4',
       'CB8',
       'CFF',
       'D10',
@@ -220,6 +222,15 @@ describe('meitrack command catalog', () => {
   // --- alerts (§3.35, §3.76, §3.60) -------------------------------------------
   it('B07 formats the speeding threshold (§3.35 example: B07,60)', () => {
     expect(build('B07', { speed: 60 })).toEqual({ kind: 'text', text: 'B07,60' });
+  });
+
+  it('CB4 sets the impact threshold + duration, reads with no params, rejects half a pair', () => {
+    expect(build('CB4', { thresholdMg: 1000, duration10ms: 10 })).toEqual({
+      kind: 'text',
+      text: 'CB4,1000,10',
+    });
+    expect(build('CB4', {})).toEqual({ kind: 'text', text: 'CB4' });
+    expect(() => build('CB4', { thresholdMg: 2500 })).toThrow(CommandValidationError);
   });
 
   it('D79 keeps the negative braking threshold (§3.76 example)', () => {

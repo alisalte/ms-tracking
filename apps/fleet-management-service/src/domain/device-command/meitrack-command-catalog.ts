@@ -959,6 +959,45 @@ export const MEITRACK_COMMAND_CATALOG: readonly CommandDef[] = [
     supportsReadback: false,
   },
   {
+    // MEITRACK GPRS Total Command V1.3 §3.124 (MD300 supported) — threshold
+    // and duration for the impact event (event 78, ACCIDENT). Field data:
+    // haul-road bumps trip the factory setting while trucks drive on.
+    code: 'CB4',
+    name: 'Impact Detection Threshold',
+    nameFa: 'آستانه تشخیص ضربه (تصادف)',
+    category: 'alerts',
+    description:
+      'Acceleration (mG) and duration (×10 ms) that raise an impact event (78). Higher = less sensitive. Empty = read.',
+    descriptionFa:
+      'شتاب (mG) و مدت (×۱۰ میلی‌ثانیه) لازم برای رویداد ضربه (۷۸). مقدار بیشتر = حساسیت کمتر. خالی = خواندن.',
+    params: [
+      {
+        key: 'thresholdMg',
+        label: 'Acceleration threshold',
+        labelFa: 'آستانه شتاب',
+        type: 'number',
+        min: 500,
+        max: 65535,
+        unit: 'mG',
+        required: false,
+        defaultValue: 2500,
+      },
+      {
+        key: 'duration10ms',
+        label: 'Duration',
+        labelFa: 'مدت',
+        type: 'number',
+        min: 0,
+        max: 255,
+        unit: '×10 ms',
+        required: false,
+        defaultValue: 15,
+      },
+    ],
+    expectResponse: true,
+    supportsReadback: true,
+  },
+  {
     code: 'C90',
     name: 'Driver Fatigue Function',
     nameFa: 'قابلیت خستگی راننده',
@@ -3528,6 +3567,17 @@ function build(def: CommandDef, p: Record<string, string | number>): CommandPayl
       return text(`C49,${num(raw, 'checkMinutes')},${num(raw, 'decreasePercent')}`);
     case 'D79':
       return text(`D79,${num(raw, 'acceleration')},${num(raw, 'braking')}`);
+    case 'CB4': {
+      if (!anyParam) return text('CB4');
+      const threshold = num(raw, 'thresholdMg');
+      const duration = num(raw, 'duration10ms');
+      if (threshold === undefined || duration === undefined) {
+        throw new CommandValidationError(
+          'CB4 needs both the acceleration threshold and the duration (or neither, to read).',
+        );
+      }
+      return text(`CB4,${threshold},${duration}`);
+    }
     case 'C90': {
       if (!anyParam) return text('C90');
       return text(
