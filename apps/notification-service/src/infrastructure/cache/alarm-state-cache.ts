@@ -11,6 +11,8 @@
  *   tenant:<tid>:occ_count:<ruleId>:<vid>         — suppressed-occurrence counter (Part 12).
  *   tenant:<tid>:vehicle:<vid>:last_fix          — last trusted fix (GPS fix gate).
  *   tenant:<tid>:vehicle:<vid>:ignition          — last seen ignition state (edge detection).
+ *   tenant:<tid>:vehicle:<vid>:accident_hold     — accident awaiting stop confirmation.
+ *   accident_hold_due                             — ZSET of holds by confirmation deadline.
  */
 import type { Redis } from '@fleetvision/cache-redis';
 
@@ -202,7 +204,76 @@ export class AlarmStateCache {
     }
   }
 
+  // ── Accident confirmation hold ──
+
+  /**
+   * Hold an accident alarm until the vehicle's behaviour confirms or cancels
+   * it. Throws when Redis is down — the caller then notifies immediately.
+   */
+  public async holdAccident(
+    tenantId: string,
+    vehicleId: string,
+    hold: { alertId: string; detectedAtMs: number },
+    deadlineMs: number,
+  ): Promise<void> {
+    await this.redis.set(accidentHoldKey(tenantId, vehicleId), JSON.stringify(hold), 'EX', 3_600);
+    await this.redis.zadd(ACCIDENT_HOLD_DUE, deadlineMs, `${tenantId}:${vehicleId}`);
+  }
+
+  public async getAccidentHold(
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<{ alertId: string; detectedAtMs: number } | null> {
+    try {
+      const raw = await this.redis.get(accidentHoldKey(tenantId, vehicleId));
+      return raw === null ? null : (JSON.parse(raw) as { alertId: string; detectedAtMs: number });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Take ownership of a hold (confirm or cancel). Exactly one caller wins, so
+   * a position and the deadline sweep can never both notify.
+   */
+  public async claimAccidentHold(
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<{ alertId: string; detectedAtMs: number } | null> {
+    const key = accidentHoldKey(tenantId, vehicleId);
+    try {
+      const raw = await this.redis.get(key);
+      const deleted = await this.redis.del(key);
+      await this.redis.zrem(ACCIDENT_HOLD_DUE, `${tenantId}:${vehicleId}`);
+      if (raw === null || deleted !== 1) return null;
+      return JSON.parse(raw) as { alertId: string; detectedAtMs: number };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Holds whose confirmation deadline has passed. */
+  public async dueAccidentHolds(
+    nowMs: number,
+  ): Promise<Array<{ tenantId: string; vehicleId: string }>> {
+    try {
+      const members = await this.redis.zrangebyscore(ACCIDENT_HOLD_DUE, 0, nowMs);
+      return members.flatMap((m) => {
+        const [tenantId, vehicleId] = m.split(':');
+        return tenantId && vehicleId ? [{ tenantId, vehicleId }] : [];
+      });
+    } catch {
+      return [];
+    }
+  }
+
   // Sprint I — the geofence inside-set state moved to the gps-engine evaluator
   // (durable tracking.geofence_state in PostgreSQL); the Redis helpers were
   // removed with the inline per-position evaluation.
+}
+
+const ACCIDENT_HOLD_DUE = 'accident_hold_due';
+
+function accidentHoldKey(tenantId: string, vehicleId: string): string {
+  return `tenant:${tenantId}:vehicle:${vehicleId}:accident_hold`;
 }
