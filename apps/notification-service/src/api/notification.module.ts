@@ -16,6 +16,7 @@ import { KNEX_TOKEN, PLATFORM_KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import type { Knex } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AccidentConfirmationWorker } from '../application/accident-confirmation.worker.js';
 import { AlarmEvaluatorService } from '../application/alarm-evaluator.service.js';
 import { AlarmEvidenceService } from '../application/alarm-evidence.service.js';
 import {
@@ -290,6 +291,12 @@ export class NotificationModule {
           inject: [AlarmEvidenceRepository, NOTIF_CONFIG],
           useFactory: (repo: AlarmEvidenceRepository, cfg: NotificationConfig) =>
             new EvidenceRetentionWorker(repo, cfg.NOTIF_EVIDENCE_RETENTION_INTERVAL_MS),
+        },
+        {
+          provide: AccidentConfirmationWorker,
+          inject: [AlarmEvaluatorService],
+          useFactory: (evaluator: AlarmEvaluatorService) =>
+            new AccidentConfirmationWorker(evaluator),
         },
         // Alarm evaluator (injects the dispatcher + Sprint G metrics + evidence).
         {

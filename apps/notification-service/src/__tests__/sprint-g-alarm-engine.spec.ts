@@ -95,6 +95,35 @@ class FakeStateCache {
     this.lastFix.set(v, fix);
   }
 
+  public readonly accidentHolds = new Map<
+    string,
+    { hold: { alertId: string; detectedAtMs: number }; deadlineMs: number }
+  >();
+  public async holdAccident(
+    t: string,
+    v: string,
+    hold: { alertId: string; detectedAtMs: number },
+    deadlineMs: number,
+  ) {
+    this.accidentHolds.set(`${t}:${v}`, { hold, deadlineMs });
+  }
+  public async getAccidentHold(t: string, v: string) {
+    return this.accidentHolds.get(`${t}:${v}`)?.hold ?? null;
+  }
+  public async claimAccidentHold(t: string, v: string) {
+    const entry = this.accidentHolds.get(`${t}:${v}`);
+    this.accidentHolds.delete(`${t}:${v}`);
+    return entry?.hold ?? null;
+  }
+  public async dueAccidentHolds(nowMs: number) {
+    return [...this.accidentHolds.entries()]
+      .filter(([, e]) => e.deadlineMs <= nowMs)
+      .map(([k]) => {
+        const [tenantId = '', vehicleId = ''] = k.split(':');
+        return { tenantId, vehicleId };
+      });
+  }
+
   public readonly ignition = new Map<string, { on: boolean; atMs: number }>();
   public async swapIgnitionState(_t: string, v: string, on: boolean, atMs: number) {
     const prev = this.ignition.get(v);
@@ -116,6 +145,10 @@ class FakeAlarmsRepo {
 
   public async create(alarm: AlarmOccurrence): Promise<void> {
     this.created.push(alarm);
+  }
+
+  public async findById(_t: string, id: string): Promise<AlarmOccurrence | null> {
+    return this.created.find((a) => a.id === id) ?? null;
   }
 
   public async findOpenByRuleAndVehicle(
@@ -788,5 +821,71 @@ describe('Rule alarms — false-positive guards', () => {
       'excessive_stop_duration',
       'excessive_stop_duration',
     ]);
+  });
+});
+
+// ── Accident confirmation by stop ────────────────────────────────────────────
+
+describe('Accident alarms — notify only when the vehicle stops', () => {
+  const T = Date.now() - 2_000;
+  const iso = (offsetMs: number) => new Date(T + offsetMs).toISOString();
+  const accident = {
+    tenantId: TENANT,
+    vehicleId: VEHICLE,
+    deviceId: 'dev-1',
+    serialOrImei: '867191086419164',
+    code: 'ACCIDENT',
+    severity: 'CRITICAL' as const,
+    source: '78',
+    detail: null,
+    lat: 35.7,
+    lng: 51.4,
+    speedKph: 20,
+    ignitionOn: true,
+    detectedAt: new Date(T),
+  };
+
+  it('records the accident but holds the notification', async () => {
+    const { service, alarms, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(accident);
+    expect(alarms.created).toHaveLength(1);
+    expect(gateway.emitted).toHaveLength(0);
+  });
+
+  it('drops the notification when the truck drives on', async () => {
+    const { service, alarms, gateway, stateCache } = makeHarness([]);
+    await service.processDeviceAlarm(accident);
+    await service.processPosition(positionSignal({ speedKph: 22, capturedAt: iso(20_000) }));
+    await service.confirmDueAccidentHolds(T + 600_000);
+    expect(gateway.emitted).toHaveLength(0);
+    expect(alarms.created.at(0)?.detail).toMatchObject({ confirmation: 'drove_on' });
+    expect(stateCache.accidentHolds.size).toBe(0);
+  });
+
+  it('notifies once the truck is still stopped a minute later', async () => {
+    const { service, alarms, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(accident);
+    await service.processPosition(positionSignal({ speedKph: 0, capturedAt: iso(30_000) }));
+    expect(gateway.emitted).toHaveLength(0);
+    await service.processPosition(positionSignal({ speedKph: 0, capturedAt: iso(65_000) }));
+    expect(gateway.emitted).toHaveLength(1);
+    expect(alarms.created.at(0)?.detail).toMatchObject({ confirmation: 'stopped' });
+  });
+
+  it('notifies when the device goes silent after the alarm', async () => {
+    const { service, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(accident);
+    expect(await service.confirmDueAccidentHolds(Date.now() + 120_000)).toBe(1);
+    expect(gateway.emitted).toHaveLength(1);
+  });
+
+  it('a GPS drift speed does not cancel the hold', async () => {
+    const { service, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(accident);
+    await service.processPosition(
+      positionSignal({ speedKph: 40, satellites: 3, capturedAt: iso(20_000) }),
+    );
+    await service.processPosition(positionSignal({ speedKph: 0, capturedAt: iso(70_000) }));
+    expect(gateway.emitted).toHaveLength(1);
   });
 });

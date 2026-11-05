@@ -248,6 +248,23 @@ export class AlarmEvaluatorService {
         this.logger.log(`Recorded device notice ${alarm.code} alarmId=${id} — not notified`);
         return;
       }
+      if (CONFIRM_BY_STOP_CODES.has(alarm.code) && vehicleId) {
+        try {
+          const detectedAtMs = alarm.detectedAt.getTime();
+          await this.deps.stateCache.holdAccident(
+            alarm.tenantId,
+            vehicleId,
+            { alertId: id, detectedAtMs },
+            Math.max(Date.now(), detectedAtMs) + ACCIDENT_SILENCE_CONFIRM_MS,
+          );
+          this.logger.log(
+            `Holding device alarm ${alarm.code} alarmId=${id} vehicle=${vehicleId} until the vehicle stops`,
+          );
+          return;
+        } catch (err) {
+          this.logger.warn(`Accident hold failed, notifying now: ${(err as Error).message}`);
+        }
+      }
       this.deps.gateway?.emitAlarmCreated(alarm.tenantId, occurrence);
       if (this.deps.dispatcher) {
         try {
@@ -268,6 +285,7 @@ export class AlarmEvaluatorService {
   /** Process a position signal from Kafka. */
   public async processPosition(input: InputSignal & { kind: 'position' }): Promise<void> {
     try {
+      await this.checkAccidentHold(input);
       const rules = await this.deps.rules.listEnabled(input.tenantId);
       const applicable = this.rulesForVehicle(rules, input.vehicleId);
       const signal = applicable.some((r) => r.type === 'ignition_on' || r.type === 'ignition_off')
@@ -380,6 +398,70 @@ export class AlarmEvaluatorService {
       this.metrics?.eventsFailed.inc({ source: 'tracking' });
       this.logger.warn(`Parking alarm evaluation error: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * Accident confirmation (field data: the crash sensor fired ~470 times in
+   * three weeks on rough haul roads, almost always while the truck drove on).
+   * A trusted fix showing the vehicle moving after the alarm cancels the
+   * notification; still stopped ACCIDENT_STOP_CONFIRM_MS after it confirms.
+   * The alarm itself (and its evidence capture) is recorded either way.
+   */
+  private async checkAccidentHold(signal: InputSignal & { kind: 'position' }): Promise<void> {
+    const hold = await this.deps.stateCache.getAccidentHold(signal.tenantId, signal.vehicleId);
+    if (!hold) return;
+    const atMs = Date.parse(signal.capturedAt);
+    if (Number.isNaN(atMs) || atMs <= hold.detectedAtMs + ACCIDENT_SETTLE_MS) return;
+    const trusted = (signal.satellites ?? Number.POSITIVE_INFINITY) >= 5 && (signal.hdop ?? 0) <= 5;
+    if (trusted && signal.speedKph > ACCIDENT_MOVING_KMH) {
+      if (await this.deps.stateCache.claimAccidentHold(signal.tenantId, signal.vehicleId)) {
+        await this.finishAccidentHold(signal.tenantId, hold.alertId, 'drove_on');
+      }
+      return;
+    }
+    if (atMs >= hold.detectedAtMs + ACCIDENT_STOP_CONFIRM_MS) {
+      if (await this.deps.stateCache.claimAccidentHold(signal.tenantId, signal.vehicleId)) {
+        await this.finishAccidentHold(signal.tenantId, hold.alertId, 'stopped');
+      }
+    }
+  }
+
+  /**
+   * Deadline sweep: a held accident whose vehicle has reported nothing since
+   * (a severe crash can cut power) is confirmed and notified.
+   */
+  public async confirmDueAccidentHolds(nowMs = Date.now()): Promise<number> {
+    let confirmed = 0;
+    for (const { tenantId, vehicleId } of await this.deps.stateCache.dueAccidentHolds(nowMs)) {
+      const hold = await this.deps.stateCache.claimAccidentHold(tenantId, vehicleId);
+      if (!hold) continue;
+      await this.finishAccidentHold(tenantId, hold.alertId, 'no_movement_reported');
+      confirmed += 1;
+    }
+    return confirmed;
+  }
+
+  private async finishAccidentHold(
+    tenantId: string,
+    alertId: string,
+    outcome: 'drove_on' | 'stopped' | 'no_movement_reported',
+  ): Promise<void> {
+    const alert = await this.deps.alarms.findById(tenantId, alertId);
+    if (!alert) return;
+    await this.deps.alarms.updateDetail(alert, { ...(alert.detail ?? {}), confirmation: outcome });
+    if (outcome === 'drove_on') {
+      this.logger.log(`Accident alarm ${alertId} not notified — vehicle drove on`);
+      return;
+    }
+    this.deps.gateway?.emitAlarmCreated(tenantId, alert);
+    if (this.deps.dispatcher) {
+      try {
+        await this.deps.dispatcher.dispatchAlarm(alert);
+      } catch (err) {
+        this.logger.warn(`Notification dispatch error: ${(err as Error).message}`);
+      }
+    }
+    this.logger.log(`Accident alarm ${alertId} confirmed (${outcome}) — notified`);
   }
 
   /**
@@ -808,6 +890,17 @@ const DEVICE_ALARM_DEDUP_WINDOW_SEC = 60;
  * broken or missing card still notifies as STORAGE_FAILURE.
  */
 const RECORD_ONLY_DEVICE_CODES: ReadonlySet<string> = new Set(['STORAGE_FULL']);
+
+/** Device alarms notified only once the vehicle's behaviour confirms them. */
+const CONFIRM_BY_STOP_CODES: ReadonlySet<string> = new Set(['ACCIDENT']);
+/** Fixes this soon after the alarm still show the pre-impact speed. */
+const ACCIDENT_SETTLE_MS = 5_000;
+/** A trusted speed above this after the alarm means the vehicle drove on. */
+const ACCIDENT_MOVING_KMH = 8;
+/** Still stopped this long after the alarm → confirmed. */
+const ACCIDENT_STOP_CONFIRM_MS = 60_000;
+/** No fix at all this long after the alarm → confirmed (device may be down). */
+const ACCIDENT_SILENCE_CONFIRM_MS = 90_000;
 
 /** An open device alarm last seen within this window absorbs a repeat (burst). */
 const DEVICE_ALARM_COALESCE_MS = 10 * 60_000;
