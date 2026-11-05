@@ -870,8 +870,10 @@ function isNonAlarmDeviceCode(code: string): boolean {
   // tracked from positions (ignition/idle/trip rules, device status); as
   // alarms they flooded the center with hundreds of non-actionable rows.
   if (DEVICE_STATUS_NOTICES.has(u) || /^INPUT_\d+_(IN)?ACTIVE$/.test(u)) return true;
-  // Unmapped vendor events carry no operator meaning ("Device alarm EVENT_675").
-  if (/^EVENT_\d+$/.test(u) && !/^EVENT_(126|65[5-9]|66[0-3])$/.test(u)) return true;
+  // EVENT_675: unmapped MD300 status event seen on every unit at standstill,
+  // no operator meaning. Other unmapped EVENT_n stay — on older gateways they
+  // carry ADAS/DMS alarms (e.g. EVENT_648 = forward collision warning).
+  if (u === 'EVENT_675') return true;
   // Unused camera slots (CH3–CH8) on 2-camera MDVR fleets.
   if (/^VIDEO_(LOSS|RECOVERY)_CH([3-8])$/.test(u)) return true;
   return false;

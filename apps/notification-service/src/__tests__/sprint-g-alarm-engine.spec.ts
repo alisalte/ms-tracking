@@ -608,6 +608,12 @@ describe('Sprint G — device-alarm DMS persistence', () => {
     expect(alarms.created).toHaveLength(0);
   });
 
+  it('still raises an unmapped safety event from an older gateway (EVENT_648 = FCW)', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'EVENT_648', severity: 'CRITICAL' }));
+    expect(alarms.created).toHaveLength(1);
+  });
+
   it('a repeat after the burst window supersedes the open alarm instead of bumping it', async () => {
     const { service, alarms, stateCache } = makeHarness([]);
     await service.processDeviceAlarm(dmsAlarm());
