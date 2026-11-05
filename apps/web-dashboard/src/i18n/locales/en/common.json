@@ -2626,12 +2626,12 @@
         "towingHint": "0 disables. Event 36. Needs A73 deep sleep on device.",
         "accel": "Harsh acceleration (mG)",
         "brake": "Harsh braking (mG)",
-        "brakeHint": "Negative value (e.g. −180).",
+        "brakeHint": "Negative value (e.g. −180). Fill both D79 fields or neither.",
         "applied": "Alert settings queued on the device.",
         "speedInvalid": "Speed must be between 0 and 255 km/h.",
         "towingInvalid": "Towing times must be between 0 and 255.",
-        "accelInvalid": "Harsh acceleration must be between 90 and 1000 mG.",
-        "brakeInvalid": "Harsh braking must be between −1500 and −100 mG.",
+        "accelInvalid": "Harsh acceleration must be between 90 and 1000 mG (fill both D79 fields or neither).",
+        "brakeInvalid": "Harsh braking must be between −1500 and −100 mG (fill both D79 fields or neither).",
         "invalid": "Alert settings are incomplete or invalid.",
         "refreshedDevice": "Merged DB4 / CB4 / history into Alerts settings.",
         "refreshedCache": "No new alert fields from device; showing local snapshot (most alert cmds have no live readback).",
@@ -2645,7 +2645,9 @@
         "vibration": "Vibration sensitivity",
         "vibrationUnknown": "Not set from here (factory default 1)",
         "vibrationHint": "B09: drives towing (36) and vibration wake-up. Smaller = more sensitive; higher cuts false towing alerts. Device cannot report it. Empty = left unchanged.",
-        "vibrationInvalid": "Vibration sensitivity must be a whole number from 1 to 65535, or empty."
+        "vibrationInvalid": "Vibration sensitivity must be a whole number from 1 to 65535, or empty.",
+        "harshUnknown": "Not set from here",
+        "accelHint": "D79 (MD5xx). Not in the MD300 command table. Empty = not sent."
       },
       "media": {
         "title": "Media settings",

@@ -359,8 +359,14 @@ export function DeviceParameterAlertsPanel({
           type="number"
           min={90}
           max={1000}
-          value={String(sett.harshAcceleration)}
-          onChange={(e) => patch({ harshAcceleration: Number(e.target.value) || 0 })}
+          value={sett.harshAcceleration === null ? '' : String(sett.harshAcceleration)}
+          placeholder={t('commands.parameter.alerts.harshUnknown', {
+            defaultValue: 'Not set from here',
+          })}
+          onChange={(e) => patch({ harshAcceleration: optionalNumber(e.target.value) })}
+          hint={t('commands.parameter.alerts.accelHint', {
+            defaultValue: 'D79 (MD5xx). Not in the MD300 command table. Empty = not sent.',
+          })}
         />
         <Input
           label={t('commands.parameter.alerts.brake', {
@@ -369,10 +375,13 @@ export function DeviceParameterAlertsPanel({
           type="number"
           min={-1500}
           max={-100}
-          value={String(sett.harshBraking)}
-          onChange={(e) => patch({ harshBraking: Number(e.target.value) || 0 })}
+          value={sett.harshBraking === null ? '' : String(sett.harshBraking)}
+          placeholder={t('commands.parameter.alerts.harshUnknown', {
+            defaultValue: 'Not set from here',
+          })}
+          onChange={(e) => patch({ harshBraking: optionalNumber(e.target.value) })}
           hint={t('commands.parameter.alerts.brakeHint', {
-            defaultValue: 'Negative value (e.g. −180).',
+            defaultValue: 'Negative value (e.g. −180). Fill both D79 fields or neither.',
           })}
         />
         <Input
