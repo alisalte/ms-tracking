@@ -84,7 +84,7 @@ export function MapSettingsPanel({
           // biome-ignore lint/a11y/useSemanticElements: styled popover has no single semantic element.
           role="dialog"
           aria-label={t('map.settings.open')}
-          className="absolute bottom-full end-0 mb-2 w-[20.5rem] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-white/10 dark:bg-graydark-300"
+          className="absolute bottom-full end-0 mb-2 w-[20.5rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-white/10 dark:bg-graydark-300"
           style={{ maxHeight: 'min(28rem, 75vh)' }}
           onPointerDown={(e) => e.stopPropagation()}
         >

@@ -12,7 +12,9 @@ import { Alert, Card, CardHeader } from '@/components/tailwind-ui';
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex items-center gap-2 py-1.5">
-      <span className="w-40 shrink-0 text-sm text-gray-500 dark:text-graydark-600">{label}</span>
+      <span className="w-28 shrink-0 text-sm sm:w-40 text-gray-500 dark:text-graydark-600">
+        {label}
+      </span>
       <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-graydark-800">
         {value}
       </span>
