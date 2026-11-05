@@ -37,9 +37,9 @@ export interface AlertsParameterSett {
    */
   vibrationSensitivity: number | null;
   /** D79 harsh acceleration (mG), 90–1000. */
-  harshAcceleration: number;
+  harshAcceleration: number | null;
   /** D79 harsh braking (mG), −1500…−100. */
-  harshBraking: number;
+  harshBraking: number | null;
   /**
    * CB4 impact (event 78) acceleration threshold (mG), 500–65535. null =
    * not known yet — CB4 is then left out of Apply so an unrelated edit never
@@ -67,8 +67,8 @@ export function defaultAlertsSett(): AlertsParameterSett {
     towingSeconds: 3,
     towingIdleMinutes: 2,
     vibrationSensitivity: null,
-    harshAcceleration: 150,
-    harshBraking: -180,
+    harshAcceleration: null,
+    harshBraking: null,
     impactThresholdMg: null,
     impactDuration10ms: null,
     gprsEventMode: '0',
@@ -85,6 +85,22 @@ export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlerts
               sensitivity: Math.max(1, Math.min(65535, Math.round(sett.vibrationSensitivity))),
             },
             label: 'B09 vibration sensitivity',
+          },
+        ]
+      : [];
+  // D79 is MD5xx-only on paper: the MD300 model table has no D79 row and the
+  // MD300 rejects other unlisted commands with FFFE. Send it only when both
+  // values were entered or read, never as a silent default on every Apply.
+  const harsh: ComposedAlertsCommand[] =
+    sett.harshAcceleration !== null && sett.harshBraking !== null
+      ? [
+          {
+            commandCode: 'D79',
+            params: {
+              acceleration: Math.max(90, Math.min(1000, Math.round(sett.harshAcceleration))),
+              braking: Math.max(-1500, Math.min(-100, Math.round(sett.harshBraking))),
+            },
+            label: 'D79 harsh accel/brake',
           },
         ]
       : [];
@@ -116,14 +132,7 @@ export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlerts
       label: 'B10 towing',
     },
     ...vibration,
-    {
-      commandCode: 'D79',
-      params: {
-        acceleration: Math.max(90, Math.min(1000, Math.round(sett.harshAcceleration))),
-        braking: Math.max(-1500, Math.min(-100, Math.round(sett.harshBraking))),
-      },
-      label: 'D79 harsh accel/brake',
-    },
+    ...harsh,
     ...impact,
     {
       commandCode: 'C03',
@@ -298,18 +307,14 @@ export function validateAlertsSett(sett: AlertsParameterSett): string | null {
   ) {
     return 'towingIdleMinutes';
   }
-  if (
-    !Number.isFinite(sett.harshAcceleration) ||
-    sett.harshAcceleration < 90 ||
-    sett.harshAcceleration > 1000
-  ) {
+  const accel = sett.harshAcceleration ?? null;
+  const brake = sett.harshBraking ?? null;
+  if (accel === null && brake !== null) return 'harshAcceleration';
+  if (brake === null && accel !== null) return 'harshBraking';
+  if (accel !== null && (!Number.isFinite(accel) || accel < 90 || accel > 1000)) {
     return 'harshAcceleration';
   }
-  if (
-    !Number.isFinite(sett.harshBraking) ||
-    sett.harshBraking < -1500 ||
-    sett.harshBraking > -100
-  ) {
+  if (brake !== null && (!Number.isFinite(brake) || brake < -1500 || brake > -100)) {
     return 'harshBraking';
   }
   const vibration = sett.vibrationSensitivity ?? null;

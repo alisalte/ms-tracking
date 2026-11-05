@@ -81,6 +81,7 @@ describe('alerts validation + cache', () => {
 
   it('rejects braking outside −1500…−100', () => {
     const sett = defaultAlertsSett();
+    sett.harshAcceleration = 150;
     sett.harshBraking = -50;
     expect(validateAlertsSett(sett)).toBe('harshBraking');
     sett.harshBraking = -180;
@@ -163,7 +164,7 @@ describe('B09 vibration sensitivity', () => {
       'B09',
     );
     const cmds = composeAlertsCommands({ ...defaultAlertsSett(), vibrationSensitivity: 20 });
-    expect(cmds.map((c) => c.commandCode)).toEqual(['B07', 'B10', 'B09', 'D79', 'C03']);
+    expect(cmds.map((c) => c.commandCode)).toEqual(['B07', 'B10', 'B09', 'C03']);
     expect(cmds[2]?.params).toEqual({ sensitivity: 20 });
   });
 
@@ -182,5 +183,24 @@ describe('B09 vibration sensitivity', () => {
       );
     }
     expect(validateAlertsSett({ ...base, vibrationSensitivity: 1 })).toBeNull();
+  });
+});
+
+describe('D79 harsh accel/brake is opt-in', () => {
+  it('is not sent while both fields are empty (MD300 rejects unlisted commands)', () => {
+    expect(composeAlertsCommands(defaultAlertsSett()).map((c) => c.commandCode)).toEqual([
+      'B07',
+      'B10',
+      'C03',
+    ]);
+  });
+
+  it('rejects one D79 field without the other', () => {
+    expect(validateAlertsSett({ ...defaultAlertsSett(), harshAcceleration: 150 })).toBe(
+      'harshBraking',
+    );
+    expect(validateAlertsSett({ ...defaultAlertsSett(), harshBraking: -180 })).toBe(
+      'harshAcceleration',
+    );
   });
 });
