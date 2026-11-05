@@ -2615,7 +2615,7 @@
       },
       "alerts": {
         "title": "Alert settings",
-        "intro": "On-device Alerts Parameter — speeding (B07), towing (B10), harsh accel/brake (D79), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.",
+        "intro": "On-device Alerts Parameter — speeding (B07), towing (B10), harsh accel/brake (D79), impact detection (CB4), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.",
         "speed": "Speeding (km/h)",
         "speedHint": "0 disables. Event 19.",
         "gprsMode": "GPRS event mode",
@@ -2633,9 +2633,15 @@
         "accelInvalid": "Harsh acceleration must be between 90 and 1000 mG.",
         "brakeInvalid": "Harsh braking must be between −1500 and −100 mG.",
         "invalid": "Alert settings are incomplete or invalid.",
-        "refreshedDevice": "Merged DB4 / history into Alerts settings.",
+        "refreshedDevice": "Merged DB4 / CB4 / history into Alerts settings.",
         "refreshedCache": "No new alert fields from device; showing local snapshot (most alert cmds have no live readback).",
-        "refreshCacheOnly": "Multi-device mode: showing local snapshot only. Open one device to read from hardware."
+        "refreshCacheOnly": "Multi-device mode: showing local snapshot only. Open one device to read from hardware.",
+        "impactThreshold": "Impact threshold (mG)",
+        "impactDuration": "Impact duration (×10 ms)",
+        "impactUnknown": "Unknown — Refresh to read",
+        "impactHint": "Event 78 (accident). Higher = only harder hits alert. Empty = left unchanged.",
+        "impactDurationHint": "How long the hit must last; 15 = 150 ms. Higher ignores short road bumps.",
+        "impactInvalid": "Impact detection needs both values (threshold 500–65535 mG, duration 0–255), or both empty to leave it unchanged."
       },
       "media": {
         "title": "Media settings",

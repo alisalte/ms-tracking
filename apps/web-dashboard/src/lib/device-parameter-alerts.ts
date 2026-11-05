@@ -1,9 +1,10 @@
 /**
- * Device Parameter → Alerts+ (B07 / B10 / D79 / C03).
+ * Device Parameter → Alerts+ (B07 / B10 / D79 / CB4 / C03).
  *
- * Speeding, towing (fast B10), harsh accel/brake, GPRS event mode.
- * B08 is covered by B10's vibration seconds. Live readback is limited —
- * B07 overspeed comes from DB4; others from last SET history.
+ * Speeding, towing (fast B10), harsh accel/brake, impact detection, GPRS
+ * event mode. B08 is covered by B10's vibration seconds. Live readback is
+ * limited — B07 overspeed comes from DB4, CB4 from its own reply; others
+ * from last SET history.
  */
 
 import {
@@ -14,7 +15,11 @@ import {
   saveParameterSnapshot,
   stampParameterSnapshot,
 } from '@/lib/device-parameter-state';
-import { type CommandHistoryLike, lastStoredSettings } from '@/lib/meitrack-readback';
+import {
+  type CommandHistoryLike,
+  lastStoredSettings,
+  parseMeitrackReadback,
+} from '@/lib/meitrack-readback';
 
 export type GprsEventMode = '0' | '1';
 
@@ -29,6 +34,14 @@ export interface AlertsParameterSett {
   harshAcceleration: number;
   /** D79 harsh braking (mG), −1500…−100. */
   harshBraking: number;
+  /**
+   * CB4 impact (event 78) acceleration threshold (mG), 500–65535. null =
+   * not known yet — CB4 is then left out of Apply so an unrelated edit never
+   * changes the device's crash sensitivity.
+   */
+  impactThresholdMg: number | null;
+  /** CB4 impact duration (×10 ms), 0–255; null = not known yet. */
+  impactDuration10ms: number | null;
   /** C03: 0 automatic, 1 confirmed UDP. */
   gprsEventMode: GprsEventMode;
 }
@@ -49,11 +62,26 @@ export function defaultAlertsSett(): AlertsParameterSett {
     towingIdleMinutes: 2,
     harshAcceleration: 150,
     harshBraking: -180,
+    impactThresholdMg: null,
+    impactDuration10ms: null,
     gprsEventMode: '0',
   };
 }
 
 export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlertsCommand[] {
+  const impact: ComposedAlertsCommand[] =
+    sett.impactThresholdMg !== null && sett.impactDuration10ms !== null
+      ? [
+          {
+            commandCode: 'CB4',
+            params: {
+              thresholdMg: Math.max(500, Math.min(65535, Math.round(sett.impactThresholdMg))),
+              duration10ms: Math.max(0, Math.min(255, Math.round(sett.impactDuration10ms))),
+            },
+            label: 'CB4 impact detection',
+          },
+        ]
+      : [];
   return [
     {
       commandCode: 'B07',
@@ -76,6 +104,7 @@ export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlerts
       },
       label: 'D79 harsh accel/brake',
     },
+    ...impact,
     {
       commandCode: 'C03',
       params: { mode: sett.gprsEventMode },
@@ -84,9 +113,26 @@ export function composeAlertsCommands(sett: AlertsParameterSett): ComposedAlerts
   ];
 }
 
-/** DB4 dump fills B07 overspeed; other fields rely on history after probe. */
+/**
+ * DB4 dump fills B07 overspeed; CB4 with no params replies its current
+ * threshold + duration. Other fields rely on history after probe.
+ */
 export function alertsReadbackCommands(): ComposedAlertsCommand[] {
-  return [{ commandCode: 'DB4', params: {}, label: 'DB4 settings dump' }];
+  return [
+    { commandCode: 'DB4', params: {}, label: 'DB4 settings dump' },
+    { commandCode: 'CB4', params: {}, label: 'CB4 impact detection' },
+  ];
+}
+
+/** Merge one probe's reply — CB4 has its own reply shape, not a DB4 dump. */
+export function mergeProbeReplyIntoAlertsSett(
+  base: AlertsParameterSett,
+  probeCode: string,
+  responseText: string | null | undefined,
+): { sett: AlertsParameterSett; changed: boolean } {
+  if (probeCode !== 'CB4') return mergeDb4ReplyIntoAlertsSett(base, responseText);
+  const sett = mergeFieldsIntoAlertsSett(base, parseMeitrackReadback('CB4', responseText), 'CB4');
+  return { sett, changed: JSON.stringify(sett) !== JSON.stringify(base) };
 }
 
 export function mergeFieldsIntoAlertsSett(
@@ -133,6 +179,20 @@ export function mergeFieldsIntoAlertsSett(
         }
       }
       break;
+    case 'CB4': {
+      const threshold = Number(fields.thresholdMg);
+      const duration = Number(fields.duration10ms);
+      if (
+        fields.thresholdMg !== undefined &&
+        fields.duration10ms !== undefined &&
+        Number.isFinite(threshold) &&
+        Number.isFinite(duration)
+      ) {
+        next.impactThresholdMg = Math.max(500, Math.min(65535, Math.round(threshold)));
+        next.impactDuration10ms = Math.max(0, Math.min(255, Math.round(duration)));
+      }
+      break;
+    }
     case 'C03':
       if (fields.mode === '0' || fields.mode === '1') next.gprsEventMode = fields.mode;
       break;
@@ -148,7 +208,7 @@ export function mergeHistoryIntoAlertsSett(
 ): { sett: AlertsParameterSett; changed: boolean } {
   let sett = { ...base };
   let changed = false;
-  for (const code of ['B07', 'B10', 'B08', 'D79', 'C03'] as const) {
+  for (const code of ['B07', 'B10', 'B08', 'D79', 'CB4', 'C03'] as const) {
     const fields = lastStoredSettings(code, history);
     if (!fields) continue;
     const before = JSON.stringify(sett);
@@ -224,6 +284,15 @@ export function validateAlertsSett(sett: AlertsParameterSett): string | null {
     sett.harshBraking > -100
   ) {
     return 'harshBraking';
+  }
+  const threshold = sett.impactThresholdMg ?? null;
+  const duration = sett.impactDuration10ms ?? null;
+  if ((threshold === null) !== (duration === null)) return 'impact';
+  if (threshold !== null && (!Number.isFinite(threshold) || threshold < 500 || threshold > 65535)) {
+    return 'impact';
+  }
+  if (duration !== null && (!Number.isFinite(duration) || duration < 0 || duration > 255)) {
+    return 'impact';
   }
   if (sett.gprsEventMode !== '0' && sett.gprsEventMode !== '1') return 'gprsEventMode';
   return null;

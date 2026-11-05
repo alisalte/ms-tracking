@@ -58,7 +58,9 @@ export function parseMeitrackReadback(
         braking: body[1] ?? '',
       };
     case 'CB4':
-      if (body.length < 2) return {};
+      // Only a genuine CB4 reply — a DB4 dump or another code's ACK must not
+      // be read as a threshold.
+      if (parts[0]?.toUpperCase() !== 'CB4' || body.length < 2) return {};
       return { thresholdMg: body[0] ?? '', duration10ms: body[1] ?? '' };
     case 'C03':
       return body[0] !== undefined && !/^ok$/i.test(body[0]) ? { mode: body[0] } : null;
