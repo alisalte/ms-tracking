@@ -614,6 +614,17 @@ describe('Sprint G — device-alarm DMS persistence', () => {
     expect(alarms.created).toHaveLength(1);
   });
 
+  it('records STORAGE_FULL as INFO without pushing it; STORAGE_FAILURE still notifies', async () => {
+    const { service, alarms, gateway } = makeHarness([]);
+    const now = new Date(Date.now() - 5_000);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'STORAGE_FULL', detectedAt: now }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.severity).toBe('INFO');
+    expect(gateway.emitted).toHaveLength(0);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'STORAGE_FAILURE', detectedAt: now }));
+    expect(gateway.emitted).toHaveLength(1);
+  });
+
   it('a repeat after the burst window supersedes the open alarm instead of bumping it', async () => {
     const { service, alarms, stateCache } = makeHarness([]);
     await service.processDeviceAlarm(dmsAlarm());
