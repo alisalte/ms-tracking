@@ -43,6 +43,7 @@ import { NotificationDeliveryRepository } from '../infrastructure/persistence/no
 import { NotificationPreferenceRepository } from '../infrastructure/persistence/notification-preference.repository.js';
 import { NotificationRepository } from '../infrastructure/persistence/notification.repository.js';
 import { UserDirectory } from '../infrastructure/persistence/user-directory.js';
+import { VehicleProfileRepository } from '../infrastructure/persistence/vehicle-profile.repository.js';
 import { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
 import { AlarmsController } from './alarms.controller.js';
 import { EventsController } from './events.controller.js';
@@ -107,6 +108,11 @@ export class NotificationModule {
           provide: AlarmOccurrenceRepository,
           inject: [KNEX_TOKEN],
           useFactory: (knex: Knex) => new AlarmOccurrenceRepository(knex),
+        },
+        {
+          provide: VehicleProfileRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: Knex) => new VehicleProfileRepository(knex),
         },
         // Sprint I — GeofenceQuery removed: geofence detection moved to the
         // gps-engine evaluator; alarm rules consume geofence.* FleetEvents.
@@ -296,6 +302,7 @@ export class NotificationModule {
             NotificationDispatcherService,
             METRICS_TOKEN,
             ALARM_EVIDENCE_SERVICE,
+            VehicleProfileRepository,
           ],
           useFactory: (
             rules: AlarmRuleRepository,
@@ -305,6 +312,7 @@ export class NotificationModule {
             dispatcher: NotificationDispatcherService,
             metrics: TelemetryMetrics,
             evidence: AlarmEvidenceService,
+            vehicles: VehicleProfileRepository,
           ) =>
             new AlarmEvaluatorService({
               rules,
@@ -314,6 +322,7 @@ export class NotificationModule {
               dispatcher,
               metrics,
               evidence,
+              machineType: (tenantId, vehicleId) => vehicles.machineType(tenantId, vehicleId),
             }),
         },
         // Sprint G Part 22 — DLQ producer (non-fatal at boot, lazy connect).

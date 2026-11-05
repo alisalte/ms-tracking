@@ -82,6 +82,26 @@ class FakeStateCache {
     this.occurrenceCounts.set(k, n);
     return n;
   }
+
+  public readonly lastFix = new Map<string, { lat: number; lng: number; capturedAtMs: number }>();
+  public async getLastFix(_t: string, v: string) {
+    return this.lastFix.get(v) ?? null;
+  }
+  public async setLastFix(
+    _t: string,
+    v: string,
+    fix: { lat: number; lng: number; capturedAtMs: number },
+  ) {
+    this.lastFix.set(v, fix);
+  }
+
+  public readonly ignition = new Map<string, { on: boolean; atMs: number }>();
+  public async swapIgnitionState(_t: string, v: string, on: boolean, atMs: number) {
+    const prev = this.ignition.get(v);
+    if (prev && prev.atMs > atMs) return 'stale' as const;
+    this.ignition.set(v, { on, atMs });
+    return prev ? prev.on : null;
+  }
 }
 
 class FakeAlarmsRepo {
@@ -573,10 +593,183 @@ describe('Sprint G — device-alarm DMS persistence', () => {
     expect(alarms.created.at(0)?.type).toBe('camera');
   });
 
-  it('classifies sleep as other (not offline connectivity)', async () => {
+  it.each([
+    'ENTER_SLEEP',
+    'START_MOVING',
+    'STOP_MOVING',
+    'INPUT_2_ACTIVE',
+    'INPUT_2_INACTIVE',
+    'GPS_SIGNAL_LOST',
+    'POWER_RESTORED',
+    'EVENT_675',
+  ])('does not raise device status notice %s', async (code) => {
     const { service, alarms } = makeHarness([]);
-    await service.processDeviceAlarm(dmsAlarm({ code: 'ENTER_SLEEP', severity: 'INFO' }));
+    await service.processDeviceAlarm(dmsAlarm({ code, severity: 'INFO' }));
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('a repeat after the burst window supersedes the open alarm instead of bumping it', async () => {
+    const { service, alarms, stateCache } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm());
+    await stateCache.expireDedupWindow();
+    await service.processDeviceAlarm(dmsAlarm({ detectedAt: new Date('2026-01-01T13:00:00Z') }));
+    expect(alarms.created).toHaveLength(2);
+    expect(alarms.created.at(0)?.status).toBe('RESOLVED');
+    expect(alarms.statusUpdates.at(0)).toMatchObject({ action: 'RESOLVE' });
+  });
+
+  it('drops TOW while stationary or while being driven', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'TOW', speedKph: 0, ignitionOn: false }));
+    await service.processDeviceAlarm(dmsAlarm({ code: 'TOW', speedKph: 30, ignitionOn: true }));
+    expect(alarms.created).toHaveLength(0);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'TOW', speedKph: 12, ignitionOn: false }));
     expect(alarms.created).toHaveLength(1);
-    expect(alarms.created.at(0)?.type).toBe('other');
+  });
+
+  it('drops harsh braking at an impossible speed or with the ignition off', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm(dmsAlarm({ code: 'BRAKING', speedKph: 513 }));
+    await service.processDeviceAlarm(dmsAlarm({ code: 'BRAKING', speedKph: 0, ignitionOn: false }));
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('records a device alarm replayed from the buffer but does not push it', async () => {
+    const { service, alarms, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(
+      dmsAlarm({ detectedAt: new Date(Date.now() - 3 * 3_600_000) }),
+    );
+    expect(alarms.created).toHaveLength(1);
+    expect(gateway.emitted).toHaveLength(0);
+    await service.processDeviceAlarm(
+      dmsAlarm({ code: 'DMS_SMOKING', detectedAt: new Date(Date.now() - 5_000) }),
+    );
+    expect(gateway.emitted).toHaveLength(1);
+  });
+});
+
+// ── False-positive guards on rule alarms ─────────────────────────────────────
+
+describe('Rule alarms — false-positive guards', () => {
+  it('ignores overspeed from a low-satellite drift fix (excavator in a pit)', async () => {
+    const { service, alarms } = makeHarness([makeRule('overspeed', { thresholdKmh: 40 })]);
+    await service.processPosition(positionSignal({ speedKph: 101, satellites: 3 }));
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('ignores a Doppler spike the distance travelled does not support', async () => {
+    const { service, alarms } = makeHarness([makeRule('overspeed', { thresholdKmh: 40 })]);
+    await service.processPosition(
+      positionSignal({ speedKph: 5, capturedAt: '2026-01-01T00:10:00Z' }),
+    );
+    // ~2 m in 5 s while claiming 65 km/h.
+    await service.processPosition(
+      positionSignal({ speedKph: 65, lat: 35.70002, capturedAt: '2026-01-01T00:10:05Z' }),
+    );
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('ignores speed over the machine-type cap', async () => {
+    const { service, alarms } = makeHarness([makeRule('overspeed', { thresholdKmh: 40 })]);
+    const shovel = new AlarmEvaluatorService({
+      ...(service as unknown as { deps: ConstructorParameters<typeof AlarmEvaluatorService>[0] })
+        .deps,
+      machineType: async () => 'SHOVEL',
+    });
+    await shovel.processPosition(positionSignal({ speedKph: 44 }));
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('ignition_on fires on the off→on transition only, not on every position', async () => {
+    const { service, alarms } = makeHarness([makeRule('ignition_on')]);
+    const at = (m: number) => `2026-01-01T00:${String(m).padStart(2, '0')}:00Z`;
+    await service.processPosition(positionSignal({ ignitionOn: true, capturedAt: at(1) }));
+    await service.processPosition(positionSignal({ ignitionOn: true, capturedAt: at(2) }));
+    expect(alarms.created).toHaveLength(0); // first sighting is not a transition
+    await service.processPosition(positionSignal({ ignitionOn: false, capturedAt: at(3) }));
+    await service.processPosition(positionSignal({ ignitionOn: true, capturedAt: at(4) }));
+    await service.processPosition(positionSignal({ ignitionOn: true, capturedAt: at(5) }));
+    expect(alarms.created).toHaveLength(1);
+    expect(alarms.created.at(0)?.type).toBe('ignition_on');
+  });
+
+  it('ignition_off fires when the ignition goes off and closes the open ignition_on', async () => {
+    const { service, alarms, stateCache } = makeHarness([
+      makeRule('ignition_on'),
+      makeRule('ignition_off'),
+    ]);
+    const at = (m: number) => `2026-01-01T00:${String(m).padStart(2, '0')}:00Z`;
+    await service.processPosition(positionSignal({ ignitionOn: false, capturedAt: at(1) }));
+    await service.processPosition(positionSignal({ ignitionOn: true, capturedAt: at(2) }));
+    await stateCache.expireDedupWindow();
+    await service.processPosition(positionSignal({ ignitionOn: false, capturedAt: at(3) }));
+    expect(alarms.created.map((a) => a.type)).toEqual(['ignition_on', 'ignition_off']);
+    expect(alarms.created.at(0)?.status).toBe('RESOLVED');
+  });
+
+  it('a replayed old position does not fabricate an ignition transition', async () => {
+    const { service, alarms } = makeHarness([makeRule('ignition_on')]);
+    await service.processPosition(
+      positionSignal({ ignitionOn: true, capturedAt: '2026-01-01T00:10:00Z' }),
+    );
+    await service.processPosition(
+      positionSignal({ ignitionOn: false, capturedAt: '2026-01-01T00:01:00Z' }),
+    );
+    await service.processPosition(
+      positionSignal({ ignitionOn: true, capturedAt: '2026-01-01T00:11:00Z' }),
+    );
+    expect(alarms.created).toHaveLength(0);
+  });
+
+  it('a point alarm is raised again after the dedup window even if the last one is still open', async () => {
+    const { service, alarms, stateCache } = makeHarness([
+      makeRule('prolonged_idle', { minDurationSec: 600 }),
+    ]);
+    const idle = (id: string) => ({
+      kind: 'idle' as const,
+      tenantId: TENANT,
+      vehicleId: VEHICLE,
+      type: 'idle.ended' as const,
+      startedAt: '2026-01-01T00:00:00Z',
+      endedAt: '2026-01-01T00:20:00Z',
+      durationSec: 1200,
+      sourceEventId: id,
+    });
+    await service.processIdle(idle('a'));
+    await stateCache.expireDedupWindow();
+    await service.processIdle(idle('b'));
+    expect(alarms.created).toHaveLength(2);
+  });
+
+  it('excessive_stop_duration fires on a long idle or parking period', async () => {
+    const { service, alarms, stateCache } = makeHarness([
+      makeRule('excessive_stop_duration', { maxStopDurationSec: 1800 }),
+    ]);
+    const base = {
+      tenantId: TENANT,
+      vehicleId: VEHICLE,
+      startedAt: '2026-01-01T00:00:00Z',
+      endedAt: '2026-01-01T01:00:00Z',
+      sourceEventId: 'p',
+    };
+    await service.processParking({
+      ...base,
+      kind: 'parking',
+      type: 'parking.ended',
+      durationSec: 600,
+    });
+    expect(alarms.created).toHaveLength(0);
+    await service.processParking({
+      ...base,
+      kind: 'parking',
+      type: 'parking.ended',
+      durationSec: 3600,
+    });
+    await stateCache.expireDedupWindow();
+    await service.processIdle({ ...base, kind: 'idle', type: 'idle.ended', durationSec: 2400 });
+    expect(alarms.created.map((a) => a.type)).toEqual([
+      'excessive_stop_duration',
+      'excessive_stop_duration',
+    ]);
   });
 });

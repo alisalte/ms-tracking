@@ -47,6 +47,7 @@ import type { AlarmRuleRepository } from '../infrastructure/persistence/alarm-ru
 import type { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
 import type { AlarmEvidenceService } from './alarm-evidence.service.js';
 import { buildEvaluatorRegistry } from './evaluators/evaluators.js';
+import { untrustedSpeedReason } from './evaluators/gps-fix-gate.js';
 import type { InputSignal } from './evaluators/rule-evaluator.js';
 import type { NotificationDispatcherService } from './notification-dispatcher.service.js';
 
@@ -60,6 +61,8 @@ export interface AlarmEvaluatorDeps {
   readonly metrics?: TelemetryMetrics | null;
   /** F-07 Slice 1 — auto evidence enqueue (optional in unit tests). */
   readonly evidence?: AlarmEvidenceService | null;
+  /** fleet.vehicles machine type for the GPS fix gate (optional in unit tests). */
+  readonly machineType?: ((tenantId: string, vehicleId: string) => Promise<string | null>) | null;
 }
 
 @Injectable()
@@ -91,6 +94,9 @@ export class AlarmEvaluatorService {
     detail: Record<string, unknown> | null;
     lat: number | null;
     lng: number | null;
+    /** Device-reported speed / ignition at the alarm instant (null = unknown). */
+    speedKph?: number | null;
+    ignitionOn?: boolean | null;
     detectedAt: Date;
   }): Promise<void> {
     try {
@@ -98,6 +104,17 @@ export class AlarmEvaluatorService {
       // not operator alarms (even if an older gateway still classifies them as ALARM).
       if (isNonAlarmDeviceCode(alarm.code)) {
         this.logger.debug(`Skipping non-alarm device event ${alarm.code} device=${alarm.deviceId}`);
+        return;
+      }
+      const implausible = implausibleDeviceAlarm(
+        alarm.code,
+        alarm.speedKph ?? null,
+        alarm.ignitionOn ?? null,
+      );
+      if (implausible) {
+        this.logger.debug(
+          `Skipping implausible device alarm ${alarm.code} device=${alarm.deviceId}: ${implausible}`,
+        );
         return;
       }
       const ruleId = deviceAlarmRuleId(alarm.code);
@@ -110,14 +127,29 @@ export class AlarmEvaluatorService {
       const vehicleId = alarm.vehicleId;
       const dedupKey = vehicleId ?? `device:${alarm.deviceId}`;
 
-      // One-open-alarm gate FIRST — bump while the same catalog alarm is open.
+      // One-open-alarm gate FIRST — bump while the same catalog alarm is open
+      // AND still active (a burst). Device alarms never auto-resolve, so an
+      // open alarm older than the coalesce window is superseded, not bumped —
+      // otherwise one stale open alarm swallowed every later occurrence.
       const open = await this.deps.alarms.findOpenByRuleAndVehicle(
         alarm.tenantId,
         ruleId,
         vehicleId,
         type,
       );
-      if (open) {
+      if (open && !isBurstOf(open, alarm.detectedAt)) {
+        const prev = open.status;
+        open.resolve(null, 'Superseded by a new occurrence.');
+        await this.deps.alarms.updateStatus(
+          open,
+          'RESOLVE',
+          prev,
+          open.status,
+          null,
+          'Superseded by a new occurrence.',
+        );
+        this.deps.gateway?.emitAlarmResolved(alarm.tenantId, open);
+      } else if (open) {
         const count = await this.deps.stateCache.incrementOccurrenceCount(
           alarm.tenantId,
           ruleId,
@@ -204,6 +236,12 @@ export class AlarmEvaluatorService {
         }
       }
 
+      if (isStaleDetection(alarm.detectedAt)) {
+        this.logger.log(
+          `Recorded stale device alarm ${alarm.code} alarmId=${id} detectedAt=${alarm.detectedAt.toISOString()} — not notified`,
+        );
+        return;
+      }
       this.deps.gateway?.emitAlarmCreated(alarm.tenantId, occurrence);
       if (this.deps.dispatcher) {
         try {
@@ -222,10 +260,14 @@ export class AlarmEvaluatorService {
   }
 
   /** Process a position signal from Kafka. */
-  public async processPosition(signal: InputSignal & { kind: 'position' }): Promise<void> {
+  public async processPosition(input: InputSignal & { kind: 'position' }): Promise<void> {
     try {
-      const rules = await this.deps.rules.listEnabled(signal.tenantId);
-      for (const rule of this.rulesForVehicle(rules, signal.vehicleId)) {
+      const rules = await this.deps.rules.listEnabled(input.tenantId);
+      const applicable = this.rulesForVehicle(rules, input.vehicleId);
+      const signal = applicable.some((r) => r.type === 'ignition_on' || r.type === 'ignition_off')
+        ? { ...input, ignitionEdge: await this.ignitionEdge(input, applicable) }
+        : input;
+      for (const rule of applicable) {
         if (rule.type === 'overspeed') {
           await this.evaluateOverspeed(signal, rule);
           continue;
@@ -335,6 +377,40 @@ export class AlarmEvaluatorService {
   }
 
   /**
+   * Derive the ignition transition this position carries and close the
+   * opposite open alarm (an ignition_on alarm ends when the ignition goes off,
+   * and vice versa). The first sighting of a vehicle is not a transition.
+   */
+  private async ignitionEdge(
+    signal: InputSignal & { kind: 'position' },
+    rules: readonly AlarmRule[],
+  ): Promise<'on' | 'off' | null> {
+    if (signal.ignitionOn === null) return null;
+    const atMs = Date.parse(signal.capturedAt);
+    if (Number.isNaN(atMs)) return null;
+    const prev = await this.deps.stateCache.swapIgnitionState(
+      signal.tenantId,
+      signal.vehicleId,
+      signal.ignitionOn,
+      atMs,
+    );
+    if (prev === null || prev === 'stale' || prev === signal.ignitionOn) return null;
+    const edge = signal.ignitionOn ? 'on' : 'off';
+    const closes = edge === 'on' ? 'ignition_off' : 'ignition_on';
+    for (const rule of rules) {
+      if (rule.type !== closes) continue;
+      await this.autoResolve(
+        signal.tenantId,
+        rule,
+        signal.vehicleId,
+        closes,
+        `Ignition turned ${edge}.`,
+      );
+    }
+    return edge;
+  }
+
+  /**
    * Rule scope precedence (Part 9): within one rule TYPE, a vehicle-scoped
    * rule (entityId === vehicleId) suppresses tenant-wide rules (entityId ===
    * null) for that vehicle. Deterministic, documented, no silent conflicts.
@@ -357,6 +433,21 @@ export class AlarmEvaluatorService {
   ): Promise<void> {
     const threshold = rule.conditionNum('thresholdKmh', 120);
     const graceSec = rule.conditionNum('gracePeriodSec', 0);
+    const nowMs = Date.parse(signal.capturedAt);
+    if (Number.isNaN(nowMs)) return; // invalid timestamp — validation should have caught
+
+    // GPS fix gate: a drifting fix (few satellites, Doppler spike, position
+    // jump, over the machine's cap) says nothing about speed — neither raise
+    // nor resolve on it, matching the gps-engine which zeroes such fixes.
+    const untrusted = await this.untrustedSpeed(signal, nowMs);
+    if (untrusted) {
+      if (signal.speedKph > threshold) {
+        this.logger.debug(
+          `Overspeed ignored: ${signal.speedKph} km/h untrusted (${untrusted}) vehicle=${signal.vehicleId}`,
+        );
+      }
+      return;
+    }
     const speeding = signal.speedKph > threshold && signal.speedKph <= 300;
 
     if (!speeding) {
@@ -373,8 +464,6 @@ export class AlarmEvaluatorService {
       return;
     }
 
-    const nowMs = Date.parse(signal.capturedAt);
-    if (Number.isNaN(nowMs)) return; // invalid timestamp — validation should have caught
     if (graceSec > 0) {
       const since = await this.deps.stateCache.getOverspeedSince(
         signal.tenantId,
@@ -414,6 +503,40 @@ export class AlarmEvaluatorService {
       },
       rule,
     );
+  }
+
+  /**
+   * Run the GPS fix gate against the vehicle's last trusted fix; a trusted fix
+   * becomes the new reference. Returns the rejection reason, or null.
+   */
+  private async untrustedSpeed(
+    signal: InputSignal & { kind: 'position' },
+    nowMs: number,
+  ): Promise<string | null> {
+    const [prev, machineType] = await Promise.all([
+      this.deps.stateCache.getLastFix(signal.tenantId, signal.vehicleId),
+      this.deps.machineType?.(signal.tenantId, signal.vehicleId) ?? Promise.resolve(null),
+    ]);
+    const reason = untrustedSpeedReason(
+      {
+        lat: signal.lat,
+        lng: signal.lng,
+        speedKph: signal.speedKph,
+        satellites: signal.satellites ?? null,
+        hdop: signal.hdop ?? null,
+        capturedAtMs: nowMs,
+      },
+      prev,
+      machineType,
+    );
+    if (reason === null && (prev === null || nowMs > prev.capturedAtMs)) {
+      await this.deps.stateCache.setLastFix(signal.tenantId, signal.vehicleId, {
+        lat: signal.lat,
+        lng: signal.lng,
+        capturedAtMs: nowMs,
+      });
+    }
+    return reason;
   }
 
   /**
@@ -529,10 +652,14 @@ export class AlarmEvaluatorService {
    *   1. Redis time-window gate (dedupWindowSec) — cheapest, storm breaker.
    *      Suppressed detections increment a per-rule+vehicle counter (metadata
    *      for the open alarm) and do NOT touch PostgreSQL.
-   *   2. One-open-alarm gate — when the window expires but the condition is
-   *      still active and an OPEN alarm exists for (rule, vehicle, type), the
-   *      existing alarm's detail is UPDATED (occurrenceCount/lastSeenAt/last
-   *      detection) instead of creating a second OPEN alarm.
+   *   2. One-open-alarm gate — CONDITION alarms only (overspeed,
+   *      device_offline: they auto-resolve when the condition clears). When the
+   *      window expires but the condition is still active and an OPEN alarm
+   *      exists for (rule, vehicle, type), the existing alarm's detail is
+   *      UPDATED (occurrenceCount/lastSeenAt/last detection) instead of
+   *      creating a second OPEN alarm. Point events (ignition, idle, geofence,
+   *      trip…) never auto-resolve, so gating them on an open alarm silently
+   *      swallowed every later occurrence.
    */
   private async raiseIfAllowed(event: AlarmEvent, rule: AlarmRule): Promise<void> {
     const vehicleKey = event.vehicleId ?? '_tenant';
@@ -549,13 +676,15 @@ export class AlarmEvaluatorService {
       return;
     }
 
-    // One-open-alarm gate (Part 12).
-    const open = await this.deps.alarms.findOpenByRuleAndVehicle(
-      event.tenantId,
-      rule.id,
-      vehicleKey,
-      event.type,
-    );
+    // One-open-alarm gate (Part 12) — condition alarms only.
+    const open = CONDITION_ALARM_TYPES.has(event.type)
+      ? await this.deps.alarms.findOpenByRuleAndVehicle(
+          event.tenantId,
+          rule.id,
+          vehicleKey,
+          event.type,
+        )
+      : null;
     if (open) {
       const count = await this.deps.stateCache.incrementOccurrenceCount(
         event.tenantId,
@@ -592,6 +721,16 @@ export class AlarmEvaluatorService {
     });
     await this.deps.alarms.create(occurrence);
     this.metrics?.alarmsOpened.inc({ type: event.type });
+
+    // A detection replayed from a device buffer is history, not news: keep the
+    // record, but do not push it to operators.
+    // (device_offline is stamped with the last-seen time, old by definition.)
+    if (event.type !== 'device_offline' && isStaleDetection(event.detectedAt)) {
+      this.logger.log(
+        `Recorded stale alarm ${event.type} alarmId=${id} detectedAt=${event.detectedAt.toISOString()} — not notified`,
+      );
+      return;
+    }
 
     // Emit realtime alarm event (best-effort — WS may be disabled).
     this.deps.gateway?.emitAlarmCreated(event.tenantId, occurrence);
@@ -641,10 +780,56 @@ export class AlarmEvaluatorService {
   }
 }
 
+/** Alarm types that auto-resolve when their condition clears. */
+const CONDITION_ALARM_TYPES: ReadonlySet<string> = new Set(['overspeed', 'device_offline']);
+
+/** Detections older than this (device buffer replays) are recorded but not notified. */
+const MAX_NOTIFY_AGE_MS = 30 * 60_000;
+
+function isStaleDetection(detectedAt: Date): boolean {
+  return Date.now() - detectedAt.getTime() > MAX_NOTIFY_AGE_MS;
+}
+
 // ── Device-alarm helpers ─────────────────────────────────────────────────────
 
 /** Dedup window for device alarms (device resends + DMS bursts). */
 const DEVICE_ALARM_DEDUP_WINDOW_SEC = 60;
+
+/** An open device alarm last seen within this window absorbs a repeat (burst). */
+const DEVICE_ALARM_COALESCE_MS = 10 * 60_000;
+
+function isBurstOf(open: AlarmOccurrence, detectedAt: Date): boolean {
+  const lastSeen = Date.parse(String(open.detail?.lastSeenAt ?? ''));
+  const last = Number.isNaN(lastSeen) ? open.raisedAt.getTime() : lastSeen;
+  return Math.abs(detectedAt.getTime() - last) <= DEVICE_ALARM_COALESCE_MS;
+}
+
+/**
+ * G-sensor alarms the device's own state contradicts (field data: every TOW
+ * fired at 0 km/h — six with the ignition off and no movement at all, one
+ * mid-drive; a "BRAKING" at 513 km/h). Real towing is detected from the GPS
+ * track by the gps-engine (parking.tamper). Returns why, or null.
+ */
+function implausibleDeviceAlarm(
+  code: string,
+  speedKph: number | null,
+  ignitionOn: boolean | null,
+): string | null {
+  switch (code) {
+    case 'TOW':
+      if (ignitionOn === true) return 'ignition on — vehicle is being driven, not towed';
+      if (speedKph !== null && speedKph < 5) return 'vehicle not moving';
+      return null;
+    case 'BRAKING':
+    case 'ACCELERATION':
+    case 'CORNERING':
+      if (speedKph !== null && speedKph > 300) return `impossible speed ${speedKph} km/h`;
+      if (ignitionOn === false) return 'ignition off';
+      return null;
+    default:
+      return null;
+  }
+}
 
 /** Gateway severity → notification alert severity. */
 const DEVICE_ALARM_SEVERITY: Readonly<Record<string, 'INFO' | 'MEDIUM' | 'CRITICAL'>> = {
@@ -681,10 +866,28 @@ function isNonAlarmDeviceCode(code: string): boolean {
     return true;
   }
   if (/^EVENT_(0|31|33|34|35)$/.test(u)) return true;
+  // Device state notices — ignition, motion, sleep, GPS and power status are
+  // tracked from positions (ignition/idle/trip rules, device status); as
+  // alarms they flooded the center with hundreds of non-actionable rows.
+  if (DEVICE_STATUS_NOTICES.has(u) || /^INPUT_\d+_(IN)?ACTIVE$/.test(u)) return true;
+  // Unmapped vendor events carry no operator meaning ("Device alarm EVENT_675").
+  if (/^EVENT_\d+$/.test(u) && !/^EVENT_(126|65[5-9]|66[0-3])$/.test(u)) return true;
   // Unused camera slots (CH3–CH8) on 2-camera MDVR fleets.
   if (/^VIDEO_(LOSS|RECOVERY)_CH([3-8])$/.test(u)) return true;
   return false;
 }
+
+const DEVICE_STATUS_NOTICES: ReadonlySet<string> = new Set([
+  'START_MOVING',
+  'STOP_MOVING',
+  'ENTER_SLEEP',
+  'EXIT_SLEEP',
+  'DEVICE_REBOOT',
+  'GPS_SIGNAL_LOST',
+  'GPS_RECOVERED',
+  'SPEED_RECOVERY',
+  'POWER_RESTORED',
+]);
 
 /** Device alarm code → dashboard alarm catalog type. */
 function deviceAlarmCatalogType(code: string): string {

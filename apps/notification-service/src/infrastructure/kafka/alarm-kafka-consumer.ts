@@ -336,6 +336,8 @@ interface GatewayAlarmEnvelope {
   readonly position?: {
     readonly latitude?: number;
     readonly longitude?: number;
+    readonly speedKph?: number;
+    readonly ignitionOn?: boolean | null;
   } | null;
   readonly alarms?: ReadonlyArray<{
     readonly code?: string;
@@ -357,6 +359,8 @@ function parseDeviceAlarmEnvelope(raw: Buffer): Array<{
   detail: Record<string, unknown> | null;
   lat: number | null;
   lng: number | null;
+  speedKph: number | null;
+  ignitionOn: boolean | null;
   detectedAt: Date;
 }> {
   let parsed: GatewayAlarmEnvelope;
@@ -375,6 +379,10 @@ function parseDeviceAlarmEnvelope(raw: Buffer): Array<{
   const detectedAt = parsed.timestamp ? new Date(parsed.timestamp) : new Date();
   const lat = parsed.position?.latitude ?? null;
   const lng = parsed.position?.longitude ?? null;
+  const speed = parsed.position?.speedKph;
+  const speedKph = typeof speed === 'number' && Number.isFinite(speed) ? speed : null;
+  const ignition = parsed.position?.ignitionOn;
+  const ignitionOn = typeof ignition === 'boolean' ? ignition : null;
   const telemetry = parsed.telemetry ?? null;
 
   return (parsed.alarms ?? []).map((alarm) => ({
@@ -389,6 +397,8 @@ function parseDeviceAlarmEnvelope(raw: Buffer): Array<{
     detail: telemetry,
     lat,
     lng,
+    speedKph,
+    ignitionOn,
     detectedAt: Number.isNaN(detectedAt.getTime()) ? new Date() : detectedAt,
   }));
 }
