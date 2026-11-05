@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { Info } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
+import { useIsPhone } from '@/hooks/useMediaQuery';
 import { paintVehicleMarker, vehicleColor } from '@/lib/map-markers';
 import type { MapVehicle } from '@/types/fleet.types';
 
@@ -25,8 +27,14 @@ export function MapStatusLegend() {
   const { t } = useTranslation();
   const [markerStyle] = useMapMarkerStyle();
   const cellsRef = useRef<Array<HTMLDivElement | null>>([]);
+  // Phones: the key starts collapsed behind a small button so it does not
+  // cover a third of the map.
+  const isPhone = useIsPhone();
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const expanded = !isPhone || phoneOpen;
 
   useEffect(() => {
+    if (!expanded) return;
     LEGEND.forEach((row, i) => {
       const el = cellsRef.current[i];
       if (!el) return;
@@ -36,28 +44,40 @@ export function MapStatusLegend() {
         style: markerStyle,
       });
     });
-  }, [markerStyle]);
+  }, [markerStyle, expanded]);
 
   return (
     <div
       data-testid="map-status-legend"
-      className="pointer-events-none absolute top-16 start-3 z-20 flex flex-col gap-1 rounded-xl border border-gray-200 bg-white/90 px-2 py-1.5 shadow-lg backdrop-blur-md md:start-[320px] dark:border-white/10 dark:bg-graydark-300/90"
+      className="pointer-events-none flex flex-col gap-1 rounded-xl border border-gray-200 bg-white/90 px-2 py-1.5 shadow-lg backdrop-blur-md dark:border-white/10 dark:bg-graydark-300/90"
     >
-      {LEGEND.map((row, i) => (
-        <div key={row.state} className="flex items-center gap-1.5">
-          <div
-            ref={(node) => {
-              cellsRef.current[i] = node;
-            }}
-            className="fv-vehicle-marker pointer-events-none"
-            style={{ width: 28, height: 28 }}
-            aria-hidden
-          />
-          <span className="text-[11px] font-medium text-gray-600 dark:text-graydark-700">
-            {t(row.key)}
-          </span>
-        </div>
-      ))}
+      {isPhone && (
+        <button
+          type="button"
+          onClick={() => setPhoneOpen((o) => !o)}
+          aria-expanded={phoneOpen}
+          className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-gray-600 dark:text-graydark-700"
+        >
+          <Info size={14} aria-hidden />
+          {t('map.legendToggle')}
+        </button>
+      )}
+      {expanded &&
+        LEGEND.map((row, i) => (
+          <div key={row.state} className="flex items-center gap-1.5">
+            <div
+              ref={(node) => {
+                cellsRef.current[i] = node;
+              }}
+              className="fv-vehicle-marker pointer-events-none"
+              style={{ width: 28, height: 28 }}
+              aria-hidden
+            />
+            <span className="text-[11px] font-medium text-gray-600 dark:text-graydark-700">
+              {t(row.key)}
+            </span>
+          </div>
+        ))}
     </div>
   );
 }

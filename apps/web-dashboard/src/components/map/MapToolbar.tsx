@@ -106,7 +106,7 @@ export function MapToolbar({
   };
 
   return (
-    <div className="pointer-events-auto absolute top-2 start-2 end-2 z-[5] flex flex-wrap items-center justify-between gap-2 rounded-full border border-white/50 bg-white/80 px-4 py-1.5 shadow-lg shadow-gray-900/8 backdrop-blur-xl md:start-[316px] dark:border-white/8 dark:bg-graydark-300/80 dark:shadow-black/25">
+    <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/50 bg-white/80 px-3 py-1.5 shadow-lg shadow-gray-900/8 backdrop-blur-xl md:rounded-full md:px-4 dark:border-white/8 dark:bg-graydark-300/80 dark:shadow-black/25">
       <div className="flex items-center gap-2">
         <h1 className="text-base font-bold text-gray-900 dark:text-white">{t('map.title')}</h1>
         {mode === 'live' && paused ? (
@@ -165,13 +165,13 @@ export function MapToolbar({
           />
         )}
         {mode === 'history' && historyPreset === 'custom' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Input
               type="datetime-local"
               value={fromInput}
               onChange={(e) => setFromInput(e.target.value)}
               aria-label={t('map.history.from')}
-              wrapperClassName="w-auto"
+              wrapperClassName="min-w-0 flex-1 basis-36 sm:w-auto sm:flex-none"
               className="h-8 rounded-full px-3.5 text-[13px]"
             />
             <span className="text-xs text-gray-400">→</span>
@@ -180,7 +180,7 @@ export function MapToolbar({
               value={toInput}
               onChange={(e) => setToInput(e.target.value)}
               aria-label={t('map.history.to')}
-              wrapperClassName="w-auto"
+              wrapperClassName="min-w-0 flex-1 basis-36 sm:w-auto sm:flex-none"
               className="h-8 rounded-full px-3.5 text-[13px]"
             />
             <Button

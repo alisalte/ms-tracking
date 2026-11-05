@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight, Pause, Play, Square } from 'lucide-react';
  * Contract preserved from the MUI version: every data-testid (playback-*),
  * the aria-labels, and the "{speed}×" button names used by the e2e suite.
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { IconButton } from '@/components/tailwind-ui';
@@ -24,9 +24,36 @@ function fmtFull(ms: number): string {
   return formatDateTime(ms);
 }
 
-export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResult }) {
+export function PlaybackControls({
+  playback,
+  onHeightChange,
+}: {
+  playback: UseTrackPlaybackResult;
+  /** Reports the bar's rendered height (0 when hidden) so map controls can sit above it. */
+  onHeightChange?: (height: number) => void;
+}) {
   const { t } = useTranslation();
   const { startMs, endMs, cursorMs, isPlaying, speed } = playback;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const visible = startMs !== null && endMs !== null && endMs > startMs;
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!onHeightChange) return;
+    if (!visible || !el) {
+      onHeightChange(0);
+      return;
+    }
+    const report = () => onHeightChange(el.offsetHeight);
+    report();
+    if (typeof ResizeObserver === 'undefined') return () => onHeightChange(0);
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      onHeightChange(0);
+    };
+  }, [visible, onHeightChange]);
 
   const onRangeChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,6 +66,7 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
 
   return (
     <div
+      ref={rootRef}
       className="absolute bottom-2 start-2 end-2 z-10 rounded-xl bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md dark:bg-graydark-300/90"
       data-testid="playback-controls"
     >
@@ -85,7 +113,7 @@ export function PlaybackControls({ playback }: { playback: UseTrackPlaybackResul
           onChange={onRangeChange}
           aria-label={t('map.playback.timeline')}
           data-testid="playback-timeline"
-          className="mx-2 h-1.5 min-w-40 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-brand-500 dark:bg-white/10"
+          className="order-first h-1.5 w-full basis-full cursor-pointer appearance-none sm:order-none sm:mx-2 sm:w-auto sm:min-w-40 sm:flex-1 sm:basis-0 rounded-full bg-gray-200 accent-brand-500 dark:bg-white/10"
         />
 
         <fieldset
