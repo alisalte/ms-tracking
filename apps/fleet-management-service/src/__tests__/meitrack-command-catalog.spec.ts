@@ -44,6 +44,7 @@ describe('meitrack command catalog', () => {
       'B06',
       'B07',
       'B08',
+      'B09',
       'B10',
       'B11',
       'B22',
@@ -222,6 +223,12 @@ describe('meitrack command catalog', () => {
   // --- alerts (§3.35, §3.76, §3.60) -------------------------------------------
   it('B07 formats the speeding threshold (§3.35 example: B07,60)', () => {
     expect(build('B07', { speed: 60 })).toEqual({ kind: 'text', text: 'B07,60' });
+  });
+
+  it('B09 sets the vibration sensitivity (Total Command §3.54 example) and rejects 0', () => {
+    expect(build('B09', { sensitivity: 1 })).toEqual({ kind: 'text', text: 'B09,1' });
+    expect(() => build('B09', { sensitivity: 0 })).toThrow(CommandValidationError);
+    expect(() => build('B09', {})).toThrow(CommandValidationError);
   });
 
   it('CB4 sets the impact threshold + duration, reads with no params, rejects half a pair', () => {

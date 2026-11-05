@@ -1,5 +1,5 @@
 /**
- * DeviceParameterAlertsPanel — Parameter → Alerts+ (B07 / B10 / D79 / CB4 / C03).
+ * DeviceParameterAlertsPanel — Parameter → Alerts+ (B07 / B10 / B09 / D79 / CB4 / C03).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -166,6 +166,14 @@ export function DeviceParameterAlertsPanel({
       );
       return;
     }
+    if (err === 'vibrationSensitivity') {
+      toast.error(
+        t('commands.parameter.alerts.vibrationInvalid', {
+          defaultValue: 'Vibration sensitivity must be a whole number from 1 to 65535, or empty.',
+        }),
+      );
+      return;
+    }
     if (err === 'harshAcceleration') {
       toast.error(
         t('commands.parameter.alerts.accelInvalid', {
@@ -248,7 +256,7 @@ export function DeviceParameterAlertsPanel({
       <Alert variant="info">
         {t('commands.parameter.alerts.intro', {
           defaultValue:
-            'On-device Alerts Parameter — speeding (B07), towing (B10), harsh accel/brake (D79), impact detection (CB4), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.',
+            'On-device Alerts Parameter — speeding (B07), towing (B10), vibration sensitivity (B09), harsh accel/brake (D79), impact detection (CB4), GPRS event mode (C03). DMS behaviors stay under AI / C90. Towing needs deep sleep (A73=2) on device.',
         })}
       </Alert>
 
@@ -325,6 +333,24 @@ export function DeviceParameterAlertsPanel({
           max={255}
           value={String(sett.towingIdleMinutes)}
           onChange={(e) => patch({ towingIdleMinutes: Number(e.target.value) || 0 })}
+        />
+        <Input
+          label={t('commands.parameter.alerts.vibration', {
+            defaultValue: 'Vibration sensitivity',
+          })}
+          type="number"
+          min={1}
+          max={65535}
+          value={sett.vibrationSensitivity === null ? '' : String(sett.vibrationSensitivity)}
+          placeholder={t('commands.parameter.alerts.vibrationUnknown', {
+            defaultValue: 'Not set from here (factory default 1)',
+          })}
+          onChange={(e) => patch({ vibrationSensitivity: optionalNumber(e.target.value) })}
+          hint={t('commands.parameter.alerts.vibrationHint', {
+            defaultValue:
+              'B09: drives towing (36) and vibration wake-up. Smaller = more sensitive; higher cuts false towing alerts. Device cannot report it. Empty = left unchanged.',
+          })}
+          data-testid="device-parameter-alerts-vibration"
         />
         <Input
           label={t('commands.parameter.alerts.accel', {
