@@ -40,6 +40,12 @@ export const DEFAULT_STANDING_KMH = 3;
 export const DEFAULT_NO_DATA_GAP_SEC = 300;
 /** A stop outside the origin / destination shorter than this is not reported. */
 export const DEFAULT_MIN_STOP_SEC = 600;
+/**
+ * A gap after an engine-off fix that ends within this distance is parking,
+ * not lost data: MD300 units report rarely with the engine off (median gap
+ * 75 min in the field; 96% of such gaps moved under 50 m).
+ */
+export const PARKED_GAP_MAX_M = 200;
 /** A driver is flagged when a phase averages this much over the fleet median. */
 export const DRIVER_SLOW_RATIO = 1.25;
 /** Services a driver needs before the comparison is meaningful. */
@@ -195,7 +201,7 @@ export function measureTruck(input: MeasureTruckInput): TruckMeasure {
     if (!a || !b) continue;
     const dt = (b.at.getTime() - a.at.getTime()) / 1000;
     if (dt <= 0) continue;
-    if (dt > noDataGapSec) {
+    if (dt > noDataGapSec && !isParkedGap(a, b)) {
       budget.noDataSec += dt;
       flush();
       continue;
@@ -275,10 +281,19 @@ function isLoadedLeg(cycles: readonly HaulCycle[], at: Date): boolean {
 function isStanding(a: TrackSample, b: TrackSample, dt: number, standingKmh: number): boolean {
   if (typeof a.speedKmh === 'number') return a.speedKmh <= standingKmh;
   // No speed on the fix: fall back on how far the next fix is.
+  return (metersBetween(a, b) / dt) * 3.6 <= standingKmh;
+}
+
+/** A long gap that starts with the engine off and ends where it started. */
+function isParkedGap(a: TrackSample, b: TrackSample): boolean {
+  if (a.ignitionOn !== false) return false;
+  return metersBetween(a, b) < PARKED_GAP_MAX_M;
+}
+
+function metersBetween(a: TrackSample, b: TrackSample): number {
   const dLat = (b.lat - a.lat) * 111_320;
   const dLng = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
-  const meters = Math.hypot(dLat, dLng);
-  return (meters / dt) * 3.6 <= standingKmh;
+  return Math.hypot(dLat, dLng);
 }
 
 function secondsBetween(a: Date, b: Date): number {
