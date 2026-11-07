@@ -107,7 +107,7 @@ function rewriteRtmpUrl(url: string, host: string, port: number, streamPath?: st
  */
 const MDVR_STREAM_ID_DIGITS = 4;
 
-function mdvrChannelStreamPath(
+export function mdvrChannelStreamPath(
   base: string,
   channel: unknown,
   kind: 'live' | 'playback' = 'live',

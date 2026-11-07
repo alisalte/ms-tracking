@@ -3,9 +3,14 @@
  *
  *   trigger (ignition on / MDVR connect / operator)
  *     → PENDING      wait `delaySeconds` so the driver is seated
- *     → CAPTURING    D03 on the cabin camera, file name chosen by us
- *     → DOWNLOADING  D00 of that file (CommandAckConsumer stores the JPEG on the command)
+ *     → CAPTURING    AB2 starts the cabin camera's live stream (unless it is
+ *                    already live); face-service grabs one frame from MediaMTX;
+ *                    AB3 stops the stream again if we started it
  *     → READY        photo stored; face-service embeds it
+ *
+ * The MD300 answers the D03/D00 photo commands with `FFFE` (not supported), so
+ * the snapshot is a frame of the live stream instead. `file_name` holds the
+ * MediaMTX stream path the frame came from.
  *     → matched      AUTO when the face clearly matches one driver's confirmed photos
  *
  * Operators file photos by hand (CONFIRMED); every confirmed photo with a face
@@ -23,11 +28,10 @@ import {
   type DriverMatchStatus,
   type DriverPhotoTrigger,
   MAX_DRIVER_PHOTO_ATTEMPTS,
-  driverPhotoFileName,
   matchFace,
   retryDelaySeconds,
 } from '../domain/driver-photo.js';
-import type { FaceEmbedder } from '../infrastructure/face/face-client.js';
+import type { FaceEmbedder, FrameGrabber } from '../infrastructure/face/face-client.js';
 import type { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
 import type { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import type {
@@ -36,7 +40,7 @@ import type {
   DriverPhotoRepository,
   DriverPhotoView,
 } from '../infrastructure/persistence/driver-photo.repository.js';
-import type { DeviceCommandService } from './device-command.service.js';
+import { type DeviceCommandService, mdvrChannelStreamPath } from './device-command.service.js';
 import type { ActorContext } from './service-context.js';
 
 export interface DriverPhotoOptions {
@@ -49,20 +53,24 @@ export interface DriverPhotoOptions {
   readonly batchSize: number;
   readonly matchThreshold: number;
   readonly matchMargin: number;
+  /** md300 RTMP stream base (`MDVR_RTMP_PATH`, e.g. `live/md300`). */
+  readonly rtmpPath: string;
+  /** MediaMTX RTSP base the frame is read from (e.g. `rtsp://mediamtx:8554`). */
+  readonly rtspBaseUrl: string;
 }
 
-/** Wait after D03 is acknowledged before downloading (the unit may still be writing). */
-const CAPTURE_SETTLE_MS = 3_000;
-/** Poll interval while a D03/D00 command is still in flight. */
-const COMMAND_POLL_SECONDS = 5;
+/** Poll interval while AB2 is in flight or the stream is still coming up. */
+const COMMAND_POLL_SECONDS = 3;
+/** After AB2,OK the unit needs a few seconds to dial RTMP, and MediaMTX to transcode. */
+const STREAM_START_TIMEOUT_MS = 45_000;
 /** Retry interval when face-service is unreachable. */
 const FACE_RETRY_SECONDS = 60;
 /** Unfiled photos this recent are re-matched when a new reference is confirmed. */
 const REMATCH_WINDOW_DAYS = 30;
 const REMATCH_LIMIT = 500;
 
-const D03_TTL_SECONDS = 90;
-const D00_TTL_SECONDS = 180;
+const AB2_TTL_SECONDS = 90;
+const AB3_TTL_SECONDS = 60;
 
 function systemActor(tenantId: string): ActorContext {
   return {
@@ -79,17 +87,6 @@ function inSeconds(s: number): Date {
   return new Date(Date.now() + s * 1000);
 }
 
-function photoFromAck(responseText: string | null): Buffer | null {
-  if (!responseText) return null;
-  try {
-    const parsed = JSON.parse(responseText) as { photoBase64?: unknown };
-    if (typeof parsed.photoBase64 !== 'string' || parsed.photoBase64.length === 0) return null;
-    return Buffer.from(parsed.photoBase64, 'base64');
-  } catch {
-    return null;
-  }
-}
-
 export class DriverPhotoService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(DriverPhotoService.name);
   private timer: NodeJS.Timeout | null = null;
@@ -101,6 +98,7 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
     private readonly commandRepo: DeviceCommandRepository,
     private readonly commands: DeviceCommandService,
     private readonly face: FaceEmbedder | null,
+    private readonly frames: FrameGrabber | null,
     private readonly options: DriverPhotoOptions,
   ) {}
 
@@ -185,7 +183,8 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
       case 'CAPTURING':
         return this.followCapture(job);
       case 'DOWNLOADING':
-        return this.followDownload(job);
+        // Left over from the old D03 → D00 flow: start over with the live stream.
+        return this.startCapture(job);
       case 'READY':
         return this.recognise(job);
       default:
@@ -194,15 +193,35 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
   }
 
   private async startCapture(job: DriverPhotoJob): Promise<void> {
-    const fileName = driverPhotoFileName(job.id);
+    if (!this.frames) return this.retryOrFail(job, 'face-service is not configured');
+    const device = await this.devices.findById(job.tenantId, job.deviceId);
+    if (!device) return this.retryOrFail(job, 'Device not found');
+    const streamPath = mdvrChannelStreamPath(
+      this.options.rtmpPath,
+      job.camera,
+      'live',
+      device.imei,
+    );
+
+    // An operator may already be watching this camera: take the frame and
+    // leave their stream alone (no AB2, no AB3).
+    const live = await this.frames.grab(this.webStreamUrl(streamPath));
+    if (live) return this.storeFrame(job, live, streamPath, false);
+
     const record = await this.commands.create(systemActor(job.tenantId), job.deviceId, {
-      commandCode: 'D03',
-      params: { camera: job.camera, imagename: fileName },
-      ttlSec: D03_TTL_SECONDS,
+      commandCode: 'AB2',
+      params: {
+        channel: job.camera,
+        dataType: '0',
+        streamType: '0',
+        // DeviceCommandService pins host, port and per-device stream name.
+        uploadUrl: `rtmp://127.0.0.1:1935/${streamPath}`,
+      },
+      ttlSec: AB2_TTL_SECONDS,
     });
     await this.photos.patch(job.tenantId, job.id, {
       status: 'CAPTURING',
-      fileName,
+      fileName: streamPath,
       captureCommandId: record.id,
       downloadCommandId: null,
       error: null,
@@ -215,6 +234,10 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
       ? await this.commandRepo.findById(job.tenantId, job.captureCommandId)
       : null;
     if (!cmd) return this.retryOrFail(job, 'Capture command missing');
+    if (cmd.command_code !== 'AB2' || !job.fileName || !this.frames) {
+      // A D03 from the old flow: start over with the live stream.
+      return this.startCapture(job);
+    }
     if (cmd.status === 'QUEUED' || cmd.status === 'SENT') {
       await this.photos.patch(job.tenantId, job.id, {
         nextCheckAt: inSeconds(COMMAND_POLL_SECONDS),
@@ -222,52 +245,59 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
       return;
     }
     if (cmd.status !== 'ACKED') {
-      return this.retryOrFail(job, `D03 ${cmd.status}: ${cmd.error ?? cmd.response_text ?? ''}`);
+      return this.retryOrFail(job, `AB2 ${cmd.status}: ${cmd.error ?? cmd.response_text ?? ''}`);
     }
+    const frame = await this.frames.grab(this.webStreamUrl(job.fileName));
+    if (frame) return this.storeFrame(job, frame, job.fileName, true);
     const ackedAt = cmd.acked_at ? new Date(cmd.acked_at).getTime() : 0;
-    if (Date.now() - ackedAt < CAPTURE_SETTLE_MS) {
+    if (Date.now() - ackedAt < STREAM_START_TIMEOUT_MS) {
       await this.photos.patch(job.tenantId, job.id, {
-        nextCheckAt: inSeconds(CAPTURE_SETTLE_MS / 1000),
+        nextCheckAt: inSeconds(COMMAND_POLL_SECONDS),
       });
       return;
     }
-    const record = await this.commands.create(systemActor(job.tenantId), job.deviceId, {
-      commandCode: 'D00',
-      params: { filename: job.fileName ?? driverPhotoFileName(job.id) },
-      ttlSec: D00_TTL_SECONDS,
-    });
-    await this.photos.patch(job.tenantId, job.id, {
-      status: 'DOWNLOADING',
-      downloadCommandId: record.id,
-      nextCheckAt: inSeconds(COMMAND_POLL_SECONDS),
-    });
+    await this.stopStream(job);
+    return this.retryOrFail(job, 'Live stream did not start after AB2,OK');
   }
 
-  private async followDownload(job: DriverPhotoJob): Promise<void> {
-    const cmd = job.downloadCommandId
-      ? await this.commandRepo.findById(job.tenantId, job.downloadCommandId)
-      : null;
-    if (!cmd) return this.retryOrFail(job, 'Download command missing');
-    if (cmd.status === 'QUEUED' || cmd.status === 'SENT') {
-      await this.photos.patch(job.tenantId, job.id, {
-        nextCheckAt: inSeconds(COMMAND_POLL_SECONDS),
-      });
-      return;
-    }
-    if (cmd.status !== 'ACKED') {
-      return this.retryOrFail(job, `D00 ${cmd.status}: ${cmd.error ?? cmd.response_text ?? ''}`);
-    }
-    const photo = photoFromAck(cmd.response_text);
-    if (!photo) return this.retryOrFail(job, 'D00 returned no image');
+  private async storeFrame(
+    job: DriverPhotoJob,
+    photo: Buffer,
+    streamPath: string,
+    startedByUs: boolean,
+  ): Promise<void> {
+    const stopId = startedByUs ? await this.stopStream(job) : null;
     await this.photos.patch(job.tenantId, job.id, {
       status: 'READY',
+      fileName: streamPath,
       photo,
-      capturedAt: cmd.acked_at ? new Date(cmd.acked_at) : new Date(),
+      capturedAt: new Date(),
+      downloadCommandId: stopId,
       faceStatus: 'PENDING',
       error: null,
       nextCheckAt: new Date(),
     });
-    this.logger.log(`Driver photo ${job.id} captured (${photo.length} bytes).`);
+    this.logger.log(`Driver photo ${job.id} captured from ${streamPath} (${photo.length} bytes).`);
+  }
+
+  /** AB3 for the stream this job started. Best effort: returns the command id or null. */
+  private async stopStream(job: DriverPhotoJob): Promise<string | null> {
+    try {
+      const record = await this.commands.create(systemActor(job.tenantId), job.deviceId, {
+        commandCode: 'AB3',
+        params: { channel: job.camera, control: '0', closeType: '0', switchType: '0' },
+        ttlSec: AB3_TTL_SECONDS,
+      });
+      return record.id;
+    } catch (err) {
+      this.logger.warn(`Driver photo ${job.id}: AB3 failed: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
+  /** MediaMTX republishes every camera as `<path>_web` (H.264) — the reliable one to decode. */
+  private webStreamUrl(streamPath: string): string {
+    return `${this.options.rtspBaseUrl.replace(/\/+$/, '')}/${streamPath}_web`;
   }
 
   private async retryOrFail(job: DriverPhotoJob, reason: string): Promise<void> {

@@ -3,13 +3,8 @@ import {
   type DriverPhotoOptions,
   DriverPhotoService,
 } from '../application/driver-photo.service.js';
-import {
-  type FaceReference,
-  cosineSimilarity,
-  driverPhotoFileName,
-  matchFace,
-} from '../domain/driver-photo.js';
-import type { FaceEmbedder } from '../infrastructure/face/face-client.js';
+import { type FaceReference, cosineSimilarity, matchFace } from '../domain/driver-photo.js';
+import type { FaceEmbedder, FrameGrabber } from '../infrastructure/face/face-client.js';
 import { IgnitionEdgeTracker } from '../infrastructure/kafka/ignition-trigger-consumer.js';
 import type { DriverPhotoJob } from '../infrastructure/persistence/driver-photo.repository.js';
 
@@ -77,12 +72,6 @@ describe('matchFace', () => {
     expect(cosineSimilarity([3, 4], [3, 4])).toBeCloseTo(1, 10);
     expect(cosineSimilarity([1, 0], [0, 1])).toBe(0);
   });
-
-  it('builds a short file name the unit accepts', () => {
-    const name = driverPhotoFileName('0a1b2c3d-4e5f-6789-abcd-ef0123456789');
-    expect(name).toBe('drv_0a1b2c3d4e5f6789.jpg');
-    expect(name.length).toBeLessThanOrEqual(60);
-  });
 });
 
 describe('IgnitionEdgeTracker', () => {
@@ -115,7 +104,9 @@ describe('IgnitionEdgeTracker', () => {
 
 type Patch = Record<string, unknown>;
 
-function makeHarness(opts: { face?: FaceEmbedder | null; refs?: FaceReference[] } = {}) {
+function makeHarness(
+  opts: { face?: FaceEmbedder | null; refs?: FaceReference[]; liveStreams?: Set<string> } = {},
+) {
   const job: { current: DriverPhotoJob } = {
     current: {
       id: '0a1b2c3d-4e5f-6789-abcd-ef0123456789',
@@ -137,6 +128,15 @@ function makeHarness(opts: { face?: FaceEmbedder | null; refs?: FaceReference[] 
   const autoMatches: Array<{ driverId: string; score: number }> = [];
   const requests: Array<Record<string, unknown>> = [];
   const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  /** RTSP URLs face-service can currently read a frame from. */
+  const liveStreams = opts.liveStreams ?? new Set<string>();
+  const grabbed: string[] = [];
+  const frames: FrameGrabber = {
+    grab: async (url) => {
+      grabbed.push(url);
+      return liveStreams.has(url) ? jpeg : null;
+    },
+  };
 
   const photos = {
     claimDue: async () => [job.current],
@@ -172,7 +172,12 @@ function makeHarness(opts: { face?: FaceEmbedder | null; refs?: FaceReference[] 
     },
   };
   const devices = {
-    findById: async () => ({ id: DEVICE, status: 'ACTIVE', protocol: 'meitrack' }),
+    findById: async () => ({
+      id: DEVICE,
+      imei: '867191086416848',
+      status: 'ACTIVE',
+      protocol: 'meitrack',
+    }),
   };
   const commandRepo = {
     findById: async (_t: string, id: string) => commandRows.get(id) ?? null,
@@ -189,6 +194,7 @@ function makeHarness(opts: { face?: FaceEmbedder | null; refs?: FaceReference[] 
       created.push({ code: input.commandCode, params: input.params });
       commandRows.set(id, {
         id,
+        command_code: input.commandCode,
         status: 'QUEUED',
         response_text: null,
         error: null,
@@ -207,6 +213,8 @@ function makeHarness(opts: { face?: FaceEmbedder | null; refs?: FaceReference[] 
     batchSize: 10,
     matchThreshold: 0.4,
     matchMargin: 0.05,
+    rtmpPath: 'live/md300',
+    rtspBaseUrl: 'rtsp://mediamtx:8554',
   };
   const service = new DriverPhotoService(
     photos as never,
@@ -214,57 +222,98 @@ function makeHarness(opts: { face?: FaceEmbedder | null; refs?: FaceReference[] 
     commandRepo as never,
     commands as never,
     opts.face === undefined ? null : opts.face,
+    frames,
     options,
   );
-  return { service, job, patches, created, commandRows, autoMatches, requests, jpeg };
+  return {
+    service,
+    job,
+    patches,
+    created,
+    commandRows,
+    autoMatches,
+    requests,
+    jpeg,
+    liveStreams,
+    grabbed,
+  };
 }
 
 describe('DriverPhotoService capture flow', () => {
-  it('runs D03 → D00 → READY and stores the JPEG', async () => {
+  const CAB_WEB = 'rtsp://mediamtx:8554/live/md300_6848_2_web';
+
+  function ack(h: ReturnType<typeof makeHarness>, id: string, msAgo = 0): void {
+    const row = h.commandRows.get(id) ?? {};
+    h.commandRows.set(id, {
+      ...row,
+      status: 'ACKED',
+      response_text: `${String(row.command_code)},OK`,
+      acked_at: new Date(Date.now() - msAgo),
+    });
+  }
+
+  it('starts the cabin stream, grabs a frame, then stops the stream', async () => {
     const h = makeHarness();
     await h.service.tick();
     expect(h.created[0]).toEqual({
-      code: 'D03',
-      params: { camera: 2, imagename: 'drv_0a1b2c3d4e5f6789.jpg' },
+      code: 'AB2',
+      params: {
+        channel: 2,
+        dataType: '0',
+        streamType: '0',
+        uploadUrl: 'rtmp://127.0.0.1:1935/live/md300_6848_2',
+      },
     });
     expect(h.job.current.status).toBe('CAPTURING');
+    expect(h.job.current.fileName).toBe('live/md300_6848_2');
 
-    // Still in flight → just waits.
+    // AB2 still in flight → just waits.
     await h.service.tick();
     expect(h.created).toHaveLength(1);
 
-    h.commandRows.set('cmd-1', {
-      id: 'cmd-1',
-      status: 'ACKED',
-      response_text: 'D03,OK',
-      acked_at: new Date(Date.now() - 10_000),
-    });
+    // AB2,OK but the unit has not dialled RTMP yet → keeps polling.
+    ack(h, 'cmd-1');
     await h.service.tick();
-    expect(h.created[1]).toEqual({
-      code: 'D00',
-      params: { filename: 'drv_0a1b2c3d4e5f6789.jpg' },
-    });
-    expect(h.job.current.status).toBe('DOWNLOADING');
+    expect(h.job.current.status).toBe('CAPTURING');
+    expect(h.created).toHaveLength(1);
 
-    h.commandRows.set('cmd-2', {
-      id: 'cmd-2',
-      status: 'ACKED',
-      response_text: JSON.stringify({ photoBase64: h.jpeg.toString('base64') }),
-      acked_at: new Date(),
-    });
+    h.liveStreams.add(CAB_WEB);
     await h.service.tick();
     expect(h.job.current.status).toBe('READY');
+    expect(h.created[1]).toEqual({
+      code: 'AB3',
+      params: { channel: 2, control: '0', closeType: '0', switchType: '0' },
+    });
     const ready = h.patches.find((p) => p.status === 'READY');
     expect(Buffer.isBuffer(ready?.photo)).toBe(true);
     expect(ready?.faceStatus).toBe('PENDING');
+    expect(h.grabbed.every((u) => u === CAB_WEB)).toBe(true);
+  });
+
+  it('uses a stream an operator is already watching without AB2 or AB3', async () => {
+    const h = makeHarness({ liveStreams: new Set([CAB_WEB]) });
+    await h.service.tick();
+    expect(h.job.current.status).toBe('READY');
+    expect(h.created).toHaveLength(0);
+  });
+
+  it('stops the stream and retries when it never comes up', async () => {
+    const h = makeHarness();
+    await h.service.tick(); // AB2
+    ack(h, 'cmd-1', 60_000);
+    await h.service.tick();
+    expect(h.created.map((c) => c.code)).toEqual(['AB2', 'AB3']);
+    expect(h.job.current.status).toBe('PENDING');
+    expect(h.job.current.attempts).toBe(1);
   });
 
   it('retries a failed capture, then gives up', async () => {
     const h = makeHarness();
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await h.service.tick(); // D03 issued
+      await h.service.tick(); // AB2 issued
       h.commandRows.set(`cmd-${attempt}`, {
         id: `cmd-${attempt}`,
+        command_code: 'AB2',
         status: 'EXPIRED',
         error: 'TTL_EXPIRED',
         response_text: null,
@@ -274,6 +323,20 @@ describe('DriverPhotoService capture flow', () => {
     }
     expect(h.job.current.status).toBe('FAILED');
     expect(h.job.current.attempts).toBe(3);
+  });
+
+  it('restarts a job left on a D03 from the old flow', async () => {
+    const h = makeHarness();
+    h.commandRows.set('old', { id: 'old', command_code: 'D03', status: 'FAILED' });
+    h.job.current = {
+      ...h.job.current,
+      status: 'CAPTURING',
+      captureCommandId: 'old',
+      fileName: 'drv_x.jpg',
+    };
+    await h.service.tick();
+    expect(h.created[0]?.code).toBe('AB2');
+    expect(h.job.current.attempts).toBe(0);
   });
 
   it('matches a found face against confirmed photos', async () => {
