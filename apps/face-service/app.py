@@ -38,6 +38,10 @@ DETECTOR_PATH = os.path.join(MODEL_DIR, "face_detection_yunet_2023mar.onnx")
 RECOGNIZER_PATH = os.path.join(MODEL_DIR, "face_recognition_sface_2021dec.onnx")
 # Faces below this detector confidence are ignored (YuNet scores 0..1).
 MIN_DETECTION_SCORE = float(os.environ.get("FACE_MIN_DETECTION_SCORE", "0.6"))
+# The contrast-enhanced retry also lifts cabin clutter (wiring, seat patterns)
+# into face-like shapes: an empty cabin scored 0.63 there. Faces found only
+# after enhancement must clear this stricter bar.
+MIN_ENHANCED_SCORE = float(os.environ.get("FACE_MIN_ENHANCED_SCORE", "0.8"))
 # Faces smaller than this (pixels, shorter box side) are too small to recognise.
 MIN_FACE_PX = int(os.environ.get("FACE_MIN_FACE_PX", "40"))
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -93,11 +97,11 @@ def enhance(img: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(clahe.apply(gray), cv2.COLOR_GRAY2BGR)
 
 
-def best_face(faces: np.ndarray | None) -> np.ndarray | None:
+def best_face(faces: np.ndarray | None, min_score: float = MIN_DETECTION_SCORE) -> np.ndarray | None:
     """The largest usable face — the driver sits closest to the cabin camera."""
     if faces is None or len(faces) == 0:
         return None
-    usable = [f for f in faces if min(f[2], f[3]) >= MIN_FACE_PX]
+    usable = [f for f in faces if min(f[2], f[3]) >= MIN_FACE_PX and f[14] >= min_score]
     if not usable:
         return None
     return max(usable, key=lambda f: float(f[2] * f[3]))
@@ -115,7 +119,7 @@ def embed(req: EmbedRequest) -> dict:
     face = best_face(detect(img))
     if face is None:
         source = enhance(img)
-        face = best_face(detect(source))
+        face = best_face(detect(source), MIN_ENHANCED_SCORE)
     if face is None:
         return {"face": None, "embedding": None}
     aligned = recognizer.alignCrop(source, face)
