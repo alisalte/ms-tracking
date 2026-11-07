@@ -9,6 +9,7 @@
  * start, local time), so a night shift that runs past midnight is not split.
  */
 import type { Knex } from '@fleetvision/persistence-knex';
+import { Logger } from '@nestjs/common';
 import { type CsvLocale, localizeCsvHeader } from '../domain/csv-locale.js';
 import { type CsvValue, csvDocument } from '../domain/csv.js';
 import {
@@ -20,6 +21,7 @@ import {
 } from '../domain/haul-analysis.js';
 import {
   type DriverContext,
+  type DriverIdentification,
   type DriverInterval,
   type HaulCycle,
   type OpenHaul,
@@ -146,6 +148,13 @@ export interface HaulAnalysisInput extends ReportQueryBase {
   stopMin?: string;
 }
 
+interface IdentificationRow {
+  vehicle_id: string;
+  driver_id: string;
+  driver_name: string;
+  seen_at: Date | string;
+}
+
 interface DriverRow {
   vehicle_id: string;
   driver_id: string;
@@ -207,6 +216,7 @@ interface HaulSetup {
   readonly destination: Zone;
   readonly drivers: DriverInterval[];
   readonly rosters: ReadonlyMap<string, ReadonlyArray<RosterDriver | null>>;
+  readonly identified: DriverIdentification[];
   readonly trucks: string[];
   readonly shovels: string[];
   readonly shovelTracks: ReadonlyMap<string, readonly TrackSample[]>;
@@ -261,6 +271,8 @@ function parseOption<T extends string>(
 }
 
 export class OperationsReportService {
+  private readonly logger = new Logger('OperationsReportService');
+
   constructor(
     private readonly knex: Knex,
     private readonly queryTimeoutMs: number,
@@ -620,6 +632,7 @@ export class OperationsReportService {
       ...new Set(members.map((row) => row.vehicle_id).filter((id): id is string => Boolean(id))),
     ];
     const drivers = await this.loadDrivers(tenantId, vehicleIds, window);
+    const identified = await this.loadIdentifications(tenantId, vehicleIds, window);
     const rosterIds = [
       ...new Set(members.flatMap((row) => parseUuidArray(row.shift_drivers)).filter(Boolean)),
     ] as string[];
@@ -671,6 +684,7 @@ export class OperationsReportService {
       destination,
       drivers,
       rosters,
+      identified,
       trucks,
       shovels,
       shovelTracks: tracks,
@@ -686,6 +700,7 @@ export class OperationsReportService {
     return {
       drivers,
       rosters: setup.rosters,
+      identified: setup.identified,
       shiftStartHour: routeStartHour(setup.route),
       shiftDurationHours: routeDurationHours(setup.route),
       shiftCount: setup.shiftCount,
@@ -1155,6 +1170,46 @@ export class OperationsReportService {
       endedAt: row.ended_at ? asDate(row.ended_at) : null,
       shiftNo: row.shift_no ?? null,
     }));
+  }
+
+  /**
+   * Drivers recognised in cabin photos (fleet.driver_photos, owned by
+   * fleet-management). A photo taken up to a day before the window can still
+   * name the driver of a shift that runs into it.
+   */
+  private async loadIdentifications(
+    tenantId: string,
+    vehicleIds: readonly string[],
+    window: ReportWindow,
+  ): Promise<DriverIdentification[]> {
+    if (vehicleIds.length === 0) return [];
+    try {
+      const { rows } = await this.query<{ rows: IdentificationRow[] }>((trx) =>
+        trx.raw(
+          `SELECT p.vehicle_id, p.driver_id, COALESCE(p.captured_at, p.triggered_at) AS seen_at,
+                  BTRIM(d.first_name || ' ' || d.last_name) AS driver_name
+             FROM fleet.driver_photos p
+             JOIN fleet.drivers d ON d.id = p.driver_id AND d.tenant_id = p.tenant_id
+            WHERE p.tenant_id = ?::uuid
+              AND p.vehicle_id = ANY(?::uuid[])
+              AND p.status = 'READY'
+              AND p.match_status IN ('AUTO', 'CONFIRMED')
+              AND COALESCE(p.captured_at, p.triggered_at) >= ?::timestamptz - interval '1 day'
+              AND COALESCE(p.captured_at, p.triggered_at) < ?`,
+          [tenantId, vehicleIds, window.from, window.to],
+        ),
+      );
+      return rows.map((row) => ({
+        vehicleId: row.vehicle_id,
+        driverId: row.driver_id,
+        driverName: row.driver_name,
+        at: asDate(row.seen_at),
+      }));
+    } catch (err) {
+      // fleet-management may not have created the table yet (staggered deploy).
+      this.logger.warn(`Driver photo identifications unavailable: ${(err as Error).message}`);
+      return [];
+    }
   }
 
   private async loadDriverNames(

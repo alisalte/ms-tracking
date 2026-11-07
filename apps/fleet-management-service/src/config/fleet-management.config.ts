@@ -18,6 +18,12 @@ import { z } from 'zod';
  * (connected_at / last_seen_at / disconnected_at). It is non-fatal at boot
  * (mirrors the gps-engine consumer): the REST API serves even when Kafka is down.
  */
+
+/** `true`/`false`/`1`/`0` env flag → boolean (z.coerce.boolean treats "false" as true). */
+const booleanFlag = z
+  .enum(['true', 'false', '1', '0', 'TRUE', 'FALSE'])
+  .transform((v) => v === 'true' || v === '1' || v === 'TRUE');
+
 export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSchema).merge(
   z.object({
     /** Override the base default (3000) — fleet-management listens on 3006. */
@@ -96,6 +102,29 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
       .int()
       .min(1024)
       .default(5 * 1024 * 1024),
+
+    // --- Driver photos: cabin snapshot on ignition-on → driver of the shift. ---
+    /** Master switch for automatic cabin snapshots. */
+    FLEET_DRIVER_PHOTO_ENABLED: booleanFlag.default('true'),
+    /** Also take a snapshot when an MDVR connects (units that power up with the ignition). */
+    FLEET_DRIVER_PHOTO_ON_CONNECT: booleanFlag.default('true'),
+    /** Cabin (DMS) camera channel the snapshot is taken from. */
+    FLEET_DRIVER_PHOTO_CAMERA: z.coerce.number().int().min(1).max(8).default(2),
+    /** Seconds after ignition-on before the snapshot, so the driver is seated. */
+    FLEET_DRIVER_PHOTO_DELAY_S: z.coerce.number().int().min(0).max(1800).default(45),
+    /** At most one automatic snapshot per device in this many minutes. */
+    FLEET_DRIVER_PHOTO_COOLDOWN_MIN: z.coerce.number().int().min(0).max(1440).default(30),
+    /** Worker poll interval (ms). 0 disables the worker. */
+    FLEET_DRIVER_PHOTO_WORKER_INTERVAL_MS: z.coerce.number().int().min(0).default(5_000),
+    FLEET_DRIVER_PHOTO_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+    /** Raw position topic watched for ignition OFF → ON. */
+    FLEET_KAFKA_POSITION_TOPIC: z.string().min(1).default('fleetvision.telemetry.position.raw'),
+    /** face-service base URL (apps/face-service). Empty = photos are only filed by hand. */
+    FLEET_FACE_SERVICE_URL: z.string().default(''),
+    /** Minimum cosine similarity to a driver's confirmed photos for an automatic match. */
+    FLEET_FACE_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.4),
+    /** Minimum lead of the best driver over the runner-up. */
+    FLEET_FACE_MATCH_MARGIN: z.coerce.number().min(0).max(1).default(0.05),
   }),
 );
 

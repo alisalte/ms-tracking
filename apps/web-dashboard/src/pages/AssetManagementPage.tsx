@@ -30,6 +30,7 @@ import { AssetDetailDrawers } from '@/components/assets/AssetDetailDrawers';
 import { AssetFormDrawer, type AssetRecord } from '@/components/assets/AssetFormDrawer';
 import { AssetImportDialog } from '@/components/assets/AssetImportDialog';
 import { DevicesTab } from '@/components/assets/DevicesTab';
+import { DriverPhotosPanel } from '@/components/assets/DriverPhotosPanel';
 import { DriverRankingPanel } from '@/components/assets/DriverRankingPanel';
 import { DriversTab } from '@/components/assets/DriversTab';
 import { FleetsTab } from '@/components/assets/FleetsTab';
@@ -98,6 +99,9 @@ function confirmCopy(tab: AssetTab): {
   };
 }
 
+/** Drivers tab sub-views: registry table, safety ranking, cabin photos. */
+type DriversView = 'registry' | 'ranking' | 'photos';
+
 /** Clamp the tab from URL params to a valid tab (default: vehicles). */
 function readTab(value: string | null): AssetTab {
   return (TABS as readonly string[]).includes(value ?? '') ? (value as AssetTab) : 'vehicles';
@@ -109,7 +113,9 @@ export function AssetManagementPage() {
   const [params, setParams] = useSearchParams();
 
   const tab = readTab(params.get('tab'));
-  const driversView = params.get('view') === 'ranking' ? 'ranking' : 'registry';
+  const viewParam = params.get('view');
+  const driversView: DriversView =
+    viewParam === 'ranking' || viewParam === 'photos' ? viewParam : 'registry';
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Per-tab filter state (kept here so switching tabs preserves filters).
@@ -172,10 +178,10 @@ export function AssetManagementPage() {
     setImportOpen(false);
   };
 
-  const setDriversView = (next: 'registry' | 'ranking') => {
+  const setDriversView = (next: DriversView) => {
     const p = new URLSearchParams(params);
     p.set('tab', 'drivers');
-    if (next === 'ranking') p.set('view', 'ranking');
+    if (next !== 'registry') p.set('view', next);
     else p.delete('view');
     setParams(p, { replace: true });
   };
@@ -364,8 +370,18 @@ export function AssetManagementPage() {
                   >
                     {t('assets.driver.viewRanking')}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={driversView === 'photos' ? 'primary' : 'outline'}
+                    onClick={() => setDriversView('photos')}
+                    type="button"
+                  >
+                    {t('assets.driver.viewPhotos')}
+                  </Button>
                 </div>
-                {driversView === 'ranking' ? (
+                {driversView === 'photos' ? (
+                  <DriverPhotosPanel drivers={drivers} devices={devices} />
+                ) : driversView === 'ranking' ? (
                   <DriverRankingPanel
                     selectedId={selectedId}
                     onSelect={setSelectedId}

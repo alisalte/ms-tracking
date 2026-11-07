@@ -13,6 +13,7 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { BindingService } from '../application/binding.service.js';
 import { DeviceCommandService } from '../application/device-command.service.js';
 import { DeviceService } from '../application/device.service.js';
+import { DriverPhotoService } from '../application/driver-photo.service.js';
 import { EvidenceCaptureWorker } from '../application/evidence-capture.worker.js';
 import { FleetService } from '../application/fleet.service.js';
 import { FtpPhotoReceiver } from '../application/ftp-photo-receiver.js';
@@ -22,8 +23,10 @@ import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
 import type { FleetManagementConfig } from '../config/fleet-management.config.js';
 import { RegistryInvalidationPublisher } from '../infrastructure/cache/registry-invalidation-publisher.js';
+import { HttpFaceClient } from '../infrastructure/face/face-client.js';
 import { CommandAckConsumer } from '../infrastructure/kafka/command-ack-consumer.js';
 import { CommandRequestProducer } from '../infrastructure/kafka/command-request-producer.js';
+import { IgnitionTriggerConsumer } from '../infrastructure/kafka/ignition-trigger-consumer.js';
 import { SessionLifecycleConsumer } from '../infrastructure/kafka/session-lifecycle-consumer.js';
 import { resolveMdvrPublicHost } from '../infrastructure/mdvr-public-host.js';
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
@@ -31,6 +34,7 @@ import { BindingRepository } from '../infrastructure/persistence/binding.reposit
 import { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
 import { DeviceInboxRepository } from '../infrastructure/persistence/device-inbox.repository.js';
 import { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
+import { DriverPhotoRepository } from '../infrastructure/persistence/driver-photo.repository.js';
 import { EvidenceCaptureRepository } from '../infrastructure/persistence/evidence-capture.repository.js';
 import { FleetRepository } from '../infrastructure/persistence/fleet.repository.js';
 import { VehicleRepository } from '../infrastructure/persistence/vehicle.repository.js';
@@ -40,6 +44,7 @@ import {
 } from './device-commands.controller.js';
 import { DeviceFtpPhotoController } from './device-ftp-photo.controller.js';
 import { DevicesController } from './devices.controller.js';
+import { DriverPhotosController } from './driver-photos.controller.js';
 import { FleetsController } from './fleets.controller.js';
 import { HaulRoutesController } from './haul-routes.controller.js';
 import {
@@ -55,12 +60,14 @@ import {
   DEVICE_COMMAND_SERVICE,
   DEVICE_REPOSITORY,
   DEVICE_SERVICE,
+  DRIVER_PHOTO_SERVICE,
   EVIDENCE_CAPTURE_REPOSITORY,
   EVIDENCE_CAPTURE_WORKER,
   FLEET_MANAGEMENT_CONFIG,
   FLEET_SERVICE,
   FTP_PHOTO_RECEIVER,
   HAUL_ROUTE_SERVICE,
+  IGNITION_TRIGGER_CONSUMER,
   PLATFORM_TENANT_ASSETS_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
   SUMMARY_SERVICE,
@@ -278,16 +285,71 @@ export class FleetManagementModule {
             return service;
           },
         },
+        // Driver photos: cabin snapshot on ignition-on / MDVR connect → driver
+        // of the shift (D03 → D00 → face-service → match).
+        {
+          provide: DriverPhotoRepository,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) => new DriverPhotoRepository(knex as never),
+        },
+        {
+          provide: DRIVER_PHOTO_SERVICE,
+          inject: [
+            DriverPhotoRepository,
+            DEVICE_REPOSITORY,
+            DEVICE_COMMAND_REPOSITORY,
+            DEVICE_COMMAND_SERVICE,
+            FLEET_MANAGEMENT_CONFIG,
+          ],
+          useFactory: (
+            photos: DriverPhotoRepository,
+            devices: DeviceRepository,
+            commandRepo: DeviceCommandRepository,
+            commands: DeviceCommandService,
+            cfg: FleetManagementConfig,
+          ) =>
+            new DriverPhotoService(
+              photos,
+              devices,
+              commandRepo,
+              commands,
+              cfg.FLEET_FACE_SERVICE_URL ? new HttpFaceClient(cfg.FLEET_FACE_SERVICE_URL) : null,
+              {
+                enabled: cfg.FLEET_DRIVER_PHOTO_ENABLED,
+                captureOnConnect: cfg.FLEET_DRIVER_PHOTO_ON_CONNECT,
+                camera: cfg.FLEET_DRIVER_PHOTO_CAMERA,
+                delaySeconds: cfg.FLEET_DRIVER_PHOTO_DELAY_S,
+                cooldownMinutes: cfg.FLEET_DRIVER_PHOTO_COOLDOWN_MIN,
+                workerIntervalMs: cfg.FLEET_DRIVER_PHOTO_WORKER_INTERVAL_MS,
+                batchSize: cfg.FLEET_DRIVER_PHOTO_BATCH_SIZE,
+                matchThreshold: cfg.FLEET_FACE_MATCH_THRESHOLD,
+                matchMargin: cfg.FLEET_FACE_MATCH_MARGIN,
+              },
+            ),
+        },
+        {
+          provide: IGNITION_TRIGGER_CONSUMER,
+          inject: [FLEET_MANAGEMENT_CONFIG, DRIVER_PHOTO_SERVICE],
+          useFactory: (cfg: FleetManagementConfig, photos: DriverPhotoService) =>
+            new IgnitionTriggerConsumer(cfg, photos),
+        },
         // Kafka session-lifecycle consumer — after commands so AUTHENTICATED
-        // can auto-send AB2 (md300-main live.js onGPRSFrame).
+        // can auto-send AB2 (md300-main live.js onGPRSFrame) and queue a
+        // driver photo.
         {
           provide: SESSION_LIFECYCLE_CONSUMER,
-          inject: [FLEET_MANAGEMENT_CONFIG, DEVICE_REPOSITORY, DEVICE_COMMAND_SERVICE],
+          inject: [
+            FLEET_MANAGEMENT_CONFIG,
+            DEVICE_REPOSITORY,
+            DEVICE_COMMAND_SERVICE,
+            DRIVER_PHOTO_SERVICE,
+          ],
           useFactory: (
             cfg: FleetManagementConfig,
             devices: DeviceRepository,
             commands: DeviceCommandService,
-          ) => new SessionLifecycleConsumer(cfg, devices, commands),
+            photos: DriverPhotoService,
+          ) => new SessionLifecycleConsumer(cfg, devices, commands, photos),
         },
         // Command-ack consumer (non-fatal at boot) + F-07 evidence photo attach.
         {
@@ -354,6 +416,7 @@ export class FleetManagementModule {
         DeviceCommandsController,
         DeviceCommandIssuesController,
         DeviceFtpPhotoController,
+        DriverPhotosController,
       ],
     };
   }
