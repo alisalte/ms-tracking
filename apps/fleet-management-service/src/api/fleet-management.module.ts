@@ -307,25 +307,24 @@ export class FleetManagementModule {
             commandRepo: DeviceCommandRepository,
             commands: DeviceCommandService,
             cfg: FleetManagementConfig,
-          ) =>
-            new DriverPhotoService(
-              photos,
-              devices,
-              commandRepo,
-              commands,
-              cfg.FLEET_FACE_SERVICE_URL ? new HttpFaceClient(cfg.FLEET_FACE_SERVICE_URL) : null,
-              {
-                enabled: cfg.FLEET_DRIVER_PHOTO_ENABLED,
-                captureOnConnect: cfg.FLEET_DRIVER_PHOTO_ON_CONNECT,
-                camera: cfg.FLEET_DRIVER_PHOTO_CAMERA,
-                delaySeconds: cfg.FLEET_DRIVER_PHOTO_DELAY_S,
-                cooldownMinutes: cfg.FLEET_DRIVER_PHOTO_COOLDOWN_MIN,
-                workerIntervalMs: cfg.FLEET_DRIVER_PHOTO_WORKER_INTERVAL_MS,
-                batchSize: cfg.FLEET_DRIVER_PHOTO_BATCH_SIZE,
-                matchThreshold: cfg.FLEET_FACE_MATCH_THRESHOLD,
-                matchMargin: cfg.FLEET_FACE_MATCH_MARGIN,
-              },
-            ),
+          ) => {
+            const face = cfg.FLEET_FACE_SERVICE_URL
+              ? new HttpFaceClient(cfg.FLEET_FACE_SERVICE_URL)
+              : null;
+            return new DriverPhotoService(photos, devices, commandRepo, commands, face, face, {
+              enabled: cfg.FLEET_DRIVER_PHOTO_ENABLED,
+              captureOnConnect: cfg.FLEET_DRIVER_PHOTO_ON_CONNECT,
+              camera: cfg.FLEET_DRIVER_PHOTO_CAMERA,
+              delaySeconds: cfg.FLEET_DRIVER_PHOTO_DELAY_S,
+              cooldownMinutes: cfg.FLEET_DRIVER_PHOTO_COOLDOWN_MIN,
+              workerIntervalMs: cfg.FLEET_DRIVER_PHOTO_WORKER_INTERVAL_MS,
+              batchSize: cfg.FLEET_DRIVER_PHOTO_BATCH_SIZE,
+              matchThreshold: cfg.FLEET_FACE_MATCH_THRESHOLD,
+              matchMargin: cfg.FLEET_FACE_MATCH_MARGIN,
+              rtmpPath: cfg.MDVR_RTMP_PATH,
+              rtspBaseUrl: cfg.FLEET_MEDIAMTX_RTSP_URL,
+            });
+          },
         },
         {
           provide: IGNITION_TRIGGER_CONSUMER,

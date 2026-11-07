@@ -119,8 +119,13 @@ export const fleetManagementConfigSchema = baseConfigSchema.merge(authConfigSche
     FLEET_DRIVER_PHOTO_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
     /** Raw position topic watched for ignition OFF → ON. */
     FLEET_KAFKA_POSITION_TOPIC: z.string().min(1).default('fleetvision.telemetry.position.raw'),
-    /** face-service base URL (apps/face-service). Empty = photos are only filed by hand. */
+    /**
+     * face-service base URL (apps/face-service). It also grabs the snapshot
+     * frame from the live stream, so empty = no driver photos are captured.
+     */
     FLEET_FACE_SERVICE_URL: z.string().default(''),
+    /** MediaMTX RTSP base face-service reads the cabin frame from. */
+    FLEET_MEDIAMTX_RTSP_URL: z.string().default('rtsp://mediamtx:8554'),
     /** Minimum cosine similarity to a driver's confirmed photos for an automatic match. */
     FLEET_FACE_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.4),
     /** Minimum lead of the best driver over the runner-up. */

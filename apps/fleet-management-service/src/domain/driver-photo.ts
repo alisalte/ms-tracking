@@ -77,15 +77,10 @@ export function matchFace(
   };
 }
 
-/** Name the unit stores the snapshot under (D03 `imagename`, ≤ 60 chars). */
-export function driverPhotoFileName(photoId: string): string {
-  return `drv_${photoId.replace(/-/g, '').slice(0, 16)}.jpg`;
-}
-
 /** Delay before retrying a failed capture step, by attempt number (1-based). */
 export function retryDelaySeconds(attempt: number): number {
   return Math.min(300, 30 * 2 ** Math.max(0, attempt - 1));
 }
 
-/** Total tries per photo (capture + download) before it is marked FAILED. */
+/** Total capture tries per photo before it is marked FAILED. */
 export const MAX_DRIVER_PHOTO_ATTEMPTS = 3;
