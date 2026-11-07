@@ -1645,7 +1645,8 @@
       "anyShift": "All shifts",
       "shiftN": "Shift {{n}}",
       "shiftHint": "A vehicle can have one driver per shift (for example three drivers for three shifts). Assign each driver to the vehicle for their own shift. “All shifts” means the driver covers every shift.",
-      "shiftBadge": "Shift {{n}}"
+      "shiftBadge": "Shift {{n}}",
+      "viewPhotos": "Photos"
     },
     "actions": {
       "archive": "Archive",
@@ -1713,6 +1714,45 @@
     },
     "export": {
       "action": "Export Excel"
+    },
+    "driverPhotos": {
+      "title": "Driver photos",
+      "hint": "When a machine starts, the cabin camera takes a photo. File each photo under its driver, or pick the right driver if it was filed wrongly. Once a driver has a few confirmed photos, the system recognises later photos by itself and credits that driver with the shift.",
+      "viewUnassigned": "No driver",
+      "viewAuto": "Recognised",
+      "viewConfirmed": "Confirmed",
+      "viewAll": "All",
+      "filterDriver": "Filter by driver",
+      "allDrivers": "All drivers",
+      "chooseDriver": "Choose driver…",
+      "confirm": "Confirm",
+      "notThisDriver": "Not this driver",
+      "delete": "Delete photo",
+      "open": "Open photo",
+      "capturing": "Taking photo…",
+      "failed": "Photo failed",
+      "noFace": "No face found",
+      "badgeConfirmed": "Confirmed",
+      "badgeAuto": "Auto",
+      "badgeUnassigned": "No driver",
+      "autoHint": "Recognised from the face. Confirm it if it is right.",
+      "assigned": "Photo filed under the driver.",
+      "cleared": "Driver removed from the photo.",
+      "deleted": "Photo deleted.",
+      "rematched": "Photo filed, and {{count}} more photos were recognised automatically.",
+      "empty": "No photos",
+      "emptyHint": "Driver photos appear here when a machine with an MDVR starts.",
+      "captureNow": "Take photo now",
+      "capture": "Take",
+      "captureHint": "The cabin camera takes a photo right now. It appears in the list a few seconds later.",
+      "captureQueued": "Photo request sent to the device.",
+      "device": "Device",
+      "chooseDevice": "Choose device…",
+      "trigger": {
+        "IGNITION": "Ignition on",
+        "CONNECT": "Device connected",
+        "MANUAL": "Manual"
+      }
     }
   },
   "reports": {

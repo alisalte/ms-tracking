@@ -15,6 +15,7 @@
 import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { type Consumer, type EachMessagePayload, Kafka } from 'kafkajs';
 import type { DeviceCommandService } from '../../application/device-command.service.js';
+import type { DriverPhotoService } from '../../application/driver-photo.service.js';
 import type { FleetManagementConfig } from '../../config/fleet-management.config.js';
 import type { DeviceRepository } from '../persistence/device.repository.js';
 
@@ -40,6 +41,7 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
     private readonly config: FleetManagementConfig,
     private readonly devices: DeviceRepository,
     private readonly commands: DeviceCommandService | null = null,
+    private readonly driverPhotos: DriverPhotoService | null = null,
   ) {
     this.kafka = new Kafka({
       brokers: this.config.FLEET_KAFKA_BROKERS.split(','),
@@ -128,6 +130,13 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
       // md300-main live.js: send AB2 as soon as the command socket is up.
       if (state === 'AUTHENTICATED') {
         await this.commands?.startMdvrLiveOnConnect(env.tenantId, env.deviceId);
+        // An MDVR that powers up with the ignition connects here first: queue
+        // the cabin snapshot that identifies the driver (cooldown-limited).
+        await this.driverPhotos
+          ?.requestCapture(env.tenantId, env.deviceId, 'CONNECT', at)
+          .catch((err: Error) =>
+            this.logger.warn(`Driver photo request failed for ${env.deviceId}: ${err.message}`),
+          );
       }
     } catch (err) {
       // Unknown device / DB down → log + advance offset (at-least-once; idempotent timestamps).

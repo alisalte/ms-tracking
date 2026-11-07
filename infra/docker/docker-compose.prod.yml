@@ -48,6 +48,11 @@ services:
     environment:
       ENVIRONMENT: production
 
+  face-service:
+    pull_policy: always
+    build: !reset
+    image: ${IMAGE_REGISTRY}/face-service:${IMAGE_TAG}
+
   fleet-service:
     pull_policy: always
     build: !reset

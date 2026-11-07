@@ -26,6 +26,7 @@ group "default" {
     "map-engine",
     "web-dashboard",
     "tenant-admin",
+    "face-service",
   ]
 }
 
@@ -33,6 +34,12 @@ target "identity-service" {
   context    = "."
   dockerfile = "apps/identity-service/Dockerfile"
   tags       = ["${REGISTRY}/identity-service:${TAG}"]
+}
+
+target "face-service" {
+  context    = "."
+  dockerfile = "apps/face-service/Dockerfile"
+  tags       = ["${REGISTRY}/face-service:${TAG}"]
 }
 
 target "fleet-management-service" {

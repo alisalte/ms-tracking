@@ -49,6 +49,18 @@ export interface RosterDriver {
   readonly driverName: string;
 }
 
+/**
+ * A driver recognised in a cabin photo (fleet.driver_photos, AUTO or
+ * CONFIRMED). It names the driver of the vehicle from `at` until the end of
+ * the shift the photo was taken in, or until a later photo of that shift.
+ */
+export interface DriverIdentification {
+  readonly vehicleId: string;
+  readonly driverId: string;
+  readonly driverName: string;
+  readonly at: Date;
+}
+
 export interface ShiftSlot {
   /** `YYYY-MM-DD#n`, or `off-shift`. */
   readonly key: string;
@@ -58,7 +70,7 @@ export interface ShiftSlot {
   readonly no: number;
 }
 
-export type DriverSource = 'ROSTER' | 'ASSIGNMENT';
+export type DriverSource = 'PHOTO' | 'ROSTER' | 'ASSIGNMENT';
 
 export interface HaulCycle {
   readonly vehicleId: string;
@@ -89,6 +101,8 @@ export interface DriverContext {
   readonly drivers: readonly DriverInterval[];
   /** Per truck: index `n - 1` is the driver of shift `n`. */
   readonly rosters?: ReadonlyMap<string, ReadonlyArray<RosterDriver | null>>;
+  /** Drivers recognised in cabin photos; they win over the roster for their shift. */
+  readonly identified?: readonly DriverIdentification[];
   readonly shiftStartHour: number;
   readonly shiftDurationHours: number;
   readonly shiftCount?: number;
@@ -327,6 +341,8 @@ export function resolveDriver(
     ctx.timeZone,
     ctx.shiftCount ?? 1,
   );
+  const seen = slot.no > 0 ? identifiedAt(ctx, vehicleId, at, slot.key) : null;
+  if (seen) return { slot, driver: seen, source: 'PHOTO' };
   const rostered = slot.no > 0 ? (ctx.rosters?.get(vehicleId)?.[slot.no - 1] ?? null) : null;
   const assigned = rostered ? null : driverAt(ctx.drivers, vehicleId, at, slot.no);
   return {
@@ -334,6 +350,32 @@ export function resolveDriver(
     driver: rostered ?? assigned,
     source: rostered ? 'ROSTER' : assigned ? 'ASSIGNMENT' : null,
   };
+}
+
+/** Latest photo identification on the vehicle at or before `at` within the same shift. */
+function identifiedAt(
+  ctx: DriverContext,
+  vehicleId: string,
+  at: Date,
+  slotKey: string,
+): RosterDriver | null {
+  if (!ctx.identified || ctx.identified.length === 0) return null;
+  const t = at.getTime();
+  let best: DriverIdentification | null = null;
+  for (const id of ctx.identified) {
+    if (id.vehicleId !== vehicleId) continue;
+    const seenAt = id.at.getTime();
+    if (seenAt > t || (best && seenAt <= best.at.getTime())) continue;
+    const seenSlot = shiftSlot(
+      id.at,
+      ctx.shiftStartHour,
+      ctx.shiftDurationHours,
+      ctx.timeZone,
+      ctx.shiftCount ?? 1,
+    );
+    if (seenSlot.key === slotKey) best = id;
+  }
+  return best ? { driverId: best.driverId, driverName: best.driverName } : null;
 }
 
 export interface ShiftSummary {

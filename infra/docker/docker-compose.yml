@@ -271,6 +271,10 @@ services:
       FLEET_FTP_PUBLIC_HOST: ${FLEET_FTP_PUBLIC_HOST:-}
       FLEET_FTP_PUBLIC_PORT: ${FLEET_FTP_PORT:-21}
       FLEET_FTP_PASV_PORTS: ${FLEET_FTP_PASV_PORTS:-30000-30009}
+      # Driver photos: cabin snapshot on ignition-on, matched by face-service.
+      FLEET_DRIVER_PHOTO_ENABLED: ${FLEET_DRIVER_PHOTO_ENABLED:-true}
+      FLEET_DRIVER_PHOTO_CAMERA: ${FLEET_DRIVER_PHOTO_CAMERA:-2}
+      FLEET_FACE_SERVICE_URL: ${FLEET_FACE_SERVICE_URL:-http://face-service:3013}
     ports:
       - "${FLEET_MGMT_PORT:-3006}:3006"
       - "${FLEET_FTP_PORT:-21}:2121"
@@ -608,6 +612,23 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  # face-service — cabin-photo face embeddings for driver identification
+  # (OpenCV YuNet + SFace, CPU only). Internal only: fleet-management calls it.
+  face-service:
+    build:
+      context: ../..
+      dockerfile: apps/face-service/Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+    container_name: fleetvision-face
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3013/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   web-dashboard:
     build:

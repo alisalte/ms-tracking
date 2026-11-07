@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   type Zone,
   detectHaulCycles,
+  resolveDriver,
   shiftDayWindow,
   shiftKey,
   shiftSlot,
@@ -372,5 +373,65 @@ describe('haul cycles: drivers assigned per shift', () => {
       drivers: [assignment('night', 3)],
     }).cycles;
     expect(alone.map((c) => c.driverId)).toEqual([null, 'night']);
+  });
+});
+
+describe('resolveDriver with cabin photo identifications', () => {
+  const ctx = {
+    drivers: [],
+    rosters: new Map([
+      [
+        'truck-1',
+        [
+          { driverId: 'drv-day', driverName: 'Day' },
+          { driverId: 'drv-night', driverName: 'Night' },
+        ],
+      ],
+    ]),
+    identified: [
+      // Seen at 08:00 in the day shift (06:00–18:00).
+      {
+        vehicleId: 'truck-1',
+        driverId: 'drv-photo',
+        driverName: 'Photo',
+        at: new Date('2026-06-01T08:00:00Z'),
+      },
+      // A second photo later in the same shift replaces the first.
+      {
+        vehicleId: 'truck-1',
+        driverId: 'drv-swap',
+        driverName: 'Swap',
+        at: new Date('2026-06-01T14:00:00Z'),
+      },
+    ],
+    shiftStartHour: 6,
+    shiftDurationHours: 12,
+    shiftCount: 2,
+    timeZone: 'UTC',
+  };
+
+  it('uses the roster before the photo was taken', () => {
+    const r = resolveDriver(ctx, 'truck-1', new Date('2026-06-01T07:00:00Z'));
+    expect([r.driver?.driverName, r.source]).toEqual(['Day', 'ROSTER']);
+  });
+
+  it('prefers the photo-identified driver for the rest of that shift', () => {
+    const r = resolveDriver(ctx, 'truck-1', new Date('2026-06-01T10:00:00Z'));
+    expect([r.driver?.driverName, r.source]).toEqual(['Photo', 'PHOTO']);
+  });
+
+  it('switches to a later photo of the same shift', () => {
+    const r = resolveDriver(ctx, 'truck-1', new Date('2026-06-01T15:00:00Z'));
+    expect(r.driver?.driverName).toBe('Swap');
+  });
+
+  it('does not carry a photo into the next shift', () => {
+    const r = resolveDriver(ctx, 'truck-1', new Date('2026-06-01T19:00:00Z'));
+    expect([r.driver?.driverName, r.source]).toEqual(['Night', 'ROSTER']);
+  });
+
+  it('ignores photos of other trucks', () => {
+    const r = resolveDriver(ctx, 'truck-2', new Date('2026-06-01T10:00:00Z'));
+    expect(r.driver).toBeNull();
   });
 });
