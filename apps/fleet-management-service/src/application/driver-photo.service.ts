@@ -16,6 +16,11 @@
  * Operators file photos by hand (CONFIRMED); every confirmed photo with a face
  * becomes a reference, and recent unfiled photos are re-matched against it.
  * Reporting credits the driver of an AUTO/CONFIRMED photo with that shift.
+ *
+ * Once a photo is filed, only the driver's newest `KEEP_IMAGES_PER_DRIVER`
+ * images are kept (their profile gallery); older ones lose the image but keep
+ * the row, and confirmed ones keep their embedding as a reference. Failed
+ * captures are deleted after a day.
  */
 import {
   BadRequestException,
@@ -35,6 +40,7 @@ import type { FaceEmbedder, FrameGrabber } from '../infrastructure/face/face-cli
 import type { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
 import type { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import type {
+  DriverFaceSummary,
   DriverPhotoCounts,
   DriverPhotoJob,
   DriverPhotoRepository,
@@ -69,6 +75,12 @@ const FACE_RETRY_SECONDS = 60;
 const REMATCH_WINDOW_DAYS = 30;
 const REMATCH_LIMIT = 500;
 
+/** Images kept per driver once photos are filed (the profile gallery). */
+export const KEEP_IMAGES_PER_DRIVER = 5;
+/** Failed captures older than this are deleted. */
+const FAILED_RETENTION_MS = 24 * 3_600_000;
+const CLEANUP_INTERVAL_MS = 3_600_000;
+
 const AB2_TTL_SECONDS = 90;
 const AB3_TTL_SECONDS = 60;
 
@@ -91,6 +103,7 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
   private readonly logger = new Logger(DriverPhotoService.name);
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private lastCleanupAt = 0;
 
   constructor(
     private readonly photos: DriverPhotoRepository,
@@ -170,9 +183,32 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
           await this.retryOrFail(job, (err as Error).message);
         }
       }
+      await this.cleanup();
       return due.length;
     } finally {
       this.running = false;
+    }
+  }
+
+  /** Hourly: drop failed captures past their retention. Best effort. */
+  private async cleanup(): Promise<void> {
+    if (Date.now() - this.lastCleanupAt < CLEANUP_INTERVAL_MS) return;
+    this.lastCleanupAt = Date.now();
+    try {
+      const n = await this.photos.deleteFailedBefore(new Date(Date.now() - FAILED_RETENTION_MS));
+      if (n > 0) this.logger.log(`Deleted ${n} failed driver photo capture(s).`);
+    } catch (err) {
+      this.logger.warn(`Driver photo cleanup failed: ${(err as Error).message}`);
+    }
+  }
+
+  /** Keep only the driver's newest images. Best effort: a failure leaves extra images. */
+  private async prune(tenantId: string, driverId: string): Promise<void> {
+    try {
+      const n = await this.photos.pruneDriverImages(tenantId, driverId, KEEP_IMAGES_PER_DRIVER);
+      if (n > 0) this.logger.log(`Dropped ${n} older photo image(s) of driver ${driverId}.`);
+    } catch (err) {
+      this.logger.warn(`Pruning photos of driver ${driverId} failed: ${(err as Error).message}`);
     }
   }
 
@@ -370,6 +406,7 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
         this.logger.log(
           `Driver photo ${photoId} matched driver ${match.driverId} (score ${match.score.toFixed(3)}).`,
         );
+        await this.prune(tenantId, match.driverId);
       }
       return filed;
     }
@@ -410,6 +447,10 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
     return this.photos.counts(ctx.tenantId);
   }
 
+  public async faces(ctx: ActorContext): Promise<DriverFaceSummary[]> {
+    return this.photos.faceSummaries(ctx.tenantId);
+  }
+
   public async image(ctx: ActorContext, id: string): Promise<Buffer> {
     const photo = await this.photos.loadPhoto(ctx.tenantId, id);
     if (!photo) throw new NotFoundException('Photo not found.');
@@ -431,6 +472,7 @@ export class DriverPhotoService implements OnApplicationBootstrap, OnApplication
     const ok = await this.photos.assign(ctx.tenantId, id, driverId, ctx.actorId);
     if (!ok) throw new NotFoundException('Photo not found.');
     if (!driverId) return { rematched: 0 };
+    await this.prune(ctx.tenantId, driverId);
     const rematched = await this.rematchUnassigned(ctx.tenantId);
     return { rematched };
   }

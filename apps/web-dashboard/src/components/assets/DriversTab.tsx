@@ -9,9 +9,11 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDriverFaces } from '@/api/driver-photo.api';
 import { driverFullName } from '@/api/driver.api';
 import { PERMISSIONS } from '@/auth/permissions';
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
+import { DriverFaceAvatar } from '@/components/assets/DriverFace';
 import { driverStatusColor } from '@/components/assets/asset-meta';
 import { devicesOnVehicle, formatDeviceLabel } from '@/components/assets/driver-join';
 import {
@@ -67,6 +69,7 @@ export function DriversTab({
   onDelete,
 }: DriversTabProps) {
   const { t } = useTranslation();
+  const faces = useDriverFaces().data;
 
   const vehicleName = useMemo(() => {
     const byId = new Map(vehicles.map((v) => [v.id, v] as const));
@@ -105,8 +108,11 @@ export function DriversTab({
       headerKey: 'assets.driver.colName',
       sortBy: (d) => driverFullName(d),
       render: (d) => (
-        <span className="font-medium text-gray-800 dark:text-graydark-800">
-          {driverFullName(d)}
+        <span className="flex items-center gap-2">
+          <DriverFaceAvatar face={faces?.get(d.id)} name={driverFullName(d)} />
+          <span className="font-medium text-gray-800 dark:text-graydark-800">
+            {driverFullName(d)}
+          </span>
         </span>
       ),
     },

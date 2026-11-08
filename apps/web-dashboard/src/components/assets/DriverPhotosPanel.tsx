@@ -7,6 +7,11 @@
  * when it was filed wrongly). Filed photos teach the platform each driver's
  * face; later photos are matched automatically and credit that driver with the
  * shift.
+ *
+ * Filing only offers drivers whose face is not registered yet (a driver with
+ * a confirmed face is recognised by the platform); "show all drivers" lifts
+ * that for a known driver the platform missed. Recognised photos show their
+ * driver instead of a picker.
  */
 import { Camera, Check, ImageOff, Loader2, Trash2, UserX } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -18,6 +23,7 @@ import {
   useAssignDriverPhoto,
   useCaptureDriverPhoto,
   useDeleteDriverPhoto,
+  useDriverFaces,
   useDriverPhotoCounts,
   useDriverPhotoImage,
   useDriverPhotos,
@@ -29,6 +35,7 @@ import { useToast } from '@/components/feedback/ToastProvider';
 import {
   Badge,
   Button,
+  Checkbox,
   EmptyState,
   IconButton,
   LoadMoreButton,
@@ -38,20 +45,21 @@ import {
   Spinner,
 } from '@/components/tailwind-ui';
 import { formatDateTime } from '@/lib/format-date';
-import type { Device, Driver } from '@/types/asset.types';
+import type { Device, Driver, Vehicle } from '@/types/asset.types';
 
 type View = 'UNASSIGNED' | 'AUTO' | 'CONFIRMED' | 'ALL';
 
 interface DriverPhotosPanelProps {
   drivers: Driver[];
   devices: Device[];
+  vehicles: Vehicle[];
 }
 
 function inFlight(p: DriverPhoto): boolean {
   return p.status === 'PENDING' || p.status === 'CAPTURING' || p.status === 'DOWNLOADING';
 }
 
-export function DriverPhotosPanel({ drivers, devices }: DriverPhotosPanelProps) {
+export function DriverPhotosPanel({ drivers, devices, vehicles }: DriverPhotosPanelProps) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const { can } = usePermissions();
@@ -61,6 +69,8 @@ export function DriverPhotosPanel({ drivers, devices }: DriverPhotosPanelProps) 
   const [driverFilter, setDriverFilter] = useState('');
   const [preview, setPreview] = useState<DriverPhoto | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [showAllDrivers, setShowAllDrivers] = useState(false);
+  const faces = useDriverFaces().data;
 
   const filters = useMemo(
     () => ({
@@ -86,6 +96,15 @@ export function DriverPhotosPanel({ drivers, devices }: DriverPhotosPanelProps) 
         .map((d) => ({ value: d.id, label: driverFullName(d) }))
         .sort((a, b) => a.label.localeCompare(b.label, i18n.language)),
     [drivers, i18n.language],
+  );
+
+  /** Drivers offered when filing: only those the platform cannot recognise yet. */
+  const filingOptions = useMemo(
+    () =>
+      showAllDrivers
+        ? driverOptions
+        : driverOptions.filter((o) => (faces?.get(o.value)?.references ?? 0) === 0),
+    [driverOptions, faces, showAllDrivers],
   );
 
   const onAssign = async (photo: DriverPhoto, driverId: string | null) => {
@@ -149,6 +168,13 @@ export function DriverPhotosPanel({ drivers, devices }: DriverPhotosPanelProps) 
           options={[{ value: '', label: t('assets.driverPhotos.allDrivers') }, ...driverOptions]}
         />
         {canWrite && (
+          <Checkbox
+            label={t('assets.driverPhotos.showAllDrivers')}
+            checked={showAllDrivers}
+            onChange={(e) => setShowAllDrivers(e.target.checked)}
+          />
+        )}
+        {canWrite && (
           <Button
             size="sm"
             variant="outline"
@@ -181,7 +207,7 @@ export function DriverPhotosPanel({ drivers, devices }: DriverPhotosPanelProps) 
               <PhotoCard
                 key={photo.id}
                 photo={photo}
-                driverOptions={driverOptions}
+                driverOptions={filingOptions}
                 canWrite={canWrite}
                 busy={
                   (assign.isPending && assign.variables?.id === photo.id) ||
@@ -203,7 +229,12 @@ export function DriverPhotosPanel({ drivers, devices }: DriverPhotosPanelProps) 
       )}
 
       <PreviewModal photo={preview} onClose={() => setPreview(null)} lang={i18n.language} />
-      <CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} devices={devices} />
+      <CaptureModal
+        open={captureOpen}
+        onClose={() => setCaptureOpen(false)}
+        devices={devices}
+        vehicles={vehicles}
+      />
     </div>
   );
 }
@@ -285,7 +316,7 @@ function PhotoCard({
         </div>
 
         {ready &&
-          (canWrite ? (
+          (canWrite && photo.matchStatus === 'UNASSIGNED' ? (
             <Select
               aria-label={t('assets.driverPhotos.chooseDriver')}
               value={photo.driverId ?? ''}
@@ -298,7 +329,9 @@ function PhotoCard({
               }}
             />
           ) : (
-            <div className="text-gray-700 dark:text-graydark-800">{photo.driverName ?? '—'}</div>
+            <div className="truncate font-medium text-gray-700 dark:text-graydark-800">
+              {photo.driverName ?? '—'}
+            </div>
           ))}
 
         {canWrite && (
@@ -407,22 +440,33 @@ function CaptureModal({
   open,
   onClose,
   devices,
+  vehicles,
 }: {
   open: boolean;
   onClose: () => void;
   devices: Device[];
+  vehicles: Vehicle[];
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const capture = useCaptureDriverPhoto();
   const [deviceId, setDeviceId] = useState('');
-  const options = useMemo(
-    () =>
-      devices
-        .filter((d) => d.protocol === 'meitrack' && d.status === 'ACTIVE')
-        .map((d) => ({ value: d.id, label: d.imei })),
-    [devices],
-  );
+  const options = useMemo(() => {
+    const vehicleName = new Map(vehicles.map((v) => [v.id, v.name] as const));
+    const rows = devices
+      .filter((d) => d.protocol === 'meitrack' && d.status === 'ACTIVE')
+      .map((d) => ({
+        id: d.id,
+        imei: d.imei,
+        name: d.vehicleId ? vehicleName.get(d.vehicleId) : undefined,
+      }));
+    // Machines by name first, then devices not bound to a vehicle.
+    rows.sort((a, b) => {
+      if (a.name && b.name) return a.name.localeCompare(b.name, i18n.language, { numeric: true });
+      return a.name ? -1 : b.name ? 1 : a.imei.localeCompare(b.imei);
+    });
+    return rows.map((r) => ({ value: r.id, label: r.name ? `${r.name} · ${r.imei}` : r.imei }));
+  }, [devices, vehicles, i18n.language]);
 
   const submit = async () => {
     if (!deviceId) return;

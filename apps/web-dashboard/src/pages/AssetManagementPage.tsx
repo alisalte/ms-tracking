@@ -380,7 +380,7 @@ export function AssetManagementPage() {
                   </Button>
                 </div>
                 {driversView === 'photos' ? (
-                  <DriverPhotosPanel drivers={drivers} devices={devices} />
+                  <DriverPhotosPanel drivers={drivers} devices={devices} vehicles={vehicles} />
                 ) : driversView === 'ranking' ? (
                   <DriverRankingPanel
                     selectedId={selectedId}

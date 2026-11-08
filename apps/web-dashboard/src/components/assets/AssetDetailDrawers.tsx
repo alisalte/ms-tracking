@@ -52,6 +52,7 @@ import { ConflictError, getApiErrorMessage } from '@/api/errors';
 import { queryKeys } from '@/api/query-keys';
 import { registerDefaultMdvrChannels } from '@/api/video.api';
 import { PERMISSIONS, PermissionGate } from '@/auth/permissions';
+import { DriverFaceSection } from '@/components/assets/DriverFace';
 import { VehicleBehaviorPanel } from '@/components/assets/VehicleBehaviorPanel';
 import {
   deviceProtocolColor,
@@ -869,6 +870,8 @@ function DriverDetailDrawer({
       >
         {driver && (
           <div className="flex flex-col gap-3">
+            <DriverFaceSection driverId={driver.id} name={driverFullName(driver)} />
+            <Divider />
             <div>
               <MetaRow
                 icon={<IdCard />}
