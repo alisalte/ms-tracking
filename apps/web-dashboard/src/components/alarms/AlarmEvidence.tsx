@@ -55,6 +55,7 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
       to: new Date(toMs).toISOString(),
     });
     if (clip.channel.deviceId) params.set('device', clip.channel.deviceId);
+    params.set('camera', clip.channel.id);
     navigate(`/video?${params.toString()}`);
   };
 
@@ -165,7 +166,9 @@ export function AlarmEvidence({ alarm }: AlarmEvidenceProps) {
                 />
                 <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                   <span className="min-w-0 truncate text-xs text-gray-500 dark:text-graydark-600">
-                    {evidence.eventPhotoName}
+                    {evidence.photoFromClip
+                      ? t('alarms.detail.photoFromClip')
+                      : evidence.eventPhotoName}
                   </span>
                   <Button
                     type="button"

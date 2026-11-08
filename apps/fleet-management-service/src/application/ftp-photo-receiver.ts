@@ -5,6 +5,11 @@
  * platform's FTP host, port and the device's derived credentials, after
  * which the unit uploads its event snapshots on its own. Non-fatal at boot:
  * a port clash logs and leaves the rest of the service running.
+ *
+ * The upload is the only way an alarm photo reaches the platform (the MD300
+ * answers D00 with FFFE), so `ensureProvisioned` runs on every connect: a
+ * unit that missed the B64 because it was offline, or holds another host or
+ * password, is configured as soon as it is reachable.
  */
 import { lookup } from 'node:dns/promises';
 import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
@@ -12,16 +17,24 @@ import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/comm
 
 import type { FleetManagementConfig } from '../config/fleet-management.config.js';
 import { FtpPhotoServer } from '../infrastructure/ftp/ftp-photo-server.js';
+import type { DeviceCommandRepository } from '../infrastructure/persistence/device-command.repository.js';
 import type { DeviceRepository } from '../infrastructure/persistence/device.repository.js';
 import type { EvidenceCaptureRepository } from '../infrastructure/persistence/evidence-capture.repository.js';
 import type { DeviceCommandService } from './device-command.service.js';
 import { FtpPhotoIngest, ftpPasswordFor } from './ftp-photo-ingest.js';
 import type { ActorContext } from './service-context.js';
 
+/** A unit that has not accepted the B64 yet is asked again at most this often. */
+const PROVISION_RETRY_MS = 30 * 60_000;
+
+/** B64 fields that must match for a unit to count as uploading here. */
+const B64_KEYS = ['mode', 'username', 'password', 'host', 'port', 'path'] as const;
+
 export class FtpPhotoReceiver implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger('FtpPhotoReceiver');
   private readonly ingest: FtpPhotoIngest;
   private server: FtpPhotoServer | null = null;
+  private readonly provisionedAt = new Map<string, number>();
 
   constructor(
     private readonly cfg: FleetManagementConfig,
@@ -30,6 +43,7 @@ export class FtpPhotoReceiver implements OnApplicationBootstrap, OnApplicationSh
     private readonly devices: DeviceRepository,
     evidence: EvidenceCaptureRepository,
     private readonly commands: DeviceCommandService,
+    private readonly commandLog: Pick<DeviceCommandRepository, 'latestAckedSetting'> | null = null,
   ) {
     this.ingest = new FtpPhotoIngest({
       secret: cfg.FLEET_FTP_SECRET,
@@ -100,14 +114,51 @@ export class FtpPhotoReceiver implements OnApplicationBootstrap, OnApplicationSh
     if (!device) throw new NotFoundException('Device not found.');
     return this.commands.create(ctx, deviceId, {
       commandCode: 'B64',
-      params: {
-        mode: '1',
-        username: device.imei,
-        password: ftpPasswordFor(this.cfg.FLEET_FTP_SECRET, device.imei),
-        host: this.publicHost,
-        port: String(this.cfg.FLEET_FTP_PUBLIC_PORT),
-        path: '/',
-      },
+      params: this.b64Params(device.imei),
     });
+  }
+
+  /**
+   * Send B64 when the unit's last accepted B64 is not this platform's upload
+   * config. Called on connect; true when a B64 was queued.
+   */
+  public async ensureProvisioned(tenantId: string, deviceId: string): Promise<boolean> {
+    if (!this.enabled || !this.commandLog) return false;
+    const now = Date.now();
+    const last = this.provisionedAt.get(deviceId);
+    if (last !== undefined && now - last < PROVISION_RETRY_MS) return false;
+    this.provisionedAt.set(deviceId, now);
+
+    const device = await this.devices.findById(tenantId, deviceId);
+    if (!device) return false;
+    const want = this.b64Params(device.imei);
+    const acked = await this.commandLog.latestAckedSetting(tenantId, deviceId, 'B64', 'mode');
+    if (acked && B64_KEYS.every((k) => String(acked.params?.[k] ?? '') === want[k])) return false;
+
+    await this.commands.create(
+      {
+        tenantId,
+        actorId: null,
+        actorType: 'SYSTEM',
+        requestId: null,
+        ipAddress: null,
+        userAgent: null,
+      },
+      deviceId,
+      { commandCode: 'B64', params: want },
+    );
+    this.logger.log(`FTP photo upload provisioned on ${device.imei} (B64 sent on connect).`);
+    return true;
+  }
+
+  private b64Params(imei: string): Record<(typeof B64_KEYS)[number], string> {
+    return {
+      mode: '1',
+      username: imei,
+      password: ftpPasswordFor(this.cfg.FLEET_FTP_SECRET, imei),
+      host: this.publicHost,
+      port: String(this.cfg.FLEET_FTP_PUBLIC_PORT),
+      path: '/',
+    };
   }
 }

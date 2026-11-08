@@ -101,6 +101,7 @@ export class AlarmEvidenceService {
       status: evidence.status,
       photoName: evidence.photoName,
       photoAvailable: evidence.status === 'PHOTO_READY',
+      photoSource: evidence.photoSource,
       error: evidence.error,
       videoStatus: evidence.videoStatus,
       videoChannel: evidence.videoChannel,

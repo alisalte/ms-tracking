@@ -377,16 +377,17 @@ export function mdvrPlaybackHlsUrl(imei?: string, logicalChannel = 1): string {
 /**
  * Which wall clock a BCD timestamp is written in.
  *
- * MD300 photo names and alarm events are stamped in UTC, but the unit indexes
- * its recorded VIDEO in local time (UTC+3:30 in Iran): asking AB8/AB4/A9D for a
- * UTC window returns no files (FFF5 / empty list). Manual playback therefore
- * uses `MDVR_PLAYBACK_CLOCK`; alarm evidence keeps the UTC default.
+ * The MD300 stamps photo names, alarm events AND its SD-card video index in
+ * UTC: every AB8 listing since September ends at "now" in UTC, and an AB8 for
+ * the same window shifted to local time (UTC+3:30) comes back empty. Asking
+ * the card on the local clock is what made playback opened from an alarm say
+ * there was no video in the range.
  */
 export type MdvrClock = 'utc' | 'local';
 
-/** Clock for manual SD-card playback (AB8 / AB4 / AB5 / A9D). */
+/** Clock for manual SD-card playback (AB8 / AB4 / AB5 / A9D); `local` only by opt-in. */
 export const MDVR_PLAYBACK_CLOCK: MdvrClock =
-  import.meta.env.VITE_MDVR_PLAYBACK_CLOCK === 'utc' ? 'utc' : 'local';
+  import.meta.env.VITE_MDVR_PLAYBACK_CLOCK === 'local' ? 'local' : 'utc';
 
 /** Meitrack AB4/AB5/AB8 timestamp: YYMMDDHHMMSS on the given device clock (default UTC). */
 export function toMdvrBcdTime(ms: number, clock: MdvrClock = 'utc'): string {

@@ -16,6 +16,7 @@ import { Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from 
 import { type Consumer, type EachMessagePayload, Kafka } from 'kafkajs';
 import type { DeviceCommandService } from '../../application/device-command.service.js';
 import type { DriverPhotoService } from '../../application/driver-photo.service.js';
+import type { FtpPhotoReceiver } from '../../application/ftp-photo-receiver.js';
 import type { FleetManagementConfig } from '../../config/fleet-management.config.js';
 import type { DeviceRepository } from '../persistence/device.repository.js';
 
@@ -42,6 +43,7 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
     private readonly devices: DeviceRepository,
     private readonly commands: DeviceCommandService | null = null,
     private readonly driverPhotos: DriverPhotoService | null = null,
+    private readonly ftpPhotos: Pick<FtpPhotoReceiver, 'ensureProvisioned'> | null = null,
   ) {
     this.kafka = new Kafka({
       brokers: this.config.FLEET_KAFKA_BROKERS.split(','),
@@ -136,6 +138,12 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
           ?.requestCapture(env.tenantId, env.deviceId, 'CONNECT', at)
           .catch((err: Error) =>
             this.logger.warn(`Driver photo request failed for ${env.deviceId}: ${err.message}`),
+          );
+        // Alarm photos only arrive by FTP: make sure this unit uploads here.
+        await this.ftpPhotos
+          ?.ensureProvisioned(env.tenantId, env.deviceId)
+          .catch((err: Error) =>
+            this.logger.warn(`FTP provisioning failed for ${env.deviceId}: ${err.message}`),
           );
       }
     } catch (err) {

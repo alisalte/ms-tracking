@@ -499,6 +499,7 @@ export function VideoWallPage() {
           <PlaybackPanel
             channels={channels}
             initialDeviceId={params.get('device')}
+            initialChannelId={params.get('camera')}
             initialFrom={params.get('from')}
             initialTo={params.get('to')}
           />
