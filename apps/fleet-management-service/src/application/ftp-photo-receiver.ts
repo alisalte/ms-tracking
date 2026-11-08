@@ -7,7 +7,7 @@
  * a port clash logs and leaves the rest of the service running.
  *
  * The upload is the only way an alarm photo reaches the platform (the MD300
- * answers D00 with FFFE), so `ensureProvisioned` runs on every connect: a
+ * answers D00 with FFFE), so `ensureProvisioned` runs while a unit is online: a
  * unit that missed the B64 because it was offline, or holds another host or
  * password, is configured as soon as it is reachable.
  */
@@ -120,7 +120,7 @@ export class FtpPhotoReceiver implements OnApplicationBootstrap, OnApplicationSh
 
   /**
    * Send B64 when the unit's last accepted B64 is not this platform's upload
-   * config. Called on connect; true when a B64 was queued.
+   * config. Called on connect and keepalive; true when a B64 was queued.
    */
   public async ensureProvisioned(tenantId: string, deviceId: string): Promise<boolean> {
     if (!this.enabled || !this.commandLog) return false;

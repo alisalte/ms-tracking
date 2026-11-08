@@ -139,7 +139,11 @@ export class SessionLifecycleConsumer implements OnApplicationBootstrap, OnAppli
           .catch((err: Error) =>
             this.logger.warn(`Driver photo request failed for ${env.deviceId}: ${err.message}`),
           );
-        // Alarm photos only arrive by FTP: make sure this unit uploads here.
+      }
+      // Alarm photos only arrive by FTP: make sure this unit uploads here.
+      // Keepalives count too — a unit's session can last for hours — and
+      // ensureProvisioned looks at each unit at most once per 30 minutes.
+      if (isConnect) {
         await this.ftpPhotos
           ?.ensureProvisioned(env.tenantId, env.deviceId)
           .catch((err: Error) =>
