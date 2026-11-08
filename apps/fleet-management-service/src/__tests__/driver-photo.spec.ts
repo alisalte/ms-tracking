@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   type DriverPhotoOptions,
   DriverPhotoService,
+  KEEP_IMAGES_PER_DRIVER,
 } from '../application/driver-photo.service.js';
 import { type FaceReference, cosineSimilarity, matchFace } from '../domain/driver-photo.js';
 import type { FaceEmbedder, FrameGrabber } from '../infrastructure/face/face-client.js';
@@ -126,6 +127,8 @@ function makeHarness(
   const created: Array<{ code: string; params: unknown }> = [];
   const commandRows = new Map<string, Record<string, unknown>>();
   const autoMatches: Array<{ driverId: string; score: number }> = [];
+  const prunes: Array<{ driverId: string; keep: number }> = [];
+  const cleanups: Date[] = [];
   const requests: Array<Record<string, unknown>> = [];
   const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
   /** RTSP URLs face-service can currently read a frame from. */
@@ -165,6 +168,14 @@ function makeHarness(
       return true;
     },
     setMatchHint: async () => undefined,
+    pruneDriverImages: async (_t: string, driverId: string, keep: number) => {
+      prunes.push({ driverId, keep });
+      return 0;
+    },
+    deleteFailedBefore: async (before: Date) => {
+      cleanups.push(before);
+      return 0;
+    },
     vehicleOfDevice: async () => 'veh-1',
     request: async (input: Record<string, unknown>) => {
       requests.push(input);
@@ -232,6 +243,8 @@ function makeHarness(
     created,
     commandRows,
     autoMatches,
+    prunes,
+    cleanups,
     requests,
     jpeg,
     liveStreams,
@@ -352,6 +365,27 @@ describe('DriverPhotoService capture flow', () => {
     await h.service.tick();
     expect(h.patches.some((p) => p.faceStatus === 'FOUND')).toBe(true);
     expect(h.autoMatches).toEqual([{ driverId: 'alice', score: expect.any(Number) }]);
+    expect(h.prunes).toEqual([{ driverId: 'alice', keep: KEEP_IMAGES_PER_DRIVER }]);
+  });
+
+  it('keeps every image when the face matches nobody', async () => {
+    const face: FaceEmbedder = { embed: async () => ({ score: 0.9, embedding: unit([0, 1]) }) };
+    const h = makeHarness({ face, refs: [{ driverId: 'alice', embedding: unit([1, 0]) }] });
+    h.job.current = { ...h.job.current, status: 'READY', faceStatus: 'PENDING' };
+    await h.service.tick();
+    expect(h.autoMatches).toEqual([]);
+    expect(h.prunes).toEqual([]);
+  });
+
+  it('deletes day-old failed captures at most once an hour', async () => {
+    const h = makeHarness({});
+    h.job.current = { ...h.job.current, status: 'FAILED' };
+    await h.service.tick();
+    await h.service.tick();
+    expect(h.cleanups).toHaveLength(1);
+    expect(Date.now() - (h.cleanups[0] as Date).getTime()).toBeGreaterThanOrEqual(
+      24 * 3_600_000 - 1000,
+    );
   });
 
   it('marks NO_FACE when face-service finds nobody', async () => {

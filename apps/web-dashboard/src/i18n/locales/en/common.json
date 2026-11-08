@@ -1717,7 +1717,7 @@
     },
     "driverPhotos": {
       "title": "Driver photos",
-      "hint": "When a machine starts, the cabin camera takes a photo. File each photo under its driver, or pick the right driver if it was filed wrongly. Once a driver has a few confirmed photos, the system recognises later photos by itself and credits that driver with the shift.",
+      "hint": "When a machine's ignition comes on, the cabin camera takes a photo. File each photo under its driver once — after that the platform recognises the driver by face, files later photos by itself and credits them with the shift. Only drivers whose face is not registered yet are offered when filing. Each driver keeps their newest 5 photos; older ones are removed.",
       "viewUnassigned": "No driver",
       "viewAuto": "Recognised",
       "viewConfirmed": "Confirmed",
@@ -1752,7 +1752,14 @@
         "IGNITION": "Ignition on",
         "CONNECT": "Device connected",
         "MANUAL": "Manual"
-      }
+      },
+      "showAllDrivers": "Show all drivers",
+      "faceRegistered": "Face registered",
+      "faceNotRegistered": "Face not registered",
+      "faceRegisteredHint_one": "Recognised automatically · {{count}} photo kept",
+      "faceRegisteredHint_other": "Recognised automatically · {{count}} photos kept",
+      "faceNotRegisteredHint": "File one of this driver's cabin photos under them (Drivers → Driver photos).",
+      "galleryOpen": "Show photos"
     }
   },
   "reports": {

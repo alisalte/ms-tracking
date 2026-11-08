@@ -63,6 +63,17 @@ export interface DriverPhotoListFilters {
   readonly limit: number;
 }
 
+/** A driver's face enrolment: confirmed reference photos and the picture shown on their profile. */
+export interface DriverFaceSummary {
+  readonly driverId: string;
+  /** Confirmed photos with a face — what auto-matching compares against. */
+  readonly references: number;
+  /** Photos of this driver that still have their image (at most the keep limit). */
+  readonly photos: number;
+  /** Photo shown on the driver's profile; null when none has an image. */
+  readonly profilePhotoId: string | null;
+}
+
 export interface DriverPhotoCounts {
   readonly unassigned: number;
   readonly auto: number;
@@ -370,6 +381,74 @@ export class DriverPhotoRepository {
     });
   }
 
+  /**
+   * Keep the images of a driver's newest `keep` photos and drop the rest. The
+   * rows stay: reporting still credits the driver with those shifts, and a
+   * confirmed photo keeps its embedding so it still teaches auto-matching.
+   * Returns how many images were dropped.
+   */
+  public async pruneDriverImages(
+    tenantId: string,
+    driverId: string,
+    keep: number,
+  ): Promise<number> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const { rowCount } = await trx.raw<{ rowCount: number }>(
+        `UPDATE fleet.driver_photos
+            SET photo = NULL,
+                embedding = CASE WHEN match_status = 'CONFIRMED' THEN embedding END,
+                updated_at = now()
+          WHERE tenant_id = ?::uuid AND driver_id = ?::uuid AND photo IS NOT NULL
+            AND id NOT IN (
+              SELECT id FROM fleet.driver_photos
+               WHERE tenant_id = ?::uuid AND driver_id = ?::uuid AND photo IS NOT NULL
+               ORDER BY COALESCE(captured_at, triggered_at) DESC
+               LIMIT ?)`,
+        [tenantId, driverId, tenantId, driverId, keep],
+      );
+      return rowCount ?? 0;
+    });
+  }
+
+  /** Delete failed captures older than `before` (all tenants) — nothing to show or learn from. */
+  public async deleteFailedBefore(before: Date): Promise<number> {
+    return withPlatformContext(this.knex, async (trx) =>
+      trx(TABLE).where('status', 'FAILED').where('updated_at', '<', before).delete(),
+    );
+  }
+
+  /** Face enrolment of every driver that has at least one filed photo. */
+  public async faceSummaries(tenantId: string): Promise<DriverFaceSummary[]> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const { rows } = await trx.raw<{
+        rows: Array<{
+          driver_id: string;
+          ref_count: string;
+          photos: string;
+          profile_photo_id: string | null;
+        }>;
+      }>(
+        `SELECT driver_id,
+                COUNT(*) FILTER (WHERE match_status = 'CONFIRMED' AND face_status = 'FOUND'
+                                   AND embedding IS NOT NULL) AS ref_count,
+                COUNT(*) FILTER (WHERE photo IS NOT NULL) AS photos,
+                (ARRAY_AGG(id ORDER BY (match_status = 'CONFIRMED') DESC, face_score DESC NULLS LAST,
+                                       COALESCE(captured_at, triggered_at) DESC)
+                   FILTER (WHERE photo IS NOT NULL AND face_status = 'FOUND'))[1] AS profile_photo_id
+           FROM fleet.driver_photos
+          WHERE tenant_id = ?::uuid AND driver_id IS NOT NULL AND status = 'READY'
+          GROUP BY driver_id`,
+        [tenantId],
+      );
+      return rows.map((r) => ({
+        driverId: r.driver_id,
+        references: Number(r.ref_count),
+        photos: Number(r.photos),
+        profilePhotoId: r.profile_photo_id,
+      }));
+    });
+  }
+
   public async list(tenantId: string, f: DriverPhotoListFilters): Promise<DriverPhotoView[]> {
     return withTenantContext(this.knex, tenantId, async (trx) => {
       const q = trx(`${TABLE} as p`)
@@ -384,6 +463,8 @@ export class DriverPhotoRepository {
       if (f.vehicleId) q.where('p.vehicle_id', f.vehicleId);
       if (f.readyOnly) q.where('p.status', 'READY');
       if (f.before) q.where('p.triggered_at', '<', f.before);
+      // Pruned photos keep their row (reporting credits the shift) but have no image to show.
+      q.where((w) => w.whereNot('p.status', 'READY').orWhereNotNull('p.photo'));
       const rows = await q
         .orderBy('p.triggered_at', 'desc')
         .limit(f.limit)
@@ -434,9 +515,9 @@ export class DriverPhotoRepository {
     return withTenantContext(this.knex, tenantId, async (trx) => {
       const { rows } = await trx.raw<{ rows: Array<Record<string, string>> }>(
         `SELECT
-           COUNT(*) FILTER (WHERE status = 'READY' AND match_status = 'UNASSIGNED') AS unassigned,
-           COUNT(*) FILTER (WHERE match_status = 'AUTO') AS auto,
-           COUNT(*) FILTER (WHERE match_status = 'CONFIRMED') AS confirmed,
+           COUNT(*) FILTER (WHERE status = 'READY' AND match_status = 'UNASSIGNED' AND photo IS NOT NULL) AS unassigned,
+           COUNT(*) FILTER (WHERE match_status = 'AUTO' AND photo IS NOT NULL) AS auto,
+           COUNT(*) FILTER (WHERE match_status = 'CONFIRMED' AND photo IS NOT NULL) AS confirmed,
            COUNT(*) FILTER (WHERE status IN ('PENDING', 'CAPTURING', 'DOWNLOADING')) AS in_progress,
            COUNT(*) FILTER (WHERE status = 'FAILED') AS failed
          FROM fleet.driver_photos WHERE tenant_id = ?::uuid`,

@@ -3,6 +3,7 @@
  *
  *   GET    /api/v1/driver-photos                 ?matchStatus&driverId&vehicleId&readyOnly&before&limit
  *   GET    /api/v1/driver-photos/counts
+ *   GET    /api/v1/driver-photos/faces           per-driver face enrolment + profile photo
  *   GET    /api/v1/driver-photos/:id/image       image/jpeg
  *   PUT    /api/v1/driver-photos/:id/driver      { driverId: uuid | null }  — file / move / clear
  *   DELETE /api/v1/driver-photos/:id
@@ -80,6 +81,12 @@ export class DriverPhotosController {
   @RequirePermissions('fleet.driver.read')
   public async counts(@CurrentUser() auth: AuthenticatedContext, @Req() req: Request) {
     return { data: await this.photos.counts(actorFrom(auth, req)) };
+  }
+
+  @Get('faces')
+  @RequirePermissions('fleet.driver.read')
+  public async faces(@CurrentUser() auth: AuthenticatedContext, @Req() req: Request) {
+    return { data: await this.photos.faces(actorFrom(auth, req)) };
   }
 
   @Get(':id/image')
