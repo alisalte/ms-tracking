@@ -13,6 +13,9 @@ export const EVIDENCE_STATUSES = [
 
 export type EvidenceStatus = (typeof EVIDENCE_STATUSES)[number];
 
+/** DEVICE = the unit's event snapshot; CLIP = a frame of the alarm's AB4 clip. */
+export type PhotoSource = 'DEVICE' | 'CLIP';
+
 export const VIDEO_STATUSES = ['PENDING', 'FETCHING', 'READY', 'FAILED', 'SKIPPED'] as const;
 export type VideoEvidenceStatus = (typeof VIDEO_STATUSES)[number];
 
@@ -33,6 +36,7 @@ export interface AlarmEvidenceRecord {
   readonly photoName: string | null;
   readonly photoBytes: Buffer | null;
   readonly photoContentType: string | null;
+  readonly photoSource: PhotoSource | null;
   readonly commandId: string | null;
   readonly error: string | null;
   readonly videoWindowFrom: Date | null;

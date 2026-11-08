@@ -1208,6 +1208,7 @@
       "noVideos": "No saved video in this window",
       "noPhotos": "No saved photos in this window",
       "noEventVideos": "No event video was stored for this alarm",
+      "photoFromClip": "Frame from the alarm video (the device sent no photo)",
       "noEventPhotos": "No event photo was stored for this alarm",
       "videos": "Videos",
       "photos": "Photos",

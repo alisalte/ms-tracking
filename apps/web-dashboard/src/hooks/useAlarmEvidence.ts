@@ -56,7 +56,9 @@ export function useAlarmEvidence(alarm: Alarm) {
   const criticalEvidence = needsPhotoEvidence(alarm);
   const mediaHint = useMemo(() => alarmEventMediaHint(alarm), [alarm]);
   const eventPhotoName = mediaHint.photoName;
-  const eventMedia = dms || Boolean(eventPhotoName);
+  // The platform keeps a photo + clip window for this alarm (accident, SOS,
+  // DMS…): show that event evidence, not just a list of nearby recordings.
+  const eventMedia = dms || Boolean(eventPhotoName) || Boolean(platform.data);
   const eventPhoto = useMemo(() => parseMdvrEventPhotoName(eventPhotoName), [eventPhotoName]);
   const window = useMemo(() => alarmEvidenceWindow(alarm.raisedAt), [alarm.raisedAt]);
   const raisedAtMs = useMemo(() => new Date(alarm.raisedAt).getTime(), [alarm.raisedAt]);
@@ -266,6 +268,8 @@ export function useAlarmEvidence(alarm: Alarm) {
   // operators should not hunt for a "Load" button on life-safety alarms.
   useEffect(() => {
     if (!criticalEvidence || !hasCamera || loadRequested || channelsLoading || !isFetched) return;
+    // Wait for the platform row: it decides event evidence vs. nearby list.
+    if (!platformSettled) return;
     if (eventMedia) requestLoad();
     else requestNearby();
   }, [
@@ -275,6 +279,7 @@ export function useAlarmEvidence(alarm: Alarm) {
     channelsLoading,
     isFetched,
     eventMedia,
+    platformSettled,
     requestLoad,
     requestNearby,
   ]);
@@ -285,6 +290,7 @@ export function useAlarmEvidence(alarm: Alarm) {
     eventPhoto,
     photoUrl,
     photoBlob,
+    photoFromClip: platform.data?.photoSource === 'CLIP',
     photoError,
     videoChannel,
     videoWindow,

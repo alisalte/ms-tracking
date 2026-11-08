@@ -344,6 +344,8 @@ export interface AlarmPlatformEvidence {
     | 'SKIPPED_COOLDOWN';
   photoName: string | null;
   photoAvailable: boolean;
+  /** DEVICE = the unit's snapshot; CLIP = a frame of the alarm's own video. */
+  photoSource?: 'DEVICE' | 'CLIP' | null;
   error: string | null;
   videoStatus: 'PENDING' | 'FETCHING' | 'READY' | 'FAILED' | 'SKIPPED' | null;
   videoChannel: number | null;
@@ -379,6 +381,11 @@ export function useAlarmPlatformEvidence(alarmId: string | null, enabled = true)
       const v = q.state.data?.videoStatus;
       if (s === 'PENDING' || s === 'FETCHING') return 5_000;
       if (v === 'PENDING' || v === 'FETCHING') return 5_000;
+      // A frame of the clip can still land a minute after the clip is READY.
+      const created = q.state.data ? Date.parse(q.state.data.createdAt) : Number.NaN;
+      if (q.state.data && !q.state.data.photoAvailable && Date.now() - created < 3 * 60_000) {
+        return 5_000;
+      }
       return false;
     },
   });

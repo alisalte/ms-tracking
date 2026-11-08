@@ -75,6 +75,14 @@ const JOB_COLS = [
   'video_window_to',
 ] as const;
 
+/** Seconds after the clip window ends before AB4 asks the card for it. */
+const CLIP_SETTLE_SECONDS = 20;
+
+/** Rows a device photo may fill: unfinished ones, or ones holding only a clip frame. */
+function photoAttachable(q: Knex.QueryBuilder): void {
+  q.whereIn('status', PHOTO_ATTACHABLE_STATUSES).orWhere('photo_source', 'CLIP');
+}
+
 export class EvidenceCaptureRepository {
   constructor(private readonly knex: Knex) {}
 
@@ -106,6 +114,9 @@ export class EvidenceCaptureRepository {
         .where({ video_status: 'PENDING' })
         .whereNotNull('video_window_from')
         .whereNotNull('video_window_to')
+        // AB4 only once the whole window is on the card: the worker grabs a
+        // frame of this playback, and a window still being recorded is cut short.
+        .whereRaw('video_window_to < now() - make_interval(secs => ?)', [CLIP_SETTLE_SECONDS])
         .orderBy('created_at', 'asc')
         .limit(limit)
         .forUpdate()
@@ -158,6 +169,7 @@ export class EvidenceCaptureRepository {
     await withTenantContext(this.knex, tenantId, async (trx) => {
       await trx('notification.alarm_evidence')
         .where({ tenant_id: tenantId, id })
+        .whereNot('status', 'PHOTO_READY')
         .update({
           status: 'PHOTO_FAILED',
           error: error.slice(0, 2000),
@@ -206,6 +218,7 @@ export class EvidenceCaptureRepository {
     await withTenantContext(this.knex, tenantId, async (trx) => {
       const patch: Record<string, unknown> = {
         status: 'PHOTO_READY',
+        photo_source: 'DEVICE',
         photo_bytes: photoBytes,
         photo_content_type: contentType,
         error: null,
@@ -229,9 +242,10 @@ export class EvidenceCaptureRepository {
       trx('notification.alarm_evidence')
         .where({ tenant_id: tenantId, device_id: deviceId })
         .whereRaw("lower(photo_name) like ? escape '\\'", [pattern])
-        .whereIn('status', PHOTO_ATTACHABLE_STATUSES)
+        .where(photoAttachable)
         .update({
           status: 'PHOTO_READY',
+          photo_source: 'DEVICE',
           photo_bytes: photoBytes,
           photo_content_type: contentType,
           error: null,
@@ -252,15 +266,42 @@ export class EvidenceCaptureRepository {
       trx('notification.alarm_evidence')
         .where({ tenant_id: tenantId, device_id: deviceId })
         .whereRaw('lower(photo_name) = lower(?)', [photoName])
-        .whereIn('status', PHOTO_ATTACHABLE_STATUSES)
+        .where(photoAttachable)
         .update({
           status: 'PHOTO_READY',
+          photo_source: 'DEVICE',
           photo_bytes: photoBytes,
           photo_content_type: contentType,
           error: null,
           updated_at: trx.fn.now(),
         }),
     );
+  }
+
+  /** Store a frame of the alarm's clip unless a photo is already there. */
+  public async markClipFrame(tenantId: string, id: string, photoBytes: Buffer): Promise<boolean> {
+    return withTenantContext(this.knex, tenantId, async (trx) => {
+      const n = await trx('notification.alarm_evidence')
+        .where({ tenant_id: tenantId, id })
+        .whereNot('status', 'PHOTO_READY')
+        .update({
+          status: 'PHOTO_READY',
+          photo_source: 'CLIP',
+          photo_bytes: photoBytes,
+          photo_content_type: 'image/jpeg',
+          updated_at: trx.fn.now(),
+        });
+      return n > 0;
+    });
+  }
+
+  /** Put a claimed video job back (its device is busy with another clip). */
+  public async releaseVideo(tenantId: string, id: string): Promise<void> {
+    await withTenantContext(this.knex, tenantId, async (trx) => {
+      await trx('notification.alarm_evidence')
+        .where({ tenant_id: tenantId, id, video_status: 'FETCHING' })
+        .update({ video_status: 'PENDING', updated_at: trx.fn.now() });
+    });
   }
 
   public async markVideoReady(tenantId: string, id: string): Promise<void> {
@@ -274,8 +315,10 @@ export class EvidenceCaptureRepository {
 
   public async markFailedByCommandId(commandId: string, error: string): Promise<void> {
     return withPlatformContext(this.knex, async (trx) => {
+      // A photo the unit uploaded meanwhile (FTP) outlives a failed D00.
       const photo = await trx('notification.alarm_evidence')
         .where({ command_id: commandId })
+        .whereNot('status', 'PHOTO_READY')
         .update({
           status: 'PHOTO_FAILED',
           error: error.slice(0, 2000),

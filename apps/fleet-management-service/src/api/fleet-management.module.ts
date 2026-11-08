@@ -342,13 +342,15 @@ export class FleetManagementModule {
             DEVICE_REPOSITORY,
             DEVICE_COMMAND_SERVICE,
             DRIVER_PHOTO_SERVICE,
+            FTP_PHOTO_RECEIVER,
           ],
           useFactory: (
             cfg: FleetManagementConfig,
             devices: DeviceRepository,
             commands: DeviceCommandService,
             photos: DriverPhotoService,
-          ) => new SessionLifecycleConsumer(cfg, devices, commands, photos),
+            ftp: FtpPhotoReceiver,
+          ) => new SessionLifecycleConsumer(cfg, devices, commands, photos, ftp),
         },
         // Command-ack consumer (non-fatal at boot) + F-07 evidence photo attach.
         {
@@ -367,10 +369,16 @@ export class FleetManagementModule {
         },
         {
           provide: EVIDENCE_CAPTURE_WORKER,
-          inject: [EVIDENCE_CAPTURE_REPOSITORY, DEVICE_COMMAND_SERVICE, FLEET_MANAGEMENT_CONFIG],
+          inject: [
+            EVIDENCE_CAPTURE_REPOSITORY,
+            DEVICE_COMMAND_SERVICE,
+            DEVICE_REPOSITORY,
+            FLEET_MANAGEMENT_CONFIG,
+          ],
           useFactory: (
             evidence: EvidenceCaptureRepository,
             commands: DeviceCommandService,
+            devices: DeviceRepository,
             cfg: FleetManagementConfig,
           ) =>
             new EvidenceCaptureWorker({
@@ -378,6 +386,19 @@ export class FleetManagementModule {
               commands,
               intervalMs: cfg.FLEET_EVIDENCE_WORKER_INTERVAL_MS,
               batchSize: cfg.FLEET_EVIDENCE_WORKER_BATCH_SIZE,
+              // Alarms without a unit snapshot get a frame of their own clip.
+              clipFrames: cfg.FLEET_FACE_SERVICE_URL
+                ? {
+                    frames: new HttpFaceClient(cfg.FLEET_FACE_SERVICE_URL),
+                    devices,
+                    rtspBaseUrl: cfg.FLEET_MEDIAMTX_RTSP_URL,
+                    rtmpPath: cfg.MDVR_RTMP_PATH,
+                    compression: {
+                      maxEdge: cfg.FLEET_EVIDENCE_PHOTO_MAX_EDGE,
+                      quality: cfg.FLEET_EVIDENCE_PHOTO_QUALITY,
+                    },
+                  }
+                : null,
             }),
         },
         // FTP alarm-photo receiver (B64 uploads) + per-device provisioning.
@@ -388,19 +409,21 @@ export class FleetManagementModule {
             DEVICE_REPOSITORY,
             EVIDENCE_CAPTURE_REPOSITORY,
             DEVICE_COMMAND_SERVICE,
+            DEVICE_COMMAND_REPOSITORY,
           ],
           useFactory: async (
             cfg: FleetManagementConfig,
             devices: DeviceRepository,
             evidence: EvidenceCaptureRepository,
             commands: DeviceCommandService,
+            commandRepo: DeviceCommandRepository,
           ) => {
             const host = cfg.FLEET_FTP_PUBLIC_HOST
               ? cfg.FLEET_FTP_PUBLIC_HOST
               : cfg.FLEET_FTP_SECRET
                 ? await resolveMdvrPublicHost(cfg.MDVR_PUBLIC_HOST)
                 : '';
-            return new FtpPhotoReceiver(cfg, host, devices, evidence, commands);
+            return new FtpPhotoReceiver(cfg, host, devices, evidence, commands, commandRepo);
           },
         },
       ],

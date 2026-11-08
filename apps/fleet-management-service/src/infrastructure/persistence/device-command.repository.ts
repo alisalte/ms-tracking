@@ -198,6 +198,26 @@ export class DeviceCommandRepository {
     return (row as DeviceCommandRow | undefined) ?? null;
   }
 
+  /** Newest ACKED command of this code that set a parameter (not a bare readback). */
+  public async latestAckedSetting(
+    tenantId: string,
+    deviceId: string,
+    commandCode: string,
+    param: string,
+  ): Promise<DeviceCommandRow | null> {
+    const row = await this.knex
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('device_id = ?::uuid', [deviceId])
+      .where('command_code', commandCode)
+      .where('status', 'ACKED')
+      .whereRaw('params->>? is not null', [param])
+      .orderBy('issued_at', 'desc')
+      .first();
+    return (row as DeviceCommandRow | undefined) ?? null;
+  }
+
   /** Command lookup by id regardless of terminal state (sent-event correlation). */
   public async findByIdAnyStatus(tenantId: string, id: string): Promise<DeviceCommandRow | null> {
     return this.findById(tenantId, id);

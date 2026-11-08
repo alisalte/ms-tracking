@@ -96,6 +96,8 @@ interface PlaybackPanelProps {
   channels: CameraChannel[];
   /** Preselect this device's first MDVR camera (alarm → playback deep link). */
   initialDeviceId?: string | null;
+  /** Preselect this exact camera (the alarm clip's) instead of the device's first one. */
+  initialChannelId?: string | null;
   /** ISO start of the alarm evidence window. */
   initialFrom?: string | null;
   /** ISO end of the alarm evidence window. */
@@ -105,6 +107,7 @@ interface PlaybackPanelProps {
 export function PlaybackPanel({
   channels,
   initialDeviceId,
+  initialChannelId,
   initialFrom,
   initialTo,
 }: PlaybackPanelProps) {
@@ -182,7 +185,7 @@ export function PlaybackPanel({
     const mine = channels
       .filter((c) => isMdvrChannel(c) && (!initialDeviceId || c.deviceId === initialDeviceId))
       .sort((a, b) => (a.logicalChannel ?? 99) - (b.logicalChannel ?? 99));
-    const ch = mine[0];
+    const ch = mine.find((c) => c.id === initialChannelId) ?? mine[0];
     if (!ch) return;
     deepLinkApplied.current = true;
     setChannelId(ch.id);
@@ -193,7 +196,7 @@ export function PlaybackPanel({
       setToInput(toDateInput(toMs));
       void searchResources(ch, fromMs, toMs);
     }
-  }, [channels, initialDeviceId, initialFrom, initialTo, searchResources]);
+  }, [channels, initialDeviceId, initialChannelId, initialFrom, initialTo, searchResources]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: cursorMs gates start; ticks use functional setState
   useEffect(() => {

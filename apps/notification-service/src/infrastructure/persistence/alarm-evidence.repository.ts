@@ -6,6 +6,7 @@ import {
   type AlarmEvidenceRecord,
   EVIDENCE_COOLDOWN_MS,
   type EvidenceStatus,
+  type PhotoSource,
   type VideoEvidenceStatus,
   computeEvidenceExpiry,
 } from '../../domain/alarm-evidence.js';
@@ -21,6 +22,7 @@ interface EvidenceRow {
   photo_name: string | null;
   photo_bytes: Buffer | null;
   photo_content_type: string | null;
+  photo_source?: string | null;
   command_id: string | null;
   error: string | null;
   video_window_from: Date | string | null;
@@ -54,6 +56,7 @@ function mapRow(r: EvidenceRow, includeBytes = false): AlarmEvidenceRecord {
     photoName: r.photo_name,
     photoBytes: includeBytes ? r.photo_bytes : null,
     photoContentType: r.photo_content_type,
+    photoSource: (r.photo_source as PhotoSource | null | undefined) ?? null,
     commandId: r.command_id,
     error: r.error,
     videoWindowFrom: asDateOrNull(r.video_window_from),
