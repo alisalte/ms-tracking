@@ -32,6 +32,9 @@ const GeofencePage = lazy(() =>
   import('@/pages/GeofencePage').then((m) => ({ default: m.GeofencePage })),
 );
 const MapPage = lazy(() => import('@/pages/MapPage').then((m) => ({ default: m.MapPage })));
+const OrthophotoPage = lazy(() =>
+  import('@/pages/OrthophotoPage').then((m) => ({ default: m.OrthophotoPage })),
+);
 const ReportsPage = lazy(() =>
   import('@/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
 );
@@ -249,6 +252,16 @@ export const router = createBrowserRouter([
           {
             path: '/admin',
             element: <AdminPage />,
+          },
+          {
+            path: '/orthophoto',
+            element: (
+              <LazyWrapper>
+                <RequirePermission permission={PERMISSIONS.mapsWrite}>
+                  <OrthophotoPage />
+                </RequirePermission>
+              </LazyWrapper>
+            ),
           },
           {
             path: '/geofences',

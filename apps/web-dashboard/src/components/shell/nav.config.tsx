@@ -113,6 +113,12 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: MapPin,
         permission: PERMISSIONS.mapsRead,
       },
+      {
+        key: 'orthophoto',
+        path: '/orthophoto',
+        icon: MapIcon,
+        permission: PERMISSIONS.mapsWrite,
+      },
     ],
   },
   {

@@ -78,7 +78,8 @@
     "consoleReady": "Console ready",
     "spatialAnalytics": "Location analytics",
     "more": "More",
-    "home": "Home"
+    "home": "Home",
+    "orthophoto": "Drone map"
   },
   "common": {
     "search": "Search...",
@@ -440,7 +441,8 @@
       "markerVehicle": "Vehicle body",
       "markerVehicleHint": "Top-down car, truck, trailer",
       "markerNav": "Direction arrow",
-      "markerNavHint": "Colored circle; arrow shows heading"
+      "markerNavHint": "Colored circle; arrow shows heading",
+      "orthophoto": "Drone map layer"
     },
     "basemap": {
       "google": "Google Streets",
@@ -3637,5 +3639,19 @@
         "km": "km"
       }
     }
+  },
+  "orthophoto": {
+    "title": "Drone map",
+    "subtitle": "Upload this month's ECW file (up to 2 GB). When conversion finishes it replaces the previous month on every map.",
+    "choose": "Choose ECW file",
+    "uploading": "Uploading… {{percent}}%",
+    "processing": "Converting {{name}}. This can take a while; the current map stays live and you can leave this page.",
+    "failed": "Conversion of {{name}} failed.",
+    "current": "Published map",
+    "none": "No drone map has been published yet.",
+    "remove": "Remove",
+    "errorType": "Only .ecw files are accepted.",
+    "errorSize": "The file must be 2 GB or smaller.",
+    "errorRequest": "The request failed. Please try again."
   }
 }

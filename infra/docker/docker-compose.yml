@@ -718,6 +718,8 @@ services:
       NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-FleetVision-MapEngine/1.0}
       MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
       MAP_CACHE_TTL_SECONDS: ${MAP_CACHE_TTL_SECONDS:-300}
+    volumes:
+      - orthophoto-data:/data/orthophotos
     ports:
       - "${MAP_ENGINE_PORT:-3009}:3009"
     healthcheck:
@@ -806,6 +808,8 @@ networks:
 
 volumes:
   # Pinned names so compose project/dir changes do not create a second empty volume.
+  orthophoto-data:
+    name: fleetvision_orthophoto-data
   postgres-data:
     name: fleetvision_postgres-data
   redis-data:

@@ -15,6 +15,8 @@ import {
   persistBasemap,
 } from '@/lib/basemaps';
 
+import { useOrthophotoOverlay } from './useOrthophotoOverlay';
+
 /** Stable empty overlay list — do not pass `[]` inline (new array every render). */
 export const NO_OVERLAY_LAYERS: readonly string[] = [];
 
@@ -116,6 +118,8 @@ export function useFollowBasemap(
       window.clearTimeout(t2);
     };
   }, [active, beforeLayerIds, i18n.language, mapReady, mapRef]);
+
+  useOrthophotoOverlay(mapRef, mapReady, active);
 
   return { basemap: active, setBasemap };
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMapMarkerStyle } from '@/hooks/useMapMarkerStyle';
+import { useOrthophotoVisible } from '@/hooks/useOrthophotoOverlay';
 import { BASEMAPS, type BasemapGroup, type BasemapId } from '@/lib/basemaps';
 import type { MapMarkerStyle } from '@/lib/map-marker-style';
 
@@ -37,6 +38,7 @@ export function MapSettingsPanel({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [markerStyle, setMarkerStyle] = useMapMarkerStyle();
+  const [orthophotoVisible, setOrthophotoVisible] = useOrthophotoVisible();
 
   useEffect(() => {
     if (!open) return;
@@ -109,6 +111,18 @@ export function MapSettingsPanel({
             onPick={pickBasemap}
             t={t}
           />
+          <label
+            data-testid="map-settings-orthophoto"
+            className="flex cursor-pointer items-center justify-between gap-2 rounded-xl px-1.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-graydark-700 dark:hover:bg-white/5"
+          >
+            {t('map.settings.orthophoto')}
+            <input
+              type="checkbox"
+              checked={orthophotoVisible}
+              onChange={(e) => setOrthophotoVisible(e.target.checked)}
+              className="size-4 accent-brand-500"
+            />
+          </label>
           <p className="px-1 pt-3 pb-2 text-xs font-bold tracking-[0.08em] text-gray-500 uppercase dark:text-graydark-600">
             {t('map.settings.markers')}
           </p>

@@ -14,6 +14,7 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { ClusterService } from '../application/cluster-service.js';
 import { GeofenceService } from '../application/geofence-service.js';
 import { HeatService } from '../application/heat-service.js';
+import { OrthophotoService } from '../application/orthophoto-service.js';
 import { PoiService } from '../application/poi-service.js';
 import { ProviderRouter } from '../application/provider-router.js';
 import { ReplayService } from '../application/replay-service.js';
@@ -22,6 +23,7 @@ import type { MapProvider } from '../domain/map-provider.js';
 import { RedisGeoCache } from '../infrastructure/cache/redis-geo-cache.js';
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
 import { GeofenceRepository } from '../infrastructure/persistence/geofence.repository.js';
+import { OrthophotoRepository } from '../infrastructure/persistence/orthophoto.repository.js';
 import { PoiRepository } from '../infrastructure/persistence/poi.repository.js';
 import { ReplayRepository } from '../infrastructure/persistence/replay.repository.js';
 import { LocalProvider } from '../infrastructure/provider/local-provider.js';
@@ -30,6 +32,7 @@ import { OsrmProvider } from '../infrastructure/provider/osrm-provider.js';
 import { GeofencesController } from './geofences.controller.js';
 import { LocationController } from './location.controller.js';
 import { MapController } from './map.controller.js';
+import { ORTHOPHOTO_DATA_DIR, OrthophotoController } from './orthophoto.controller.js';
 import { RouteController } from './route.controller.js';
 import {
   CLUSTER_SERVICE,
@@ -40,6 +43,7 @@ import {
   HEAT_SERVICE,
   MAP_ENGINE_CONFIG,
   MAP_PROVIDER,
+  ORTHOPHOTO_SERVICE,
   POI_REPOSITORY,
   POI_SERVICE,
   PROVIDER_ROUTER,
@@ -169,12 +173,29 @@ export class MapEngineModule {
           useFactory: (repo: PoiRepository) => new PoiService({ repo }),
         },
 
+        {
+          provide: ORTHOPHOTO_SERVICE,
+          inject: [KNEX_TOKEN],
+          useFactory: (knex: unknown) =>
+            new OrthophotoService({
+              repo: new OrthophotoRepository(knex as never),
+              dataDir: ORTHOPHOTO_DATA_DIR,
+              tileSecret: config.JWT_SECRET,
+            }),
+        },
+
         MapController,
         LocationController,
         RouteController,
         GeofencesController,
       ],
-      controllers: [MapController, LocationController, RouteController, GeofencesController],
+      controllers: [
+        MapController,
+        LocationController,
+        RouteController,
+        GeofencesController,
+        OrthophotoController,
+      ],
     };
   }
 }

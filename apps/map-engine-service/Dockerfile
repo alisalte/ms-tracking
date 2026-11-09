@@ -49,6 +49,16 @@ COPY packages ./packages
 COPY apps/map-engine-service ./apps/map-engine-service
 RUN pnpm --filter @fleetvision/map-engine-service... build
 
+# ---- Stage: ecw2tiff (MIT, SDK-free ECW decoder) ----------------------------
+# Pinned to an audited commit; pure-Rust build so the runtime needs no libs.
+FROM rust:1-slim-bookworm AS ecw2tiff
+ENV ECW2TIFF_COMMIT=b50288e
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && git clone https://github.com/itamarwe/ecw2tiff /src \
+    && cd /src && git checkout "$ECW2TIFF_COMMIT" \
+    && cargo build --release --locked --no-default-features \
+    && cp target/release/ecw2tiff /usr/local/bin/ecw2tiff
+
 # ---- Stage 2: runtime (non-root) -------------------------------------------
 # NOTE: the canonical base is `gcr.io/distroless/nodejs22-debian12:nonroot`
 # (no shell, smaller). That registry is blocked from some regions (403), so we
@@ -56,6 +66,12 @@ RUN pnpm --filter @fleetvision/map-engine-service... build
 FROM node:22-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
+
+# Orthophoto pipeline: ecw2tiff decodes ECW, GDAL builds the COG and renders tiles.
+RUN apt-get update && apt-get install -y --no-install-recommends gdal-bin \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data/orthophotos && chown node:node /data/orthophotos
+COPY --from=ecw2tiff /usr/local/bin/ecw2tiff /usr/local/bin/ecw2tiff
 
 # Install only production dependencies (workspace-aware). --ignore-scripts
 # skips the root `prepare` husky hook (not present in a prod install).
