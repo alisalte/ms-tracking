@@ -312,6 +312,18 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(COMMAND_DISPATCHER) private readonly commands: CommandDispatcher,
   ) {}
 
+  /** Adapters behind a shared port: `auto` = every enabled adapter, `a+b` = those named. */
+  private resolveCandidates(spec: string): ProtocolAdapter[] {
+    if (spec === 'auto') return [...this.adapters.enabled()];
+    const found: ProtocolAdapter[] = [];
+    for (const id of spec.split('+')) {
+      const adapter = this.adapters.get(id);
+      if (adapter) found.push(adapter);
+      else this.logger.warn(`Shared listener '${spec}': adapter '${id}' not enabled — left out.`);
+    }
+    return found;
+  }
+
   /** Open the configured TCP/UDP listeners once the DI graph is ready. */
   public async onApplicationBootstrap(): Promise<void> {
     // Sprint D §11 — start push-based registry cache invalidation.
@@ -327,16 +339,23 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
       const udpServer = new UdpServer();
 
       for (const l of listeners) {
-        const adapter = this.adapters.get(l.adapterId);
-        if (!adapter) {
+        // `a+b` / `auto` = several protocols multiplexed on one port (06 §2.3).
+        const shared = l.adapterId === 'auto' || l.adapterId.includes('+');
+        const candidates = shared ? this.resolveCandidates(l.adapterId) : [];
+        const adapter = shared ? null : this.adapters.get(l.adapterId);
+        if (shared ? candidates.length === 0 : !adapter) {
           this.logger.warn(`Listener '${l.adapterId}' has no enabled adapter — skipping.`);
+          continue;
+        }
+        if (shared && l.transport === 'udp') {
+          this.logger.warn(`Listener '${l.adapterId}:udp' — shared ports are TCP-only, skipping.`);
           continue;
         }
         if (l.transport === 'tcp') {
           tcpServer.add(
             `${l.adapterId}:tcp:${l.port}`,
             new TcpListener({
-              adapter,
+              ...(shared ? { candidates } : { adapter: adapter as ProtocolAdapter }),
               port: l.port,
               host: this.config.GATEWAY_HOST,
               idleTimeoutMs: this.config.GATEWAY_TCP_IDLE_TIMEOUT_SECONDS * 1000,
@@ -351,12 +370,12 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
                   ctx.socket.write(data),
                 );
               },
-              onPacket: async (ctx, payload) => this.onPacket(ctx, adapter, payload),
+              onPacket: async (ctx, payload) => this.onPacket(ctx, ctx.adapter, payload),
               onClose: (ctx, reason) => {
                 if (ctx.session.state === 'NEW' || ctx.session.state === 'IDENTIFY') {
                   this.logger.warn(
                     `Unauthenticated close (${reason}) session=${ctx.session.id} ` +
-                      `from ${ctx.remoteAddress}:${ctx.remotePort} [${adapter.id}] ` +
+                      `from ${ctx.remoteAddress}:${ctx.remotePort} [${ctx.adapter.id}] ` +
                       `state=${ctx.session.state} — no IMEI resolved; AB2 stays HELD.`,
                   );
                 }
@@ -368,7 +387,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
               // the live-video AB2 investigation).
               onError: (ctx, err) => {
                 this.logger.warn(
-                  `Frame error on session ${ctx.session.id} from ${ctx.remoteAddress}:${ctx.remotePort} [${adapter.id}]: ${err.message}`,
+                  `Frame error on session ${ctx.session.id} from ${ctx.remoteAddress}:${ctx.remotePort} [${ctx.adapter.id}]: ${err.message}`,
                 );
               },
             }),
@@ -377,12 +396,12 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
           udpServer.add(
             `${l.adapterId}:udp:${l.port}`,
             new UdpListener({
-              adapter,
+              adapter: adapter as ProtocolAdapter,
               port: l.port,
               host: this.config.GATEWAY_HOST,
               openSession: (init) => this.openSession(init),
               onPacket: async (ctx, payload) => {
-                await this.onPacket(ctx, adapter, payload);
+                await this.onPacket(ctx, adapter as ProtocolAdapter, payload);
               },
             }),
           );

@@ -49,7 +49,7 @@ const DEFAULT_OPTIONS: AuthResolverOptions = {
   autoEnroll: false,
 };
 
-const ENROLLABLE_PROTOCOLS = new Set(['gt06', 'jt808', 'meitrack', 'stub']);
+const ENROLLABLE_PROTOCOLS = new Set(['gt06', 'jt808', 'meitrack', 'teltonika', 'stub']);
 
 /** The auth resolution outcome the dispatcher acts on. */
 export type AuthOutcome =

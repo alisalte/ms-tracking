@@ -70,6 +70,8 @@ export function deviceProtocolColor(p: DeviceProtocol): BadgeProps['color'] {
       return 'purple';
     case 'meitrack':
       return 'teal';
+    case 'teltonika':
+      return 'pink';
     default:
       return 'gray';
   }

@@ -17,6 +17,7 @@ import { type Server, type Socket, createServer } from 'node:net';
  */
 import { Logger, type OnApplicationShutdown } from '@nestjs/common';
 import type { DeviceSession, Transport } from '../../domain/index.js';
+import { DETECTION_THRESHOLD } from '../protocol/adapter-registry.js';
 import type { ProtocolAdapter } from '../protocol/protocol-adapter.js';
 import { ByteReader, NEED_MORE } from './byte-reader.js';
 
@@ -43,8 +44,24 @@ export interface TcpConnectionContext {
  */
 export type TcpPacketHandler = (ctx: TcpConnectionContext, packet: Buffer) => Promise<boolean>;
 
+/**
+ * Bytes a multiplexed listener will buffer while waiting for one candidate
+ * adapter to recognise the connection. The longest signature is Teltonika's
+ * 17-byte IMEI frame; a client that has sent this much without matching is not
+ * speaking any candidate protocol.
+ */
+const MAX_DETECT_BYTES = 64;
+
 export interface TcpListenerOptions {
-  readonly adapter: ProtocolAdapter;
+  /** Dedicated listener: every connection speaks this protocol. */
+  readonly adapter?: ProtocolAdapter;
+  /**
+   * Multiplexed listener (06 §2.3): several protocols share the port. The first
+   * bytes of each connection are peeked and the best-matching candidate (above
+   * the detection threshold) parses the whole connection. The session is opened
+   * only once the protocol is known. Exactly one of `adapter` / `candidates`.
+   */
+  readonly candidates?: readonly ProtocolAdapter[];
   readonly port: number;
   readonly host?: string;
   /** Idle timeout (ms) — socket.setTimeout, reset on each framed read (06 §3.3). */
@@ -80,12 +97,20 @@ export class TcpListener implements OnApplicationShutdown {
   private server: Server | null = null;
 
   constructor(private readonly options: TcpListenerOptions) {
-    this.logger = new Logger(`TcpListener:${options.adapter.id}`);
+    if (!options.adapter === !options.candidates) {
+      throw new Error('TcpListener needs exactly one of `adapter` or `candidates`.');
+    }
+    this.logger = new Logger(`TcpListener:${this.label}`);
+  }
+
+  /** Listener name for logs: the adapter id, or `a+b` for a multiplexed port. */
+  private get label(): string {
+    return this.options.adapter?.id ?? (this.options.candidates ?? []).map((a) => a.id).join('+');
   }
 
   /** Bind and begin accepting. Resolves when listening. */
   public async listen(): Promise<void> {
-    const { port, host, adapter } = this.options;
+    const { port, host } = this.options;
     const server = createServer((socket) => this.handle(socket));
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -95,7 +120,7 @@ export class TcpListener implements OnApplicationShutdown {
       });
     });
     this.server = server;
-    this.logger.log(`Listening on ${host ?? '0.0.0.0'}:${port} [${adapter.meta.name}].`);
+    this.logger.log(`Listening on ${host ?? '0.0.0.0'}:${port} [${this.label}].`);
   }
 
   /** Stop accepting and close all connections. */
@@ -112,13 +137,83 @@ export class TcpListener implements OnApplicationShutdown {
   }
 
   private handle(socket: Socket): void {
+    socket.setNoDelay(true);
+    socket.setTimeout(this.options.idleTimeoutMs);
+    if (this.options.adapter) {
+      this.attach(socket, this.options.adapter, null);
+    } else {
+      this.detectThenAttach(socket);
+    }
+  }
+
+  /** Best candidate for the bytes seen so far, or null while undecided. */
+  private detect(peek: Buffer): ProtocolAdapter | null {
+    let best: { adapter: ProtocolAdapter; confidence: number } | null = null;
+    for (const adapter of this.options.candidates ?? []) {
+      const { confidence } = adapter.detect(peek);
+      if (confidence > (best?.confidence ?? -1)) best = { adapter, confidence };
+    }
+    return best && best.confidence >= DETECTION_THRESHOLD ? best.adapter : null;
+  }
+
+  /**
+   * Multiplexed port: buffer the opening bytes until one candidate recognises
+   * them, then hand the socket (and the buffered bytes) to that adapter. No
+   * session exists yet, so an unrecognised or silent client costs nothing.
+   */
+  private detectThenAttach(socket: Socket): void {
+    const remote = `${socket.remoteAddress ?? 'unknown'}:${socket.remotePort ?? 0}`;
+    let head = Buffer.alloc(0);
+    const stop = () => {
+      socket.off('data', onData);
+      socket.off('error', onFail);
+      socket.off('close', onFail);
+      socket.off('timeout', onFail);
+    };
+    // Diagnostics: an unrecognised or silent client leaves no session, so log
+    // the connection itself and what (if anything) it sent before giving up.
+    this.logger.log(
+      `Shared-port connection from ${remote} [${this.label}] — waiting for first bytes.`,
+    );
+    const onFail = () => {
+      stop();
+      const seen =
+        head.length > 0
+          ? `${head.length}B received hex=${head.subarray(0, 32).toString('hex')}`
+          : 'no bytes received';
+      this.logger.warn(
+        `Shared-port connection from ${remote} [${this.label}] ended before detection: ${seen}`,
+      );
+      socket.destroy();
+    };
+    const onData = (chunk: Buffer) => {
+      head = Buffer.concat([head, chunk]);
+      const adapter = this.detect(head);
+      if (adapter) {
+        stop();
+        this.logger.log(`Detected ${adapter.id} from ${remote} on shared port.`);
+        this.attach(socket, adapter, head);
+        return;
+      }
+      if (head.length >= MAX_DETECT_BYTES) {
+        this.logger.warn(
+          `Unrecognised protocol from ${remote} [${this.label}] — closing. ` +
+            `hex=${head.subarray(0, 32).toString('hex')}`,
+        );
+        onFail();
+      }
+    };
+    socket.on('data', onData);
+    socket.on('error', onFail);
+    socket.on('close', onFail);
+    socket.on('timeout', onFail);
+  }
+
+  /** Open the session and run the read → frame → dispatch loop for `adapter`. */
+  private attach(socket: Socket, adapter: ProtocolAdapter, initial: Buffer | null): void {
     const remoteAddress = socket.remoteAddress ?? 'unknown';
     const remotePort = socket.remotePort ?? 0;
-    const { adapter, openSession, onClose, onOpen, onError, onIdleTimeout, idleTimeoutMs } =
-      this.options;
-
-    socket.setNoDelay(true);
-    socket.setTimeout(idleTimeoutMs);
+    const { openSession, onClose, onOpen, onError, onIdleTimeout } = this.options;
 
     const session = openSession({
       transport: 'tcp',
@@ -154,7 +249,7 @@ export class TcpListener implements OnApplicationShutdown {
     // the same reader and frames reach Kafka out of order.
     let draining: Promise<void> = Promise.resolve();
     let loggedFirstBytes = false;
-    socket.on('data', (chunk: Buffer) => {
+    const onChunk = (chunk: Buffer) => {
       if (!loggedFirstBytes) {
         loggedFirstBytes = true;
         const preview = chunk.subarray(0, FIRST_CHUNK_LOG_BYTES);
@@ -167,7 +262,10 @@ export class TcpListener implements OnApplicationShutdown {
       draining = draining
         .then(() => this.drainFrames(reader, ctx))
         .catch((err) => onError?.(ctx, err as Error));
-    });
+    };
+    socket.on('data', onChunk);
+    // Bytes consumed while detecting the protocol are replayed into the reader.
+    if (initial) onChunk(initial);
 
     socket.on('timeout', () => {
       onIdleTimeout?.(ctx);

@@ -65,7 +65,14 @@ const STATUSES: Array<DeviceStatus | 'all'> = [
   'UNPAIRED',
   'DECOMMISSIONED',
 ];
-const PROTOCOLS: Array<DeviceProtocol | 'all'> = ['all', 'gt06', 'jt808', 'meitrack', 'stub'];
+const PROTOCOLS: Array<DeviceProtocol | 'all'> = [
+  'all',
+  'gt06',
+  'jt808',
+  'meitrack',
+  'teltonika',
+  'stub',
+];
 
 export function DevicesTab({
   devices,

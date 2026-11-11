@@ -4,18 +4,21 @@
  * Sprint 3 shipped GT06 (the reference, most-cloned protocol) + a stub adapter
  * (exercising the plugin/pipeline path without a real vendor format). Sprint 4
  * added Meitrack (Taiwan — MVT380/MT90/P99B). Sprint 8 adds JT808 (Chinese
- * national JT/T 808-2019 commercial-vehicle protocol). The remaining protocols
- * (JT1078, Teltonika, Concox, Queclink) are later-sprint adapter modules against
+ * national JT/T 808-2019 commercial-vehicle protocol). Teltonika (FMB/FMC, codecs
+ * 8/8E/16) follows. The remaining protocols
+ * (JT1078, Concox, Queclink) are later-sprint adapter modules against
  * the same ProtocolAdapter contract.
  */
 import { Gt06Adapter } from './gt06/gt06.adapter.js';
 import { Jt808Adapter } from './jt808/jt808.adapter.js';
 import { MeitrackAdapter } from './meitrack/meitrack.adapter.js';
 import { StubAdapter } from './stub/stub.adapter.js';
+import { TeltonikaAdapter } from './teltonika/teltonika.adapter.js';
 
 export { Gt06Adapter } from './gt06/gt06.adapter.js';
 export { Jt808Adapter } from './jt808/jt808.adapter.js';
 export { MeitrackAdapter } from './meitrack/meitrack.adapter.js';
+export { TeltonikaAdapter } from './teltonika/teltonika.adapter.js';
 export { StubAdapter } from './stub/stub.adapter.js';
 
 /**
@@ -25,5 +28,6 @@ export const BUILTIN_ADAPTERS = [
   new Gt06Adapter(),
   new Jt808Adapter(),
   new MeitrackAdapter(),
+  new TeltonikaAdapter(),
   new StubAdapter(),
 ] as const;

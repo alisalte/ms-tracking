@@ -15,6 +15,7 @@ const PROTOCOL_LABEL: Record<DeviceProtocol, string> = {
   meitrack: 'Meitrack',
   jt808: 'JT/T 808',
   gt06: 'GT06',
+  teltonika: 'Teltonika',
   stub: 'Stub',
 };
 

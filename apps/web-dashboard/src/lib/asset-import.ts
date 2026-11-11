@@ -64,7 +64,7 @@ export interface ParsedAssetImport<T> {
   issues: ImportRowIssue[];
 }
 
-const PROTOCOLS = new Set<DeviceProtocol>(['gt06', 'jt808', 'meitrack', 'stub']);
+const PROTOCOLS = new Set<DeviceProtocol>(['gt06', 'jt808', 'meitrack', 'teltonika', 'stub']);
 
 function normalizeHeader(h: string): string {
   return h
@@ -216,6 +216,7 @@ function normalizeProtocol(raw: string): DeviceProtocol | null {
   if (t === 'gt06' || t === 'gt06n') return 'gt06';
   if (t === 'jt808' || t === 'jtt808' || t === 'jt808') return 'jt808';
   if (t === 'meitrack' || t === 'mei' || t === 'mdvr') return 'meitrack';
+  if (t === 'teltonika' || t === 'tlt' || t === 'fmb640' || t === 'fmb') return 'teltonika';
   if (t === 'stub') return 'stub';
   return PROTOCOLS.has(t as DeviceProtocol) ? (t as DeviceProtocol) : null;
 }

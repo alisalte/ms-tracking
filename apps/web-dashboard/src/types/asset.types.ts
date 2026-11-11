@@ -105,7 +105,7 @@ export type UpdateVehiclePayload = Omit<
 export type DeviceStatus = 'ACTIVE' | 'SUSPENDED' | 'DECOMMISSIONED' | 'UNPAIRED';
 
 /** Supported ingest protocols (the gateway's built-in adapters). */
-export type DeviceProtocol = 'gt06' | 'jt808' | 'meitrack' | 'stub';
+export type DeviceProtocol = 'gt06' | 'jt808' | 'meitrack' | 'teltonika' | 'stub';
 
 /** A telematics device in the persistent registry. */
 export interface Device {

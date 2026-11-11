@@ -381,7 +381,13 @@ function requireImei(imei: string): string {
 }
 
 function asProtocol(value: string | null | undefined): Protocol {
-  if (value === 'gt06' || value === 'jt808' || value === 'meitrack' || value === 'stub')
+  if (
+    value === 'gt06' ||
+    value === 'jt808' ||
+    value === 'meitrack' ||
+    value === 'teltonika' ||
+    value === 'stub'
+  )
     return value;
   return 'meitrack';
 }

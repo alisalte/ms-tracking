@@ -500,6 +500,8 @@ function manufacturerFor(protocol: Protocol): string {
       return 'Concox';
     case 'jt808':
       return 'JT808';
+    case 'teltonika':
+      return 'Teltonika';
     default:
       return 'Auto';
   }

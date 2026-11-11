@@ -76,4 +76,15 @@ export interface ProtocolAdapter {
 
   /** Encode a downstream command to wire bytes (06 §9.1). */
   encode(cmd: DeviceCommand): Buffer;
+
+  /**
+   * Optional protocol-mandated reply to an inbound frame, written to the socket
+   * by the dispatcher once the frame has been processed — e.g. Teltonika's
+   * 0x01/0x00 login verdict and its per-packet record-count ack.
+   *
+   * `accepted` is true when the frame was authenticated and fully published,
+   * false when authentication failed (the session is about to close). Return
+   * null for "no reply".
+   */
+  acknowledge?(raw: RawPacket, accepted: boolean): Buffer | null;
 }

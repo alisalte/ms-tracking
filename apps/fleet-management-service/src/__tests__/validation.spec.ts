@@ -106,9 +106,17 @@ describe('validation schemas (§16, INV-I02)', () => {
   it('createDeviceSchema rejects an unsupported protocol', () => {
     const r = createDeviceSchema.safeParse({
       imei: validImei('35123456789012'),
-      protocol: 'teltonika',
+      protocol: 'queclink',
     });
     expect(r.success).toBe(false);
+  });
+
+  it('createDeviceSchema accepts the teltonika protocol (FMB640)', () => {
+    const r = createDeviceSchema.safeParse({
+      imei: validImei('35630704244101'),
+      protocol: 'teltonika',
+    });
+    expect(r.success).toBe(true);
   });
 
   it('enrollDeviceSchema requires a Luhn IMEI and a known protocol', () => {

@@ -180,7 +180,7 @@ const deviceCreateSchema = z.object({
   serialNumber: optionalText(64, 'validation.device.imeiFormat'),
   manufacturer: optionalText(100, 'validation.device.imeiFormat'),
   model: optionalText(100, 'validation.device.imeiFormat'),
-  protocol: z.enum(['gt06', 'jt808', 'meitrack', 'stub'], {
+  protocol: z.enum(['gt06', 'jt808', 'meitrack', 'teltonika', 'stub'], {
     message: 'validation.device.protocolRequired',
   }),
 });
@@ -190,11 +190,11 @@ const deviceEditSchema = z.object({
   serialNumber: optionalText(64, 'validation.device.imeiFormat'),
   manufacturer: optionalText(100, 'validation.device.imeiFormat'),
   model: optionalText(100, 'validation.device.imeiFormat'),
-  protocol: z.enum(['gt06', 'jt808', 'meitrack', 'stub']),
+  protocol: z.enum(['gt06', 'jt808', 'meitrack', 'teltonika', 'stub']),
   status: z.enum(['ACTIVE', 'SUSPENDED', 'DECOMMISSIONED', 'UNPAIRED']),
 });
 
-const PROTOCOL_OPTIONS: DeviceProtocol[] = ['gt06', 'jt808', 'meitrack', 'stub'];
+const PROTOCOL_OPTIONS: DeviceProtocol[] = ['gt06', 'jt808', 'meitrack', 'teltonika', 'stub'];
 const DEVICE_STATUS_OPTIONS: DeviceStatus[] = ['ACTIVE', 'SUSPENDED', 'UNPAIRED', 'DECOMMISSIONED'];
 
 const optionalEmail = z

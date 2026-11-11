@@ -510,7 +510,9 @@ services:
       GATEWAY_ADMIN_PORT: "8081"
       GATEWAY_HOST: 0.0.0.0
       # Device protocol listeners (06 §9.3): meitrack TCP for MDVR/tracker GPRS.
-      GATEWAY_LISTENERS: meitrack:tcp:${GATEWAY_MEITRACK_PORT:-5023},meitrack:tcp:6180
+      # 6180 is shared: `meitrack+teltonika` peeks each connection's first bytes
+      # ("$$" → Meitrack, IMEI frame → Teltonika FMB/FMC) and routes it to that parser.
+      GATEWAY_LISTENERS: meitrack:tcp:${GATEWAY_MEITRACK_PORT:-5023},meitrack+teltonika:tcp:6180
       REDISURL: redis://redis:6379/1
       DBURL: postgres://${POSTGRES_APP_USER:-fleetvision_app}:${POSTGRES_APP_PASSWORD:-fleetvision_app_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
       JWT_SECRET: ${JWT_SECRET}

@@ -121,6 +121,7 @@ export class PacketDispatcher {
           this.logger.warn(
             `Auth failed for imei=${msg.serialOrImei} reason=${outcome.reason} — closing session.`,
           );
+          this.sendProtocolAck(session, adapter, raw, false);
           return {
             published: 0,
             authenticated: false,
@@ -170,6 +171,7 @@ export class PacketDispatcher {
           this.logger.warn(
             `Auth failed for imei=${msg.serialOrImei} reason=${outcome.reason} — closing session.`,
           );
+          this.sendProtocolAck(session, adapter, raw, false);
           return {
             published: 0,
             authenticated: false,
@@ -261,7 +263,40 @@ export class PacketDispatcher {
       this.acknowledgeCceCache(session, raw);
     }
 
+    // Protocol-mandated reply (e.g. Teltonika login verdict / record-count ack).
+    // Sent only now that every message of the packet is published, so a device
+    // that never gets the ack keeps its records and resends them.
+    if (session.canPublish()) this.sendProtocolAck(session, adapter, raw, true);
+
     return { published, authenticated, close: false, closeReason: null };
+  }
+
+  /**
+   * Write the adapter's protocol-mandated reply for `raw`, if it defines one.
+   * Best-effort: a failed write is logged, never thrown — the device simply
+   * resends, and the dispatcher's own result must not depend on socket state.
+   */
+  private sendProtocolAck(
+    session: DeviceSession,
+    adapter: ProtocolAdapter,
+    raw: RawPacket,
+    accepted: boolean,
+  ): void {
+    if (!adapter.acknowledge) return;
+    let reply: Buffer | null;
+    try {
+      reply = adapter.acknowledge(raw, accepted);
+    } catch (err) {
+      this.logger.warn(
+        `${adapter.id} ack build failed session=${session.id}: ${(err as Error).message}`,
+      );
+      return;
+    }
+    if (!reply || reply.length === 0) return;
+    const writer = this.deps.sessionManager.writerFor(session.id as string);
+    if (!writer || !writer(reply)) {
+      this.logger.warn(`${adapter.id} ack write failed session=${session.id}`);
+    }
   }
 
   /**

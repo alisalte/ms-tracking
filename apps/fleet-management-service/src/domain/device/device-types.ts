@@ -18,7 +18,7 @@ export type DeviceStatus = 'ACTIVE' | 'SUSPENDED' | 'DECOMMISSIONED' | 'UNPAIRED
  * (06 §2.1). Hardcoded to what actually exists; do NOT invent protocols the
  * gateway cannot decode (Sprint C §8).
  */
-export const PROTOCOLS = ['gt06', 'jt808', 'meitrack', 'stub'] as const;
+export const PROTOCOLS = ['gt06', 'jt808', 'meitrack', 'teltonika', 'stub'] as const;
 export type Protocol = (typeof PROTOCOLS)[number];
 
 /** Roles a bound device may play on a vehicle (extensible — §11). */
