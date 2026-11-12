@@ -26,13 +26,33 @@ const loginSchema = z.object({
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
-/** Org name is prefilled so the browser does not autofill a stale tenant UUID. */
-const EMPTY_LOGIN: LoginForm = {
-  tenantId: 'FleetVision',
-  email: '',
-  password: '',
-  rememberDevice: false,
-};
+/** Last organisation name that signed in successfully on this browser. */
+const LAST_TENANT_STORAGE_KEY = 'fv.login.lastTenant';
+const DEFAULT_TENANT = 'FleetVision';
+
+function readLastTenant(): string {
+  try {
+    return localStorage.getItem(LAST_TENANT_STORAGE_KEY)?.trim() || DEFAULT_TENANT;
+  } catch {
+    return DEFAULT_TENANT;
+  }
+}
+
+function saveLastTenant(tenant: string): void {
+  try {
+    localStorage.setItem(LAST_TENANT_STORAGE_KEY, tenant.trim());
+  } catch {
+    /* storage unavailable (private mode) — prefill just falls back to the default */
+  }
+}
+
+/**
+ * Org name is prefilled (last successful one, else the default) so the
+ * browser does not autofill a stale tenant UUID.
+ */
+function emptyLogin(): LoginForm {
+  return { tenantId: readLastTenant(), email: '', password: '', rememberDevice: false };
+}
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -48,7 +68,7 @@ export function LoginPage() {
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: EMPTY_LOGIN,
+    defaultValues: emptyLogin(),
     mode: 'onSubmit',
   });
 
@@ -56,6 +76,7 @@ export function LoginPage() {
     clearError();
     const success = await login(values.email, values.password, values.tenantId);
     if (success) {
+      saveLastTenant(values.tenantId);
       navigate(redirectPath, { replace: true });
     }
   };
