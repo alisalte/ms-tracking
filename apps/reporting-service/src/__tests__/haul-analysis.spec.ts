@@ -409,6 +409,8 @@ describe('haul analysis', () => {
         travelSec: 300,
         durationSec: (left - enter) * 60 + 300,
         distanceM: 1000,
+        loadPoint: { lat: 0, lng: 0 },
+        dumpPoint: { lat: 0, lng: 0 },
         shift: '2026-06-01#1',
         shiftDate: '2026-06-01',
         shiftNo: 1,

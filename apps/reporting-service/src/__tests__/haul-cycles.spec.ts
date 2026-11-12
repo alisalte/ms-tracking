@@ -391,6 +391,63 @@ describe('haul cycles: haul duration cap', () => {
   });
 });
 
+describe('haul cycles: where the truck loaded and dumped', () => {
+  const detect = (samples: Array<{ at: Date; lat: number; lng: number; speedKmh?: number }>) =>
+    detectHaulCycles({
+      trucks: ['truck-1'],
+      shovels: [],
+      tracks: new Map([['truck-1', samples]]),
+      origin,
+      destination,
+      drivers: [],
+      shiftStartHour: 7,
+      shiftDurationHours: 12,
+      timeZone: 'UTC',
+    }).cycles;
+
+  it('takes the last standing fix in the origin and the first standing fix in the destination', () => {
+    const cycles = detect([
+      { at: at('2026-11-12T08:00:00Z'), lat: 35.001, lng: 51.001, speedKmh: 15 },
+      { at: at('2026-11-12T08:02:00Z'), lat: 35.006, lng: 51.004, speedKmh: 0 },
+      { at: at('2026-11-12T08:04:00Z'), lat: 35.007, lng: 51.006, speedKmh: 1 },
+      { at: at('2026-11-12T08:06:00Z'), lat: 35.009, lng: 51.009, speedKmh: 20 },
+      { at: at('2026-11-12T08:10:00Z'), lat: 35.03, lng: 51.03, speedKmh: 30 },
+      { at: at('2026-11-12T08:14:00Z'), lat: 35.051, lng: 51.051, speedKmh: 18 },
+      { at: at('2026-11-12T08:15:00Z'), lat: 35.055, lng: 51.057, speedKmh: 0 },
+      { at: at('2026-11-12T08:16:00Z'), lat: 35.056, lng: 51.058, speedKmh: 0 },
+    ]);
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]?.loadPoint).toEqual({ lat: 35.007, lng: 51.006 });
+    expect(cycles[0]?.dumpPoint).toEqual({ lat: 35.055, lng: 51.057 });
+  });
+
+  it('falls back to the last origin fix and the arrival fix when the truck never stood still', () => {
+    const cycles = detect([
+      { at: at('2026-11-12T08:00:00Z'), lat: 35.004, lng: 51.004, speedKmh: 12 },
+      { at: at('2026-11-12T08:01:00Z'), lat: 35.008, lng: 51.008, speedKmh: 14 },
+      { at: at('2026-11-12T08:05:00Z'), lat: 35.03, lng: 51.03, speedKmh: 30 },
+      { at: at('2026-11-12T08:09:00Z'), lat: 35.052, lng: 51.053, speedKmh: 20 },
+      { at: at('2026-11-12T08:10:00Z'), lat: 35.07, lng: 51.07, speedKmh: 25 },
+    ]);
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]?.loadPoint).toEqual({ lat: 35.008, lng: 51.008 });
+    expect(cycles[0]?.dumpPoint).toEqual({ lat: 35.052, lng: 51.053 });
+  });
+
+  it('reads standing from the step to the next fix when the device sends no speed', () => {
+    const cycles = detect([
+      { at: at('2026-11-12T08:00:00Z'), lat: 35.002, lng: 51.002 },
+      { at: at('2026-11-12T08:05:00Z'), lat: 35.005, lng: 51.005 },
+      { at: at('2026-11-12T08:10:00Z'), lat: 35.005, lng: 51.005 },
+      { at: at('2026-11-12T08:11:00Z'), lat: 35.03, lng: 51.03 },
+      { at: at('2026-11-12T08:15:00Z'), lat: 35.055, lng: 51.055 },
+    ]);
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]?.loadPoint).toEqual({ lat: 35.005, lng: 51.005 });
+    expect(cycles[0]?.dumpPoint).toEqual({ lat: 35.055, lng: 51.055 });
+  });
+});
+
 describe('haul cycles: drivers assigned per shift', () => {
   const base = {
     trucks: ['truck-1'],

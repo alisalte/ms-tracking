@@ -7,7 +7,7 @@
  * service can still override either.
  */
 import { MapPinned, Plus, Truck } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDevices, useVehicles } from '@/api/asset.api';
@@ -451,8 +451,9 @@ export function RoutesTab({
         <div className="flex flex-col gap-4">
           {route && (
             <RouteSettings
-              key={`${route.id}-${route.shiftStartHour}-${route.shiftDurationHours}-${route.shiftCount}`}
+              key={`${route.id}-${route.originGeofenceId}-${route.destinationGeofenceId}-${route.shiftStartHour}-${route.shiftDurationHours}-${route.shiftCount}`}
               route={route}
+              placeOptions={placeOptions}
               onSaved={() => setNotice(t('operations.saved'))}
               onError={(message) => setFormError(message)}
               onArchive={() => setConfirmArchive(true)}
@@ -737,11 +738,14 @@ function ShiftPlanNote({
 
 function RouteSettings({
   route,
+  placeOptions,
   onSaved,
   onError,
   onArchive,
 }: {
   route: HaulRoute;
+  /** The places to pick the origin and destination from. */
+  placeOptions: ReactNode;
   onSaved: () => void;
   onError: (message: string) => void;
   onArchive: () => void;
@@ -749,6 +753,8 @@ function RouteSettings({
   const { t } = useTranslation();
   const update = useUpdateHaulRoute(route.id);
   const [name, setName] = useState(route.name);
+  const [originId, setOriginId] = useState(route.originGeofenceId);
+  const [destinationId, setDestinationId] = useState(route.destinationGeofenceId);
   const [start, setStart] = useState(timeValue(route.shiftStartHour, route.shiftStartMinute ?? 0));
   const [hours, setHours] = useState(route.shiftDurationHours);
   const [minutes, setMinutes] = useState(route.shiftDurationMinutes ?? 0);
@@ -783,9 +789,15 @@ function RouteSettings({
       onError(t(`operations.lunchInvalid.${lunch.error}`));
       return;
     }
+    if (!originId || !destinationId || originId === destinationId) {
+      onError(t('operations.placesInvalid'));
+      return;
+    }
     try {
       await update.mutateAsync({
         name: name.trim(),
+        originGeofenceId: originId,
+        destinationGeofenceId: destinationId,
         shiftStartHour: startAt.hour,
         shiftStartMinute: startAt.minute,
         shiftDurationHours: hours,
@@ -816,6 +828,26 @@ function RouteSettings({
           required
           maxLength={200}
         />
+        <Select
+          label={t('operations.origin')}
+          aria-label={t('operations.origin')}
+          data-testid="route-settings-origin"
+          value={originId}
+          onChange={(event) => setOriginId(event.target.value)}
+          required
+        >
+          {placeOptions}
+        </Select>
+        <Select
+          label={t('operations.destination')}
+          aria-label={t('operations.destination')}
+          data-testid="route-settings-destination"
+          value={destinationId}
+          onChange={(event) => setDestinationId(event.target.value)}
+          required
+        >
+          {placeOptions}
+        </Select>
         <Input
           label={t('operations.shiftStart')}
           type="time"

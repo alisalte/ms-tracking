@@ -78,6 +78,15 @@ export interface ShiftSlot {
 
 export type DriverSource = 'PHOTO' | 'ROSTER' | 'ASSIGNMENT';
 
+/** A position on the map. */
+export interface GeoPoint {
+  readonly lat: number;
+  readonly lng: number;
+}
+
+/** A truck standing still (loading under the shovel, dumping). */
+const STANDING_KMH = 3;
+
 export interface HaulCycle {
   readonly vehicleId: string;
   readonly shovelId: string | null;
@@ -91,6 +100,10 @@ export interface HaulCycle {
   readonly travelSec: number;
   readonly durationSec: number;
   readonly distanceM: number;
+  /** Where the truck stood while loading: its last standing fix in the origin. */
+  readonly loadPoint: GeoPoint;
+  /** Where the truck dumped: its first standing fix in the destination. */
+  readonly dumpPoint: GeoPoint;
   readonly shift: string;
   readonly shiftDate: string | null;
   readonly shiftNo: number;
@@ -241,7 +254,8 @@ export function detectHaulCycles(input: DetectHaulInput): {
     let phase: 'OUT' | 'LOADING' | 'HAULING' = 'OUT';
     let enteredAt: Date | null = null;
     let leftAt: Date | null = null;
-    let lastInOrigin: TrackSample | null = null;
+    let lastInOrigin = null as TrackSample | null;
+    let loadSpot = null as TrackSample | null;
     let leg: TrackSample[] = [];
 
     const reset = () => {
@@ -249,28 +263,39 @@ export function detectHaulCycles(input: DetectHaulInput): {
       enteredAt = null;
       leftAt = null;
       lastInOrigin = null;
+      loadSpot = null;
       leg = [];
     };
 
-    const complete = (loadedAt: Date, departedAt: Date, arrival: TrackSample) => {
-      cycles.push(buildCycle(input, vehicleId, loadedAt, departedAt, arrival.at, leg));
+    const inOriginAt = (index: number) => {
+      const sample = samples[index] as TrackSample;
+      lastInOrigin = sample;
+      if (isStanding(sample, samples[index + 1] ?? null)) loadSpot = sample;
+    };
+
+    const complete = (loadedAt: Date, departedAt: Date, index: number) => {
+      const arrival = samples[index] as TrackSample;
+      const load = loadSpot ?? lastInOrigin ?? arrival;
+      const dump = dumpSpot(samples, index, input.destination);
+      cycles.push(buildCycle(input, vehicleId, loadedAt, departedAt, arrival.at, leg, load, dump));
       reset();
     };
 
-    for (const sample of samples) {
+    for (let index = 0; index < samples.length; index += 1) {
+      const sample = samples[index] as TrackSample;
       const inOrigin = zoneContains(sample.lat, sample.lng, input.origin);
       const inDest = zoneContains(sample.lat, sample.lng, input.destination);
       if (phase === 'OUT') {
         if (inOrigin && !inDest) {
           phase = 'LOADING';
           enteredAt = sample.at;
-          lastInOrigin = sample;
+          inOriginAt(index);
         }
         continue;
       }
       if (phase === 'LOADING') {
         if (inOrigin) {
-          lastInOrigin = sample;
+          inOriginAt(index);
           continue;
         }
         if (inDest && enteredAt && lastInOrigin) {
@@ -283,7 +308,7 @@ export function detectHaulCycles(input: DetectHaulInput): {
           }
           leftAt = lastInOrigin.at;
           leg = [lastInOrigin, sample];
-          complete(enteredAt, leftAt, sample);
+          complete(enteredAt, leftAt, index);
           continue;
         }
         phase = 'HAULING';
@@ -298,7 +323,7 @@ export function detectHaulCycles(input: DetectHaulInput): {
         if (inOrigin && !inDest) {
           phase = 'LOADING';
           enteredAt = sample.at;
-          lastInOrigin = sample;
+          inOriginAt(index);
         }
         continue;
       }
@@ -309,13 +334,16 @@ export function detectHaulCycles(input: DetectHaulInput): {
         phase = 'LOADING';
         // A short step outside the origin (GPS noise at the fence edge) does
         // not restart the loading clock.
-        if (!jitter) enteredAt = sample.at;
-        lastInOrigin = sample;
+        if (!jitter) {
+          enteredAt = sample.at;
+          loadSpot = null;
+        }
+        inOriginAt(index);
         leftAt = null;
         leg = [];
         continue;
       }
-      if (inDest && enteredAt && leftAt) complete(enteredAt, leftAt, sample);
+      if (inDest && enteredAt && leftAt) complete(enteredAt, leftAt, index);
     }
 
     if (phase === 'LOADING' && enteredAt)
@@ -333,6 +361,8 @@ function buildCycle(
   leftAt: Date,
   arrivedAt: Date,
   leg: readonly TrackSample[],
+  load: TrackSample,
+  dump: TrackSample,
 ): HaulCycle {
   const { slot, driver, source } = resolveDriver(input, vehicleId, enteredAt);
   return {
@@ -348,6 +378,8 @@ function buildCycle(
     travelSec: secondsBetween(leftAt, arrivedAt),
     durationSec: secondsBetween(enteredAt, arrivedAt),
     distanceM: pathDistance(leg),
+    loadPoint: { lat: load.lat, lng: load.lng },
+    dumpPoint: { lat: dump.lat, lng: dump.lng },
     shift: slot.key,
     shiftDate: slot.date,
     shiftNo: slot.no,
@@ -573,6 +605,36 @@ function driverAt(
     }
   }
   return anyShift;
+}
+
+/**
+ * Standing still: the device speed when it has one, else the step to the next
+ * fix. A fix with neither counts as standing (a slow, sparse loading).
+ */
+function isStanding(sample: TrackSample, next: TrackSample | null): boolean {
+  if (typeof sample.speedKmh === 'number') return sample.speedKmh <= STANDING_KMH;
+  if (!next) return true;
+  const dt = (next.at.getTime() - sample.at.getTime()) / 1000;
+  if (dt <= 0) return true;
+  return (haversineMeters(sample.lat, sample.lng, next.lat, next.lng) / dt) * 3.6 <= STANDING_KMH;
+}
+
+/**
+ * Where the truck dumped: the first standing fix from its arrival while it
+ * stays in the destination, else the arrival fix itself.
+ */
+function dumpSpot(
+  samples: readonly TrackSample[],
+  arrival: number,
+  destination: Zone,
+): TrackSample {
+  const first = samples[arrival] as TrackSample;
+  for (let i = arrival; i < samples.length; i += 1) {
+    const sample = samples[i] as TrackSample;
+    if (!zoneContains(sample.lat, sample.lng, destination)) break;
+    if (isStanding(sample, samples[i + 1] ?? null)) return sample;
+  }
+  return first;
 }
 
 function pathDistance(samples: readonly TrackSample[]): number {

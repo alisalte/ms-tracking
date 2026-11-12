@@ -597,6 +597,8 @@ export class OperationsReportService {
     return {
       id: haul.route.id,
       name: haul.route.name,
+      originGeofenceId: haul.route.origin_geofence_id,
+      destinationGeofenceId: haul.route.destination_geofence_id,
       shiftStartHour: haul.route.shift_start_hour,
       shiftStartMinute: haul.route.shift_start_minute ?? 0,
       shiftDurationHours: haul.route.shift_duration_hours,
@@ -797,6 +799,8 @@ export class OperationsReportService {
         travelSec: cycle.travelSec,
         durationSec: cycle.durationSec,
         distanceKm: km(cycle.distanceM),
+        loadPoint: cycle.loadPoint,
+        dumpPoint: cycle.dumpPoint,
         shift: cycle.shift,
         shiftDate: cycle.shiftDate,
         shiftNo: cycle.shiftNo,
