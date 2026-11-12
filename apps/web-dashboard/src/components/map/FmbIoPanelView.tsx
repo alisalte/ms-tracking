@@ -1,3 +1,6 @@
+import type { TFunction } from 'i18next';
+import { ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lastSeenLabel } from '@/lib/relative-time';
@@ -16,12 +19,42 @@ const GROUP_ORDER: readonly FmbIoGroup[] = [
   'other',
 ];
 
+/** Groups whose rows are short on meaning (raw ids) start folded. */
+const START_FOLDED: ReadonlySet<FmbIoGroup> = new Set(['other']);
+
+/** Remembered per viewer: whether the whole panel is open. */
+const OPEN_STORAGE_KEY = 'fv.fmbIo.open';
+
 /** Seconds after which a point is shown as stale (its device time, not receipt). */
 const STALE_AFTER_MS = 10 * 60 * 1000;
 
 function isStale(at: string, now: number): boolean {
   const t = Date.parse(at);
   return Number.isFinite(t) && now - t > STALE_AFTER_MS;
+}
+
+function readOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeOpen(open: boolean): void {
+  try {
+    localStorage.setItem(OPEN_STORAGE_KEY, open ? '1' : '0');
+  } catch {
+    /* private mode / blocked storage — the panel just forgets */
+  }
+}
+
+/** Technical code under a row's name: DIN1 / AIN2 / DOUT1 for I/O, else the AVL id. */
+function codeOf(p: FmbIoPoint): string {
+  if (p.key && (p.group === 'din' || p.group === 'dout' || p.group === 'ain')) {
+    return p.key.toUpperCase();
+  }
+  return `AVL ${p.id}`;
 }
 
 function PointValue({ point }: { point: FmbIoPoint }) {
@@ -44,62 +77,167 @@ function PointValue({ point }: { point: FmbIoPoint }) {
     );
   }
   const text = point.value === '' ? '—' : String(point.value);
+  // dir=ltr keeps "2.475 V" in reading order inside the RTL layout.
   return (
-    <span className="text-sm font-medium tabular-nums text-gray-800 dark:text-graydark-800">
+    <span
+      dir="ltr"
+      className="text-sm font-medium tabular-nums text-gray-800 dark:text-graydark-800"
+    >
       {text}
       {point.unit && point.value !== '' ? ` ${point.unit}` : ''}
     </span>
   );
 }
 
+/** One-line digest shown while the panel is folded: "1 of 4 inputs on · Analog: 3 · …". */
+function summaryOf(panel: FmbIoPanel, groups: readonly FmbIoGroup[], t: TFunction): string {
+  return groups
+    .map((g) => {
+      const points = panel.groups[g] ?? [];
+      if (g === 'din' || g === 'dout') {
+        const on = points.filter((p) => p.value === true).length;
+        return t(`map.io.summary.${g}`, { on, total: points.length });
+      }
+      return `${t(`map.io.groups.${g}`)}: ${points.length}`;
+    })
+    .join(' · ');
+}
+
+function GroupSection({
+  group,
+  points,
+  now,
+}: {
+  group: FmbIoGroup;
+  points: readonly FmbIoPoint[];
+  now: number;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(!START_FOLDED.has(group));
+  const hint = t(`map.io.hints.${group}`, { defaultValue: '' });
+  const bodyId = `fmb-io-${group}`;
+  return (
+    <div className="rounded-lg border border-gray-100 dark:border-white/5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-start"
+      >
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold text-gray-700 dark:text-graydark-800">
+            {t(`map.io.groups.${group}`)}
+            <span className="ms-1.5 font-normal text-gray-400 dark:text-graydark-600">
+              ({points.length})
+            </span>
+          </span>
+          {hint ? (
+            <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
+              {hint}
+            </span>
+          ) : null}
+        </span>
+        <ChevronDown
+          size={16}
+          aria-hidden
+          className={`shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open ? (
+        <ul
+          id={bodyId}
+          className="divide-y divide-gray-100 border-t border-gray-100 dark:divide-white/5 dark:border-white/5"
+        >
+          {points.map((p) => (
+            <li
+              key={p.id}
+              className={`flex items-center justify-between gap-3 px-3 py-2 ${
+                isStale(p.at, now) ? 'opacity-50' : ''
+              }`}
+              title={new Date(p.at).toLocaleString()}
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-gray-700 dark:text-graydark-800">
+                  {p.key
+                    ? t(`map.io.points.${p.key}`, { defaultValue: t('map.io.unknown') })
+                    : t('map.io.unknown')}
+                </span>
+                <span
+                  dir="ltr"
+                  className="block text-start text-xs text-gray-400 dark:text-graydark-600"
+                >
+                  {codeOf(p)}
+                </span>
+              </span>
+              <PointValue point={p} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * Live I/O of a Teltonika FMB640: digital inputs/outputs, analog inputs,
- * 1-Wire, serial (RS232/RS485) sensors and CAN. Values are the newest the
+ * 1-Wire, serial (RS232/RS485) sensors and CAN. Folded by default, with a
+ * one-line summary; each group folds on its own. Values are the newest the
  * device reported per element; a value older than 10 minutes is dimmed.
  */
 export function FmbIoPanelView({ panel }: { panel: FmbIoPanel }) {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(readOpen);
   const now = Date.now();
   const groups = GROUP_ORDER.filter((g) => (panel.groups[g]?.length ?? 0) > 0);
   if (groups.length === 0) return null;
 
+  const toggle = () => {
+    setOpen((o) => {
+      writeOpen(!o);
+      return !o;
+    });
+  };
+
   return (
-    <section className="mb-4" aria-label={t('map.io.title')} data-testid="fmb-io-panel">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-graydark-800">
-          {t('map.io.title')}
-        </h3>
-        <span className="text-xs text-gray-500 dark:text-graydark-600">
-          {t('map.io.updated', { time: lastSeenLabel(panel.updatedAt, t) })}
+    <section
+      className="mb-4 rounded-xl border border-gray-200 dark:border-white/10"
+      aria-label={t('map.io.title')}
+      data-testid="fmb-io-panel"
+    >
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls="fmb-io-body"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-gray-800 dark:text-graydark-800">
+            {t('map.io.title')}
+          </span>
+          <span className="block truncate text-xs text-gray-500 dark:text-graydark-600">
+            {open
+              ? t('map.io.updated', { time: lastSeenLabel(panel.updatedAt, t) })
+              : summaryOf(panel, groups, t)}
+          </span>
         </span>
-      </div>
-      <div className="flex flex-col gap-3">
-        {groups.map((g) => (
-          <div key={g}>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-graydark-600">
-              {t(`map.io.groups.${g}`)}
-            </p>
-            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-white/5 dark:border-white/5">
-              {(panel.groups[g] ?? []).map((p) => (
-                <li
-                  key={p.id}
-                  className={`flex items-center justify-between gap-3 px-3 py-1.5 ${
-                    isStale(p.at, now) ? 'opacity-50' : ''
-                  }`}
-                  title={new Date(p.at).toLocaleString()}
-                >
-                  <span className="min-w-0 truncate text-xs text-gray-600 dark:text-graydark-700">
-                    {p.key
-                      ? t(`map.io.points.${p.key}`, { defaultValue: `AVL ${p.id}` })
-                      : t('map.io.unknown', { id: p.id })}
-                  </span>
-                  <PointValue point={p} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+        <ChevronDown
+          size={18}
+          aria-hidden
+          className={`shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open ? (
+        <div
+          id="fmb-io-body"
+          className="flex flex-col gap-2 border-t border-gray-100 p-2 dark:border-white/5"
+        >
+          {groups.map((g) => (
+            <GroupSection key={g} group={g} points={panel.groups[g] ?? []} now={now} />
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
