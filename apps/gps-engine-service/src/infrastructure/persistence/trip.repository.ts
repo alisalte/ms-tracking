@@ -24,6 +24,15 @@ import type {
 
 const SCHEMA = 'tracking';
 
+/**
+ * Durations are computed as (ms − ms) / 1000, so they are fractional whenever
+ * the device timestamps carry milliseconds (Teltonika does). `duration_s` is an
+ * integer column and Postgres rejects "4615.468", which left trips ACTIVE.
+ */
+export function wholeSeconds(seconds: number): number {
+  return Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
+}
+
 /** Result of a trip close/discard: how many ACTIVE rows were transitioned. */
 export interface TripTransitionResult {
   /** Rows updated (0 when no ACTIVE trip matched — e.g. already closed or none). */
@@ -98,7 +107,7 @@ export class TripRepository {
         event.endLat,
         event.endLng,
         event.distanceKm,
-        event.durationSec,
+        wholeSeconds(event.durationSec),
         event.maxSpeedKmh,
         event.stopCount,
         event.tenantId,
@@ -140,7 +149,7 @@ export class TripRepository {
         event.endLat,
         event.endLng,
         event.distanceKm,
-        event.durationSec,
+        wholeSeconds(event.durationSec),
         event.tenantId,
         event.vehicleId,
       ],
@@ -164,7 +173,7 @@ export class TripRepository {
         vehicle_id: this.knex.raw('?::uuid', [event.vehicleId]),
         window_start: event.windowStart,
         window_end: event.windowEnd,
-        duration_s: event.durationSec,
+        duration_s: wholeSeconds(event.durationSec),
         engine_hours: event.engineHours,
         source_event_id: this.knex.raw('?::uuid', [event.sourceEventId]),
       })
@@ -184,7 +193,7 @@ export class TripRepository {
         vehicle_id: this.knex.raw('?::uuid', [event.vehicleId]),
         started_at: event.startedAt,
         ended_at: event.type === 'idle.ended' ? event.endedAt : null,
-        duration_s: event.durationSec,
+        duration_s: wholeSeconds(event.durationSec),
         alerted: event.type === 'idle.alert',
         source_event_id: event.sourceEventId ?? null,
       })
@@ -210,7 +219,7 @@ export class TripRepository {
               : 'ACTIVE',
         started_at: event.startedAt,
         ended_at: event.type !== 'parking.started' ? event.endedAt : null,
-        duration_s: event.durationSec,
+        duration_s: wholeSeconds(event.durationSec),
         lat: event.lat,
         lng: event.lng,
         source_event_id: event.sourceEventId ?? null,
