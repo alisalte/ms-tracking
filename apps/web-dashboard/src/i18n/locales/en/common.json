@@ -568,6 +568,55 @@
     "roster": {
       "open": "Show fleet list",
       "close": "Hide fleet list"
+    },
+    "io": {
+      "title": "Inputs & outputs",
+      "updated": "updated {{time}}",
+      "on": "On",
+      "off": "Off",
+      "unknown": "AVL {{id}}",
+      "groups": {
+        "din": "Digital inputs",
+        "dout": "Digital outputs",
+        "ain": "Analog inputs",
+        "onewire": "1-Wire",
+        "serial": "RS232 / RS485 sensors",
+        "can": "CAN J1939",
+        "j1708": "J1708",
+        "kline": "K-Line",
+        "other": "Other"
+      },
+      "points": {
+        "din1": "DIN 1",
+        "din2": "DIN 2",
+        "din3": "DIN 3",
+        "din4": "DIN 4",
+        "dout1": "DOUT 1",
+        "dout2": "DOUT 2",
+        "dout3": "DOUT 3",
+        "dout4": "DOUT 4",
+        "ain1": "AIN 1",
+        "ain2": "AIN 2",
+        "ain3": "AIN 3",
+        "ain4": "AIN 4",
+        "temp1": "Temperature 1",
+        "temp2": "Temperature 2",
+        "temp3": "Temperature 3",
+        "temp4": "Temperature 4",
+        "ibutton": "iButton",
+        "lls1Level": "Fuel sensor 1 level",
+        "lls1Temp": "Fuel sensor 1 temp.",
+        "lls2Level": "Fuel sensor 2 level",
+        "lls2Temp": "Fuel sensor 2 temp.",
+        "canSpeed": "Speed",
+        "canPedal": "Accelerator pedal",
+        "canFuelUsed": "Fuel used",
+        "canFuelLevelL": "Fuel level",
+        "canRpm": "Engine speed",
+        "canMileage": "Total mileage",
+        "canFuelLevelPct": "Fuel level",
+        "canEngineTemp": "Engine temp."
+      }
     }
   },
   "trips": {

@@ -1,3 +1,7 @@
+import { Logger } from '@nestjs/common';
+import { DeviceMessage } from '../domain/device-message.js';
+import type { DeviceSession } from '../domain/device-session.js';
+import { ProtocolError } from '../domain/errors.js';
 /**
  * PacketDispatcher — the staged packet-processing pipeline (06 §8).
  *
@@ -15,10 +19,7 @@
  * Idempotency: messageId (UUIDv7) is the dedupe key (06 §8.4); consumers dedupe
  * on (device_id, message_id).
  */
-import { Logger } from '@nestjs/common';
-import { DeviceMessage } from '../domain/device-message.js';
-import type { DeviceSession } from '../domain/device-session.js';
-import { ProtocolError } from '../domain/errors.js';
+import type { FmbIoPanel } from '../domain/fmb-io-panel.js';
 import type { RawPacket } from '../domain/raw-packet.js';
 import {
   formatCceFrameLog,
@@ -30,6 +31,7 @@ import { PhotoAssembler } from '../infrastructure/adapters/meitrack/meitrack.pho
 import type { DeviceGatewayKafkaProducer } from '../infrastructure/kafka/kafka-producer.js';
 import type { ProtocolAdapter } from '../infrastructure/protocol/protocol-adapter.js';
 import type { CanSnapshotStore } from '../infrastructure/storage/can-snapshot-store.js';
+import type { FmbIoStore } from '../infrastructure/storage/fmb-io-store.js';
 import type { RawPacketStorage } from '../infrastructure/storage/raw-packet-storage.js';
 import type { AuthResolver } from './auth-resolver.js';
 import type { CommandDispatcher } from './command-dispatcher.js';
@@ -55,6 +57,8 @@ export interface PacketDispatcherDeps {
   readonly commandDispatcher?: CommandDispatcher;
   /** Optional — keeps CAN from CCE records that are not positions (no GPS fix). */
   readonly canStore?: CanSnapshotStore;
+  /** Optional — merges Teltonika I/O points across records into one live panel. */
+  readonly fmbIoStore?: FmbIoStore;
 }
 
 export class PacketDispatcher {
@@ -198,7 +202,7 @@ export class PacketDispatcher {
       }
 
       // Stage 4: normalize — identity is already bound; stamp it onto the message.
-      const normalized = this.bindIdentity(msg, session);
+      const normalized = await this.withMergedIo(this.bindIdentity(msg, session), session);
 
       // First useful payload (POSITION/TELEMETRY) transitions → ACTIVE (06 §6.1).
       if (
@@ -325,6 +329,19 @@ export class PacketDispatcher {
   }
 
   /** Bind the session's resolved identity onto a pre-auth message (06 §9.2). */
+  /**
+   * Teltonika: replace this record's I/O points with the panel merged across
+   * records. Needs the bound vehicle; an unpaired device keeps the record-only panel.
+   */
+  private async withMergedIo(msg: DeviceMessage, session: DeviceSession): Promise<DeviceMessage> {
+    const panel = msg.telemetry?.fmbIo as FmbIoPanel | undefined;
+    const store = this.deps.fmbIoStore;
+    if (!panel || !store || !session.tenantId || !session.vehicleId) return msg;
+    const points = Object.values(panel.groups).flatMap((g) => g ?? []);
+    const merged = await store.merge(session.tenantId, session.vehicleId, points, msg.timestamp);
+    return new DeviceMessage({ ...msg, telemetry: { ...msg.telemetry, fmbIo: merged } });
+  }
+
   private bindIdentity(msg: DeviceMessage, session: DeviceSession): DeviceMessage {
     return new DeviceMessage({
       messageId: msg.messageId,

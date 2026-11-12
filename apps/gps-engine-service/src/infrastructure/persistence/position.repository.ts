@@ -1,3 +1,6 @@
+import type { Knex } from '@fleetvision/persistence-knex';
+import type { PositionEvent } from '../../domain/position-event.js';
+import { QUALITY_CODE } from '../../domain/quality.js';
 /**
  * Position repository — TimescaleDB `tracking.vehicle_positions` access
  * (07 §9.2, 03 §11.1).
@@ -7,9 +10,7 @@
  * duplicate rows. `findLatest` serves the cache-miss fallback; `findRange`
  * serves the REST history endpoint.
  */
-import type { Knex } from '@fleetvision/persistence-knex';
-import type { PositionEvent } from '../../domain/position-event.js';
-import { QUALITY_CODE } from '../../domain/quality.js';
+import type { FmbIoPanel } from '../cache/fmb-io-memory.js';
 
 const TABLE = 'vehicle_positions';
 const SCHEMA = 'tracking';
@@ -36,6 +37,8 @@ export interface LatestPosition {
   readonly quality: number;
   /** Decoded CCE record when this fix came from a Meitrack CCE packet. */
   readonly cce?: CceRecord | null;
+  /** Live FMB640 I/O panel, attached on the read path from the gateway's merged hash. */
+  readonly fmbIo?: FmbIoPanel | null;
 }
 
 /** Full CCE parameter map plus the CAN present/absent verdict. */
@@ -49,6 +52,12 @@ export interface CceRecord {
   } & Readonly<Record<string, unknown>>;
   /** Scaled non-CAN IDs (GPS, I/O, power, cell, sensors). Absent on older rows. */
   readonly status?: Readonly<Record<string, unknown>>;
+}
+
+function withoutFmbIo(metadata: PositionEvent['metadata']): Record<string, unknown> {
+  if (!metadata) return {};
+  const { fmbIo: _live, ...rest } = metadata as Record<string, unknown>;
+  return rest;
 }
 
 export class PositionRepository {
@@ -86,7 +95,8 @@ export class PositionRepository {
             protocolId: event.protocolId,
             // Satellites feed the GPS-coverage heatmap (no dedicated column).
             ...(event.satellites !== null ? { satellites: event.satellites } : {}),
-            ...(event.metadata ?? {}),
+            // The live I/O panel is a snapshot (Redis + websocket), not history.
+            ...withoutFmbIo(event.metadata),
           }),
         ]),
       })

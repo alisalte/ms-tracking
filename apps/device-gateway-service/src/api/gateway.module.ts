@@ -58,6 +58,7 @@ import {
   HttpDeviceRegistry,
   RegistryInvalidationSubscriber,
 } from '../infrastructure/registry/index.js';
+import { FmbIoStore } from '../infrastructure/storage/fmb-io-store.js';
 import {
   CanSnapshotStore,
   RawPacketStorage,
@@ -232,6 +233,11 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
           inject: [REDIS_TOKEN],
           useFactory: (redis: Redis) => new CanSnapshotStore(redis),
         },
+        {
+          provide: 'GATEWAY_FMB_IO_STORE',
+          inject: [REDIS_TOKEN],
+          useFactory: (redis: Redis) => new FmbIoStore(redis),
+        },
         // Packet dispatcher (after command dispatcher so held AB2 can flush on auth).
         {
           provide: PACKET_DISPATCHER,
@@ -242,6 +248,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
             'GATEWAY_RAW_STORAGE',
             COMMAND_DISPATCHER,
             'GATEWAY_CAN_STORE',
+            'GATEWAY_FMB_IO_STORE',
           ],
           useFactory: (
             authResolver: AuthResolver,
@@ -250,6 +257,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
             raw: RawPacketStorage,
             commands: CommandDispatcher,
             canStore: CanSnapshotStore,
+            fmbIoStore: FmbIoStore,
           ) =>
             new PacketDispatcher({
               authResolver,
@@ -258,6 +266,7 @@ export class GatewayModule implements OnApplicationBootstrap, OnApplicationShutd
               rawStorage: raw,
               commandDispatcher: commands,
               canStore,
+              fmbIoStore,
             }),
         },
         // Kafka command.request consumer — broadcast to all instances; only

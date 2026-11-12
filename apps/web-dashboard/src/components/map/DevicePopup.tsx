@@ -31,13 +31,14 @@ import { PERMISSIONS, usePermissions } from '@/auth/permissions';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LiveBadge } from '@/components/dashboard/LiveBadge';
 import { useToast } from '@/components/feedback/ToastProvider';
+import { FmbIoPanelView } from '@/components/map/FmbIoPanelView';
 import { Badge, IconButton, Skeleton } from '@/components/tailwind-ui';
 import { localizeAlarmMessage, localizeAlarmType } from '@/lib/alarm-copy';
 import { formatCanFact, formatDeviceFact } from '@/lib/cce-can';
 import { lastSeenLabel } from '@/lib/relative-time';
 import { deriveVehicleMotion } from '@/lib/vehicle-motion';
 import { status } from '@/theme/palette';
-import type { MapVehicle, VehicleDetail, VehicleEvent } from '@/types/fleet.types';
+import type { FmbIoPanel, MapVehicle, VehicleDetail, VehicleEvent } from '@/types/fleet.types';
 
 const DRAWER_WIDTH = 360;
 
@@ -87,7 +88,14 @@ export function DevicePopup({
   const toast = useToast();
   const qc = useQueryClient();
   const { can } = usePermissions();
-  const { data: detail, isError, error, refetch } = useVehicleDetail(vehicleId);
+  const {
+    data: detail,
+    isError,
+    error,
+    refetch,
+  } = useVehicleDetail(vehicleId, {
+    refetchIntervalMs: 5_000,
+  });
   // Roster (WS-merged) wins for presence/motion so the drawer never says
   // "آفلاین" while the list card still shows "در حرکت" from the same vehicle.
   const roster = liveVehicle?.id === vehicleId ? liveVehicle : null;
@@ -262,6 +270,8 @@ export function DevicePopup({
                 tone={live ? 'success' : 'gray'}
               />
             </div>
+
+            {data.fmbIo ? <FmbIoPanelView panel={data.fmbIo} /> : null}
 
             <Fact
               icon={MapPin}
@@ -477,6 +487,15 @@ function fmtKm(km: number): string {
   return `${km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
 }
 
+function newerPanel(
+  a: FmbIoPanel | null | undefined,
+  b: FmbIoPanel | null | undefined,
+): FmbIoPanel | null | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return Date.parse(a.updatedAt) >= Date.parse(b.updatedAt) ? a : b;
+}
+
 /**
  * Merge REST detail + live roster so presence/motion never diverge from the
  * list card. Roster wins for live fields; motion is re-derived so we never
@@ -531,6 +550,8 @@ function mergePopupVehicle(
     ignitionOn,
     lastSeenAt: roster.lastSeenAt ?? detail?.lastSeenAt,
     cce: roster.cce !== undefined ? roster.cce : detail?.cce,
+    // Newest panel wins: the websocket one is fresher unless the unit has no fix.
+    fmbIo: newerPanel(roster.fmbIo, detail?.fmbIo),
     updatedAt,
     deviceId: roster.deviceId ?? detail?.deviceId,
   };

@@ -26,6 +26,8 @@ export interface PositionSignal {
   readonly quality: string;
   /** CCE parameter map + CAN verdict, when this fix came from a CCE packet. */
   readonly cce?: Readonly<Record<string, unknown>>;
+  /** Merged FMB640 I/O panel, when this fix came from a Teltonika record. */
+  readonly fmbIo?: Readonly<Record<string, unknown>>;
 }
 
 export interface DeviceStatusSignal {
@@ -94,6 +96,9 @@ export class SignalBus {
       quality: event.quality,
       ...(event.metadata?.cce && typeof event.metadata.cce === 'object'
         ? { cce: event.metadata.cce as Record<string, unknown> }
+        : {}),
+      ...(event.metadata?.fmbIo && typeof event.metadata.fmbIo === 'object'
+        ? { fmbIo: event.metadata.fmbIo as Record<string, unknown> }
         : {}),
     };
     this.emitter.emit(SIGNAL.POSITION, signal);

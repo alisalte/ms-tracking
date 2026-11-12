@@ -28,6 +28,7 @@ import { PositionPipeline } from '../application/position-pipeline.js';
 import { SignalBus } from '../application/signal-bus.js';
 import { TripEngine } from '../application/trip-engine.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
+import { FmbIoMemory } from '../infrastructure/cache/fmb-io-memory.js';
 import { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
 import { RedisDeviceStatusCache } from '../infrastructure/cache/redis-device-status-cache.js';
 import { RedisFsmCache } from '../infrastructure/cache/redis-fsm-cache.js';
@@ -53,6 +54,7 @@ import {
   DEVICE_STATUS_PIPELINE,
   DEVICE_STATUS_REPOSITORY,
   DLQ_PRODUCER,
+  FMB_IO_MEMORY,
   FSM_CACHE,
   GEOFENCE_DEFINITIONS_REPOSITORY,
   GEOFENCE_EVALUATOR,
@@ -161,6 +163,11 @@ export class GpsEngineModule {
           provide: LAST_CAN_MEMORY,
           inject: [REDIS_TOKEN],
           useFactory: (redis: Redis) => new LastCanMemory(redis),
+        },
+        {
+          provide: FMB_IO_MEMORY,
+          inject: [REDIS_TOKEN],
+          useFactory: (redis: Redis) => new FmbIoMemory(redis),
         },
         {
           provide: DEVICE_STATUS_CACHE,

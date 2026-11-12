@@ -568,6 +568,55 @@
     "roster": {
       "open": "نمایش فهرست ناوگان",
       "close": "پنهان‌کردن فهرست ناوگان"
+    },
+    "io": {
+      "title": "ورودی‌ها و خروجی‌ها",
+      "updated": "به‌روزرسانی {{time}}",
+      "on": "روشن",
+      "off": "خاموش",
+      "unknown": "AVL {{id}}",
+      "groups": {
+        "din": "ورودی‌های دیجیتال",
+        "dout": "خروجی‌های دیجیتال",
+        "ain": "ورودی‌های آنالوگ",
+        "onewire": "۱-Wire",
+        "serial": "سنسورهای RS232 / RS485",
+        "can": "CAN J1939",
+        "j1708": "J1708",
+        "kline": "K-Line",
+        "other": "سایر"
+      },
+      "points": {
+        "din1": "DIN ۱",
+        "din2": "DIN ۲",
+        "din3": "DIN ۳",
+        "din4": "DIN ۴",
+        "dout1": "DOUT ۱",
+        "dout2": "DOUT ۲",
+        "dout3": "DOUT ۳",
+        "dout4": "DOUT ۴",
+        "ain1": "AIN ۱",
+        "ain2": "AIN ۲",
+        "ain3": "AIN ۳",
+        "ain4": "AIN ۴",
+        "temp1": "دما ۱",
+        "temp2": "دما ۲",
+        "temp3": "دما ۳",
+        "temp4": "دما ۴",
+        "ibutton": "iButton",
+        "lls1Level": "سطح سوخت (سنسور ۱)",
+        "lls1Temp": "دمای سنسور سوخت ۱",
+        "lls2Level": "سطح سوخت (سنسور ۲)",
+        "lls2Temp": "دمای سنسور سوخت ۲",
+        "canSpeed": "سرعت",
+        "canPedal": "پدال گاز",
+        "canFuelUsed": "سوخت مصرفی",
+        "canFuelLevelL": "سطح سوخت",
+        "canRpm": "دور موتور",
+        "canMileage": "کیلومتر کل",
+        "canFuelLevelPct": "سطح سوخت",
+        "canEngineTemp": "دمای موتور"
+      }
     }
   },
   "trips": {

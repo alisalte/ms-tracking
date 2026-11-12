@@ -83,6 +83,7 @@ function toMapVehicle(
     presence: motion.presence,
     lastSeenAt,
     cce: pos?.cce ?? null,
+    fmbIo: pos?.fmbIo ?? null,
   };
 }
 
@@ -283,6 +284,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         presence: motion.presence,
         deviceId: picked?.deviceId,
         cce: position?.cce ?? null,
+        fmbIo: position?.fmbIo ?? null,
         odometer: vehicleWire.odometerKm ?? 0,
         address: '', // Reverse geocoding is a map-engine concern (out of scope).
         events: [],
@@ -330,11 +332,13 @@ export function useMapVehicles() {
 }
 
 /** Enriched vehicle detail for the map popup drawer. */
-export function useVehicleDetail(id: string | null) {
+export function useVehicleDetail(id: string | null, opts?: { refetchIntervalMs?: number }) {
   return useQuery({
     queryKey: id ? queryKeys.fleet.vehicleDetail(id) : ['fleet', 'vehicle', 'none'],
     queryFn: () => fetchVehicleDetail(id as string),
     enabled: Boolean(id),
+    // The I/O panel of a unit without a GPS fix is not pushed over the websocket.
+    ...(opts?.refetchIntervalMs ? { refetchInterval: opts.refetchIntervalMs } : {}),
   });
 }
 

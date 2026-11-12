@@ -67,6 +67,8 @@ export interface MapVehicle {
   lastSeenAt?: string;
   /** Latest CCE record for this fix, including whether CAN was in the packet. */
   cce?: CceRecord | null;
+  /** Live I/O panel of a Teltonika FMB640 (inputs, outputs, 1-Wire, serial, CAN). */
+  fmbIo?: FmbIoPanel | null;
 }
 
 // ── Sprint E: REAL gps-engine wire types (live tracking bootstrap) ───────────
@@ -108,6 +110,37 @@ export interface LatestPosition {
   quality: number;
   /** Meitrack CCE parameter map and CAN verdict. Null when this fix was not a CCE packet. */
   cce?: CceRecord | null;
+  /** Live FMB640 I/O panel (single-vehicle endpoint only). */
+  fmbIo?: FmbIoPanel | null;
+}
+
+export type FmbIoGroup =
+  | 'din'
+  | 'dout'
+  | 'ain'
+  | 'onewire'
+  | 'serial'
+  | 'can'
+  | 'j1708'
+  | 'kline'
+  | 'other';
+
+/** One FMB640 IO element, merged across records by the gateway. */
+export interface FmbIoPoint {
+  /** AVL id as sent by the device. */
+  id: number;
+  /** i18n key suffix under `map.io.points`; null for an element without a known name. */
+  key: string | null;
+  group: FmbIoGroup;
+  value: number | boolean | string;
+  unit?: string;
+  /** Device time of the record that last reported this element (ISO). */
+  at: string;
+}
+
+export interface FmbIoPanel {
+  updatedAt: string;
+  groups: Partial<Record<FmbIoGroup, FmbIoPoint[]>>;
 }
 
 /** One decoded MD300 CCE record stored with the position. */

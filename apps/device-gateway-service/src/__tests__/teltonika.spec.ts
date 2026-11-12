@@ -4,10 +4,12 @@ import type { AuthOutcome } from '../application/auth-resolver.js';
 import type { AuthResolver } from '../application/auth-resolver.js';
 import { PacketDispatcher, type PacketDispatcherDeps } from '../application/packet-dispatcher.js';
 import { SessionManager } from '../application/session-manager.js';
+import type { FmbIoPanel } from '../domain/fmb-io-panel.js';
 import { DeviceSession, ProtocolError, type RawPacket } from '../domain/index.js';
 import { TeltonikaAdapter } from '../infrastructure/adapters/teltonika/teltonika.adapter.js';
 import { encodeCodec12Command } from '../infrastructure/adapters/teltonika/teltonika.encode.js';
 import { teltonikaCrc16 } from '../infrastructure/adapters/teltonika/teltonika.frames.js';
+import { FmbIoStore } from '../infrastructure/storage/fmb-io-store.js';
 import { RawPacketStorage } from '../infrastructure/storage/raw-packet-storage.js';
 import { ByteReader, NEED_MORE } from '../infrastructure/transport/byte-reader.js';
 import { TcpListener } from '../infrastructure/transport/tcp-server.js';
@@ -598,5 +600,143 @@ describe('Teltonika over a real TCP socket', () => {
 
     sock.destroy();
     await listener.close();
+  });
+});
+
+// ── FMB640 I/O panel ─────────────────────────────────────────────────────────
+
+const panelOf = (msg: { telemetry?: Record<string, unknown> } | undefined): FmbIoPanel =>
+  msg?.telemetry?.fmbIo as FmbIoPanel;
+const point = (panel: FmbIoPanel, id: number) =>
+  Object.values(panel.groups)
+    .flatMap((g) => g ?? [])
+    .find((p) => p.id === id);
+
+describe('Teltonika decode — I/O panel', () => {
+  const fix = { lat: 54.6872, lon: 25.2797, sats: 9, speed: 40 };
+
+  it('groups digital, analog, 1-Wire, serial and CAN elements with scaled values', () => {
+    const [msg] = decode(
+      avl(0x08, [
+        {
+          ...fix,
+          io: [
+            { id: 1, width: 1, value: 1 }, // DIN1 on
+            { id: 2, width: 1, value: 0 }, // DIN2 off
+            { id: 179, width: 1, value: 1 }, // DOUT1 on
+            { id: 9, width: 2, value: 12340 }, // AIN1 12.34 V
+            { id: 72, width: 2, value: 0xffe7 }, // Dallas temp, -2.5 °C (signed 0.1)
+            { id: 201, width: 2, value: 480 }, // LLS1 level
+            { id: 85, width: 2, value: 1450 }, // CAN rpm
+          ],
+        },
+      ]),
+    );
+    const panel = panelOf(msg);
+    expect(point(panel, 1)).toMatchObject({ group: 'din', key: 'din1', value: true });
+    expect(point(panel, 2)).toMatchObject({ group: 'din', value: false });
+    expect(point(panel, 179)).toMatchObject({ group: 'dout', key: 'dout1', value: true });
+    expect(point(panel, 9)).toMatchObject({ group: 'ain', value: 12.34, unit: 'V' });
+    expect(point(panel, 72)).toMatchObject({ group: 'onewire', value: -2.5, unit: '°C' });
+    expect(point(panel, 201)).toMatchObject({ group: 'serial', key: 'lls1Level', value: 480 });
+    expect(point(panel, 85)).toMatchObject({ group: 'can', value: 1450, unit: 'rpm' });
+  });
+
+  it('keeps unknown elements under "other" and skips ones shown elsewhere', () => {
+    // Codec 8E: ids above 255 do not fit Codec 8's one-byte id.
+    const [msg] = decode(
+      avl(0x8e, [
+        {
+          ...fix,
+          io: [
+            { id: 300, width: 2, value: 77 }, // not catalogued
+            { id: 66, width: 2, value: 24100 }, // external voltage — already a device fact
+            { id: 239, width: 1, value: 1 }, // ignition — already a device fact
+          ],
+        },
+      ]),
+    );
+    const panel = panelOf(msg);
+    expect(point(panel, 300)).toMatchObject({ group: 'other', key: null, value: 77 });
+    expect(point(panel, 66)).toBeUndefined();
+    expect(point(panel, 239)).toBeUndefined();
+  });
+
+  it('formats an 8-byte iButton id as upper-case hex', () => {
+    const [msg] = decode(
+      avl(0x08, [{ ...fix, io: [{ id: 78, width: 8, value: 0xa1b2c3d4e5f60708n }] }]),
+    );
+    expect(point(panelOf(msg), 78)).toMatchObject({ group: 'onewire', value: 'A1B2C3D4E5F60708' });
+  });
+
+  it('has no panel when the record has no IO elements', () => {
+    const [msg] = decode(avl(0x08, [{ ...fix }]));
+    expect(msg?.telemetry?.fmbIo).toBeUndefined();
+  });
+});
+
+/** Minimal in-memory stand-in for the Redis hash commands FmbIoStore uses. */
+function fakeRedis() {
+  const hashes = new Map<string, Map<string, string>>();
+  const h = (k: string) => {
+    let m = hashes.get(k);
+    if (!m) {
+      m = new Map();
+      hashes.set(k, m);
+    }
+    return m;
+  };
+  return {
+    hmget: async (k: string, ...f: string[]) => f.map((x) => h(k).get(x) ?? null),
+    hset: async (k: string, v: Record<string, string>) => {
+      for (const [f, val] of Object.entries(v)) h(k).set(f, val);
+      return Object.keys(v).length;
+    },
+    expire: async () => 1,
+    hgetall: async (k: string) => Object.fromEntries(h(k)),
+  };
+}
+
+describe('FmbIoStore — merging partial records', () => {
+  const T = 'tenant-1';
+  const V = 'vehicle-1';
+  const pt = (id: number, value: number | boolean, at: string) => ({
+    id,
+    key: `k${id}`,
+    group: 'din' as const,
+    value,
+    at,
+  });
+  const t1 = '2026-11-10T08:00:00.000Z';
+  const t2 = '2026-11-10T08:00:10.000Z';
+
+  it('returns the union of what the device reported across records', async () => {
+    const store = new FmbIoStore(fakeRedis() as never);
+    await store.merge(T, V, [pt(1, true, t1), pt(2, false, t1)], new Date(t1));
+    const panel = await store.merge(T, V, [pt(2, true, t2)], new Date(t2));
+    const din = panel.groups.din ?? [];
+    expect(din.map((p) => [p.id, p.value])).toEqual([
+      [1, true], // from the first record, not repeated in the second
+      [2, true], // updated by the second
+    ]);
+    expect(panel.updatedAt).toBe(t2);
+  });
+
+  it('does not let a delayed older record overwrite a newer value', async () => {
+    const store = new FmbIoStore(fakeRedis() as never);
+    await store.merge(T, V, [pt(1, true, t2)], new Date(t2));
+    const panel = await store.merge(T, V, [pt(1, false, t1)], new Date(t1));
+    expect(panel.groups.din?.[0]?.value).toBe(true);
+  });
+
+  it("falls back to the record's own points when Redis fails", async () => {
+    const broken = {
+      hmget: async () => {
+        throw new Error('redis down');
+      },
+    };
+    const store = new FmbIoStore(broken as never);
+    const panel = await store.merge(T, V, [pt(1, true, t1)], new Date(t1));
+    expect(panel.groups.din?.[0]?.value).toBe(true);
   });
 });

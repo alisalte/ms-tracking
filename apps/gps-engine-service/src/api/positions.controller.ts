@@ -29,6 +29,7 @@ import {
 } from '@nestjs/common';
 import { historyWindowErrorMessage, parseHistoryWindow } from '../application/history-window.js';
 import type { GpsEngineConfig } from '../config/gps-engine.config.js';
+import type { FmbIoMemory } from '../infrastructure/cache/fmb-io-memory.js';
 import type { LastCanMemory } from '../infrastructure/cache/last-can-memory.js';
 import type { RedisPositionCache } from '../infrastructure/cache/redis-position-cache.js';
 import type {
@@ -36,6 +37,7 @@ import type {
   PositionRepository,
 } from '../infrastructure/persistence/position.repository.js';
 import {
+  FMB_IO_MEMORY,
   GPS_ENGINE_CONFIG,
   LAST_CAN_MEMORY,
   POSITION_CACHE,
@@ -59,7 +61,19 @@ export class PositionsController {
     @Inject(GPS_ENGINE_CONFIG) private readonly config: GpsEngineConfig,
     @Inject(METRICS_TOKEN) private readonly metrics: TelemetryMetrics,
     @Optional() @Inject(LAST_CAN_MEMORY) private readonly lastCan?: LastCanMemory,
+    @Optional() @Inject(FMB_IO_MEMORY) private readonly fmbIo?: FmbIoMemory,
   ) {}
+
+  /**
+   * Attach the gateway's merged FMB640 I/O panel to ONE vehicle's latest
+   * position. Single-vehicle only: the tenant list would cost one Redis read
+   * per vehicle, and the live map gets the panel over the websocket anyway.
+   */
+  private async withFmbIo<T extends LatestPosition>(position: T): Promise<T> {
+    if (!this.fmbIo) return position;
+    const panel = await this.fmbIo.read(position.tenantId, position.vehicleId);
+    return panel ? { ...position, fmbIo: panel } : position;
+  }
 
   /** Add the remembered CAN reading to CAN-less records (no-op without the memory). */
   private async withLastCan<T extends LatestPosition>(positions: readonly T[]): Promise<T[]> {
@@ -136,12 +150,12 @@ export class PositionsController {
   @RequirePermissions('tracking.read')
   public async latest(@Param('vehicleId') vehicleId: string, @CurrentTenant() tenantId: string) {
     const cached = await this.cache.getLatest(tenantId, vehicleId);
-    if (cached) return (await this.withLastCan([cached]))[0];
+    if (cached) return this.withFmbIo((await this.withLastCan([cached]))[0] as LatestPosition);
     const fromDb = await this.repo.findLatest(tenantId, vehicleId);
     if (!fromDb) {
       throw new HttpException('No position found for this vehicle.', HttpStatus.NOT_FOUND);
     }
-    return (await this.withLastCan([fromDb]))[0];
+    return this.withFmbIo((await this.withLastCan([fromDb]))[0] as LatestPosition);
   }
 
   /**

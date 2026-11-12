@@ -28,6 +28,7 @@ import { ProtocolError } from '../../../domain/errors.js';
 import type { RawPacket } from '../../../domain/raw-packet.js';
 import { ALARM_EVENTS, IO_CATALOG, IO_IGNITION } from './teltonika.codes.js';
 import { AVL_HEADER_BYTES, TELTONIKA_CODEC, isImeiFrame } from './teltonika.frames.js';
+import { buildFmbIoPoints, toFmbIoPanel } from './teltonika.io-panel.js';
 
 type IoValue = number | bigint | Buffer;
 /** An IO element with the byte width it had on the wire (needed for signed values). */
@@ -314,7 +315,14 @@ function recordToMessages(raw: RawPacket, r: AvlRecord): DeviceMessage[] {
       }
     : undefined;
 
-  const telemetry = { ...buildTelemetry(r.io), ignitionOn, fixValid: hasFix };
+  // This record's I/O points only; the dispatcher merges them with earlier records.
+  const ioPoints = buildFmbIoPoints(r.io, timestamp);
+  const telemetry = {
+    ...buildTelemetry(r.io),
+    ignitionOn,
+    fixValid: hasFix,
+    ...(ioPoints.length > 0 ? { fmbIo: toFmbIoPanel(ioPoints, timestamp) } : {}),
+  };
   const io: Record<string, unknown> = {};
   for (const [id, e] of r.io) io[String(id)] = jsonValue(e.value);
 

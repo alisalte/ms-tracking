@@ -20,6 +20,7 @@ import { DeviceStatusRecord, mapSessionState } from '../../domain/device-status.
  * — the documented Sprint-7 semantic.
  */
 import { PositionEvent } from '../../domain/position-event.js';
+import { isFmbIoPanel } from '../cache/fmb-io-memory.js';
 
 /** Structural validation failure — non-retryable (Sprint D §18). */
 export class EnvelopeValidationError extends Error {
@@ -124,8 +125,19 @@ export function parsePositionEnvelope(raw: Buffer | string): PositionEvent {
     ingestedAt,
     protocolId: env.protocolId ?? '',
     quality: 'VALID',
-    metadata: cceMetadata(env.telemetry),
+    metadata: positionMetadata(env.telemetry),
   });
+}
+
+/** CCE record and/or FMB I/O panel carried by the envelope, kept on the position. */
+function positionMetadata(telemetry: unknown): Record<string, unknown> | undefined {
+  const cce = cceMetadata(telemetry);
+  const fmbIo =
+    telemetry && typeof telemetry === 'object'
+      ? (telemetry as { fmbIo?: unknown }).fmbIo
+      : undefined;
+  if (!cce && !isFmbIoPanel(fmbIo)) return undefined;
+  return { ...cce, ...(isFmbIoPanel(fmbIo) ? { fmbIo } : {}) };
 }
 
 /** Keep a decoded CCE record (parameter map + CAN verdict) on the position. */

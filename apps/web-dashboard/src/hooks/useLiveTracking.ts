@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { type ConnectionState, useRealtimeSocket } from '@/hooks/useRealtimeSocket';
 import { resolveRealtimeTarget } from '@/lib/realtime-url';
 import { MOTION_FRESH_MS, deriveVehicleMotion, presenceFromLiveFix } from '@/lib/vehicle-motion';
-import type { CceRecord, MapVehicle } from '@/types/fleet.types';
+import type { CceRecord, FmbIoPanel, MapVehicle } from '@/types/fleet.types';
 
 /** A live position update from the gps-engine (wire format). */
 export interface LivePosition {
@@ -37,6 +37,8 @@ export interface LivePosition {
   quality: string;
   /** CCE record when the live fix carried one. Absent on older broadcasters. */
   cce?: CceRecord;
+  /** FMB640 I/O panel when the live fix came from a Teltonika record. */
+  fmbIo?: FmbIoPanel;
 }
 
 /** A device-status update from the gps-engine. */
@@ -101,6 +103,10 @@ export function useLiveTracking(tenantId: string | null, wsUrl?: string): LiveTr
           data.cce && typeof data.cce === 'object' && typeof data.cce.can?.present === 'boolean'
             ? data.cce
             : undefined;
+        const fmbIo =
+          data.fmbIo && typeof data.fmbIo === 'object' && typeof data.fmbIo.groups === 'object'
+            ? data.fmbIo
+            : undefined;
         next.set(data.vehicleId, {
           vehicleId: data.vehicleId,
           latitude: data.latitude,
@@ -110,6 +116,7 @@ export function useLiveTracking(tenantId: string | null, wsUrl?: string): LiveTr
           capturedAt: data.capturedAt ?? new Date().toISOString(),
           quality: data.quality ?? 'VALID',
           ...(cce ? { cce } : {}),
+          ...(fmbIo ? { fmbIo } : {}),
         });
         return next;
       });
@@ -194,6 +201,7 @@ export function mergeLivePositions(
       presence: motion.presence,
       lastSeenAt: status?.lastSeenAt ?? v.lastSeenAt,
       cce: pos?.cce !== undefined ? pos.cce : v.cce,
+      fmbIo: pos?.fmbIo !== undefined ? pos.fmbIo : v.fmbIo,
     };
   });
 }
