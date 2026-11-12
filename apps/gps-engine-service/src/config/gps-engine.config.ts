@@ -139,11 +139,12 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     GPS_FILTER_MAX_SPEED_KMH: z.coerce.number().min(1).default(200),
     /**
      * Per-machine-type speed caps (km/h) as JSON, keyed by fleet.vehicles
-     * machine_type. Default `{"SHOVEL":15}` (tracked excavators crawl).
+     * machine_type. Default `{"SHOVEL":15,"TRUCK":70}`: tracked excavators
+     * crawl, and the fleet's haul trucks top out near 60 km/h.
      */
     GPS_FILTER_MACHINE_MAX_SPEED_KMH: z
       .string()
-      .default('{"SHOVEL":15}')
+      .default('{"SHOVEL":15,"TRUCK":70}')
       .transform((raw, ctx) => {
         try {
           const parsed = JSON.parse(raw) as unknown;

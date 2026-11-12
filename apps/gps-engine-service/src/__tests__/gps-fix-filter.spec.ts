@@ -18,7 +18,7 @@ const OPTS: GpsFilterOptions = {
   minSatellites: 5,
   maxHdop: 5,
   maxSpeedKmh: 200,
-  machineMaxSpeedKmh: { SHOVEL: 15 },
+  machineMaxSpeedKmh: { SHOVEL: 15, TRUCK: 70 },
   mismatchMinSpeedKmh: 20,
   mismatchFactor: 3,
   mismatchSlackKmh: 10,
@@ -78,8 +78,12 @@ describe('assessFix — GPS plausibility rules', () => {
     expect(v.speedKph).toBe(0);
     expect(v.reasons).toContain('OVER_MACHINE_CAP');
     expect(v.capKmh).toBe(15);
-    // Same speed on a truck is fine.
-    expect(assessFix(fix({ speedKph: 107 }), null, 'TRUCK', OPTS).quality).toBe('VALID');
+    // A haul truck is capped at 70; an untyped vehicle only at the generic cap.
+    expect(assessFix(fix({ speedKph: 60 }), null, 'TRUCK', OPTS).quality).toBe('VALID');
+    expect(assessFix(fix({ speedKph: 101 }), null, 'TRUCK', OPTS).reasons).toEqual([
+      'OVER_MACHINE_CAP',
+    ]);
+    expect(assessFix(fix({ speedKph: 107 }), null, null, OPTS).quality).toBe('VALID');
     // Over the generic cap for any machine.
     expect(assessFix(fix({ speedKph: 566 }), null, null, OPTS).reasons).toContain(
       'OVER_MACHINE_CAP',
