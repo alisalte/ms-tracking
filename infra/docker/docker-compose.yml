@@ -423,6 +423,9 @@ services:
       NOTIF_SMTP_PASS: ${NOTIF_SMTP_PASS:-}
       NOTIF_SMTP_FROM: ${NOTIF_SMTP_FROM:-noreply@fleetvision.local}
       NOTIF_SMTP_SECURE: ${NOTIF_SMTP_SECURE:-false}
+      # Decrypts per-tenant SMTP passwords (reporting.tenant_email_settings) for alarm-rule email.
+      # Must equal reporting-service's key.
+      REPORT_SECRETS_KEY: ${REPORT_SECRETS_KEY:-}
       # Realtime Socket.IO (browser connects to localhost:3010, same pattern as GPS :3001).
       NOTIF_WS_PORT: "3010"
       NOTIF_WS_ENABLED: "true"

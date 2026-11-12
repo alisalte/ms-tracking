@@ -49,6 +49,8 @@ interface RuleFormValues {
   cooldownSec: string;
   dedupWindowSec: string;
   repeatPolicy: RepeatPolicy;
+  /** Comma/space/semicolon-separated email addresses. */
+  recipients: string;
   thresholdKmh: string;
   gracePeriodSec: string;
   minDurationSec: string;
@@ -67,6 +69,7 @@ const EMPTY: RuleFormValues = {
   cooldownSec: '300',
   dedupWindowSec: '600',
   repeatPolicy: 'COOLDOWN',
+  recipients: '',
   thresholdKmh: '80',
   gracePeriodSec: '0',
   minDurationSec: '600',
@@ -111,6 +114,14 @@ function conditionsFromForm(v: RuleFormValues): Record<string, unknown> {
   }
 }
 
+/** Split a free-text address list (comma / space / semicolon / newline separated). */
+export function parseRecipients(text: string): string[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
 function formFromRule(r: AlarmRule): RuleFormValues {
   const c = r.conditions;
   return {
@@ -122,6 +133,7 @@ function formFromRule(r: AlarmRule): RuleFormValues {
     cooldownSec: String(r.cooldownSec),
     dedupWindowSec: String(r.dedupWindowSec),
     repeatPolicy: r.repeatPolicy,
+    recipients: r.recipients.join(', '),
     thresholdKmh: String(c.thresholdKmh ?? 80),
     gracePeriodSec: String(c.gracePeriodSec ?? 0),
     minDurationSec: String(c.minDurationSec ?? 600),
@@ -206,6 +218,7 @@ export function AlarmRulesPage() {
       cooldownSec: num(values.cooldownSec) ?? 300,
       dedupWindowSec: num(values.dedupWindowSec) ?? 600,
       repeatPolicy: values.repeatPolicy,
+      recipients: parseRecipients(values.recipients),
     };
     try {
       if (editTarget) {
@@ -218,6 +231,7 @@ export function AlarmRulesPage() {
             cooldownSec: payload.cooldownSec,
             dedupWindowSec: payload.dedupWindowSec,
             repeatPolicy: payload.repeatPolicy,
+            recipients: payload.recipients,
           },
         });
         toast.success(t('rules.updateSuccess'));
@@ -555,6 +569,18 @@ export function AlarmRulesPage() {
                   value: p,
                   label: t(`rules.repeatPolicies.${p}`),
                 }))}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="recipients"
+            render={({ field }) => (
+              <Input
+                {...field}
+                label={t('rules.recipients')}
+                placeholder={t('rules.recipientsHint')}
+                data-testid="rule-recipients"
               />
             )}
           />

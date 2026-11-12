@@ -3144,6 +3144,8 @@
     "cooldown": "زمان انتظار (ثانیه)",
     "dedup": "پنجرهٔ حذف تکرار (ثانیه)",
     "repeat": "سیاست تکرار",
+    "recipients": "گیرندگان ایمیل",
+    "recipientsHint": "a@x.com, b@y.com (حداکثر ۱۰)",
     "thresholdKmh": "حد سرعت (کیلومتر بر ساعت)",
     "gracePeriodSec": "مهلت (ثانیه)",
     "minDurationSec": "حداقل مدت (ثانیه)",

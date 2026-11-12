@@ -32,6 +32,7 @@ export interface AlarmRuleRow {
   cooldown_sec: number;
   dedup_window_sec: number;
   repeat_policy: RepeatPolicy;
+  recipients: string[] | null;
   version: number;
   created_at: Date;
   updated_at: Date;
@@ -74,6 +75,7 @@ export class AlarmRuleRepository {
         cooldown_sec: rule.cooldownSec,
         dedup_window_sec: rule.dedupWindowSec,
         repeat_policy: rule.repeatPolicy,
+        recipients: JSON.stringify(rule.recipients),
         version: rule.version,
       });
     });
@@ -178,6 +180,7 @@ export class AlarmRuleRepository {
           cooldown_sec: rule.cooldownSec,
           dedup_window_sec: rule.dedupWindowSec,
           repeat_policy: rule.repeatPolicy,
+          recipients: JSON.stringify(rule.recipients),
           version: this.knex.raw('version + 1'),
           updated_at: this.knex.fn.now(),
         });
@@ -209,6 +212,7 @@ export class AlarmRuleRepository {
       cooldown_sec: rule.cooldownSec,
       dedup_window_sec: rule.dedupWindowSec,
       repeat_policy: rule.repeatPolicy,
+      recipients: rule.recipients,
       version: rule.version,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -228,6 +232,7 @@ export class AlarmRuleRepository {
       cooldownSec: row.cooldown_sec,
       dedupWindowSec: row.dedup_window_sec,
       repeatPolicy: row.repeat_policy,
+      recipients: row.recipients ?? [],
     });
   }
 }

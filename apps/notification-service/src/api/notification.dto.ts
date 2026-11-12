@@ -7,6 +7,7 @@
  * duration…) is rejected at the API boundary — no invalid rule can be stored.
  */
 import { z } from 'zod';
+import { MAX_RULE_RECIPIENTS, normalizeRecipients } from '../domain/rule-recipients.js';
 
 const ALARM_TYPES = [
   'overspeed',
@@ -104,6 +105,22 @@ export function conditionsForType(
   throw new Error(`Rule type '${type}' is not supported by the alarm engine yet`);
 }
 
+/** Up to 10 valid email addresses; output is trimmed, lowercased and deduped. */
+export const recipientsSchema = z
+  .array(z.string().max(254))
+  .max(MAX_RULE_RECIPIENTS)
+  .transform((list, ctx) => {
+    const normalized = normalizeRecipients(list);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `recipients must be at most ${MAX_RULE_RECIPIENTS} valid email addresses`,
+      });
+      return z.NEVER;
+    }
+    return normalized;
+  });
+
 const createRuleBase = {
   name: z.string().min(1).max(256),
   type: z.enum(ALARM_TYPES),
@@ -112,6 +129,7 @@ const createRuleBase = {
   cooldown_sec: positiveInt(0).default(300),
   dedup_window_sec: positiveInt(0).default(600),
   repeat_policy: z.enum(REPEAT_POLICIES).default('COOLDOWN'),
+  recipients: recipientsSchema.default([]),
 };
 
 export const createRuleSchema = z
@@ -140,6 +158,7 @@ export const updateRuleSchema = z
     cooldown_sec: positiveInt(0).optional(),
     dedup_window_sec: positiveInt(0).optional(),
     repeat_policy: z.enum(REPEAT_POLICIES).optional(),
+    recipients: recipientsSchema.optional(),
   })
   .refine((val) => Object.keys(val).length > 0, { message: 'at least one field required' });
 export type UpdateRuleDto = z.infer<typeof updateRuleSchema>;

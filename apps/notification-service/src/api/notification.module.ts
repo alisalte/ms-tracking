@@ -31,9 +31,11 @@ import { DeliveryExecutor } from '../application/delivery-executor.js';
 import { DeliveryRetryWorker } from '../application/delivery-retry-worker.js';
 import { EvidenceRetentionWorker } from '../application/evidence-retention.worker.js';
 import { NotificationDispatcherService } from '../application/notification-dispatcher.service.js';
+import { RuleEmailNotifier } from '../application/rule-email-notifier.js';
 import type { NotificationConfig } from '../config/notification.config.js';
 import { AlarmStateCache } from '../infrastructure/cache/alarm-state-cache.js';
 import { NotificationRateLimiter } from '../infrastructure/cache/notification-rate-limiter.js';
+import { SecretBox } from '../infrastructure/crypto/secret-box.js';
 import { AlarmDlqProducer } from '../infrastructure/kafka/alarm-dlq-producer.js';
 import { AlarmKafkaConsumer } from '../infrastructure/kafka/alarm-kafka-consumer.js';
 import { AlarmEvidenceRepository } from '../infrastructure/persistence/alarm-evidence.repository.js';
@@ -43,6 +45,7 @@ import { FleetEventRepository } from '../infrastructure/persistence/fleet-event.
 import { NotificationDeliveryRepository } from '../infrastructure/persistence/notification-delivery.repository.js';
 import { NotificationPreferenceRepository } from '../infrastructure/persistence/notification-preference.repository.js';
 import { NotificationRepository } from '../infrastructure/persistence/notification.repository.js';
+import { TenantSmtpRepository } from '../infrastructure/persistence/tenant-smtp.repository.js';
 import { UserDirectory } from '../infrastructure/persistence/user-directory.js';
 import { VehicleProfileRepository } from '../infrastructure/persistence/vehicle-profile.repository.js';
 import { AlarmRealtimeGateway } from '../infrastructure/websocket/alarm-realtime.gateway.js';
@@ -68,6 +71,7 @@ export class NotificationModule {
           user: config.NOTIF_SMTP_USER ?? '',
           pass: config.NOTIF_SMTP_PASS ?? '',
           from: config.NOTIF_SMTP_FROM ?? 'no-reply@fleetvision.local',
+          secure: config.NOTIF_SMTP_SECURE,
         }
       : null;
 
@@ -183,6 +187,23 @@ export class NotificationModule {
               .register(new PushChannel(cfg.NOTIF_PUSH_ENABLED));
           },
         },
+        // Alarm-rule email: tenant SMTP (reporting.tenant_email_settings,
+        // decrypted with REPORT_SECRETS_KEY) → server NOTIF_SMTP_* fallback.
+        {
+          provide: RuleEmailNotifier,
+          inject: [PLATFORM_KNEX_TOKEN, NotificationDeliveryRepository],
+          useFactory: (platformKnex: Knex, deliveries: NotificationDeliveryRepository) => {
+            const secrets = new SecretBox(config.REPORT_SECRETS_KEY);
+            return new RuleEmailNotifier({
+              // Without the key tenant passwords cannot be decrypted → server default only.
+              tenantSmtp: secrets.available
+                ? new TenantSmtpRepository(platformKnex, secrets)
+                : null,
+              fallback: smtpConfig,
+              deliveries,
+            });
+          },
+        },
         // Sprint H — rate limiter (storm protection).
         {
           provide: NotificationRateLimiter,
@@ -218,6 +239,7 @@ export class NotificationModule {
             UserDirectory,
             NotificationRateLimiter,
             DeliveryExecutor,
+            RuleEmailNotifier,
             METRICS_TOKEN,
             NOTIF_CONFIG,
           ],
@@ -229,6 +251,7 @@ export class NotificationModule {
             userDirectory: UserDirectory,
             rateLimiter: NotificationRateLimiter,
             executor: DeliveryExecutor,
+            ruleEmail: RuleEmailNotifier,
             metrics: TelemetryMetrics,
             cfg: NotificationConfig,
           ) =>
@@ -240,6 +263,7 @@ export class NotificationModule {
               userDirectory,
               rateLimiter,
               executor,
+              ruleEmail,
               metrics,
               defaultLocale: cfg.NOTIF_DEFAULT_LOCALE,
               enabled: cfg.NOTIFICATION_ENABLED,

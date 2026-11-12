@@ -33,6 +33,8 @@ export interface AlarmRuleProps {
   cooldownSec: number;
   dedupWindowSec: number;
   repeatPolicy: RepeatPolicy;
+  /** Extra email recipients (normalized, max 10) notified when the rule fires. */
+  recipients?: readonly string[];
 }
 
 export class AlarmRule {
@@ -47,6 +49,7 @@ export class AlarmRule {
   public cooldownSec: number;
   public dedupWindowSec: number;
   public repeatPolicy: RepeatPolicy;
+  public recipients: string[];
   public version: number;
 
   private constructor(id: string, version: number, props: AlarmRuleProps) {
@@ -62,6 +65,7 @@ export class AlarmRule {
     this.cooldownSec = props.cooldownSec;
     this.dedupWindowSec = props.dedupWindowSec;
     this.repeatPolicy = props.repeatPolicy;
+    this.recipients = [...(props.recipients ?? [])];
     this.version = version;
   }
 

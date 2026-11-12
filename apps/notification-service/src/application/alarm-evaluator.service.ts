@@ -827,7 +827,7 @@ export class AlarmEvaluatorService {
     // The dispatcher handles preferences, dedup, retry, and channel selection.
     if (this.deps.dispatcher) {
       try {
-        await this.deps.dispatcher.dispatchAlarm(occurrence);
+        await this.deps.dispatcher.dispatchAlarm(occurrence, { ruleRecipients: rule.recipients });
       } catch (err) {
         this.logger.warn(`Notification dispatch error: ${(err as Error).message}`);
       }
