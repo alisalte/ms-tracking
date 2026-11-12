@@ -1,3 +1,4 @@
+import type { Redis } from '@fleetvision/cache-redis';
 /**
  * Redis FSM-state cache — persists per-vehicle FSM snapshots so a pod restart
  * resumes mid-trip without spurious boundaries (07 §13.5).
@@ -11,8 +12,12 @@
  *
  * Values are JSON. All operations are best-effort (Redis down → the FSM
  * restarts from defaults; a few spurious boundaries on failover are acceptable).
+ *
+ * "Best-effort" does not mean silent: a Redis outage makes every vehicle start a
+ * new trip on each position (it once produced ~9,500 orphan trips in one day with
+ * no trace in the logs), so failures are logged, at most once per minute.
  */
-import type { Redis } from '@fleetvision/cache-redis';
+import { Logger } from '@nestjs/common';
 
 /** Per-FSM TTL in seconds (07 §13.5). */
 const TTL: Record<string, number> = {
@@ -23,8 +28,32 @@ const TTL: Record<string, number> = {
   enginehours: 24 * 3600,
 };
 
+/** Minimum gap between two failure log lines. */
+const FAILURE_LOG_INTERVAL_MS = 60_000;
+
 export class RedisFsmCache {
-  constructor(private readonly redis: Redis) {}
+  private readonly logger = new Logger('RedisFsmCache');
+  private lastFailureLogAt = 0;
+  private failuresSinceLog = 0;
+
+  constructor(
+    private readonly redis: Redis,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  /** Log a failed operation; repeats within a minute are only counted. */
+  private logFailure(op: string, fsm: string, err: unknown): void {
+    this.failuresSinceLog += 1;
+    const t = this.now();
+    if (t - this.lastFailureLogAt < FAILURE_LOG_INTERVAL_MS) return;
+    this.lastFailureLogAt = t;
+    const n = this.failuresSinceLog;
+    this.failuresSinceLog = 0;
+    this.logger.warn(
+      `FSM state ${op} failed (${fsm}): ${(err as Error)?.message ?? String(err)} — ` +
+        `${n} failure(s) since the last log. Trips restart from defaults while this lasts.`,
+    );
+  }
 
   private key(tenantId: string, vehicleId: string, fsm: string): string {
     return `tenant:${tenantId}:vehicle:${vehicleId}:${fsm}`;
@@ -36,7 +65,8 @@ export class RedisFsmCache {
       const raw = await this.redis.get(this.key(tenantId, vehicleId, fsm));
       if (!raw) return null;
       return JSON.parse(raw) as T;
-    } catch {
+    } catch (err) {
+      this.logFailure('read', fsm, err);
       return null;
     }
   }
@@ -50,8 +80,8 @@ export class RedisFsmCache {
         'EX',
         TTL[fsm] ?? 3600,
       );
-    } catch {
-      /* best-effort */
+    } catch (err) {
+      this.logFailure('write', fsm, err);
     }
   }
 
@@ -60,7 +90,8 @@ export class RedisFsmCache {
     try {
       const raw = await this.redis.get(this.key(tenantId, vehicleId, fsm));
       return raw ? Number(raw) || 0 : 0;
-    } catch {
+    } catch (err) {
+      this.logFailure('read', fsm, err);
       return 0;
     }
   }
@@ -79,8 +110,8 @@ export class RedisFsmCache {
         'EX',
         TTL[fsm] ?? 3600,
       );
-    } catch {
-      /* best-effort */
+    } catch (err) {
+      this.logFailure('write', fsm, err);
     }
   }
 }

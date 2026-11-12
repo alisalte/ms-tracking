@@ -27,6 +27,11 @@ const TEST_DB_NAME = 'fleetvision_gps_int_test';
 const TENANT_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const TENANT_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const VEHICLE = '22222222-2222-2222-2222-222222222222';
+// source_event_id is a uuid column.
+const EV1 = '00000000-0000-4000-8000-000000000001';
+const EV2 = '00000000-0000-4000-8000-000000000002';
+const EV3 = '00000000-0000-4000-8000-000000000003';
+const EV4 = '00000000-0000-4000-8000-000000000004';
 
 interface Ctx {
   knex: Knex;
@@ -186,8 +191,15 @@ d('TripRepository (integration: real PostgreSQL)', () => {
   it('multiple ACTIVE trips → the newest active trip is closed', async () => {
     const older = new Date('2026-08-13T10:00:00Z');
     const newer = new Date('2026-08-13T11:00:00Z');
-    await repo.insertTripStart(startEvent(TENANT_A, older));
-    await repo.insertTripStart(startEvent(TENANT_A, newer)); // newest ACTIVE
+    // insertTripStart supersedes older ACTIVE rows, so seed both rows directly
+    // to keep covering completeTrip's "newest wins" selection (legacy data).
+    for (const startedAt of [older, newer]) {
+      await knex.raw(
+        `INSERT INTO tracking.trip_events (tenant_id, vehicle_id, status, started_at, start_lat, start_lng)
+         VALUES (?::uuid, ?::uuid, 'ACTIVE', ?, 1, 1)`,
+        [TENANT_A, VEHICLE, startedAt],
+      );
+    }
 
     const result = await repo.completeTrip(
       endEvent(TENANT_A, newer, new Date('2026-08-13T11:30:00Z')),
@@ -199,7 +211,55 @@ d('TripRepository (integration: real PostgreSQL)', () => {
     const closed = rows.find((r) => r.status === 'COMPLETED');
     const active = rows.find((r) => r.status === 'ACTIVE');
     expect(closed?.started_at).toEqual(newer); // newest closed
-    expect(active?.started_at).toEqual(older); // older left ACTIVE (one vehicle, one trip at a time in practice)
+    expect(active?.started_at).toEqual(older); // older left ACTIVE
+  });
+
+  it("a new start supersedes the vehicle's older ACTIVE trip (one trip at a time)", async () => {
+    const older = new Date('2026-08-13T10:00:00Z');
+    const newer = new Date('2026-08-13T11:00:00Z');
+    await repo.insertTripStart({ ...startEvent(TENANT_A, older), sourceEventId: EV1 });
+    await repo.insertTripStart({ ...startEvent(TENANT_A, newer), sourceEventId: EV2 });
+
+    const rows = await tripRows(knex, TENANT_A);
+    expect(rows.map((r) => r.status)).toEqual(['DISCARDED', 'ACTIVE']);
+    const discarded = await knex
+      .withSchema('tracking')
+      .from('trip_events')
+      .whereRaw('vehicle_id = ?::uuid', [VEHICLE])
+      .where('status', 'DISCARDED')
+      .first();
+    expect(discarded?.ended_at).toEqual(newer); // superseded when the next trip began
+  });
+
+  it('a late (out-of-order) start does not discard a newer ACTIVE trip', async () => {
+    const older = new Date('2026-08-13T10:00:00Z');
+    const newer = new Date('2026-08-13T11:00:00Z');
+    await repo.insertTripStart({ ...startEvent(TENANT_A, newer), sourceEventId: EV2 });
+    await repo.insertTripStart({ ...startEvent(TENANT_A, older), sourceEventId: EV1 });
+
+    const rows = await tripRows(knex, TENANT_A);
+    expect(rows.map((r) => r.status)).toEqual(['ACTIVE', 'ACTIVE']);
+  });
+
+  it('a redelivered start changes nothing (no extra row, nothing superseded)', async () => {
+    const first = new Date('2026-08-13T10:00:00Z');
+    const second = new Date('2026-08-13T11:00:00Z');
+    await repo.insertTripStart({ ...startEvent(TENANT_A, first), sourceEventId: EV1 });
+    await repo.insertTripStart({ ...startEvent(TENANT_A, second), sourceEventId: EV2 });
+    await repo.insertTripStart({ ...startEvent(TENANT_A, first), sourceEventId: EV1 }); // replay
+
+    const rows = await tripRows(knex, TENANT_A);
+    expect(rows.map((r) => r.status)).toEqual(['DISCARDED', 'ACTIVE']);
+  });
+
+  it("a start never touches another tenant's ACTIVE trip", async () => {
+    const t = new Date('2026-08-13T10:00:00Z');
+    await repo.insertTripStart({ ...startEvent(TENANT_B, t), sourceEventId: EV3 });
+    await repo.insertTripStart({
+      ...startEvent(TENANT_A, new Date('2026-08-13T11:00:00Z')),
+      sourceEventId: EV4,
+    });
+    expect((await tripRows(knex, TENANT_B)).map((r) => r.status)).toEqual(['ACTIVE']);
   });
 
   it('no active trip → completeTrip returns updated:0 (graceful, no throw)', async () => {

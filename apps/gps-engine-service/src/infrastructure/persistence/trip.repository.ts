@@ -44,26 +44,54 @@ export class TripRepository {
 
   // --- Trips ---
 
-  /** Insert a new ACTIVE trip row (on trip.started). Idempotent on sourceEventId (Sprint D §6). */
+  /**
+   * Insert a new ACTIVE trip row (on trip.started). Idempotent on sourceEventId
+   * (Sprint D §6).
+   *
+   * A vehicle has one trip at a time, so a start supersedes any older ACTIVE
+   * row of the same vehicle: it is closed as DISCARDED (its end was never
+   * seen, so no distance or duration is known). Without this, every trip.started
+   * whose close was missed stayed ACTIVE forever, because completeTrip/discardTrip
+   * only close the newest ACTIVE row; an FSM-state outage once left ~9,500 rows.
+   * Only strictly older rows are superseded, so a late (out-of-order) start never
+   * discards a newer trip, and a redelivered start (conflict) changes nothing.
+   */
   public async insertTripStart(event: TripBoundaryEvent): Promise<void> {
-    await this.knex
-      .withSchema(SCHEMA)
-      .from('trip_events')
-      .insert({
-        tenant_id: this.knex.raw('?::uuid', [event.tenantId]),
-        vehicle_id: this.knex.raw('?::uuid', [event.vehicleId]),
-        status: 'ACTIVE',
-        started_at: event.startedAt,
-        start_lat: event.startLat,
-        start_lng: event.startLng,
-        distance_km: 0,
-        duration_s: 0,
-        max_speed_kmh: event.maxSpeedKmh,
-        stop_count: 0,
-        source_event_id: event.sourceEventId ?? null,
-      })
-      .onConflict(['source_event_id'])
-      .ignore();
+    await this.knex.transaction(async (trx) => {
+      const inserted = await trx
+        .withSchema(SCHEMA)
+        .from('trip_events')
+        .insert({
+          tenant_id: this.knex.raw('?::uuid', [event.tenantId]),
+          vehicle_id: this.knex.raw('?::uuid', [event.vehicleId]),
+          status: 'ACTIVE',
+          started_at: event.startedAt,
+          start_lat: event.startLat,
+          start_lng: event.startLng,
+          distance_km: 0,
+          duration_s: 0,
+          max_speed_kmh: event.maxSpeedKmh,
+          stop_count: 0,
+          source_event_id: event.sourceEventId ?? null,
+        })
+        .onConflict(['source_event_id'])
+        .ignore()
+        .returning('id');
+      if (inserted.length === 0) return; // redelivery — already handled
+      await trx.raw(
+        `UPDATE tracking.trip_events
+            SET status = 'DISCARDED',
+                ended_at = ?,
+                end_lat = start_lat,
+                end_lng = start_lng,
+                updated_at = now()
+          WHERE status = 'ACTIVE'
+            AND tenant_id = ?::uuid
+            AND vehicle_id = ?::uuid
+            AND started_at < ?`,
+        [event.startedAt, event.tenantId, event.vehicleId, event.startedAt],
+      );
+    });
   }
 
   /**
