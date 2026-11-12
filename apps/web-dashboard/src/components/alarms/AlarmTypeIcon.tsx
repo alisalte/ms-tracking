@@ -7,6 +7,7 @@
  * never hardcodes hex values.
  */
 import {
+  Activity,
   AlertTriangle,
   BatteryWarning,
   Camera,
@@ -39,6 +40,7 @@ const TYPE_ICON: Record<AlarmType, LucideIcon> = {
   'fuel-theft': Fuel,
   temperature: Thermometer,
   collision: CarFront,
+  'harsh-driving': Activity,
   camera: Camera,
   idle: PauseCircle,
   ignition: KeyRound,

@@ -63,6 +63,7 @@ const EVENT_TYPES = [
   'fuel-theft',
   'camera',
   'collision',
+  'harsh-driving',
   'temperature',
   'offline',
   'idle',

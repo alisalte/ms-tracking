@@ -15,7 +15,7 @@
  *   12. tenant isolation: rules of tenant B never see tenant A signals (Part 25)
  */
 import { describe, expect, it } from '@jest/globals';
-import { AlarmEvaluatorService } from '../application/alarm-evaluator.service.js';
+import { AlarmEvaluatorService, accidentImpactMg } from '../application/alarm-evaluator.service.js';
 import type { InputSignal } from '../application/evaluators/rule-evaluator.js';
 import type { AlarmOccurrence } from '../domain/alarm-occurrence.js';
 import { AlarmRule } from '../domain/alarm-rule.js';
@@ -852,14 +852,74 @@ describe('Accident alarms — notify only when the vehicle stops', () => {
     expect(gateway.emitted).toHaveLength(0);
   });
 
-  it('drops the notification when the truck drives on', async () => {
+  it('drops the notification and closes the alarm when the truck drives on', async () => {
     const { service, alarms, gateway, stateCache } = makeHarness([]);
     await service.processDeviceAlarm(accident);
     await service.processPosition(positionSignal({ speedKph: 22, capturedAt: iso(20_000) }));
     await service.confirmDueAccidentHolds(T + 600_000);
-    expect(gateway.emitted).toHaveLength(0);
+    expect(gateway.emitted.filter((e) => e.event === 'alarm.created')).toHaveLength(0);
     expect(alarms.created.at(0)?.detail).toMatchObject({ confirmation: 'drove_on' });
+    expect(alarms.created.at(0)?.status).toBe('RESOLVED');
+    expect(alarms.statusUpdates.at(0)?.reason).toMatch(/drove on/);
     expect(stateCache.accidentHolds.size).toBe(0);
+  });
+
+  /** CCE detail with a 0xfef5 G-sensor reading (mG, little-endian int32 X/Y/Z). */
+  const withImpact = (x: number, y: number, z: number) => {
+    const buf = Buffer.alloc(12);
+    buf.writeInt32LE(x, 0);
+    buf.writeInt32LE(y, 4);
+    buf.writeInt32LE(z, 8);
+    return { ...accident, detail: { cce: { params: { '0xfef5': buf.toString('hex') } } } };
+  };
+
+  it('closes a stopped accident whose impact is a rough-road jolt', async () => {
+    const { service, alarms, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(withImpact(762, -743, -806)); // ~1.3 g
+    await service.processPosition(positionSignal({ speedKph: 0, capturedAt: iso(65_000) }));
+    expect(gateway.emitted.filter((e) => e.event === 'alarm.created')).toHaveLength(0);
+    expect(alarms.created.at(0)?.detail).toMatchObject({
+      confirmation: 'weak_impact',
+      impactMg: 1335,
+    });
+    expect(alarms.created.at(0)?.status).toBe('RESOLVED');
+    expect(alarms.statusUpdates.at(0)?.reason).toMatch(/1\.3 g is below 3 g/);
+  });
+
+  it('notifies a stopped accident with a hard impact', async () => {
+    const { service, alarms, gateway } = makeHarness([]);
+    await service.processDeviceAlarm(withImpact(-7778, -396, 635)); // ~7.8 g
+    await service.processPosition(positionSignal({ speedKph: 0, capturedAt: iso(65_000) }));
+    expect(gateway.emitted).toHaveLength(1);
+    expect(alarms.created.at(0)?.detail).toMatchObject({ confirmation: 'stopped', impactMg: 7814 });
+    expect(alarms.created.at(0)?.status).toBe('OPEN');
+  });
+
+  it('decodes the impact and keeps the strongest repeat', () => {
+    const hex = (x: number) => {
+      const b = Buffer.alloc(12);
+      b.writeInt32LE(x, 0);
+      return b.toString('hex');
+    };
+    expect(accidentImpactMg(null)).toBeNull();
+    expect(accidentImpactMg({ cce: { params: { '0xfef5': 'zz' } } })).toBeNull();
+    expect(
+      accidentImpactMg({
+        cce: { params: { '0xfef5': hex(1200) } },
+        lastDetection: { cce: { params: { '0xfef5': hex(-4100) } } },
+      }),
+    ).toBe(4100);
+  });
+
+  it('files harsh braking as driving behaviour, not a collision', async () => {
+    const { service, alarms } = makeHarness([]);
+    await service.processDeviceAlarm({
+      ...accident,
+      code: 'BRAKING',
+      severity: 'WARNING' as const,
+      source: '129',
+    });
+    expect(alarms.created.at(0)?.type).toBe('harsh-driving');
   });
 
   it('notifies once the truck is still stopped a minute later', async () => {

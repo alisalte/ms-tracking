@@ -448,9 +448,28 @@ export class AlarmEvaluatorService {
   ): Promise<void> {
     const alert = await this.deps.alarms.findById(tenantId, alertId);
     if (!alert) return;
-    await this.deps.alarms.updateDetail(alert, { ...(alert.detail ?? {}), confirmation: outcome });
-    if (outcome === 'drove_on') {
-      this.logger.log(`Accident alarm ${alertId} not notified — vehicle drove on`);
+    const impactMg = accidentImpactMg(alert.detail);
+    const weak = impactMg !== null && impactMg < ACCIDENT_MIN_IMPACT_MG;
+    await this.deps.alarms.updateDetail(alert, {
+      ...(alert.detail ?? {}),
+      confirmation: outcome === 'drove_on' || !weak ? outcome : 'weak_impact',
+      ...(impactMg !== null ? { impactMg } : {}),
+    });
+    if (outcome === 'drove_on' || weak) {
+      // Recorded for history, but closed so it does not sit in the list as a crash.
+      const reason =
+        outcome === 'drove_on'
+          ? 'Vehicle drove on after the impact — rough road, not an accident.'
+          : `Impact ${((impactMg ?? 0) / 1000).toFixed(1)} g is below ${ACCIDENT_MIN_IMPACT_MG / 1000} g — rough road, not an accident.`;
+      // Re-read: updateDetail bumped the row version.
+      const fresh = await this.deps.alarms.findById(tenantId, alertId);
+      if (fresh && fresh.status !== 'RESOLVED') {
+        const prev = fresh.status;
+        fresh.resolve(null, reason);
+        await this.deps.alarms.updateStatus(fresh, 'RESOLVE', prev, fresh.status, null, reason);
+        this.deps.gateway?.emitAlarmResolved(tenantId, fresh);
+      }
+      this.logger.log(`Accident alarm ${alertId} not notified — ${reason}`);
       return;
     }
     this.deps.gateway?.emitAlarmCreated(tenantId, alert);
@@ -901,6 +920,31 @@ const ACCIDENT_MOVING_KMH = 8;
 const ACCIDENT_STOP_CONFIRM_MS = 60_000;
 /** No fix at all this long after the alarm → confirmed (device may be down). */
 const ACCIDENT_SILENCE_CONFIRM_MS = 90_000;
+/**
+ * Impact below this (total G incl. gravity, mG) is a rough-road jolt. Field
+ * data: 0xfef5 reads ~1000 mG at rest; haul trucks on dirt roads raise the
+ * crash sensor at 1-3 g, and stopping (loading/dumping) does not tell those
+ * apart from a crash.
+ */
+const ACCIDENT_MIN_IMPACT_MG = 3_000;
+
+/**
+ * Strongest impact a Meitrack ACCIDENT detection carries, in mG: CCE param
+ * 0xfef5 is the G-sensor X/Y/Z as three little-endian int32 (mG). Repeats
+ * absorbed into the same alarm count too. Null when no reading was reported.
+ */
+export function accidentImpactMg(
+  detail: Record<string, unknown> | null | undefined,
+): number | null {
+  const readings = [detail, detail?.lastDetection as Record<string, unknown> | null | undefined]
+    .map((d) => (d?.cce as { params?: Record<string, unknown> } | undefined)?.params?.['0xfef5'])
+    .filter((hex): hex is string => typeof hex === 'string' && /^[0-9a-f]{24}$/i.test(hex))
+    .map((hex) => {
+      const buf = Buffer.from(hex, 'hex');
+      return Math.hypot(buf.readInt32LE(0), buf.readInt32LE(4), buf.readInt32LE(8));
+    });
+  return readings.length > 0 ? Math.round(Math.max(...readings)) : null;
+}
 
 /** An open device alarm last seen within this window absorbs a repeat (burst). */
 const DEVICE_ALARM_COALESCE_MS = 10 * 60_000;
@@ -1026,12 +1070,14 @@ function deviceAlarmCatalogType(code: string): string {
     case 'TEMPERATURE_LOW':
       return 'temperature';
     case 'ACCIDENT':
+    case 'ROLLOVER':
+      return 'collision';
     case 'BRAKING':
     case 'ACCELERATION':
     case 'CORNERING':
     case 'DRIVING_BEHAVIOR':
-    case 'ROLLOVER':
-      return 'collision';
+      // Harsh braking/acceleration is driving behaviour, not a crash.
+      return 'harsh-driving';
     case 'IDLE_OVERTIME':
     case 'IDLE_RECOVERY':
       return 'idle';
