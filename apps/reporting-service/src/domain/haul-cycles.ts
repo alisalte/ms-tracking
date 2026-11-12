@@ -12,6 +12,12 @@
 const EARTH_RADIUS_M = 6_371_000;
 /** A truck that steps outside the origin and back within this gap is still loading. */
 const ORIGIN_JITTER_MS = 120_000;
+/**
+ * Longest haul (origin exit to destination entry) that still counts as one
+ * service. A truck that leaves the pit at the end of a shift, parks overnight
+ * and drives into the dump the next morning is not a service.
+ */
+export const DEFAULT_MAX_HAUL_SEC = 2 * 3600;
 const DAY_MS = 86_400_000;
 const MINUTES_PER_DAY = 1440;
 
@@ -116,6 +122,8 @@ export interface DetectHaulInput extends DriverContext {
   readonly tracks: ReadonlyMap<string, readonly TrackSample[]>;
   readonly origin: Zone;
   readonly destination: Zone;
+  /** Hauls longer than this (seconds) are dropped; defaults to {@link DEFAULT_MAX_HAUL_SEC}. */
+  readonly maxHaulSec?: number;
 }
 
 export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -221,6 +229,11 @@ export function detectHaulCycles(input: DetectHaulInput): {
 } {
   const cycles: HaulCycle[] = [];
   const open: OpenHaul[] = [];
+  const maxHaulMs =
+    typeof input.maxHaulSec === 'number' && input.maxHaulSec > 0
+      ? input.maxHaulSec * 1000
+      : DEFAULT_MAX_HAUL_SEC * 1000;
+  const tooLong = (from: Date, to: Date) => to.getTime() - from.getTime() > maxHaulMs;
   for (const vehicleId of input.trucks) {
     const samples = [...(input.tracks.get(vehicleId) ?? [])].sort(
       (a, b) => a.at.getTime() - b.at.getTime(),
@@ -262,7 +275,12 @@ export function detectHaulCycles(input: DetectHaulInput): {
         }
         if (inDest && enteredAt && lastInOrigin) {
           // Sparse fixes: the truck jumped from the origin straight into the
-          // destination with no fix in between. Still one service.
+          // destination with no fix in between. Still one service, unless the
+          // gap is longer than any haul (no data overnight, for example).
+          if (tooLong(lastInOrigin.at, sample.at)) {
+            reset();
+            continue;
+          }
           leftAt = lastInOrigin.at;
           leg = [lastInOrigin, sample];
           complete(enteredAt, leftAt, sample);
@@ -271,6 +289,17 @@ export function detectHaulCycles(input: DetectHaulInput): {
         phase = 'HAULING';
         leftAt = sample.at;
         leg = lastInOrigin ? [lastInOrigin, sample] : [sample];
+        continue;
+      }
+      if (leftAt && tooLong(leftAt, sample.at)) {
+        // The haul ran past the cap: the truck parked somewhere instead of
+        // dumping. Drop it and read this fix afresh.
+        reset();
+        if (inOrigin && !inDest) {
+          phase = 'LOADING';
+          enteredAt = sample.at;
+          lastInOrigin = sample;
+        }
         continue;
       }
       leg.push(sample);

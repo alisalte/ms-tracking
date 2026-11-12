@@ -308,6 +308,89 @@ describe('haul cycles', () => {
   });
 });
 
+describe('haul cycles: haul duration cap', () => {
+  const PIT = { lat: 35.005, lng: 51.005 };
+  const ROAD = { lat: 35.03, lng: 51.03 };
+  const DUMP = { lat: 35.055, lng: 51.055 };
+  const fix = (iso: string, place: { lat: number; lng: number }) => ({ at: at(iso), ...place });
+  const detect = (samples: ReturnType<typeof fix>[], maxHaulSec?: number) =>
+    detectHaulCycles({
+      trucks: ['truck-1'],
+      shovels: [],
+      tracks: new Map([['truck-1', samples]]),
+      origin,
+      destination,
+      drivers: [],
+      shiftStartHour: 7,
+      shiftDurationHours: 12,
+      timeZone: 'UTC',
+      ...(maxHaulSec === undefined ? {} : { maxHaulSec }),
+    });
+
+  it('drops a truck that leaves the pit, parks overnight and reaches the dump next morning', () => {
+    const { cycles, open } = detect([
+      fix('2026-11-11T18:04:00Z', PIT),
+      fix('2026-11-11T18:45:00Z', ROAD),
+      fix('2026-11-11T23:00:00Z', ROAD),
+      fix('2026-11-12T06:57:00Z', DUMP),
+    ]);
+    expect(cycles).toEqual([]);
+    expect(open).toEqual([]);
+  });
+
+  it('counts the next real service after a dropped haul', () => {
+    const { cycles } = detect([
+      fix('2026-11-11T18:04:00Z', PIT),
+      fix('2026-11-11T18:45:00Z', ROAD),
+      fix('2026-11-12T07:05:00Z', PIT),
+      fix('2026-11-12T07:15:00Z', ROAD),
+      fix('2026-11-12T07:20:00Z', DUMP),
+    ]);
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]).toMatchObject({
+      originEnteredAt: at('2026-11-12T07:05:00Z'),
+      destinationEnteredAt: at('2026-11-12T07:20:00Z'),
+      shift: '2026-11-12#1',
+    });
+  });
+
+  it('drops a jump straight from the pit into the dump across a long data gap', () => {
+    const { cycles } = detect([
+      fix('2026-11-11T18:04:00Z', PIT),
+      fix('2026-11-12T06:57:00Z', DUMP),
+    ]);
+    expect(cycles).toEqual([]);
+  });
+
+  it('still counts a sparse pit-to-dump jump within the cap', () => {
+    const { cycles } = detect([
+      fix('2026-11-12T08:00:00Z', PIT),
+      fix('2026-11-12T08:04:00Z', DUMP),
+    ]);
+    expect(cycles).toHaveLength(1);
+  });
+
+  it('keeps a slow haul just under the default two-hour cap', () => {
+    const { cycles } = detect([
+      fix('2026-11-12T08:00:00Z', PIT),
+      fix('2026-11-12T08:10:00Z', ROAD),
+      fix('2026-11-12T10:09:00Z', DUMP),
+    ]);
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0]?.travelSec).toBe(119 * 60);
+  });
+
+  it('honours a custom cap', () => {
+    const samples = [
+      fix('2026-11-12T08:00:00Z', PIT),
+      fix('2026-11-12T08:10:00Z', ROAD),
+      fix('2026-11-12T08:50:00Z', DUMP),
+    ];
+    expect(detect(samples, 30 * 60).cycles).toEqual([]);
+    expect(detect(samples, 60 * 60).cycles).toHaveLength(1);
+  });
+});
+
 describe('haul cycles: drivers assigned per shift', () => {
   const base = {
     trucks: ['truck-1'],
