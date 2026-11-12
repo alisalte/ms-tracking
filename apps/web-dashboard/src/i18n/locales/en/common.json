@@ -3232,6 +3232,7 @@
     "roleShovel": "Shovel",
     "saveMembers": "Save machines",
     "services": "Services",
+    "servicesTotal": "Total services",
     "loads": "Loads",
     "byVehicle": "Services by machine",
     "byDriver": "Services by driver and shift",

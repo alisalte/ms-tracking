@@ -28,7 +28,7 @@ import {
 import type { Column } from '@/components/reports/ReportsTable';
 import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Alert, Badge, Button, SegmentedControl, Skeleton } from '@/components/tailwind-ui';
-import { formatWorkDay } from '@/lib/operations-export';
+import { formatWorkDay, servicesByVehicleShift, shiftBuckets } from '@/lib/operations-export';
 import { chart } from '@/theme/palette';
 
 type View = 'shift' | 'vehicle' | 'driver' | 'shovel' | 'list';
@@ -134,11 +134,23 @@ export function ServicesTab({
     },
   ];
 
+  const buckets = useMemo(() => (data ? shiftBuckets(data, t, lang) : []), [data, t, lang]);
+  const perVehicle = useMemo(
+    () => (data ? servicesByVehicleShift(data) : new Map<string, Record<number, number>>()),
+    [data],
+  );
   const vehicleColumns: Array<Column<HaulCycleReport['byVehicle'][number]>> = [
     { id: 'vehicle', headerKey: 'operations.colVehicle', render: (row) => row.vehicleName },
+    ...buckets.map(
+      (bucket): Column<HaulCycleReport['byVehicle'][number]> => ({
+        id: `shift-${bucket.no}`,
+        header: bucket.label,
+        render: (row) => numText(perVehicle.get(row.vehicleId)?.[bucket.no] ?? 0, lang, 0),
+      }),
+    ),
     {
       id: 'services',
-      headerKey: 'operations.services',
+      headerKey: 'operations.servicesTotal',
       render: (row) => numText(row.services, lang, 0),
     },
     {
