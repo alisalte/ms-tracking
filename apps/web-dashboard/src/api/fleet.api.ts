@@ -19,7 +19,7 @@
  *   - `latest` position `vehicleId` may carry the deviceId when a device is
  *     UNBOUND (gps-engine fallback); bound devices carry the registry vehicleId.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { displayLabel } from '@/lib/ids';
 import { getVehicleIcon } from '@/lib/map-markers';
@@ -35,6 +35,7 @@ import type {
   DeviceConnection,
   FleetAlert,
   FleetStats,
+  IoSensorConfig,
   LatestPosition,
   MapVehicle,
   Trip,
@@ -43,7 +44,7 @@ import type {
   VehiclePresence,
 } from '@/types/fleet.types';
 import { fetchAllVehiclesAsMap } from './asset.api';
-import { apiGet, apiGetRaw } from './client';
+import { apiGet, apiGetRaw, apiPut } from './client';
 import { queryKeys } from './query-keys';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -234,6 +235,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
           code: string;
           plate: string | null;
           odometerKm: number | null;
+          ioSensors?: IoSensorConfig[] | null;
         }>(`/vehicles/${id}`),
         apiGet<BoundDevice[]>(`/vehicles/${id}/devices`),
         fetchDeviceStatuses(),
@@ -286,6 +288,7 @@ function fetchVehicleDetail(id: string): Promise<VehicleDetail> {
         cce: position?.cce ?? null,
         fmbIo: position?.fmbIo ?? null,
         odometer: vehicleWire.odometerKm ?? 0,
+        ioSensors: Array.isArray(vehicleWire.ioSensors) ? vehicleWire.ioSensors : [],
         address: '', // Reverse geocoding is a map-engine concern (out of scope).
         events: [],
       } satisfies VehicleDetail;
@@ -532,6 +535,29 @@ export function useActiveAlarms() {
             occurredAt: a.raisedAt,
           }),
         );
+    },
+  });
+}
+
+// ── Analog sensor wiring (fleet-management PUT /vehicles/:id/io-sensors) ─────
+
+/** Save which sensor sits on each analog input and its voltage calibration. */
+export function useSaveIoSensors(vehicleId: string | null) {
+  const qc = useQueryClient();
+  return useMutation<IoSensorConfig[], Error, IoSensorConfig[]>({
+    mutationFn: async (sensors) => {
+      const saved = await apiPut<{ sensors: IoSensorConfig[] }, { ioSensors?: IoSensorConfig[] }>(
+        `/vehicles/${vehicleId}/io-sensors`,
+        { sensors },
+      );
+      return saved.ioSensors ?? sensors;
+    },
+    onSuccess: (ioSensors) => {
+      if (!vehicleId) return;
+      qc.setQueryData<VehicleDetail>(queryKeys.fleet.vehicleDetail(vehicleId), (prev) =>
+        prev ? { ...prev, ioSensors } : prev,
+      );
+      qc.invalidateQueries({ queryKey: queryKeys.assets.vehicleDetail(vehicleId) });
     },
   });
 }

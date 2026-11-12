@@ -10,6 +10,7 @@ import {
   importDevicesBodySchema,
   importVehicleRowSchema,
   importVehiclesBodySchema,
+  ioSensorsBodySchema,
   listQuerySchema,
   updateVehicleSchema,
 } from '../application/validation/schemas.js';
@@ -237,5 +238,48 @@ describe('validation schemas (§16, INV-I02)', () => {
       rows: [{ imei: validImei('35123456789012'), protocol: 'gt06' }],
     });
     expect(parsed.rows).toHaveLength(1);
+  });
+});
+
+describe('ioSensorsBodySchema', () => {
+  const fuel = {
+    input: 'ain1',
+    kind: 'fuel',
+    tankLiters: 300,
+    points: [
+      { v: 0.5, value: 0 },
+      { v: 4.5, value: 100 },
+    ],
+  };
+
+  it('accepts a calibrated fuel sender and a bare voltage input', () => {
+    const parsed = ioSensorsBodySchema.parse({
+      sensors: [fuel, { input: 'ain2', kind: 'voltage', points: [] }],
+    });
+    expect(parsed.sensors).toHaveLength(2);
+  });
+
+  it('rejects one-point calibration for fuel/temperature', () => {
+    const r = ioSensorsBodySchema.safeParse({
+      sensors: [{ input: 'ain2', kind: 'temperature', points: [{ v: 1, value: 90 }] }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects two sensors on the same input and duplicate voltages', () => {
+    expect(ioSensorsBodySchema.safeParse({ sensors: [fuel, fuel] }).success).toBe(false);
+    expect(
+      ioSensorsBodySchema.safeParse({
+        sensors: [
+          {
+            ...fuel,
+            points: [
+              { v: 1, value: 0 },
+              { v: 1, value: 100 },
+            ],
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });

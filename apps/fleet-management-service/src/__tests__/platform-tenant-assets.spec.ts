@@ -72,6 +72,7 @@ function vehicle(over: Partial<VehicleRecord> = {}): VehicleRecord {
     odometerKm: 10,
     engineHours: null,
     machineType: null,
+    ioSensors: [],
     status: 'ACTIVE',
     version: 2,
     createdAt: new Date('2026-01-01T00:00:00Z'),

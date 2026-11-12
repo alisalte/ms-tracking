@@ -29,6 +29,7 @@ import type { ImportResult } from './import-result.js';
 import type { ActorContext } from './service-context.js';
 import {
   type CreateVehicleInput,
+  type IoSensorsBody,
   type UpdateVehicleInput,
   importVehicleRowSchema,
 } from './validation/schemas.js';
@@ -121,6 +122,36 @@ export class VehicleService {
       if (!row) throw new ConflictException('Vehicle was modified by another request.');
       const record = VehicleRepository.toRecord(row);
       await this.audit.append(trx, this.entry(ctx, 'vehicle.updated', id, current, record));
+      return record;
+    });
+  }
+
+  /** Replace the analog sensor wiring shown as gauges in the map popup. */
+  public async setIoSensors(
+    ctx: ActorContext,
+    id: string,
+    input: IoSensorsBody,
+  ): Promise<VehicleRecord> {
+    const current = await this.vehicles.findById(ctx.tenantId, id);
+    if (!current) throw new NotFoundException('Vehicle not found.');
+    return await withTenantContext(this.knex, ctx.tenantId, async (trx) => {
+      const sensors = input.sensors.map((s) => ({
+        ...s,
+        points: [...s.points].sort((a, b) => a.v - b.v),
+      }));
+      const row = await this.vehicles.setIoSensors(trx, ctx.tenantId, id, sensors);
+      if (!row) throw new NotFoundException('Vehicle not found.');
+      const record = VehicleRepository.toRecord(row);
+      await this.audit.append(
+        trx,
+        this.entry(
+          ctx,
+          'vehicle.io_sensors.updated',
+          id,
+          { ioSensors: current.io_sensors ?? [] },
+          { ioSensors: record.ioSensors },
+        ),
+      );
       return record;
     });
   }

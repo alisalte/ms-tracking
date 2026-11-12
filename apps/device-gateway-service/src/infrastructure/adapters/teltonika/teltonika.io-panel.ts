@@ -46,6 +46,8 @@ export const IO_POINTS: Readonly<Record<number, PointDef>> = {
   10: { key: 'ain2', group: 'ain', scale: 0.001, unit: 'V' },
   11: { key: 'ain3', group: 'ain', scale: 0.001, unit: 'V' },
   19: { key: 'ain4', group: 'ain', scale: 0.001, unit: 'V' },
+  // FMB64x send Analog Input 4 as AVL 245; without it AIN4 landed in "Other".
+  245: { key: 'ain4', group: 'ain', scale: 0.001, unit: 'V' },
   // 1-Wire: Dallas temperature probes (0.1 °C) and iButton
   72: { key: 'temp1', group: 'onewire', scale: 0.1, signed: true, unit: '°C' },
   73: { key: 'temp2', group: 'onewire', scale: 0.1, signed: true, unit: '°C' },

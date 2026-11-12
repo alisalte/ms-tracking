@@ -271,7 +271,14 @@ export function DevicePopup({
               />
             </div>
 
-            {data.fmbIo ? <FmbIoPanelView panel={data.fmbIo} /> : null}
+            {data.fmbIo ? (
+              <FmbIoPanelView
+                panel={data.fmbIo}
+                vehicleId={vehicleId}
+                sensors={data.ioSensors}
+                canConfigure={can(PERMISSIONS.vehicleWrite)}
+              />
+            ) : null}
 
             <Fact
               icon={MapPin}

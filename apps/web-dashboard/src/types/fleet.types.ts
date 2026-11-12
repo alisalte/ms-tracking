@@ -214,6 +214,33 @@ export interface VehicleDetail extends MapVehicle {
   lastSeenAt?: string;
   /** Last ~5 events (overspeed / idle / geofence / DTC / AI). */
   events: VehicleEvent[];
+  /** Analog sensors wired to the tracker (fleet registry); empty when none are set up. */
+  ioSensors?: IoSensorConfig[];
+}
+
+/** Analog input of the tracker a sensor is wired to. */
+export type IoSensorInput = 'ain1' | 'ain2' | 'ain3' | 'ain4';
+
+/** What a sensor on an analog input measures. */
+export type IoSensorKind = 'fuel' | 'temperature' | 'voltage';
+
+/** One calibration pair: input voltage → value (%, °C or V). */
+export interface IoCalibrationPoint {
+  v: number;
+  value: number;
+}
+
+/**
+ * Sensor wired to an analog input (PUT /vehicles/:id/io-sensors). The device
+ * only reports volts; `points` turns them into fuel % or °C (piecewise linear).
+ */
+export interface IoSensorConfig {
+  input: IoSensorInput;
+  kind: IoSensorKind;
+  label?: string;
+  /** Tank volume, so the fuel gauge can also show litres. */
+  tankLiters?: number;
+  points: IoCalibrationPoint[];
 }
 
 /**

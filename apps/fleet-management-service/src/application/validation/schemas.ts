@@ -162,6 +162,40 @@ export const updateVehicleSchema = z.object({
 });
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 
+/**
+ * Analog sensor wiring of a vehicle (PUT /vehicles/:id/io-sensors). Each input
+ * appears at most once; calibration needs ≥2 points with distinct voltages.
+ */
+const ioSensorSchema = z
+  .object({
+    input: z.enum(['ain1', 'ain2', 'ain3', 'ain4']),
+    kind: z.enum(['fuel', 'temperature', 'voltage']),
+    label: z.string().trim().max(60).optional(),
+    tankLiters: z.number().finite().positive().max(100_000).optional(),
+    points: z
+      .array(
+        z.object({
+          v: z.number().finite().min(0).max(60),
+          value: z.number().finite().min(-100_000).max(100_000),
+        }),
+      )
+      .max(20)
+      .refine((pts) => new Set(pts.map((p) => p.v)).size === pts.length, {
+        message: 'Calibration voltages must differ.',
+      }),
+  })
+  .refine((s) => s.kind === 'voltage' || s.points.length >= 2, {
+    message: 'Fuel and temperature sensors need at least two calibration points.',
+    path: ['points'],
+  });
+export const ioSensorsBodySchema = z
+  .object({ sensors: z.array(ioSensorSchema).max(4) })
+  .refine((b) => new Set(b.sensors.map((s) => s.input)).size === b.sensors.length, {
+    message: 'Each analog input can carry one sensor.',
+    path: ['sensors'],
+  });
+export type IoSensorsBody = z.infer<typeof ioSensorsBodySchema>;
+
 export const vehicleListQuerySchema = listQuerySchema.extend({
   fleetId: uuid.optional(),
   status: z.enum(['ACTIVE', 'ARCHIVED']).optional(),

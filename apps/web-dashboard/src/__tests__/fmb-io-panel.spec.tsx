@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FmbIoPanelView } from '@/components/map/FmbIoPanelView';
 import { i18n } from '@/i18n';
-import type { FmbIoPanel } from '@/types/fleet.types';
+import type { FmbIoPanel, IoSensorConfig } from '@/types/fleet.types';
 
 const NOW = new Date().toISOString();
 const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -35,6 +35,8 @@ const open = () => fireEvent.click(toggle());
 describe('FmbIoPanelView', () => {
   beforeEach(async () => {
     localStorage.clear();
+    // These cases cover the plain list; the gauges have their own block below.
+    localStorage.setItem('fv.fmbIo.view', 'list');
     await i18n.changeLanguage('en');
   });
   afterEach(() => localStorage.clear());
@@ -105,5 +107,88 @@ describe('FmbIoPanelView', () => {
   it('renders nothing for an empty panel', () => {
     renderPanel({ updatedAt: NOW, groups: {} });
     expect(screen.queryByTestId('fmb-io-panel')).toBeNull();
+  });
+});
+
+const gaugePanel: FmbIoPanel = {
+  updatedAt: NOW,
+  groups: {
+    din: [{ id: 1, key: 'din1', group: 'din', value: true, at: NOW }],
+    ain: [
+      { id: 9, key: 'ain1', group: 'ain', value: 2.5, unit: 'V', at: NOW },
+      { id: 10, key: 'ain2', group: 'ain', value: 1.0, unit: 'V', at: NOW },
+      { id: 11, key: 'ain3', group: 'ain', value: 12.4, unit: 'V', at: NOW },
+    ],
+    can: [{ id: 115, key: 'canEngineTemp', group: 'can', value: 104, unit: '°C', at: NOW }],
+    other: [{ id: 300, key: null, group: 'other', value: 77, at: NOW }],
+  },
+};
+
+const sensors: IoSensorConfig[] = [
+  {
+    input: 'ain1',
+    kind: 'fuel',
+    tankLiters: 200,
+    points: [
+      { v: 0.5, value: 0 },
+      { v: 4.5, value: 100 },
+    ],
+  },
+  {
+    input: 'ain2',
+    kind: 'temperature',
+    label: 'Coolant',
+    points: [
+      { v: 0.5, value: 120 },
+      { v: 3.5, value: 30 },
+    ],
+  },
+];
+
+describe('FmbIoPanelView gauges', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    localStorage.setItem('fv.fmbIo.open', '1');
+    await i18n.changeLanguage('en');
+  });
+  afterEach(() => localStorage.clear());
+
+  it('opens on the graphic view: calibrated fuel tank and thermometer, lamps and voltmeter', () => {
+    render(
+      createElement(
+        I18nextProvider,
+        { i18n },
+        createElement(FmbIoPanelView, { panel: gaugePanel, sensors }),
+      ),
+    );
+    expect(screen.getByTestId('fmb-io-gauges')).toBeTruthy();
+    const fuel = screen.getByTestId('gauge-ain-9');
+    expect(within(fuel).getByText('50%')).toBeTruthy();
+    expect(within(fuel).getByText('≈ 100 L')).toBeTruthy();
+    const coolant = screen.getByTestId('gauge-ain-10');
+    expect(within(coolant).getByText('Coolant')).toBeTruthy();
+    expect(within(coolant).getByText('105 °C')).toBeTruthy();
+    expect(within(coolant).getByText(/Hot/)).toBeTruthy();
+    // CAN engine temperature is drawn as a thermometer without any setup.
+    expect(within(screen.getByTestId('gauge-can-115')).getByText('104 °C')).toBeTruthy();
+    // Uncalibrated input stays a voltmeter.
+    expect(
+      within(screen.getByTestId('gauge-ain-11')).getByRole('img', { name: '12.4 V' }),
+    ).toBeTruthy();
+    expect(within(screen.getByTestId('gauge-din-1')).getByText('On')).toBeTruthy();
+    expect(screen.getByText(/1 more parameter is only in the list view/)).toBeTruthy();
+  });
+
+  it('switches to the list and remembers it', () => {
+    renderPanel(gaugePanel);
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.queryByTestId('fmb-io-gauges')).toBeNull();
+    expect(screen.getByText('Analog input 1 (voltage)')).toBeTruthy();
+    expect(localStorage.getItem('fv.fmbIo.view')).toBe('list');
+  });
+
+  it('offers the sensor setup only with permission and a vehicle', () => {
+    renderPanel(gaugePanel);
+    expect(screen.queryByRole('button', { name: 'Sensors' })).toBeNull();
   });
 });

@@ -1,10 +1,13 @@
 import type { TFunction } from 'i18next';
-import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FmbIoGauges } from '@/components/map/FmbIoGauges';
+import { IoSensorEditor } from '@/components/map/IoSensorEditor';
+import { buildGaugeView } from '@/lib/io-gauges';
 import { lastSeenLabel } from '@/lib/relative-time';
-import type { FmbIoGroup, FmbIoPanel, FmbIoPoint } from '@/types/fleet.types';
+import type { FmbIoGroup, FmbIoPanel, FmbIoPoint, IoSensorConfig } from '@/types/fleet.types';
 
 /** Display order of the groups; a group without points is not drawn. */
 const GROUP_ORDER: readonly FmbIoGroup[] = [
@@ -24,6 +27,29 @@ const START_FOLDED: ReadonlySet<FmbIoGroup> = new Set(['other']);
 
 /** Remembered per viewer: whether the whole panel is open. */
 const OPEN_STORAGE_KEY = 'fv.fmbIo.open';
+
+const NO_SENSORS: readonly IoSensorConfig[] = [];
+
+/** Remembered per viewer: graphic gauges or the plain list. */
+const VIEW_STORAGE_KEY = 'fv.fmbIo.view';
+
+type ViewMode = 'gauges' | 'list';
+
+function readView(): ViewMode {
+  try {
+    return localStorage.getItem(VIEW_STORAGE_KEY) === 'list' ? 'list' : 'gauges';
+  } catch {
+    return 'gauges';
+  }
+}
+
+function writeView(view: ViewMode): void {
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    /* blocked storage — the view just resets */
+  }
+}
 
 /** Seconds after which a point is shown as stale (its device time, not receipt). */
 const STALE_AFTER_MS = 10 * 60 * 1000;
@@ -179,18 +205,68 @@ function GroupSection({
   );
 }
 
+function ModeButton({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof List;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium ${
+        active
+          ? 'bg-white text-brand-600 shadow-sm dark:bg-white/10 dark:text-brand-300'
+          : 'text-gray-500 hover:text-gray-700 dark:text-graydark-600'
+      }`}
+    >
+      <Icon size={14} aria-hidden />
+      {label}
+    </button>
+  );
+}
+
 /**
  * Live I/O of a Teltonika FMB640: digital inputs/outputs, analog inputs,
  * 1-Wire, serial (RS232/RS485) sensors and CAN. Folded by default, with a
- * one-line summary; each group folds on its own. Values are the newest the
- * device reported per element; a value older than 10 minutes is dimmed.
+ * one-line summary. Opened, it shows gauges (fuel tank, thermometer, dials,
+ * lamps) or the plain list; analog inputs become fuel/temperature gauges once
+ * the vehicle's sensor wiring is set (`sensors`, editable with `canConfigure`).
+ * Values are the newest the device reported; one older than 10 minutes is dimmed.
  */
-export function FmbIoPanelView({ panel }: { panel: FmbIoPanel }) {
+export function FmbIoPanelView({
+  panel,
+  vehicleId,
+  sensors = NO_SENSORS,
+  canConfigure = false,
+}: {
+  panel: FmbIoPanel;
+  vehicleId?: string;
+  sensors?: readonly IoSensorConfig[];
+  canConfigure?: boolean;
+}) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(readOpen);
+  const [view, setView] = useState<ViewMode>(readView);
+  const [editing, setEditing] = useState(false);
+  const gaugeView = useMemo(() => buildGaugeView(panel, sensors), [panel, sensors]);
   const now = Date.now();
   const groups = GROUP_ORDER.filter((g) => (panel.groups[g]?.length ?? 0) > 0);
   if (groups.length === 0) return null;
+
+  const pick = (v: ViewMode) => {
+    setEditing(false);
+    setView(v);
+    writeView(v);
+  };
+  const showGauges = view === 'gauges' && gaugeView.sections.length > 0;
 
   const toggle = () => {
     setOpen((o) => {
@@ -233,9 +309,44 @@ export function FmbIoPanelView({ panel }: { panel: FmbIoPanel }) {
           id="fmb-io-body"
           className="flex flex-col gap-2 border-t border-gray-100 p-2 dark:border-white/5"
         >
-          {groups.map((g) => (
-            <GroupSection key={g} group={g} points={panel.groups[g] ?? []} now={now} />
-          ))}
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-white/5">
+              <ModeButton
+                active={view === 'gauges' && !editing}
+                onClick={() => pick('gauges')}
+                icon={LayoutGrid}
+                label={t('map.io.views.gauges')}
+              />
+              <ModeButton
+                active={view === 'list' && !editing}
+                onClick={() => pick('list')}
+                icon={List}
+                label={t('map.io.views.list')}
+              />
+            </div>
+            {canConfigure && vehicleId ? (
+              <ModeButton
+                active={editing}
+                onClick={() => setEditing((e) => !e)}
+                icon={SlidersHorizontal}
+                label={t('map.io.sensors.title')}
+              />
+            ) : null}
+          </div>
+          {editing && vehicleId ? (
+            <IoSensorEditor
+              vehicleId={vehicleId}
+              panel={panel}
+              sensors={sensors}
+              onDone={() => setEditing(false)}
+            />
+          ) : showGauges ? (
+            <FmbIoGauges view={gaugeView} now={now} />
+          ) : (
+            groups.map((g) => (
+              <GroupSection key={g} group={g} points={panel.groups[g] ?? []} now={now} />
+            ))
+          )}
         </div>
       ) : null}
     </section>

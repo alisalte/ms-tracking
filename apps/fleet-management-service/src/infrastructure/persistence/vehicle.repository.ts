@@ -5,6 +5,7 @@
 import type { Knex } from '@fleetvision/persistence-knex';
 import type { Page } from '@fleetvision/shared-kernel';
 import type {
+  IoSensorConfig,
   MachineType,
   VehicleRecord,
   VehicleStatus,
@@ -25,6 +26,7 @@ export interface VehicleRow {
   readonly odometer_km: number | null;
   readonly engine_hours: number | null;
   readonly machine_type: MachineType | null;
+  readonly io_sensors?: IoSensorConfig[] | null;
   readonly status: VehicleStatus;
   readonly version: number;
   readonly created_at: Date;
@@ -167,6 +169,26 @@ export class VehicleRepository {
     return (row as VehicleRow | undefined) ?? null;
   }
 
+  /** Replace the vehicle's analog sensor wiring (does not bump `version`: not part of the edit form). */
+  public async setIoSensors(
+    trx: Knex.Transaction,
+    tenantId: string,
+    id: string,
+    sensors: readonly IoSensorConfig[],
+  ): Promise<VehicleRow | null> {
+    const [row] = await trx
+      .withSchema(SCHEMA)
+      .from(TABLE)
+      .whereRaw('tenant_id = ?::uuid', [tenantId])
+      .whereRaw('id = ?::uuid', [id])
+      .update({
+        io_sensors: trx.raw('?::jsonb', [JSON.stringify(sensors)]),
+        updated_at: trx.fn.now(),
+      })
+      .returning('*');
+    return (row as VehicleRow | undefined) ?? null;
+  }
+
   public async archive(
     trx: Knex.Transaction,
     tenantId: string,
@@ -196,6 +218,7 @@ export class VehicleRepository {
       odometerKm: row.odometer_km,
       engineHours: row.engine_hours,
       machineType: row.machine_type ?? null,
+      ioSensors: Array.isArray(row.io_sensors) ? row.io_sensors : [],
       status: row.status,
       version: row.version,
       createdAt: new Date(row.created_at),

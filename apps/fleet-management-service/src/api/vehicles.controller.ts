@@ -6,6 +6,7 @@
  *   GET    /api/v1/vehicles/:id
  *   PATCH  /api/v1/vehicles/:id
  *   DELETE /api/v1/vehicles/:id             (archive)
+ *   PUT    /api/v1/vehicles/:id/io-sensors  (analog sensor wiring + calibration)
  *   GET    /api/v1/vehicles/:id/devices     (devices bound to the vehicle)
  *   POST   /api/v1/vehicles/:id/devices/:deviceId   (bind)
  *   DELETE /api/v1/vehicles/:id/devices/:deviceId   (unbind)
@@ -22,6 +23,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -31,6 +33,7 @@ import {
   bindBodySchema,
   createVehicleSchema,
   importVehiclesBodySchema,
+  ioSensorsBodySchema,
   updateVehicleSchema,
   vehicleListQuerySchema,
 } from '../application/validation/schemas.js';
@@ -101,6 +104,17 @@ export class VehiclesController {
     @Body(new ZodValidationPipe(updateVehicleSchema)) body: unknown,
   ) {
     return { data: await this.vehicles.update(actorFrom(auth, req), id, body as never) };
+  }
+
+  @Put(':id/io-sensors')
+  @RequirePermissions('vehicle.write')
+  public async setIoSensors(
+    @CurrentUser() auth: AuthenticatedContext,
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(ioSensorsBodySchema)) body: unknown,
+  ) {
+    return { data: await this.vehicles.setIoSensors(actorFrom(auth, req), id, body as never) };
   }
 
   @Delete(':id')

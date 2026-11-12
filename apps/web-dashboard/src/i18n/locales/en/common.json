@@ -628,7 +628,60 @@
         "canRpm": "Engine speed",
         "canMileage": "Total mileage",
         "canFuelLevelPct": "Fuel level (percent)",
-        "canEngineTemp": "Engine temperature"
+        "canEngineTemp": "Engine temperature",
+        "sensorFuel": "Fuel level",
+        "sensorTemp": "Engine temperature"
+      },
+      "views": {
+        "gauges": "Gauges",
+        "list": "List"
+      },
+      "gauges": {
+        "sections": {
+          "fuel": "Fuel",
+          "temp": "Temperature",
+          "dial": "Gauges",
+          "switch": "Inputs & outputs",
+          "value": "Other readings"
+        },
+        "hidden_one": "{{count}} more parameter is only in the list view.",
+        "hidden_other": "{{count}} more parameters are only in the list view.",
+        "level": {
+          "fuel": {
+            "warning": "Low",
+            "critical": "Very low"
+          },
+          "temp": {
+            "cold": "Cold",
+            "warning": "Hot",
+            "critical": "Overheating"
+          }
+        }
+      },
+      "sensors": {
+        "title": "Sensors",
+        "help": "The device reports analog inputs in volts. Say what is wired to each input and give at least two calibration points (voltage → value); \"Current\" copies the live voltage.",
+        "none": "This device has not reported any analog input yet.",
+        "kind": "Sensor",
+        "kinds": {
+          "voltage": "Voltage only",
+          "fuel": "Fuel level",
+          "temperature": "Engine temperature"
+        },
+        "label": "Name (optional)",
+        "tankLiters": "Tank volume (litres, optional)",
+        "volts": "Voltage (V)",
+        "percent": "Fuel (%)",
+        "celsius": "Temperature (°C)",
+        "useCurrent": "Current",
+        "addPoint": "Add point",
+        "removePoint": "Remove point",
+        "errors": {
+          "point": "every row needs a voltage (0–60 V) and a value",
+          "twoPoints": "at least two calibration points are needed",
+          "sameVoltage": "two points have the same voltage",
+          "save": "Saving failed. Check your connection and try again."
+        }
       }
     }
   },
