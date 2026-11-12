@@ -80,6 +80,62 @@ function shiftText(
   return `${formatWorkDay(row.shiftDate, lang)} · ${t('operations.shiftN', { n: row.shiftNo })}`;
 }
 
+/** Minute of the day → `07:00` in the UI language's digits. */
+function clockText(minute: number, lang: string): string {
+  const fmt = new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-GB', {
+    minimumIntegerDigits: 2,
+    useGrouping: false,
+  });
+  const m = ((Math.round(minute) % 1440) + 1440) % 1440;
+  return `${fmt.format(Math.floor(m / 60))}:${fmt.format(m % 60)}`;
+}
+
+export interface ShiftBucket {
+  /** Shift number on the route; 0 = outside every shift. */
+  readonly no: number;
+  /** `شیفت 1 (07:00–19:00)` from the route's shift definition, or `خارج از شیفت`. */
+  readonly label: string;
+}
+
+/**
+ * The shift columns of a haul report: every shift the route defines, with its
+ * clock window, then off-shift when any service fell outside the shifts.
+ */
+export function shiftBuckets(report: HaulCycleReport, t: TFunction, lang: string): ShiftBucket[] {
+  const { route } = report;
+  const start = route.shiftStartHour * 60 + (route.shiftStartMinute ?? 0);
+  const duration = route.shiftDurationHours * 60 + (route.shiftDurationMinutes ?? 0);
+  const count = Math.max(1, route.shiftCount, ...report.cycles.map((cycle) => cycle.shiftNo));
+  const buckets: ShiftBucket[] = Array.from({ length: count }, (_, i) => {
+    const from = start + i * duration;
+    const name = t('operations.shiftN', { n: i + 1 });
+    return {
+      no: i + 1,
+      label:
+        duration > 0
+          ? `${name} (${clockText(from, lang)}–${clockText(from + duration, lang)})`
+          : name,
+    };
+  });
+  if (report.cycles.some((cycle) => cycle.shiftNo === 0)) {
+    buckets.push({ no: 0, label: t('operations.offShift') });
+  }
+  return buckets;
+}
+
+/** Services of each truck per shift number (0 = off-shift), from the services themselves. */
+export function servicesByVehicleShift(
+  report: HaulCycleReport,
+): Map<string, Record<number, number>> {
+  const out = new Map<string, Record<number, number>>();
+  for (const cycle of report.cycles) {
+    const row = out.get(cycle.vehicleId) ?? {};
+    row[cycle.shiftNo] = (row[cycle.shiftNo] ?? 0) + 1;
+    out.set(cycle.vehicleId, row);
+  }
+  return out;
+}
+
 export function activitySheets(
   report: DeviceActivityReport,
   t: TFunction,
@@ -122,6 +178,9 @@ export function activitySheets(
 
 export function haulSheets(report: HaulCycleReport, t: TFunction, lang: string): SheetSpec[] {
   const rtl = lang === 'fa';
+  const buckets = shiftBuckets(report, t, lang);
+  const perVehicle = servicesByVehicleShift(report);
+  const perShift = (no: number) => report.cycles.filter((cycle) => cycle.shiftNo === no).length;
   return [
     {
       name: t('operations.sheetSummary'),
@@ -129,7 +188,11 @@ export function haulSheets(report: HaulCycleReport, t: TFunction, lang: string):
       rows: [
         [t('operations.routeName'), report.route.name],
         [t('operations.range'), `${dateTime(report.from, lang)} → ${dateTime(report.to, lang)}`],
-        [t('operations.services'), report.services],
+        ...buckets.map((bucket): SheetCell[] => [
+          `${t('operations.services')} · ${bucket.label}`,
+          perShift(bucket.no),
+        ]),
+        [t('operations.servicesTotal'), report.services],
         [t('operations.colDistance'), report.distanceKm],
       ],
     },
@@ -165,12 +228,14 @@ export function haulSheets(report: HaulCycleReport, t: TFunction, lang: string):
       rows: [
         [
           t('operations.colVehicle'),
-          t('operations.services'),
+          ...buckets.map((bucket) => bucket.label),
+          t('operations.servicesTotal'),
           t('operations.colDistance'),
           t('operations.colHours'),
         ],
         ...report.byVehicle.map((row): SheetCell[] => [
           row.vehicleName,
+          ...buckets.map((bucket) => perVehicle.get(row.vehicleId)?.[bucket.no] ?? 0),
           row.services,
           row.distanceKm,
           hoursOf(row.durationSec),

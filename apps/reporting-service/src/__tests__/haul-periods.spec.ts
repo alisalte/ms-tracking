@@ -19,6 +19,8 @@ function cycle(over: Partial<HaulCycle>): HaulCycle {
     distanceM: 1000,
     shift: '2026-10-21#1',
     shiftDate: '2026-10-21',
+    loadPoint: { lat: 0, lng: 0 },
+    dumpPoint: { lat: 0, lng: 0 },
     shiftNo: 1,
     ...over,
   };

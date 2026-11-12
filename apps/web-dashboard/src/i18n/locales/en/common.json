@@ -3224,6 +3224,7 @@
     "shiftInvalid": "Enter a start time and a shift length of at least one minute.",
     "createRoute": "Create service",
     "pickPlace": "Choose a place",
+    "placesInvalid": "Pick an origin and a destination; they must differ.",
     "pickRoute": "Choose a service",
     "members": "Machines on this service",
     "membersHint": "Trucks complete the haul. Shovels stay in the origin and are credited for each load.",
@@ -3232,6 +3233,7 @@
     "roleShovel": "Shovel",
     "saveMembers": "Save machines",
     "services": "Services",
+    "servicesTotal": "Total services",
     "loads": "Loads",
     "byVehicle": "Services by machine",
     "byDriver": "Services by driver and shift",
@@ -3503,7 +3505,15 @@
         "chartVehicle": "Services per machine",
         "chartDriver": "Services per driver",
         "chartShovel": "Loads per shovel",
-        "noShifts": "No shift in this range."
+        "noShifts": "No shift in this range.",
+        "openDetails": "Show the services and where they loaded and dumped",
+        "loadedHere": "Loaded here",
+        "dumpedHere": "Dumped here",
+        "mapLabel": "Where the services loaded and dumped",
+        "noPoints": "These services carry no load or dump positions (older server).",
+        "detailCount_one": "{{n}} service",
+        "detailCount_other": "{{n}} services",
+        "showOnMap": "Map"
       },
       "periods": {
         "kpiServices": "Services",

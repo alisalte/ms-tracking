@@ -6,12 +6,16 @@
  * that shift and the shovel that was loading it.
  */
 import type { ApexOptions } from 'apexcharts';
-import { Download, Gauge, Route, Timer, Truck } from 'lucide-react';
+import { Download, Gauge, MapPin, Route, Timer, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { HaulCycleReport } from '@/api/operations.api';
+import type { HaulCycleReport, HaulCycleRow } from '@/api/operations.api';
 import { StatCard } from '@/components/analytics/StatCard';
+import {
+  type ServiceDetail,
+  ServiceDetailsModal,
+} from '@/components/operations/ServiceDetailsModal';
 import {
   ChartPanel,
   OpsTable,
@@ -28,7 +32,7 @@ import {
 import type { Column } from '@/components/reports/ReportsTable';
 import { startEndColumns } from '@/components/reports/dateTimeColumns';
 import { Alert, Badge, Button, SegmentedControl, Skeleton } from '@/components/tailwind-ui';
-import { formatWorkDay } from '@/lib/operations-export';
+import { formatWorkDay, servicesByVehicleShift, shiftBuckets } from '@/lib/operations-export';
 import { chart } from '@/theme/palette';
 
 type View = 'shift' | 'vehicle' | 'driver' | 'shovel' | 'list';
@@ -48,6 +52,28 @@ export function ServicesTab({
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const [view, setView] = useState<View>('shift');
+  const [detail, setDetail] = useState<ServiceDetail | null>(null);
+
+  /** A service count that opens the services behind it, with their map. */
+  const countLink = (
+    count: number,
+    title: string,
+    pick: (cycle: HaulCycleRow) => boolean,
+    testId?: string,
+  ) =>
+    count > 0 ? (
+      <button
+        type="button"
+        className="font-semibold text-brand-600 underline decoration-dotted underline-offset-4 hover:text-brand-700 dark:text-brand-400"
+        data-testid={testId}
+        title={t('operations.ui.services.openDetails')}
+        onClick={() => setDetail({ title, cycles: (data?.cycles ?? []).filter(pick) })}
+      >
+        {numText(count, lang, 0)}
+      </button>
+    ) : (
+      numText(0, lang, 0)
+    );
 
   const shiftLabel = (row: { shift: string; shiftDate: string | null; shiftNo: number }) =>
     row.shift === 'off-shift' || !row.shiftDate
@@ -95,7 +121,8 @@ export function ServicesTab({
     {
       id: 'services',
       headerKey: 'operations.services',
-      render: (row) => numText(row.services, lang, 0),
+      render: (row) =>
+        countLink(row.services, shiftLabel(row), (cycle) => cycle.shift === row.shift),
     },
     {
       id: 'distance',
@@ -134,12 +161,36 @@ export function ServicesTab({
     },
   ];
 
+  const buckets = useMemo(() => (data ? shiftBuckets(data, t, lang) : []), [data, t, lang]);
+  const perVehicle = useMemo(
+    () => (data ? servicesByVehicleShift(data) : new Map<string, Record<number, number>>()),
+    [data],
+  );
   const vehicleColumns: Array<Column<HaulCycleReport['byVehicle'][number]>> = [
     { id: 'vehicle', headerKey: 'operations.colVehicle', render: (row) => row.vehicleName },
+    ...buckets.map(
+      (bucket): Column<HaulCycleReport['byVehicle'][number]> => ({
+        id: `shift-${bucket.no}`,
+        header: bucket.label,
+        render: (row) =>
+          countLink(
+            perVehicle.get(row.vehicleId)?.[bucket.no] ?? 0,
+            `${row.vehicleName} · ${bucket.label}`,
+            (cycle) => cycle.vehicleId === row.vehicleId && cycle.shiftNo === bucket.no,
+            `vehicle-${row.vehicleId}-shift-${bucket.no}`,
+          ),
+      }),
+    ),
     {
       id: 'services',
-      headerKey: 'operations.services',
-      render: (row) => numText(row.services, lang, 0),
+      headerKey: 'operations.servicesTotal',
+      render: (row) =>
+        countLink(
+          row.services,
+          row.vehicleName,
+          (cycle) => cycle.vehicleId === row.vehicleId,
+          `vehicle-${row.vehicleId}-total`,
+        ),
     },
     {
       id: 'distance',
@@ -164,7 +215,12 @@ export function ServicesTab({
     {
       id: 'services',
       headerKey: 'operations.services',
-      render: (row) => numText(row.services, lang, 0),
+      render: (row) =>
+        countLink(
+          row.services,
+          `${row.driverName} · ${shiftLabel(row)}`,
+          (cycle) => cycle.driverId === row.driverId && cycle.shift === row.shift,
+        ),
     },
     {
       id: 'distance',
@@ -218,6 +274,25 @@ export function ServicesTab({
       id: 'distance',
       headerKey: 'operations.colDistance',
       render: (row) => numText(row.distanceKm, lang),
+    },
+    {
+      id: 'map',
+      header: '',
+      render: (row) => (
+        <Button
+          size="sm"
+          variant="ghost"
+          leftIcon={<MapPin size={14} />}
+          onClick={() =>
+            setDetail({
+              title: `${row.vehicleName} · ${stampText(row.originEnteredAt, lang)}`,
+              cycles: [row],
+            })
+          }
+        >
+          {t('operations.ui.services.showOnMap')}
+        </Button>
+      ),
     },
   ];
 
@@ -407,6 +482,13 @@ export function ServicesTab({
           />
         </Panel>
       )}
+
+      <ServiceDetailsModal
+        detail={detail}
+        route={data.route}
+        shiftLabel={shiftLabel}
+        onClose={() => setDetail(null)}
+      />
     </div>
   );
 }

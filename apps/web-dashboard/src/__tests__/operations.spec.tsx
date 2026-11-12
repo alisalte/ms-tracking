@@ -9,6 +9,7 @@ const rangeSeen = vi.hoisted(() => ({ activity: [] as unknown[], periods: [] as 
 const downloads = vi.hoisted(() => ({ calls: [] as Array<{ blob: Blob; name: string }> }));
 const shiftExports = vi.hoisted(() => ({ calls: [] as unknown[][] }));
 const shiftRoutes = vi.hoisted(() => ({ calls: [] as string[][] }));
+const routeUpdates = vi.hoisted(() => ({ calls: [] as Array<Record<string, unknown>> }));
 
 // ApexCharts mounts a canvas — stub the wrapper (charts are covered by the reports tests).
 vi.mock('@/components/dashboard/ApexChart', () => ({
@@ -303,7 +304,12 @@ vi.mock('@/api/operations.api', () => ({
   }),
   useHaulAnalysis: () => ({ data: undefined, isError: false }),
   useCreateHaulRoute: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUpdateHaulRoute: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateHaulRoute: () => ({
+    mutateAsync: async (body: Record<string, unknown>) => {
+      routeUpdates.calls.push(body);
+    },
+    isPending: false,
+  }),
   useArchiveHaulRoute: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSetHaulMembers: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
@@ -386,6 +392,7 @@ describe('operations page', () => {
     downloads.calls.length = 0;
     shiftExports.calls.length = 0;
     shiftRoutes.calls.length = 0;
+    routeUpdates.calls.length = 0;
     localStorage.clear();
   });
 
@@ -455,6 +462,35 @@ describe('operations page', () => {
     expect(screen.getByTestId('haul-route-settings')).toBeInTheDocument();
     expect((screen.getByTestId('roster-dev-1-1') as HTMLSelectElement).value).toBe('drv-1');
     expect((screen.getByTestId('roster-dev-1-2') as HTMLSelectElement).value).toBe('drv-2');
+  });
+
+  it('shows and changes the origin and destination of a saved route', async () => {
+    renderPage();
+    openRouteTab('routes');
+    const origin = screen.getByTestId('route-settings-origin') as HTMLSelectElement;
+    const destination = screen.getByTestId('route-settings-destination') as HTMLSelectElement;
+    expect(origin.value).toBe('geo-1');
+    expect(destination.value).toBe('geo-2');
+    // Swapped places are saved with the route.
+    fireEvent.change(origin, { target: { value: 'geo-2' } });
+    fireEvent.change(destination, { target: { value: 'geo-1' } });
+    fireEvent.submit(screen.getByTestId('haul-route-settings'));
+    await vi.waitFor(() => expect(routeUpdates.calls).toHaveLength(1));
+    expect(routeUpdates.calls[0]).toMatchObject({
+      originGeofenceId: 'geo-2',
+      destinationGeofenceId: 'geo-1',
+    });
+  });
+
+  it('does not save a route whose origin and destination are the same place', () => {
+    renderPage();
+    openRouteTab('routes');
+    fireEvent.change(screen.getByTestId('route-settings-destination'), {
+      target: { value: 'geo-1' },
+    });
+    fireEvent.submit(screen.getByTestId('haul-route-settings'));
+    expect(screen.getByText(/they must differ/)).toBeInTheDocument();
+    expect(routeUpdates.calls).toHaveLength(0);
   });
 
   it('takes the machine type from the vehicle instead of asking for it on the route', () => {
