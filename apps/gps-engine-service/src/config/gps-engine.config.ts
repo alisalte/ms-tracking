@@ -30,6 +30,13 @@ export const gpsEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     DBURL_PLATFORM: z.string().min(1).optional(),
     /** Redis connection URL (last-position cache + device-status cache + WS adapter). */
     REDISURL: z.string().min(1),
+    /**
+     * Redis the device-gateway writes to, when it is not the one above. The
+     * gateway defaults to database 1 while this service uses database 0, so the
+     * I/O panel it stores (`…:fmbio`) is invisible here unless this points at the
+     * gateway's database (e.g. `redis://redis:6379/1`). Unset: use REDISURL.
+     */
+    GATEWAY_REDISURL: z.string().min(1).optional(),
 
     // --- Kafka (position consumer + session-lifecycle consumer) ---
     /** Comma-separated broker list, e.g. `localhost:9092`. */

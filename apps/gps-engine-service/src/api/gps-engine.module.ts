@@ -14,7 +14,7 @@
  * Sprint D: DLQ producer + metrics wired through every pipeline; the module
  * exports the consumer + readiness indicators for /health/ready (§35).
  */
-import { REDIS_TOKEN } from '@fleetvision/cache-redis';
+import { REDIS_TOKEN, createRedisClient } from '@fleetvision/cache-redis';
 import type { Redis } from '@fleetvision/cache-redis';
 import { EXTRA_READINESS_INDICATORS, type ReadinessIndicator } from '@fleetvision/health';
 import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
@@ -167,7 +167,11 @@ export class GpsEngineModule {
         {
           provide: FMB_IO_MEMORY,
           inject: [REDIS_TOKEN],
-          useFactory: (redis: Redis) => new FmbIoMemory(redis),
+          // The gateway may use another Redis database than this service.
+          useFactory: (redis: Redis) =>
+            config.GATEWAY_REDISURL
+              ? new FmbIoMemory(createRedisClient({ url: config.GATEWAY_REDISURL }), true)
+              : new FmbIoMemory(redis),
         },
         {
           provide: DEVICE_STATUS_CACHE,

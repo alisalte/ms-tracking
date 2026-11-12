@@ -35,7 +35,25 @@ export interface FmbIoPanel {
 }
 
 export class FmbIoMemory {
-  constructor(private readonly redis: Redis) {}
+  /**
+   * @param redis the Redis the device-gateway writes to
+   * @param ownsClient true when this class created `redis` (a separate gateway
+   *   connection) and must close it on shutdown
+   */
+  constructor(
+    private readonly redis: Redis,
+    private readonly ownsClient = false,
+  ) {}
+
+  /** Nest shutdown hook — closes a connection created just for the gateway's database. */
+  public async onApplicationShutdown(): Promise<void> {
+    if (!this.ownsClient) return;
+    try {
+      await this.redis.quit();
+    } catch {
+      this.redis.disconnect();
+    }
+  }
 
   /** The merged panel for one vehicle; null when nothing is stored or Redis fails. */
   public async read(tenantId: string, vehicleId: string): Promise<FmbIoPanel | null> {

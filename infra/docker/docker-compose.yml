@@ -346,6 +346,8 @@ services:
       # role is DML-only under RLS (see 20260822100000 grant migration).
       DBURL_PLATFORM: postgres://${POSTGRES_PLATFORM_USER:-fleetvision_platform}:${POSTGRES_PLATFORM_PASSWORD:-fleetvision_platform_dev}@postgres:5432/${POSTGRES_DB:-fleetvision}
       REDISURL: redis://redis:6379/0
+      # The device-gateway uses Redis database 1; the I/O panel it stores lives there.
+      GATEWAY_REDISURL: redis://redis:6379/1
       JWT_ISSUER: ${JWT_ISSUER:-fleetvision}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-fleetvision-identity}
       JWT_SECRET: ${JWT_SECRET}

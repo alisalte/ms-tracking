@@ -85,3 +85,19 @@ describe('FmbIoMemory', () => {
     expect(await new FmbIoMemory(down as never).read('t', 'v')).toBeNull();
   });
 });
+
+describe('FmbIoMemory connection ownership', () => {
+  it('closes a connection it created for the gateway database on shutdown', async () => {
+    let quit = 0;
+    const redis = { quit: async () => void quit++, disconnect: () => undefined };
+    await new FmbIoMemory(redis as never, true).onApplicationShutdown();
+    expect(quit).toBe(1);
+  });
+
+  it('leaves the shared connection alone', async () => {
+    let quit = 0;
+    const redis = { quit: async () => void quit++, disconnect: () => undefined };
+    await new FmbIoMemory(redis as never).onApplicationShutdown();
+    expect(quit).toBe(0);
+  });
+});
