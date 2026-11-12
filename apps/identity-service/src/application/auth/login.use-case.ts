@@ -119,8 +119,7 @@ export class LoginUseCase {
       throw new TenantNotActiveError();
     }
 
-    const concurrent = await this.sessions.countForTenant(input.tenantId);
-    const license = await this.entitlements.assertLoginAllowed(input.tenantId, concurrent);
+    const license = await this.entitlements.assertLoginAllowed(input.tenantId);
 
     const ctx = buildEventContext(input.tenantId, 'user', input.correlationId);
 
@@ -140,6 +139,11 @@ export class LoginUseCase {
     if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
       throw new AccountLockedError();
     }
+
+    // Drop this user's leftover sessions (each successful sign-in used to keep
+    // them until idle expiry and then trip the license cap). If other users
+    // still fill the cap, the oldest session is released so this sign-in fits.
+    await this.sessions.makeRoom(input.tenantId, user.id as string, license.maxConcurrentSessions);
 
     // 6. Issue tokens + create session + start refresh family.
     // The iat is strictly after any user-level revocation watermark so a
