@@ -136,9 +136,18 @@ export interface HaulCycleRow {
   travelSec: number;
   durationSec: number;
   distanceKm: number;
+  /** Where the truck stood while loading (absent from older servers). */
+  loadPoint?: GeoPoint;
+  /** Where the truck dumped (absent from older servers). */
+  dumpPoint?: GeoPoint;
   shift: string;
   shiftDate: string | null;
   shiftNo: number;
+}
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
 }
 
 export interface HaulShiftRow {
@@ -158,6 +167,8 @@ export interface HaulCycleReport {
   route: {
     id: string;
     name: string;
+    originGeofenceId?: string;
+    destinationGeofenceId?: string;
     shiftStartHour: number;
     shiftStartMinute?: number;
     shiftDurationHours: number;
