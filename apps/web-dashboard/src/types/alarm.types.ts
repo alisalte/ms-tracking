@@ -27,6 +27,7 @@ export type AlarmType =
   | 'fuel-theft'
   | 'temperature'
   | 'collision'
+  | 'harsh-driving'
   | 'camera'
   | 'dms'
   | 'idle'

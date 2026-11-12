@@ -22,6 +22,7 @@ const TYPE_COLOR: Record<string, string> = {
   lowBattery: chart.lowBattery,
   sos: chart.critical,
   collision: chart.speeding,
+  'harsh-driving': chart.medium,
   offline: chart.offline,
   camera: chart.other,
   'fuel-theft': chart.high,

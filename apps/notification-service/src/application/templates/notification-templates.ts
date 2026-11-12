@@ -231,6 +231,16 @@ const TEMPLATES: Record<string, TemplateEntry> = {
       body: '{{alarmDetail}}',
     },
   },
+  'harsh-driving': {
+    en: {
+      title: 'Harsh driving: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+    fa: {
+      title: 'رانندگی خشن: {{vehicleName}}',
+      body: '{{alarmDetail}}',
+    },
+  },
   temperature: {
     en: {
       title: 'Temperature: {{vehicleName}}',

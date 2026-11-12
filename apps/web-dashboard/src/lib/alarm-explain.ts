@@ -144,6 +144,7 @@ const BY_TYPE: Readonly<Partial<Record<AlarmType, ExplainTopic>>> = {
   'fuel-theft': 'fuelTheft',
   temperature: 'temperature',
   collision: 'crash',
+  'harsh-driving': 'harshDriving',
   camera: 'videoLoss',
   dms: 'distraction',
   idle: 'idle',

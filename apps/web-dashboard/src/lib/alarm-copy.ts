@@ -20,6 +20,7 @@ export const ALARM_CATALOG_TYPES: readonly AlarmType[] = [
   'fuel-theft',
   'temperature',
   'collision',
+  'harsh-driving',
   'camera',
   'idle',
   'ignition',
@@ -193,16 +194,15 @@ export function mapAlarmType(raw: string | undefined): AlarmType {
   if (u === 'TEMPERATURE_HIGH' || u === 'TEMPERATURE_LOW' || u === 'TEMPERATURE') {
     return 'temperature';
   }
+  if (u === 'ACCIDENT' || u === 'COLLISION' || u === 'ROLLOVER') return 'collision';
   if (
-    u === 'ACCIDENT' ||
-    u === 'COLLISION' ||
+    u === 'HARSH_DRIVING' ||
     u === 'BRAKING' ||
     u === 'ACCELERATION' ||
     u === 'CORNERING' ||
-    u === 'DRIVING_BEHAVIOR' ||
-    u === 'ROLLOVER'
+    u === 'DRIVING_BEHAVIOR'
   ) {
-    return 'collision';
+    return 'harsh-driving';
   }
   if (u.startsWith('VIDEO') || u.startsWith('STORAGE') || u === 'CAMERA') return 'camera';
   if (
@@ -625,7 +625,7 @@ function compactNum(value: unknown): string {
 }
 
 function looksEnglishAlarmTitle(text: string): boolean {
-  return /^(alarm|speeding|overspeed|geofence|device |ignition |trip |prolonged |unauthorized |low battery|notification|sos|dms|fuel|camera|collision|temperature|idle|tow|power|jamming|driver )/i.test(
+  return /^(alarm|speeding|overspeed|geofence|device |ignition |trip |prolonged |unauthorized |low battery|notification|sos|dms|fuel|camera|collision|harsh driving|temperature|idle|tow|power|jamming|driver )/i.test(
     text.trim(),
   );
 }
