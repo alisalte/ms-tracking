@@ -1,5 +1,5 @@
 /**
- * Orthophoto pipeline: ECW upload → ecw2tiff → GDAL COG (EPSG:3857) → publish.
+ * Orthophoto pipeline: ECW upload → ecw2tiff → collar mask (alpha) → GDAL COG (EPSG:3857) → publish.
  *
  * Conversions run one at a time as low-priority child processes. The previous
  * layer stays live until the new COG is ready, then is replaced atomically.
@@ -37,6 +37,8 @@ const MAX_TILE_RENDERS = 4;
 const FREE_SPACE_FACTOR = 6;
 /** How far below native resolution the layer is still drawn. */
 const ZOOM_RANGE = 10;
+/** How far (per channel) a collar pixel may drift from pure white/black. */
+const COLLAR_TOLERANCE = 15;
 const GDAL_ENV = { ...process.env, GDAL_PAM_ENABLED: 'NO' };
 
 function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<string> {
@@ -153,6 +155,7 @@ export class OrthophotoService implements OnModuleInit {
     const dir = this.jobDir(tenantId, id);
     const source = join(dir, 'source.ecw');
     const decoded = join(dir, 'decoded.tif');
+    const masked = join(dir, 'masked.tif');
     const cog = join(dir, 'cog.tif');
     try {
       await this.convert('nice', [
@@ -166,6 +169,37 @@ export class OrthophotoService implements OnModuleInit {
         source,
         decoded,
       ]);
+      // ECW mosaics have no alpha: the area around the flown footprint is a
+      // solid white (or black) collar that would cover the basemap. Mask the
+      // collar — scanned in from the edges only, so white/black pixels inside
+      // the imagery stay — into an alpha band. `-near` absorbs JPEG noise.
+      await this.convert('nice', [
+        '-n',
+        '10',
+        'nearblack',
+        '-q',
+        '-color',
+        '255,255,255',
+        '-color',
+        '0,0,0',
+        '-near',
+        String(COLLAR_TOLERANCE),
+        '-setalpha',
+        '-of',
+        'GTiff',
+        '-co',
+        'TILED=YES',
+        '-co',
+        'COMPRESS=DEFLATE',
+        '-co',
+        'PREDICTOR=2',
+        '-co',
+        'BIGTIFF=IF_SAFER',
+        '-o',
+        masked,
+        decoded,
+      ]);
+      await rm(decoded, { force: true });
       await this.convert('nice', [
         '-n',
         '10',
@@ -183,7 +217,7 @@ export class OrthophotoService implements OnModuleInit {
         'NUM_THREADS=3',
         '-co',
         'BIGTIFF=IF_SAFER',
-        decoded,
+        masked,
         cog,
       ]);
       const info = JSON.parse(await this.convert('gdalinfo', ['-json', cog])) as {
@@ -202,7 +236,7 @@ export class OrthophotoService implements OnModuleInit {
         cogBytes: size,
       });
       await rm(source, { force: true });
-      await rm(decoded, { force: true });
+      await rm(masked, { force: true });
       for (const oldId of replaced) {
         await rm(this.jobDir(tenantId, oldId), { force: true, recursive: true });
       }
