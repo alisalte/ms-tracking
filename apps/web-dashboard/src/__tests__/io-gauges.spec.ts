@@ -96,7 +96,14 @@ describe('buildGaugeView', () => {
     const view = buildGaugeView(panel, [{ input: 'ain1', kind: 'temperature', points: fridge }]);
     const temp = view.sections.find((s) => s.section === 'temp')?.gauges ?? [];
     const probe = temp.find((g) => g.code === 'AIN1');
-    expect(probe).toMatchObject({ type: 'temp', celsius: 10, min: -10, max: 70, level: 'normal' });
+    expect(probe).toMatchObject({
+      type: 'temp',
+      celsius: 10,
+      min: -10,
+      max: 70,
+      level: 'normal',
+      scale: 'ambient',
+    });
   });
 
   it('keeps engine thresholds for a coolant sender', () => {
@@ -106,6 +113,11 @@ describe('buildGaugeView', () => {
     ];
     const view = buildGaugeView(panel, [{ input: 'ain1', kind: 'temperature', points: coolant }]);
     const temp = view.sections.find((s) => s.section === 'temp')?.gauges ?? [];
-    expect(temp.find((g) => g.code === 'AIN1')).toMatchObject({ level: 'cold', min: 0, max: 130 });
+    expect(temp.find((g) => g.code === 'AIN1')).toMatchObject({
+      level: 'cold',
+      min: 0,
+      max: 130,
+      scale: 'engine',
+    });
   });
 });

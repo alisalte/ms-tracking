@@ -281,42 +281,171 @@ function FuelTank({ gauge, now, index }: { gauge: FuelGauge; now: number; index:
   );
 }
 
-/** Thermometer column filled to the temperature on its scale. */
+/**
+ * Colour of an ambient probe by the temperature itself (°C → colour), so a
+ * fridge reads icy at -18 °C and warm at +20 °C whatever its scale.
+ */
+const THERMAL_STOPS: ReadonlyArray<readonly [number, readonly [number, number, number]]> = [
+  [-20, [139, 92, 246]], // violet
+  [0, [59, 130, 246]], // blue
+  [8, [6, 182, 212]], // cyan
+  [18, [16, 185, 129]], // emerald
+  [28, [245, 158, 11]], // amber
+  [40, [249, 115, 22]], // orange
+  [60, [239, 68, 68]], // red
+];
+
+function thermalColor(celsius: number): string {
+  const stops = THERMAL_STOPS;
+  const first = stops[0] as (typeof stops)[number];
+  const last = stops[stops.length - 1] as (typeof stops)[number];
+  let rgb: readonly [number, number, number] = celsius <= first[0] ? first[1] : last[1];
+  for (let i = 1; i < stops.length; i++) {
+    const [ta, ca] = stops[i - 1] as (typeof stops)[number];
+    const [tb, cb] = stops[i] as (typeof stops)[number];
+    if (celsius >= ta && celsius <= tb) {
+      const t = (celsius - ta) / (tb - ta);
+      const mix = (a: number, b: number) => Math.round(a + t * (b - a));
+      rgb = [mix(ca[0], cb[0]), mix(ca[1], cb[1]), mix(ca[2], cb[2])];
+      break;
+    }
+  }
+  return `rgb(${rgb[0]} ${rgb[1]} ${rgb[2]})`;
+}
+
+/** Thermometer geometry (SVG user units). */
+const THERMO = { tubeX: 23, colX: 26.5, colW: 7, top: 10, bottom: 64, bulbY: 76 } as const;
+
+/** Glass thermometer filled to the temperature on its scale. */
 function Thermometer({ gauge, now }: { gauge: TempGauge; now: number }) {
-  const top = 6;
-  const bottom = 58; // column bottom (bulb starts here)
-  const frac = Math.min(1, Math.max(0, (gauge.celsius - gauge.min) / (gauge.max - gauge.min)));
-  const y = bottom - frac * (bottom - top);
-  const color = LEVEL_COLOR[gauge.level];
+  const span = gauge.max - gauge.min || 1;
+  const frac = Math.min(1, Math.max(0, (gauge.celsius - gauge.min) / span));
+  const shown = useFillLevel(frac * 100) / 100;
+  const color =
+    gauge.scale === 'ambient' && gauge.level === 'normal'
+      ? thermalColor(gauge.celsius)
+      : LEVEL_COLOR[gauge.level];
+  const uid = `thermo-${gauge.id.replace(/[^\w-]/g, '')}`;
+  const surface = THERMO.bottom - shown * (THERMO.bottom - THERMO.top);
+  const levelStyle = { transform: `translateY(${surface}px)` };
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
   return (
     <Card gauge={gauge} now={now}>
       <svg
-        viewBox="0 0 60 80"
-        width="54"
-        height="70"
+        viewBox="0 0 64 92"
+        width="58"
+        height="76"
         role="img"
         aria-label={`${fmt(gauge.celsius)} °C`}
+        className="overflow-visible"
       >
-        <rect x="18" y="2" width="12" height="62" rx="6" fill={TRACK} />
-        <circle cx="24" cy="68" r="10" fill={TRACK} />
-        <rect x="21" y={y} width="6" height={bottom - y + 6} rx="3" fill={color} />
-        <circle cx="24" cy="68" r="7" fill={color} />
-        {[0, 0.5, 1].map((q) => {
-          const ty = bottom - q * (bottom - top);
+        <defs>
+          <linearGradient id={`${uid}-liquid`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={color} />
+            <stop offset="40%" stopColor="#fff" stopOpacity="0.35" />
+            <stop offset="55%" stopColor={color} />
+            <stop offset="100%" stopColor={color} />
+          </linearGradient>
+          <radialGradient id={`${uid}-bulb`} cx="38%" cy="35%" r="70%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.85" />
+            <stop offset="35%" stopColor={color} />
+            <stop offset="100%" stopColor={color} />
+          </radialGradient>
+          <clipPath id={`${uid}-column`}>
+            <rect
+              x={THERMO.colX}
+              y={THERMO.top - 4}
+              width={THERMO.colW}
+              height={THERMO.bulbY - THERMO.top + 4}
+              rx={THERMO.colW / 2}
+            />
+          </clipPath>
+        </defs>
+
+        {/* glow behind the bulb */}
+        <circle
+          className="fv-thermo-glow"
+          cx="30"
+          cy={THERMO.bulbY}
+          r="15"
+          fill={color}
+          fillOpacity="0.25"
+        />
+
+        {/* glass tube and bulb */}
+        <rect x={THERMO.tubeX} y="2" width="14" height="74" rx="7" fill={TRACK} />
+        <circle cx="30" cy={THERMO.bulbY} r="12" fill={TRACK} />
+        <rect
+          x={THERMO.colX - 1}
+          y="5"
+          width={THERMO.colW + 2}
+          height="70"
+          rx="4.5"
+          className="fill-white dark:fill-white/5"
+          fillOpacity="0.85"
+        />
+
+        {/* liquid column with a sheen travelling up */}
+        <g clipPath={`url(#${uid}-column)`}>
+          <g className="fv-tank-level" style={levelStyle}>
+            <rect
+              x={THERMO.colX}
+              y="0"
+              width={THERMO.colW}
+              height="90"
+              fill={`url(#${uid}-liquid)`}
+            />
+            <rect
+              className="fv-thermo-sheen"
+              x={THERMO.colX}
+              y="40"
+              width={THERMO.colW}
+              height="10"
+              fill="#fff"
+              fillOpacity="0.45"
+            />
+          </g>
+        </g>
+        <circle cx="30" cy={THERMO.bulbY} r="8.5" fill={`url(#${uid}-bulb)`} />
+
+        {/* glass highlight */}
+        <rect
+          x={THERMO.tubeX + 2.5}
+          y="8"
+          width="2"
+          height="56"
+          rx="1"
+          fill="#fff"
+          fillOpacity="0.5"
+        />
+
+        {/* scale */}
+        {ticks.map((q) => {
+          const ty = THERMO.bottom - q * (THERMO.bottom - THERMO.top);
+          const major = q === 0 || q === 0.5 || q === 1;
           return (
             <g key={q}>
               <line
-                x1="32"
-                x2="36"
+                x1="40"
+                x2={major ? 45 : 43}
                 y1={ty}
                 y2={ty}
                 stroke="currentColor"
-                strokeOpacity="0.4"
-                className="text-gray-500"
+                strokeOpacity="0.45"
+                strokeLinecap="round"
+                className="text-gray-500 dark:text-white"
               />
-              <text x="38" y={ty + 3} fontSize="7" fill="currentColor" className="text-gray-400">
-                {Math.round(gauge.min + q * (gauge.max - gauge.min))}
-              </text>
+              {major ? (
+                <text
+                  x="47"
+                  y={ty + 2.5}
+                  fontSize="7"
+                  fill="currentColor"
+                  className="text-gray-400"
+                >
+                  {Math.round(gauge.min + q * span)}
+                </text>
+              ) : null}
             </g>
           );
         })}
