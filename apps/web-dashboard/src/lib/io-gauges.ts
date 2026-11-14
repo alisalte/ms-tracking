@@ -50,6 +50,11 @@ export interface TempGauge extends GaugeBase {
   readonly max: number;
   readonly volts: number | null;
   readonly level: GaugeLevel;
+  /**
+   * `engine`: coolant sender, coloured by its warning level.
+   * `ambient`: fridge / cargo / air probe, coloured by the temperature itself.
+   */
+  readonly scale: 'engine' | 'ambient';
 }
 
 export interface DialGauge extends GaugeBase {
@@ -173,6 +178,7 @@ function engineGauge(p: FmbIoPoint, celsius: number, volts: number | null, label
     max: Math.max(130, Math.ceil(c / 10) * 10),
     volts,
     level: engineTempLevel(c),
+    scale: 'engine',
   } satisfies TempGauge;
 }
 
@@ -186,6 +192,7 @@ function ambientGauge(p: FmbIoPoint, celsius: number): TempGauge {
     max: Math.max(60, Math.ceil(c / 10) * 10),
     volts: null,
     level: 'normal',
+    scale: 'ambient',
   };
 }
 
@@ -208,6 +215,7 @@ function rangeGauge(
     max: Math.ceil(Math.max(high, c) / 10) * 10,
     volts,
     level: 'normal',
+    scale: 'ambient',
   };
 }
 
