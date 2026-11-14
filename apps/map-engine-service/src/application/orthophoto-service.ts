@@ -30,7 +30,9 @@ export class OrthophotoDiskFullError extends Error {}
 
 export type CommandRunner = (cmd: string, args: readonly string[]) => Promise<string>;
 
-const CONVERT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+/** Large ECW mosaics take hours to decode at low priority; override with ORTHOPHOTO_CONVERT_TIMEOUT_HOURS. */
+const CONVERT_TIMEOUT_MS =
+  (Number(process.env.ORTHOPHOTO_CONVERT_TIMEOUT_HOURS) || 12) * 60 * 60 * 1000;
 const TILE_TIMEOUT_MS = 30_000;
 const MAX_TILE_RENDERS = 4;
 /** Room needed for the decoded intermediate + COG, as a multiple of the ECW. */
@@ -58,9 +60,19 @@ function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<s
       err = (err + d.toString()).slice(-2000);
     });
     child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) resolve(out);
-      else reject(new Error(err.trim() || `${cmd} exited with ${code ?? 'signal'}`));
+    const started = Date.now();
+    child.on('close', (code, signal) => {
+      if (code === 0) return resolve(out);
+      // `nice` wraps the real tool; name the tool, not the wrapper.
+      const tool = cmd === 'nice' ? (args[2] ?? cmd) : cmd;
+      const elapsed = Date.now() - started;
+      const why =
+        signal && elapsed >= timeoutMs
+          ? `timed out after ${Math.round(timeoutMs / 60_000)} min`
+          : signal
+            ? `killed by ${signal} after ${Math.round(elapsed / 60_000)} min`
+            : `exited with code ${code}`;
+      reject(new Error(`${tool} ${why}${err.trim() ? `: ${err.trim()}` : ''}`));
     });
   });
 }
