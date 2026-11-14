@@ -427,3 +427,73 @@ html[dir="rtl"] .fv-breadcrumb .fv-breadcrumb-sep {
 .fv-trip-endpoint--end {
   background: #0f172a;
 }
+
+/* ── I/O fuel tank gauge (FmbIoGauges) ───────────────────────────────── */
+
+/* Liquid surface: the wave path is two periods wide and slides one period. */
+@keyframes fv-tank-wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-56px);
+  }
+}
+
+/* Bubbles rising through the liquid. */
+@keyframes fv-tank-bubble {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-46px);
+    opacity: 0;
+  }
+}
+
+/* Critical level: the tank glows. */
+@keyframes fv-tank-alert {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.fv-tank-wave {
+  animation: fv-tank-wave 3.2s linear infinite;
+}
+.fv-tank-wave--back {
+  animation-duration: 5.4s;
+  animation-direction: reverse;
+}
+.fv-tank-bubble {
+  transform-box: fill-box;
+  animation: fv-tank-bubble 3s ease-in infinite;
+}
+.fv-tank-alert {
+  animation: fv-tank-alert 1.6s ease-in-out infinite;
+}
+.fv-tank-level {
+  transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fv-tank-wave,
+  .fv-tank-bubble,
+  .fv-tank-alert {
+    animation: none;
+  }
+  .fv-tank-bubble {
+    opacity: 0;
+  }
+  .fv-tank-level {
+    transition: none;
+  }
+}

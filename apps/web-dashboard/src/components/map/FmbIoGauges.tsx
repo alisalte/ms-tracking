@@ -1,4 +1,5 @@
 import { Fuel, Gauge as GaugeIcon, KeyRound, Route } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type {
@@ -89,59 +90,175 @@ function LevelLabel({ level, kind }: { level: GaugeLevel; kind: 'fuel' | 'temp' 
   );
 }
 
+/**
+ * Liquid colours (light top → deep bottom). Each tank on a vehicle gets its own
+ * hue so several tanks are told apart at a glance; low / critical levels
+ * override it with amber / red (and the level is also written in words).
+ */
+const TANK_PALETTES: ReadonlyArray<readonly [string, string]> = [
+  ['#5eead4', '#0d9488'], // teal
+  ['#7dd3fc', '#2563eb'], // blue
+  ['#c4b5fd', '#7c3aed'], // violet
+  ['#67e8f9', '#0891b2'], // cyan
+];
+const TANK_LEVEL_PALETTE: Partial<Record<GaugeLevel, readonly [string, string]>> = {
+  warning: ['#fcd34d', '#f59e0b'],
+  critical: ['#fca5a5', '#dc2626'],
+};
+
+/** Tank geometry (SVG user units). */
+const TANK = { x: 11, top: 13, width: 50, height: 72, bottom: 85 } as const;
+/** Two wavelengths (28) wide and slid by one period (56) → seamless loop. */
+const WAVE_PATH = 'M5 0 Q12 -3 19 0 T33 0 T47 0 T61 0 T75 0 T89 0 T103 0 T117 0 V90 H5 Z';
+const BUBBLES = [
+  { cx: 22, r: 1.8, delay: '0s' },
+  { cx: 36, r: 1.3, delay: '1.1s' },
+  { cx: 49, r: 2.1, delay: '2s' },
+] as const;
+
+/** Level shown by the tank: starts empty and fills to `percent` after mount. */
+function useFillLevel(percent: number): number {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setShown(percent));
+    return () => cancelAnimationFrame(raf);
+  }, [percent]);
+  return shown;
+}
+
 /** Fuel tank with its level, percent and (with a tank volume) litres. */
-function FuelTank({ gauge, now }: { gauge: FuelGauge; now: number }) {
-  const inner = 60; // height of the liquid column at 100 %
-  const h = (gauge.percent / 100) * inner;
-  const color = gauge.level === 'normal' ? 'var(--color-brand-500)' : LEVEL_COLOR[gauge.level];
+function FuelTank({ gauge, now, index }: { gauge: FuelGauge; now: number; index: number }) {
+  const shown = useFillLevel(gauge.percent);
+  const [light, deep] = TANK_LEVEL_PALETTE[gauge.level] ??
+    TANK_PALETTES[index % TANK_PALETTES.length] ?? ['', ''];
+  const uid = `tank-${gauge.id.replace(/[^\w-]/g, '')}`;
+  const surface = TANK.bottom - (shown / 100) * TANK.height;
+  const levelStyle = { transform: `translateY(${surface}px)` };
+  const empty = shown <= 0.5;
   return (
     <Card gauge={gauge} now={now}>
       <svg
-        viewBox="0 0 64 80"
-        width="56"
-        height="70"
+        viewBox="0 0 72 92"
+        width="60"
+        height="76"
         role="img"
         aria-label={`${fmt(gauge.percent, 0)}%`}
+        className="overflow-visible"
       >
-        {/* filler cap */}
-        <rect x="40" y="2" width="12" height="7" rx="2" fill={TRACK} />
-        {/* tank body */}
-        <rect
-          x="6"
-          y="8"
-          width="52"
-          height="68"
-          rx="8"
-          fill="none"
-          stroke={TRACK}
-          strokeWidth="3"
-        />
-        <clipPath id={`tank-${gauge.id}`}>
-          <rect x="10" y="12" width="44" height="60" rx="5" />
-        </clipPath>
-        <rect
-          x="10"
-          y={72 - h}
-          width="44"
-          height={h}
-          fill={color}
-          clipPath={`url(#tank-${gauge.id})`}
-          style={{ transition: 'y 600ms ease, height 600ms ease' }}
-        />
-        {/* quarter marks */}
-        {[0.25, 0.5, 0.75].map((q) => (
-          <line
-            key={q}
-            x1="10"
-            x2={q === 0.5 ? 22 : 17}
-            y1={72 - q * inner}
-            y2={72 - q * inner}
-            stroke="currentColor"
-            strokeOpacity="0.35"
-            strokeWidth="1.5"
-            className="text-gray-500"
+        <defs>
+          <linearGradient id={`${uid}-liquid`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={light} />
+            <stop offset="100%" stopColor={deep} />
+          </linearGradient>
+          {/* Cylinder shading over glass and liquid. */}
+          <linearGradient id={`${uid}-shade`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#000" stopOpacity="0.12" />
+            <stop offset="22%" stopColor="#fff" stopOpacity="0.28" />
+            <stop offset="45%" stopColor="#fff" stopOpacity="0" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.16" />
+          </linearGradient>
+          <linearGradient id={`${uid}-cap`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={light} />
+            <stop offset="100%" stopColor={deep} />
+          </linearGradient>
+          <clipPath id={`${uid}-body`}>
+            <rect x={TANK.x} y={TANK.top} width={TANK.width} height={TANK.height} rx="13" />
+          </clipPath>
+          {/* Area under the surface, so bubbles never rise above the liquid. */}
+          <clipPath id={`${uid}-liquid-area`}>
+            <rect className="fv-tank-level" style={levelStyle} x="0" y="0" width="72" height="92" />
+          </clipPath>
+        </defs>
+
+        {/* critical glow */}
+        {gauge.level === 'critical' ? (
+          <rect
+            className="fv-tank-alert"
+            x="4"
+            y="6"
+            width="64"
+            height="86"
+            rx="20"
+            fill="none"
+            stroke={deep}
+            strokeWidth="4"
           />
-        ))}
+        ) : null}
+
+        {/* filler cap and neck */}
+        <rect x="27" y="3" width="18" height="7" rx="3" fill={`url(#${uid}-cap)`} />
+        <rect x="31" y="8" width="10" height="4" fill={TRACK} />
+
+        {/* glass body */}
+        <rect x="8" y="10" width="56" height="78" rx="16" fill={TRACK} />
+        <rect
+          x={TANK.x}
+          y={TANK.top}
+          width={TANK.width}
+          height={TANK.height}
+          rx="13"
+          className="fill-white dark:fill-white/5"
+          fillOpacity="0.85"
+        />
+
+        {/* liquid: back wave, front wave, bubbles */}
+        <g clipPath={`url(#${uid}-body)`} opacity={empty ? 0 : 1}>
+          <g className="fv-tank-level" style={levelStyle}>
+            <g className="fv-tank-wave fv-tank-wave--back">
+              <path d={WAVE_PATH} fill={deep} fillOpacity="0.45" transform="translate(0 -1.5)" />
+            </g>
+            <g className="fv-tank-wave">
+              <path d={WAVE_PATH} fill={`url(#${uid}-liquid)`} />
+            </g>
+          </g>
+          {shown > 12 ? (
+            <g clipPath={`url(#${uid}-liquid-area)`}>
+              {BUBBLES.map((b) => (
+                <circle
+                  key={b.cx}
+                  className="fv-tank-bubble"
+                  style={{ animationDelay: b.delay }}
+                  cx={b.cx}
+                  cy={TANK.bottom - 3}
+                  r={b.r}
+                  fill="#fff"
+                  fillOpacity="0.75"
+                />
+              ))}
+            </g>
+          ) : null}
+        </g>
+
+        {/* glass shading and highlight */}
+        <rect
+          x={TANK.x}
+          y={TANK.top}
+          width={TANK.width}
+          height={TANK.height}
+          rx="13"
+          fill={`url(#${uid}-shade)`}
+          pointerEvents="none"
+        />
+        <rect x="16" y="20" width="4" height="50" rx="2" fill="#fff" fillOpacity="0.45" />
+
+        {/* quarter marks */}
+        {[0.25, 0.5, 0.75].map((q) => {
+          const y = TANK.bottom - q * TANK.height;
+          return (
+            <line
+              key={q}
+              x1={q === 0.5 ? 48 : 52}
+              x2="58"
+              y1={y}
+              y2={y}
+              stroke="currentColor"
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              className="text-gray-600 dark:text-white"
+            />
+          );
+        })}
       </svg>
       <span
         dir="ltr"
@@ -351,10 +468,10 @@ function ValueTile({ gauge, now }: { gauge: ValueGauge; now: number }) {
   );
 }
 
-function GaugeItem({ gauge, now }: { gauge: Gauge; now: number }) {
+function GaugeItem({ gauge, now, index }: { gauge: Gauge; now: number; index: number }) {
   switch (gauge.type) {
     case 'fuel':
-      return <FuelTank gauge={gauge} now={now} />;
+      return <FuelTank gauge={gauge} now={now} index={index} />;
     case 'temp':
       return <Thermometer gauge={gauge} now={now} />;
     case 'dial':
@@ -380,8 +497,8 @@ export function FmbIoGauges({ view, now }: { view: GaugeView; now: number }) {
             {t(`map.io.gauges.sections.${section}`)}
           </p>
           <div className={`grid gap-2 ${section === 'switch' ? 'grid-cols-4' : 'grid-cols-3'}`}>
-            {gauges.map((g) => (
-              <GaugeItem key={g.id} gauge={g} now={now} />
+            {gauges.map((g, i) => (
+              <GaugeItem key={g.id} gauge={g} now={now} index={i} />
             ))}
           </div>
         </section>
