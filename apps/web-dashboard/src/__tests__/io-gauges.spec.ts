@@ -84,4 +84,28 @@ describe('buildGaugeView', () => {
     expect(fuel[0]).toMatchObject({ type: 'fuel', percent: 50, liters: 40, volts: 2.5 });
     expect(view.sections.map((s) => s.section)).toEqual(['fuel', 'temp', 'dial']);
   });
+
+  it('draws a fridge probe on its own range without engine warnings', () => {
+    const fridge = [
+      { v: 0.4, value: 61.7 },
+      { v: 1.557, value: 33 },
+      { v: 2.5, value: 10 },
+      { v: 2.91, value: 0 },
+      { v: 3.033, value: -3 },
+    ];
+    const view = buildGaugeView(panel, [{ input: 'ain1', kind: 'temperature', points: fridge }]);
+    const temp = view.sections.find((s) => s.section === 'temp')?.gauges ?? [];
+    const probe = temp.find((g) => g.code === 'AIN1');
+    expect(probe).toMatchObject({ type: 'temp', celsius: 10, min: -10, max: 70, level: 'normal' });
+  });
+
+  it('keeps engine thresholds for a coolant sender', () => {
+    const coolant = [
+      { v: 0.5, value: 130 },
+      { v: 2.5, value: 20 },
+    ];
+    const view = buildGaugeView(panel, [{ input: 'ain1', kind: 'temperature', points: coolant }]);
+    const temp = view.sections.find((s) => s.section === 'temp')?.gauges ?? [];
+    expect(temp.find((g) => g.code === 'AIN1')).toMatchObject({ level: 'cold', min: 0, max: 130 });
+  });
 });

@@ -189,6 +189,28 @@ function ambientGauge(p: FmbIoPoint, celsius: number): TempGauge {
   };
 }
 
+/** Thermometer scaled to a calibrated range, without engine thresholds. */
+function rangeGauge(
+  p: FmbIoPoint,
+  celsius: number,
+  low: number,
+  high: number,
+  volts: number,
+  label?: string,
+): TempGauge {
+  const c = round1(celsius);
+  return {
+    ...base(p),
+    ...(label ? { label } : {}),
+    type: 'temp',
+    celsius: c,
+    min: Math.floor(Math.min(low, c) / 10) * 10,
+    max: Math.ceil(Math.max(high, c) / 10) * 10,
+    volts,
+    level: 'normal',
+  };
+}
+
 function analogGauge(p: FmbIoPoint, sensor: IoSensorConfig | undefined): Gauge | null {
   const volts = num(p);
   if (volts === null) return null;
@@ -203,7 +225,18 @@ function analogGauge(p: FmbIoPoint, sensor: IoSensorConfig | undefined): Gauge |
   }
   if (sensor?.kind === 'temperature') {
     const c = calibrate(sensor.points, volts);
-    if (c !== null) return { ...engineGauge(p, c, volts, sensor.label), titleKey: 'sensorTemp' };
+    if (c !== null) {
+      // Only a sender calibrated into the engine's working range is a coolant
+      // sensor; a fridge / cargo / ambient probe (e.g. -3…62 °C) must not get
+      // "cold engine" warnings or a 0–130 °C scale.
+      const values = sensor.points.map((pt) => pt.value);
+      const top = Math.max(...values);
+      const gauge =
+        top >= ENGINE_WARM
+          ? engineGauge(p, c, volts, sensor.label)
+          : rangeGauge(p, c, Math.min(...values), top, volts, sensor.label);
+      return { ...gauge, titleKey: 'sensorTemp' };
+    }
   }
   return {
     ...base(p),
