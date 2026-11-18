@@ -13,6 +13,9 @@ export const REPORT_SECTIONS = [
   'distance',
   'speed',
   'speeding',
+  'highspeed',
+  'mileage',
+  'temperature',
   'stops',
   'operation',
   'odometer',
@@ -32,13 +35,16 @@ export const REPORT_CATALOG: ReadonlyArray<{
   id: Exclude<ReportSection, 'overview'>;
   group: ReportCatalogGroup;
 }> = [
+  { id: 'mileage', group: 'ops' },
   { id: 'distance', group: 'ops' },
   { id: 'trips', group: 'ops' },
   { id: 'operation', group: 'ops' },
   { id: 'odometer', group: 'ops' },
   { id: 'stops', group: 'ops' },
   { id: 'speed', group: 'ops' },
+  { id: 'highspeed', group: 'safety' },
   { id: 'speeding', group: 'safety' },
+  { id: 'temperature', group: 'safety' },
   { id: 'alarms', group: 'safety' },
   { id: 'geofences', group: 'safety' },
   { id: 'analytics', group: 'safety' },

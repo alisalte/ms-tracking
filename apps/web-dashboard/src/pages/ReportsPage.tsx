@@ -18,6 +18,8 @@ import { DevicesSection } from '@/components/reports/DevicesSection';
 import { DistanceSection } from '@/components/reports/DistanceSection';
 import { DriversSection } from '@/components/reports/DriversSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
+import { HighSpeedSection } from '@/components/reports/HighSpeedSection';
+import { MileageSection } from '@/components/reports/MileageSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
 import { OperationSection } from '@/components/reports/OperationSection';
 import { RangeSummary } from '@/components/reports/RangeSummary';
@@ -27,6 +29,7 @@ import { SchedulesSection } from '@/components/reports/SchedulesSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
 import { SpeedingSection } from '@/components/reports/SpeedingSection';
 import { StopsSection } from '@/components/reports/StopsSection';
+import { TemperatureSection } from '@/components/reports/TemperatureSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { VehiclesSection } from '@/components/reports/VehiclesSection';
 import { PageHeader, Tabs } from '@/components/tailwind-ui';
@@ -79,6 +82,9 @@ export function ReportsPage() {
       {section === 'distance' && <DistanceSection range={range} />}
       {section === 'speed' && <SpeedSection range={range} />}
       {section === 'speeding' && <SpeedingSection range={range} />}
+      {section === 'highspeed' && <HighSpeedSection range={range} />}
+      {section === 'mileage' && <MileageSection range={range} />}
+      {section === 'temperature' && <TemperatureSection range={range} />}
       {section === 'stops' && <StopsSection range={range} />}
       {section === 'operation' && <OperationSection range={range} />}
       {section === 'odometer' && <OdometerSection range={range} />}

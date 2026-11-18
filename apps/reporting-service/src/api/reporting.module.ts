@@ -7,6 +7,7 @@ import type { Redis } from '@fleetvision/cache-redis';
 import { METRICS_TOKEN, type TelemetryMetrics } from '@fleetvision/observability';
 import { KNEX_TOKEN } from '@fleetvision/persistence-knex';
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { FleetReportService } from '../application/fleet-report.service.js';
 import { OperationsReportService } from '../application/operations-report.service.js';
 import { ReportScheduleService } from '../application/report-schedule.service.js';
 import { ReportScheduleWorker } from '../application/report-schedule.worker.js';
@@ -17,15 +18,18 @@ import { ExportRateLimiter, ReportCache } from '../infrastructure/cache/report-c
 import { SecretBox } from '../infrastructure/crypto/secret-box.js';
 import { type ReportMailer, TenantSmtpReportMailer } from '../infrastructure/mail/report-mailer.js';
 import { AuditRepository } from '../infrastructure/persistence/audit.repository.js';
+import { FleetReportRepository } from '../infrastructure/persistence/fleet-report.repository.js';
 import { ReportScheduleRepository } from '../infrastructure/persistence/report-schedule.repository.js';
 import { ReportRepository } from '../infrastructure/persistence/report.repository.js';
 import { TenantEmailSettingsRepository } from '../infrastructure/persistence/tenant-email-settings.repository.js';
+import { FleetReportsController } from './fleet-reports.controller.js';
 import { OperationsReportsController } from './operations-reports.controller.js';
 import { PlatformEmailSettingsController } from './platform-email-settings.controller.js';
 import { ReportSchedulesController } from './report-schedules.controller.js';
 import { ReportsController } from './reports.controller.js';
 import {
   EXPORT_RATE_LIMITER,
+  FLEET_REPORT_SERVICE,
   OPERATIONS_REPORT_SERVICE,
   REPORTING_CONFIG,
   REPORT_AUDIT_REPOSITORY,
@@ -172,6 +176,20 @@ export class ReportingModule {
         useFactory: (knex: unknown, cfg: ReportingConfig) =>
           new OperationsReportService(knex as never, cfg.REPORT_QUERY_TIMEOUT_MS),
       },
+      {
+        provide: FLEET_REPORT_SERVICE,
+        inject: [KNEX_TOKEN, EXPORT_RATE_LIMITER, REPORT_AUDIT_REPOSITORY],
+        useFactory: (knex: unknown, limiter: ExportRateLimiter, audit: AuditRepository) =>
+          new FleetReportService({
+            config,
+            repository: new FleetReportRepository({
+              knex: knex as never,
+              queryTimeoutMs: config.REPORT_QUERY_TIMEOUT_MS,
+            }),
+            exportLimiter: limiter,
+            audit,
+          }),
+      },
       ReportsController,
       OperationsReportsController,
       ReportSchedulesController,
@@ -182,6 +200,7 @@ export class ReportingModule {
       providers,
       controllers: [
         ReportsController,
+        FleetReportsController,
         OperationsReportsController,
         ReportSchedulesController,
         PlatformEmailSettingsController,
