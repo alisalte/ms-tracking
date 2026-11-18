@@ -208,8 +208,10 @@ export interface TemperatureEpisodeRow {
   readonly vehicleId: string;
   readonly label: string;
   readonly fleetName: string | null;
-  /** Probe id, e.g. `temp1` (Teltonika 1-Wire), `lls1Temp`, `cce2` (Meitrack slot 2). */
+  /** Probe id, e.g. `temp1` (Teltonika 1-Wire), `lls1Temp`, `cce2` (Meitrack slot 2), `ain1`. */
   readonly sensor: string;
+  /** Human name when it does not derive from the sensor id (configured analog sensors). */
+  readonly sensorLabel: string | null;
   readonly seq: number;
   /** HIGH = above the allowed maximum, LOW = below the allowed minimum. */
   readonly kind: 'HIGH' | 'LOW';
@@ -228,6 +230,7 @@ export interface TemperatureSensorStat {
   readonly vehicleId: string;
   readonly label: string;
   readonly sensor: string;
+  readonly sensorLabel: string | null;
   readonly readings: number;
   readonly minC: number;
   readonly maxC: number;
@@ -239,7 +242,33 @@ export function sensorLabel(sensor: string): string {
   if (m) return `T${m[1]}`;
   const lls = /^lls(\d)Temp$/.exec(sensor);
   if (lls) return `LLS${lls[1]}`;
+  if (/^ain\d+$/.test(sensor)) return sensor.toUpperCase();
+  if (sensor === 'canFuelLevelPct') return 'CAN';
+  if (sensor === 'cceFuel') return 'CCE';
   return sensor;
+}
+
+// ── Fuel ─────────────────────────────────────────────────────────────────────
+
+/** One fuel fill or drop as the API and the workbook lay it out. */
+export interface FuelEventRow {
+  readonly vehicleId: string;
+  readonly label: string;
+  readonly fleetName: string | null;
+  /** Sensor id, e.g. `ain2` (configured analog sender), `canFuelLevelPct`, `cceFuel`. */
+  readonly sensor: string;
+  readonly sensorLabel: string;
+  readonly seq: number;
+  readonly kind: 'FILL' | 'DROP';
+  readonly startedAt: string;
+  readonly endedAt: string;
+  readonly startPct: number;
+  readonly endPct: number;
+  readonly deltaPct: number;
+  /** Litres when the tank size is known (analog sensor with `tankLiters`). */
+  readonly deltaL: number | null;
+  /** Where the event began. */
+  readonly start: { readonly lat: number; readonly lng: number };
 }
 
 // ── Durations ────────────────────────────────────────────────────────────────
@@ -295,6 +324,14 @@ const T: Record<CsvLocale, Record<string, string>> = {
     lat: 'عرض جغرافیایی',
     lng: 'طول جغرافیایی',
     allowed: 'بازهٔ مجاز (°C)',
+    fuelTitle: 'سوخت',
+    fill: 'سوخت‌گیری',
+    drop: 'افت سوخت',
+    startLevel: 'سطح شروع (%)',
+    endLevel: 'سطح پایان (%)',
+    deltaPct: 'تغییر (%)',
+    deltaL: 'تغییر (لیتر)',
+    minDelta: 'حداقل تغییر (%)',
   },
   en: {
     period: 'Period:',
@@ -332,6 +369,14 @@ const T: Record<CsvLocale, Record<string, string>> = {
     lat: 'Latitude',
     lng: 'Longitude',
     allowed: 'Allowed range (°C)',
+    fuelTitle: 'Fuel',
+    fill: 'Refill',
+    drop: 'Fuel drop',
+    startLevel: 'Start level (%)',
+    endLevel: 'End level (%)',
+    deltaPct: 'Change (%)',
+    deltaL: 'Change (L)',
+    minDelta: 'Minimum change (%)',
   },
 };
 
@@ -466,7 +511,7 @@ export function temperatureSheet(
       ...rows.map((r): SheetCell[] => [
         r.seq,
         r.label,
-        sensorLabel(r.sensor),
+        r.sensorLabel ?? sensorLabel(r.sensor),
         r.kind === 'HIGH' ? t.high : t.low,
         ...shamsiCells(r.startedAt, REPORT_TIME_ZONE),
         ...shamsiCells(r.endedAt, REPORT_TIME_ZONE),
@@ -475,6 +520,55 @@ export function temperatureSheet(
         r.minC,
         r.maxC,
         r.avgC,
+        r.start.lat,
+        r.start.lng,
+      ]),
+    ],
+  };
+}
+
+export function fuelSheet(
+  rows: readonly FuelEventRow[],
+  win: SheetWindow,
+  minDeltaPct: number,
+  locale: CsvLocale,
+): SheetSpec {
+  const t = T[locale];
+  return {
+    name: t.fuelTitle as string,
+    rtl: locale === 'fa',
+    rows: [
+      [t.fuelTitle],
+      periodRow(locale, win.from, win.to),
+      [t.minDelta, minDeltaPct],
+      [],
+      [
+        t.no,
+        t.vehicle,
+        t.sensor,
+        t.kind,
+        t.startDate,
+        t.startTime,
+        t.endDate,
+        t.endTime,
+        t.startLevel,
+        t.endLevel,
+        t.deltaPct,
+        t.deltaL,
+        t.lat,
+        t.lng,
+      ],
+      ...rows.map((r): SheetCell[] => [
+        r.seq,
+        r.label,
+        r.sensorLabel,
+        r.kind === 'FILL' ? t.fill : t.drop,
+        ...shamsiCells(r.startedAt, REPORT_TIME_ZONE),
+        ...shamsiCells(r.endedAt, REPORT_TIME_ZONE),
+        r.startPct,
+        r.endPct,
+        r.deltaPct,
+        r.deltaL ?? '',
         r.start.lat,
         r.start.lng,
       ]),

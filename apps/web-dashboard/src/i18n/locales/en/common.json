@@ -1980,6 +1980,7 @@
       "highspeed": "High speeds",
       "mileage": "Mileage",
       "temperature": "Allowed temperature",
+      "fuel": "Fuel",
       "objects": "Objects"
     },
     "schedules": {
@@ -2061,6 +2062,7 @@
         "highspeed": "Every speeding run across the fleet, with the top speed and where it happened.",
         "mileage": "Kilometres per vehicle over the period, with fleet subtotals and a grand total.",
         "temperature": "Periods a cargo / fridge probe read outside the allowed range.",
+        "fuel": "Every refill and abnormal fuel-level drop, with the level before and after, litres when the tank size is known, and where it happened.",
         "objects": "Every vehicle with IMEI, SIM, last position and last message time; CSV export like the previous system."
       }
     },
@@ -2358,7 +2360,22 @@
       "sensorSummary_one": "Summary of {{count}} probe",
       "sensorSummary_other": "Summary of {{count}} probes",
       "readings_one": "{{count}} reading",
-      "readings_other": "{{count}} readings"
+      "readings_other": "{{count}} readings",
+      "minDeltaPct": "Minimum change (%)",
+      "fuelEvents": "Fuel events",
+      "refills": "Refills",
+      "fuelDrops": "Drops",
+      "filledTotal": "Total filled",
+      "droppedTotal": "Total dropped",
+      "refill": "Refill",
+      "fuelDrop": "Drop",
+      "levelBefore": "Level before",
+      "levelAfter": "Level after",
+      "deltaPct": "Change (%)",
+      "deltaL": "Litres",
+      "lastLevel": "last {{level}}",
+      "noFuelSensors": "No vehicle sent fuel-level data in this period.",
+      "noFuelEvents": "No refill or abnormal drop above the threshold in this period."
     },
     "objects": {
       "name": "Name",

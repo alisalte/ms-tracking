@@ -53,11 +53,23 @@ RUN pnpm --filter @fleetvision/map-engine-service... build
 # Pinned to an audited commit; pure-Rust build so the runtime needs no libs.
 FROM rust:1-slim-bookworm AS ecw2tiff
 ENV ECW2TIFF_COMMIT=b50288e
+
+
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
-    && git clone https://github.com/itamarwe/ecw2tiff /src \
-    && cd /src && git checkout "$ECW2TIFF_COMMIT" \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/itamarwe/ecw2tiff /src \
+    && cd /src \
+    && git checkout "$ECW2TIFF_COMMIT" \
     && cargo build --release --locked --no-default-features \
     && cp target/release/ecw2tiff /usr/local/bin/ecw2tiff
+
+
+#RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+ #   && git clone https://github.com/itamarwe/ecw2tiff /src \
+  #  && cd /src && git checkout "$ECW2TIFF_COMMIT" \
+   # && cargo build --release --locked --no-default-features \
+    #&& cp target/release/ecw2tiff /usr/local/bin/ecw2tiff
 
 # ---- Stage 2: runtime (non-root) -------------------------------------------
 # NOTE: the canonical base is `gcr.io/distroless/nodejs22-debian12:nonroot`

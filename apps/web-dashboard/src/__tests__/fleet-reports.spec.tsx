@@ -11,6 +11,7 @@ import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/auth/auth.store';
+import { FuelSection } from '@/components/reports/FuelSection';
 import { HighSpeedSection } from '@/components/reports/HighSpeedSection';
 import { MileageSection } from '@/components/reports/MileageSection';
 import { ObjectsSection } from '@/components/reports/ObjectsSection';
@@ -250,6 +251,154 @@ describe('TemperatureSection', () => {
     await waitFor(() =>
       expect(
         screen.getByText('No vehicle sent temperature probe data in this period.'),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('names a configured analog probe by its label', async () => {
+    apiGetRaw.mockResolvedValue(
+      response(
+        [
+          {
+            vehicleId: 'v1',
+            label: 'T 15-366 izst',
+            fleetName: null,
+            sensor: 'ain1',
+            sensorLabel: 'دمای یخچال',
+            seq: 1,
+            kind: 'LOW',
+            startedAt: '2026-08-31T20:32:27Z',
+            endedAt: '2026-08-31T21:02:27Z',
+            durationSec: 1800,
+            minC: -2.5,
+            maxC: 4.9,
+            avgC: 1,
+            readings: 30,
+            start: { lat: 35.8, lng: 50.9 },
+          },
+        ],
+        1,
+      ),
+    );
+    render(<TemperatureSection range={range} />, { wrapper });
+    await waitFor(() => expect(screen.getByText('دمای یخچال')).toBeInTheDocument());
+    expect(screen.queryByText('AIN1')).not.toBeInTheDocument();
+  });
+});
+
+describe('FuelSection', () => {
+  it('lists refills and drops with the level change and exports with the threshold', async () => {
+    apiGetRaw.mockImplementation(async (url: string) => {
+      if (url === '/reports/fuel') {
+        return {
+          from: '2026-08-31T20:30:00Z',
+          to: '2026-09-01T19:30:00Z',
+          minDeltaPct: 8,
+          truncated: false,
+          summary: {
+            eventCount: 2,
+            vehicleCount: 1,
+            fillCount: 1,
+            dropCount: 1,
+            vehiclesWithSensors: 1,
+            totalFilledL: 133.2,
+            totalDroppedL: 66.6,
+          },
+          sensors: [
+            {
+              vehicleId: 'v1',
+              label: 'T 15-366 izst',
+              sensor: 'ain3',
+              sensorLabel: 'مخزن ۲',
+              readings: 42,
+              minPct: 12.5,
+              maxPct: 76,
+              lastPct: 45.2,
+            },
+          ],
+          items: [
+            {
+              vehicleId: 'v1',
+              label: 'T 15-366 izst',
+              fleetName: null,
+              sensor: 'ain3',
+              sensorLabel: 'مخزن ۲',
+              seq: 1,
+              kind: 'FILL',
+              startedAt: '2026-09-01T06:00:00Z',
+              endedAt: '2026-09-01T06:10:00Z',
+              startPct: 12.5,
+              endPct: 52.5,
+              deltaPct: 40,
+              deltaL: 133.2,
+              start: { lat: 35.8, lng: 50.9 },
+            },
+            {
+              vehicleId: 'v1',
+              label: 'T 15-366 izst',
+              fleetName: null,
+              sensor: 'ain3',
+              sensorLabel: 'مخزن ۲',
+              seq: 2,
+              kind: 'DROP',
+              startedAt: '2026-09-01T12:00:00Z',
+              endedAt: '2026-09-01T12:10:00Z',
+              startPct: 62.5,
+              endPct: 42.5,
+              deltaPct: -20,
+              deltaL: 66.6,
+              start: { lat: 35.8, lng: 50.9 },
+            },
+          ],
+        };
+      }
+      return null;
+    });
+    render(<FuelSection range={range} />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText('T 15-366 izst').length).toBeGreaterThan(1));
+    expect(apiGetRaw).toHaveBeenCalledWith(
+      '/reports/fuel',
+      expect.objectContaining({ preset: 'today', minDeltaPct: 8 }),
+    );
+    expect(screen.getByText('Refill')).toBeInTheDocument();
+    expect(screen.getByText('Drop')).toBeInTheDocument();
+    expect(screen.getByText('+40.0 %')).toBeInTheDocument();
+    expect(screen.getByText('-20.0 %')).toBeInTheDocument();
+    expect(screen.getByText(/Total filled: 133\.2 L/)).toBeInTheDocument();
+    expect(screen.getByText(/Total dropped: 66\.6 L/)).toBeInTheDocument();
+    expect(screen.getAllByText('مخزن ۲').length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /Export Excel/ }));
+    await waitFor(() =>
+      expect(apiGetBlob).toHaveBeenCalledWith(
+        '/reports/workbook/fuel',
+        expect.objectContaining({ preset: 'today', minDeltaPct: 8, lang: 'en' }),
+      ),
+    );
+  });
+
+  it('says when no vehicle sent fuel-level data', async () => {
+    apiGetRaw.mockResolvedValue({
+      from: '2026-08-31T20:30:00Z',
+      to: '2026-09-01T19:30:00Z',
+      minDeltaPct: 8,
+      truncated: false,
+      summary: {
+        eventCount: 0,
+        vehicleCount: 0,
+        fillCount: 0,
+        dropCount: 0,
+        vehiclesWithSensors: 0,
+        totalFilledL: null,
+        totalDroppedL: null,
+      },
+      sensors: [],
+      items: [],
+    });
+    render(<FuelSection range={range} />, { wrapper });
+    await waitFor(() =>
+      expect(
+        screen.getByText('No vehicle sent fuel-level data in this period.'),
       ).toBeInTheDocument(),
     );
   });

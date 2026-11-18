@@ -17,6 +17,7 @@ import { CommandsReportSection } from '@/components/reports/CommandsReportSectio
 import { DevicesSection } from '@/components/reports/DevicesSection';
 import { DistanceSection } from '@/components/reports/DistanceSection';
 import { DriversSection } from '@/components/reports/DriversSection';
+import { FuelSection } from '@/components/reports/FuelSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { HighSpeedSection } from '@/components/reports/HighSpeedSection';
 import { MileageSection } from '@/components/reports/MileageSection';
@@ -87,6 +88,7 @@ export function ReportsPage() {
       {section === 'highspeed' && <HighSpeedSection range={range} />}
       {section === 'mileage' && <MileageSection range={range} />}
       {section === 'temperature' && <TemperatureSection range={range} />}
+      {section === 'fuel' && <FuelSection range={range} />}
       {section === 'stops' && <StopsSection range={range} />}
       {section === 'operation' && <OperationSection range={range} />}
       {section === 'odometer' && <OdometerSection range={range} />}

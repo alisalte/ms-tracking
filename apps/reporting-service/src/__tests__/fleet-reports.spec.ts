@@ -4,6 +4,7 @@ import {
   buildMileageReport,
   fleetOverspeedEpisodes,
   formatDuration,
+  fuelSheet,
   mileageSheet,
   objectCells,
   objectsHeader,
@@ -12,6 +13,12 @@ import {
   sensorLabel,
   temperatureSheet,
 } from '../domain/fleet-reports.js';
+import {
+  analogTemperatureEpisodes,
+  buildFuelEvents,
+  calibrateVolts,
+  parseIoSensors,
+} from '../domain/sensor-reports.js';
 import type { SpeedFix } from '../domain/speeding-events.js';
 
 const t0 = Date.parse('2026-08-31T03:00:00Z');
@@ -245,6 +252,208 @@ describe('objects list', () => {
       '',
       '1405/05/29 08:48:30',
       '1405/05/29 08:48:32',
+    ]);
+  });
+});
+
+describe('analog sensors', () => {
+  const points = [
+    { v: 0, value: 0 },
+    { v: 10, value: 100 },
+  ];
+
+  it('calibrates piecewise linearly and holds the calibrated ends', () => {
+    expect(calibrateVolts(points, 5)).toBe(50);
+    expect(calibrateVolts(points, -1)).toBe(0);
+    expect(calibrateVolts(points, 12)).toBe(100);
+    expect(calibrateVolts([], 5)).toBeNull();
+  });
+
+  it('keeps only well-formed io_sensors entries', () => {
+    expect(
+      parseIoSensors([
+        { input: 'ain1', kind: 'temperature', label: 'Fridge', points },
+        { input: 'ain2', kind: 'fuel', tankLiters: 500, points },
+        { input: 'ain3', kind: 'nope', points },
+        { input: 'ain4', kind: 'fuel', points: [{ v: 0, value: 0 }] },
+      ]),
+    ).toEqual([
+      { input: 'ain1', kind: 'temperature', label: 'Fridge', tankLiters: null, points },
+      { input: 'ain2', kind: 'fuel', label: null, tankLiters: 500, points },
+    ]);
+  });
+
+  it('turns analog volts into out-of-range temperature periods', () => {
+    const config = [
+      {
+        input: 'ain1',
+        kind: 'temperature',
+        label: 'دمای یخچال',
+        points: [
+          { v: 0, value: 0 },
+          { v: 10, value: 20 },
+        ],
+      },
+    ];
+    const row = (min: number, volts: number) => ({
+      vehicleId: 'v1',
+      at: new Date(t0 + min * 60_000),
+      lat: 35.6,
+      lng: 51.4,
+      analog: { ain1: volts },
+      ioSensors: config,
+    });
+    const result = analogTemperatureEpisodes(
+      [row(0, 7.5), row(1, 8.5), row(2, 9), row(3, 7.5)],
+      { minC: null, maxC: 16 },
+      0,
+    );
+    expect(result.sensors).toEqual([
+      {
+        vehicleId: 'v1',
+        sensor: 'ain1',
+        sensorLabel: 'دمای یخچال',
+        readings: 4,
+        minC: 15,
+        maxC: 18,
+      },
+    ]);
+    expect(result.episodes).toHaveLength(1);
+    const episode = result.episodes[0];
+    expect(episode?.kind).toBe('HIGH');
+    expect(episode?.startedAt).toEqual(new Date(t0 + 60_000));
+    expect(episode?.endedAt).toEqual(new Date(t0 + 3 * 60_000));
+    expect([episode?.minC, episode?.maxC, episode?.avgC, episode?.readings]).toEqual([
+      17, 18, 17.5, 2,
+    ]);
+  });
+});
+
+describe('buildFuelEvents', () => {
+  const config = [
+    {
+      input: 'ain2',
+      kind: 'fuel',
+      label: 'باک اصلی',
+      tankLiters: 500,
+      points: [
+        { v: 0, value: 0 },
+        { v: 10, value: 100 },
+      ],
+    },
+  ];
+  const row = (min: number, volts: number) => ({
+    vehicleId: 'v1',
+    at: new Date(t0 + min * 60_000),
+    lat: 35.6,
+    lng: 51.4,
+    analog: { ain2: volts },
+    fuel: null,
+    cceFuelPct: null,
+    ioSensors: config,
+  });
+
+  it('reports a refill and an abnormal drop in percent and litres', () => {
+    const { events, sensors } = buildFuelEvents(
+      [row(0, 5), row(2, 5.1), row(4, 7), row(6, 4), row(20, 4.1)],
+      { minDeltaPct: 8 },
+    );
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      kind: 'FILL',
+      startPct: 50,
+      endPct: 70,
+      deltaPct: 20,
+      deltaL: 100,
+      sensorLabel: 'باک اصلی',
+    });
+    expect(events[0]?.startedAt).toEqual(new Date(t0));
+    expect(events[0]?.endedAt).toEqual(new Date(t0 + 4 * 60_000));
+    expect(events[1]).toMatchObject({ kind: 'DROP', deltaPct: -30, deltaL: -150 });
+    expect(sensors).toEqual([
+      {
+        vehicleId: 'v1',
+        sensor: 'ain2',
+        sensorLabel: 'باک اصلی',
+        readings: 5,
+        minPct: 40,
+        maxPct: 70,
+        lastPct: 41,
+      },
+    ]);
+  });
+
+  it('ignores normal consumption and readings across a long gap', () => {
+    const { events } = buildFuelEvents([row(0, 5), row(5, 4.95), row(10, 4.9), row(60, 4.5)], {
+      minDeltaPct: 8,
+    });
+    expect(events).toEqual([]);
+  });
+
+  it('uses the CAN and CCE percentages when there is no analog sender', () => {
+    const base = {
+      vehicleId: 'v2',
+      lat: 35.6,
+      lng: 51.4,
+      analog: null,
+      ioSensors: null,
+    };
+    const { events, sensors } = buildFuelEvents(
+      [
+        { ...base, at: new Date(t0), fuel: { canFuelLevelPct: 30 }, cceFuelPct: null },
+        { ...base, at: new Date(t0 + 60_000), fuel: { canFuelLevelPct: 55 }, cceFuelPct: 25 },
+        { ...base, at: new Date(t0 + 120_000), fuel: { canFuelLevelPct: 55 }, cceFuelPct: 25 },
+      ],
+      { minDeltaPct: 10 },
+    );
+    expect(events.map((e) => [e.sensor, e.kind, e.deltaPct])).toEqual([
+      ['canFuelLevelPct', 'FILL', 25],
+    ]);
+    expect(sensors.map((s) => s.sensor).sort()).toEqual(['canFuelLevelPct', 'cceFuel']);
+  });
+});
+
+describe('fuel sheet', () => {
+  it('lays out a refill with its start and end level', () => {
+    const sheet = fuelSheet(
+      [
+        {
+          vehicleId: 'v',
+          label: 'T 15-612',
+          fleetName: null,
+          sensor: 'ain2',
+          sensorLabel: 'باک اصلی',
+          seq: 1,
+          kind: 'FILL',
+          startedAt: '2026-09-01T03:00:00Z',
+          endedAt: '2026-09-01T03:04:00Z',
+          startPct: 50,
+          endPct: 70,
+          deltaPct: 20,
+          deltaL: 100,
+          start: { lat: 35.6, lng: 51.4 },
+        },
+      ],
+      { from: new Date('2026-08-31T20:30:00Z'), to: new Date('2026-09-01T19:30:00Z') },
+      8,
+      'fa',
+    );
+    expect(sheet.rows[2]).toEqual(['حداقل تغییر (%)', 8]);
+    expect(sheet.rows[5]).toEqual([
+      1,
+      'T 15-612',
+      'باک اصلی',
+      'سوخت‌گیری',
+      '1405/06/10',
+      '06:30:00',
+      '1405/06/10',
+      '06:34:00',
+      50,
+      70,
+      20,
+      100,
+      35.6,
+      51.4,
     ]);
   });
 });

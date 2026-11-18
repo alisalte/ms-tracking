@@ -590,6 +590,8 @@ export interface TemperatureRowWire {
   label: string;
   fleetName: string | null;
   sensor: string;
+  /** Configured analog sensor name (`AIN1` / the label set on the vehicle). */
+  sensorLabel: string | null;
   seq: number;
   kind: 'HIGH' | 'LOW';
   startedAt: string;
@@ -621,11 +623,57 @@ export interface TemperatureReportResponse {
     vehicleId: string;
     label: string;
     sensor: string;
+    sensorLabel: string | null;
     readings: number;
     minC: number;
     maxC: number;
   }>;
   items: TemperatureRowWire[];
+}
+
+export interface FuelRowWire {
+  vehicleId: string;
+  label: string;
+  fleetName: string | null;
+  sensor: string;
+  sensorLabel: string;
+  seq: number;
+  kind: 'FILL' | 'DROP';
+  startedAt: string;
+  endedAt: string;
+  startPct: number;
+  endPct: number;
+  deltaPct: number;
+  /** Litres when the tank size is configured; null otherwise. */
+  deltaL: number | null;
+  start: { lat: number; lng: number };
+}
+
+export interface FuelReportResponse {
+  from: string;
+  to: string;
+  minDeltaPct: number;
+  truncated: boolean;
+  summary: {
+    eventCount: number;
+    vehicleCount: number;
+    fillCount: number;
+    dropCount: number;
+    vehiclesWithSensors: number;
+    totalFilledL: number | null;
+    totalDroppedL: number | null;
+  };
+  sensors: Array<{
+    vehicleId: string;
+    label: string;
+    sensor: string;
+    sensorLabel: string;
+    readings: number;
+    minPct: number;
+    maxPct: number;
+    lastPct: number;
+  }>;
+  items: FuelRowWire[];
 }
 
 function scopeParams(scope: FleetScope) {
@@ -682,9 +730,24 @@ export function useTemperatureReport(
   });
 }
 
+export function useFuelReport(
+  range: ReportRange,
+  scope: FleetScope,
+  opts: { minDeltaPct: number },
+) {
+  return useQuery({
+    queryKey: ['reports', 'fuel', range, scope, opts],
+    queryFn: () =>
+      apiGetRaw<FuelReportResponse>(
+        '/reports/fuel',
+        rangeParams(range, { ...scopeParams(scope), ...opts }),
+      ),
+  });
+}
+
 /** Excel download of a fleet-wide report (Shamsi dates; Persian or English headers). */
 export async function exportFleetWorkbook(
-  report: 'overspeed' | 'mileage' | 'temperature' | 'objects',
+  report: 'overspeed' | 'mileage' | 'temperature' | 'fuel' | 'objects',
   range: ReportRange,
   params: Record<string, unknown>,
   lang: 'fa' | 'en',

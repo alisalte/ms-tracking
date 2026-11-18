@@ -39,7 +39,13 @@ function sensorName(sensor: string): string {
   const m = /^(?:temp|cce)(\d+)$/.exec(sensor);
   if (m) return `T${m[1]}`;
   const lls = /^lls(\d)Temp$/.exec(sensor);
-  return lls ? `LLS${lls[1]}` : sensor;
+  if (lls) return `LLS${lls[1]}`;
+  if (/^ain\d+$/.test(sensor)) return sensor.toUpperCase();
+  return sensor;
+}
+
+function probeName(sensor: string, label: string | null): string {
+  return label ?? sensorName(sensor);
 }
 
 const celsius = (c: number | null) => (c === null ? '—' : `${c.toFixed(1)} °C`);
@@ -59,7 +65,11 @@ export function TemperatureSection({ range }: { range: ReportRange }) {
   const columns: Column<TemperatureRowWire>[] = [
     { id: 'seq', header: '#', render: (r) => String(r.seq) },
     { id: 'label', headerKey: 'reports.fleet.vehicleName', render: (r) => r.label },
-    { id: 'sensor', headerKey: 'reports.fleet.sensor', render: (r) => sensorName(r.sensor) },
+    {
+      id: 'sensor',
+      headerKey: 'reports.fleet.sensor',
+      render: (r) => probeName(r.sensor, r.sensorLabel),
+    },
     {
       id: 'kind',
       headerKey: 'reports.fleet.kind',
@@ -217,7 +227,7 @@ export function TemperatureSection({ range }: { range: ReportRange }) {
                       className="flex flex-wrap justify-between gap-3 border-b border-gray-100 py-1 last:border-b-0 dark:border-white/5"
                     >
                       <span>
-                        {s.label} · {sensorName(s.sensor)}
+                        {s.label} · {probeName(s.sensor, s.sensorLabel)}
                       </span>
                       <span dir="ltr">
                         {celsius(s.minC)} … {celsius(s.maxC)}

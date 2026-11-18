@@ -694,6 +694,9 @@ services:
     build:
       context: ../..
       dockerfile: apps/map-engine-service/Dockerfile
+      network: host
+      entitlements:
+      - network.host
     container_name: fleetvision-map-engine
     restart: unless-stopped
     depends_on:

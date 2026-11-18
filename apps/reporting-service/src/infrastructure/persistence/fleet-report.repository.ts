@@ -17,6 +17,7 @@ import {
   type TemperatureSensorStat,
   type VehicleRef,
 } from '../../domain/fleet-reports.js';
+import type { AnalogTemperatureRow, FuelReadingRow } from '../../domain/sensor-reports.js';
 import {
   MAX_PLAUSIBLE_KMH,
   type SpeedFix,
@@ -45,6 +46,7 @@ export interface FleetOverspeedData {
 export interface TemperatureEpisodeDbRow {
   readonly vehicleId: string;
   readonly sensor: string;
+  readonly sensorLabel: string | null;
   readonly kind: 'HIGH' | 'LOW';
   readonly startedAt: Date;
   readonly endedAt: Date;
@@ -60,6 +62,17 @@ export interface TemperatureData {
   readonly vehicles: readonly VehicleRef[];
   readonly episodes: readonly TemperatureEpisodeDbRow[];
   readonly sensors: readonly TemperatureSensorStat[];
+  readonly truncated: boolean;
+}
+
+export interface AnalogTemperatureData {
+  readonly rows: readonly AnalogTemperatureRow[];
+  readonly truncated: boolean;
+}
+
+export interface FuelReadingsData {
+  readonly vehicles: readonly VehicleRef[];
+  readonly rows: readonly FuelReadingRow[];
   readonly truncated: boolean;
 }
 
@@ -355,6 +368,7 @@ export class FleetReportRepository {
         episodes: episodeRows.slice(0, episodeCap).map((r) => ({
           vehicleId: String(r.vehicle_id),
           sensor: String(r.sensor),
+          sensorLabel: null,
           kind: r.kind === 'LOW' ? 'LOW' : 'HIGH',
           startedAt: new Date(String(r.started_at)),
           endedAt: new Date(String(r.ended_at)),
@@ -369,6 +383,7 @@ export class FleetReportRepository {
           vehicleId: String(r.vehicle_id),
           label: label.get(String(r.vehicle_id)) ?? String(r.vehicle_id),
           sensor: String(r.sensor),
+          sensorLabel: null,
           readings: Number(r.readings),
           minC: round2(Number(r.min_c)),
           maxC: round2(Number(r.max_c)),
@@ -376,6 +391,103 @@ export class FleetReportRepository {
       };
     });
   }
+  // ── Analog probes / fuel level ──────────────────────────────────────────────
+
+  /**
+   * Raw analog-input readings of vehicles that carry an `io_sensors` mapping.
+   * Volts → °C and the out-of-range runs are computed in the domain.
+   */
+  public async analogTemperature(
+    tenantId: string,
+    win: TimeWindow,
+    filter: VehicleFilter,
+    rowCap: number,
+  ): Promise<AnalogTemperatureData> {
+    return this.query(async (trx) => {
+      const vehicles = await this.vehicles(trx, tenantId, filter);
+      if (vehicles.length === 0) return { rows: [], truncated: false };
+      const ids = vehicles.map((v) => v.vehicleId);
+      const rows = (
+        await trx.raw(
+          `SELECT p.vehicle_id, p.captured_at, p.latitude, p.longitude,
+                  p.metadata->'analog' AS analog, v.io_sensors
+           FROM tracking.vehicle_positions p
+           JOIN fleet.vehicles v ON v.id = p.vehicle_id AND v.tenant_id = p.tenant_id
+           WHERE p.tenant_id = ?::uuid AND p.vehicle_id = ANY(?::uuid[])
+             AND p.quality <> 0
+             AND p.captured_at >= ? AND p.captured_at < ?
+             AND jsonb_exists(p.metadata, 'analog')
+             AND v.io_sensors IS NOT NULL
+           ORDER BY p.vehicle_id, p.captured_at
+           LIMIT ?`,
+          [tenantId, ids, win.from, win.to, rowCap + 1],
+        )
+      ).rows as Array<Record<string, unknown>>;
+      return {
+        rows: rows.slice(0, rowCap).map((r) => ({
+          vehicleId: String(r.vehicle_id),
+          at: new Date(r.captured_at as string | Date),
+          lat: Number(r.latitude),
+          lng: Number(r.longitude),
+          analog: jsonObject(r.analog),
+          ioSensors: r.io_sensors,
+        })),
+        truncated: rows.length > rowCap,
+      };
+    });
+  }
+
+  /**
+   * Raw fuel-level readings of every vehicle in scope: analog fuel senders are
+   * calibrated in the domain, CAN / CCE percentages are read as stored.
+   */
+  public async fuelReadings(
+    tenantId: string,
+    win: TimeWindow,
+    filter: VehicleFilter,
+    rowCap: number,
+  ): Promise<FuelReadingsData> {
+    return this.query(async (trx) => {
+      const vehicles = await this.vehicles(trx, tenantId, filter);
+      if (vehicles.length === 0) return { vehicles, rows: [], truncated: false };
+      const ids = vehicles.map((v) => v.vehicleId);
+      const rows = (
+        await trx.raw(
+          `SELECT p.vehicle_id, p.captured_at, p.latitude, p.longitude,
+                  p.metadata->'analog' AS analog, p.metadata->'fuel' AS fuel,
+                  CASE WHEN jsonb_typeof(p.metadata #> '{cce,status,fuelPct}') = 'number'
+                       THEN (p.metadata #>> '{cce,status,fuelPct}')::float8 END AS cce_fuel_pct,
+                  v.io_sensors
+           FROM tracking.vehicle_positions p
+           JOIN fleet.vehicles v ON v.id = p.vehicle_id AND v.tenant_id = p.tenant_id
+           WHERE p.tenant_id = ?::uuid AND p.vehicle_id = ANY(?::uuid[])
+             AND p.quality <> 0
+             AND p.captured_at >= ? AND p.captured_at < ?
+             AND (jsonb_exists(p.metadata, 'fuel')
+                  OR (jsonb_exists(p.metadata, 'analog') AND v.io_sensors IS NOT NULL)
+                  OR jsonb_typeof(p.metadata #> '{cce,status,fuelPct}') = 'number')
+           ORDER BY p.vehicle_id, p.captured_at
+           LIMIT ?`,
+          [tenantId, ids, win.from, win.to, rowCap + 1],
+        )
+      ).rows as Array<Record<string, unknown>>;
+      return {
+        vehicles,
+        rows: rows.slice(0, rowCap).map((r) => ({
+          vehicleId: String(r.vehicle_id),
+          at: new Date(r.captured_at as string | Date),
+          lat: Number(r.latitude),
+          lng: Number(r.longitude),
+          analog: jsonObject(r.analog),
+          fuel: jsonObject(r.fuel),
+          cceFuelPct: finiteOrNull(r.cce_fuel_pct),
+          ioSensors: r.io_sensors,
+        })),
+        truncated: rows.length > rowCap,
+      };
+    });
+  }
+
   // ── Objects (live status) ──────────────────────────────────────────────────
 
   /**
@@ -454,6 +566,24 @@ export class FleetReportRepository {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function jsonObject(value: unknown): Record<string, unknown> | null {
+  let v = value;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+
+function finiteOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 
 function asArray(value: unknown): Array<Record<string, unknown>> {
   const v = typeof value === 'string' ? (JSON.parse(value) as unknown) : value;

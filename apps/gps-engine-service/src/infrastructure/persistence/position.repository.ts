@@ -1,4 +1,5 @@
 import type { Knex } from '@fleetvision/persistence-knex';
+import { ioReadings } from '../../domain/io-readings.js';
 import type { PositionEvent } from '../../domain/position-event.js';
 import { probeTemperatures } from '../../domain/probe-temperatures.js';
 import { QUALITY_CODE } from '../../domain/quality.js';
@@ -78,6 +79,11 @@ export class PositionRepository {
       (event.metadata as { fmbIo?: FmbIoPanel | null } | undefined)?.fmbIo,
       event.capturedAt,
     );
+    // Analog / fuel readings of this fix: the temperature and fuel reports read them.
+    const readings = ioReadings(
+      (event.metadata as { fmbIo?: FmbIoPanel | null } | undefined)?.fmbIo,
+      event.capturedAt,
+    );
     const geom = `SRID=4326;POINT(${event.longitude} ${event.latitude})`;
     await this.knex
       .withSchema(SCHEMA)
@@ -104,6 +110,8 @@ export class PositionRepository {
             // The live I/O panel is a snapshot (Redis + websocket), not history.
             ...withoutFmbIo(event.metadata),
             ...(temps ? { temps } : {}),
+            ...(readings?.analog ? { analog: readings.analog } : {}),
+            ...(readings?.fuel ? { fuel: readings.fuel } : {}),
           }),
         ]),
       })

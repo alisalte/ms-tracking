@@ -10,11 +10,13 @@ import type { ReportingConfig } from '../config/reporting.config.js';
 import type { CsvLocale } from '../domain/csv-locale.js';
 import { csvDocument } from '../domain/csv.js';
 import {
+  type FuelEventRow,
   type OverspeedEpisodeRow,
   type TemperatureBounds,
   type TemperatureEpisodeRow,
   buildMileageReport,
   fleetOverspeedEpisodes,
+  fuelSheet,
   mileageSheet,
   objectCells,
   objectsHeader,
@@ -24,6 +26,7 @@ import {
   temperatureSheet,
 } from '../domain/fleet-reports.js';
 import { parseReportWindow, reportWindowErrorMessage } from '../domain/report-window.js';
+import { analogTemperatureEpisodes, buildFuelEvents } from '../domain/sensor-reports.js';
 import { type SheetSpec, buildXlsxWorkbook } from '../domain/xlsx.js';
 import type { ExportRateLimiter } from '../infrastructure/cache/report-cache.js';
 import type { FleetReportRepository } from '../infrastructure/persistence/fleet-report.repository.js';
@@ -32,13 +35,23 @@ import { ReportInputError } from './report.service.js';
 
 /** Default limit of the high-speed report (km/h). */
 export const OVERSPEED_DEFAULT_LIMIT_KMH = 90;
+/** Default level change that counts as a fill / drop (percent). */
+export const FUEL_DEFAULT_DELTA_PCT = 8;
 /** Over-limit fixes read for one fleet-wide request. */
 const OVERSPEED_FIX_CAP = 100_000;
 /** Out-of-range periods returned by one request. */
 const TEMPERATURE_EPISODE_CAP = 20_000;
+/** Analog-input rows read for the temperature report. */
+const TEMPERATURE_ANALOG_ROW_CAP = 200_000;
+/** Fuel-level rows read for one request. */
+const FUEL_READING_CAP = 200_000;
+/** Fuel fills / drops returned by one request. */
+const FUEL_EVENT_CAP = 20_000;
 
-export const FLEET_REPORTS = ['overspeed', 'mileage', 'temperature', 'objects'] as const;
+export const FLEET_REPORTS = ['overspeed', 'mileage', 'temperature', 'fuel', 'objects'] as const;
 export type FleetReportId = (typeof FLEET_REPORTS)[number];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export interface FleetReportQuery {
   preset?: string | undefined;
@@ -51,6 +64,7 @@ export interface FleetReportQuery {
   hideZero?: unknown;
   minC?: unknown;
   maxC?: unknown;
+  minDeltaPct?: unknown;
 }
 
 export interface FleetReportServiceDeps {
@@ -139,15 +153,26 @@ export class FleetReportService {
       minDurationSec,
       TEMPERATURE_EPISODE_CAP,
     );
+    const analog = await this.deps.repository.analogTemperature(
+      tenantId,
+      win,
+      filter,
+      TEMPERATURE_ANALOG_ROW_CAP,
+    );
+    const analogResult = analogTemperatureEpisodes(analog.rows, bounds, minDurationSec);
     const vehicle = new Map(data.vehicles.map((v) => [v.vehicleId, v]));
-    const seqByVehicle = new Map<string, number>();
-    const items: TemperatureEpisodeRow[] = data.episodes
+    const ordered = [...data.episodes, ...analogResult.episodes]
       .map((e) => ({ e, v: vehicle.get(e.vehicleId) }))
       .sort(
         (a, b) =>
           (a.v?.label ?? '').localeCompare(b.v?.label ?? '', 'en', { numeric: true }) ||
           a.e.startedAt.getTime() - b.e.startedAt.getTime(),
-      )
+      );
+    const truncated =
+      data.truncated || analog.truncated || ordered.length > TEMPERATURE_EPISODE_CAP;
+    const seqByVehicle = new Map<string, number>();
+    const items: TemperatureEpisodeRow[] = ordered
+      .slice(0, TEMPERATURE_EPISODE_CAP)
       .map(({ e, v }) => {
         const seq = (seqByVehicle.get(e.vehicleId) ?? 0) + 1;
         seqByVehicle.set(e.vehicleId, seq);
@@ -156,6 +181,7 @@ export class FleetReportService {
           label: v?.label ?? e.vehicleId,
           fleetName: v?.fleetName ?? null,
           sensor: e.sensor,
+          sensorLabel: e.sensorLabel,
           seq,
           kind: e.kind,
           startedAt: e.startedAt.toISOString(),
@@ -168,22 +194,100 @@ export class FleetReportService {
           start: { lat: e.startLat, lng: e.startLng },
         };
       });
+    const sensors = [
+      ...data.sensors,
+      ...analogResult.sensors.map((s) => ({
+        vehicleId: s.vehicleId,
+        label: vehicle.get(s.vehicleId)?.label ?? s.vehicleId,
+        sensor: s.sensor,
+        sensorLabel: s.sensorLabel,
+        readings: s.readings,
+        minC: s.minC,
+        maxC: s.maxC,
+      })),
+    ];
     return {
       from: win.from.toISOString(),
       to: win.to.toISOString(),
       minC: bounds.minC,
       maxC: bounds.maxC,
       minDurationSec,
-      truncated: data.truncated,
+      truncated,
       summary: {
         episodeCount: items.length,
         vehicleCount: seqByVehicle.size,
-        vehiclesWithSensors: new Set(data.sensors.map((s) => s.vehicleId)).size,
+        vehiclesWithSensors: new Set(sensors.map((s) => s.vehicleId)).size,
         totalDurationSec: items.reduce((s, r) => s + r.durationSec, 0),
         highestC: items.length > 0 ? Math.max(...items.map((r) => r.maxC)) : null,
         lowestC: items.length > 0 ? Math.min(...items.map((r) => r.minC)) : null,
       },
-      sensors: data.sensors,
+      sensors,
+      items,
+    };
+  }
+
+  /** Fuel: every refill and abnormal level drop of every vehicle in scope. */
+  public async fuel(tenantId: string, q: FleetReportQuery) {
+    const win = this.window(q);
+    const filter = this.filter(q);
+    const minDeltaPct = this.number(q.minDeltaPct, FUEL_DEFAULT_DELTA_PCT, 1, 100, 'minDeltaPct');
+    const data = await this.deps.repository.fuelReadings(tenantId, win, filter, FUEL_READING_CAP);
+    const result = buildFuelEvents(data.rows, { minDeltaPct });
+    const vehicle = new Map(data.vehicles.map((v) => [v.vehicleId, v]));
+    const ordered = result.events
+      .map((e) => ({ e, v: vehicle.get(e.vehicleId) }))
+      .sort(
+        (a, b) =>
+          (a.v?.label ?? '').localeCompare(b.v?.label ?? '', 'en', { numeric: true }) ||
+          a.e.startedAt.getTime() - b.e.startedAt.getTime(),
+      );
+    const truncated = data.truncated || ordered.length > FUEL_EVENT_CAP;
+    const seqByVehicle = new Map<string, number>();
+    const items: FuelEventRow[] = ordered.slice(0, FUEL_EVENT_CAP).map(({ e, v }) => {
+      const seq = (seqByVehicle.get(e.vehicleId) ?? 0) + 1;
+      seqByVehicle.set(e.vehicleId, seq);
+      return {
+        vehicleId: e.vehicleId,
+        label: v?.label ?? e.vehicleId,
+        fleetName: v?.fleetName ?? null,
+        sensor: e.sensor,
+        sensorLabel: e.sensorLabel,
+        seq,
+        kind: e.kind,
+        startedAt: e.startedAt.toISOString(),
+        endedAt: e.endedAt.toISOString(),
+        startPct: e.startPct,
+        endPct: e.endPct,
+        deltaPct: e.deltaPct,
+        deltaL: e.deltaL,
+        start: { lat: e.startLat, lng: e.startLng },
+      };
+    });
+    const liters = (kind: 'FILL' | 'DROP'): number | null => {
+      const values = items
+        .filter((i) => i.kind === kind && i.deltaL !== null)
+        .map((i) => Math.abs(i.deltaL ?? 0));
+      return values.length > 0 ? round2(values.reduce((s, v) => s + v, 0)) : null;
+    };
+    const sensors = result.sensors.map((s) => ({
+      ...s,
+      label: vehicle.get(s.vehicleId)?.label ?? s.vehicleId,
+    }));
+    return {
+      from: win.from.toISOString(),
+      to: win.to.toISOString(),
+      minDeltaPct,
+      truncated,
+      summary: {
+        eventCount: items.length,
+        vehicleCount: seqByVehicle.size,
+        fillCount: items.filter((i) => i.kind === 'FILL').length,
+        dropCount: items.filter((i) => i.kind === 'DROP').length,
+        vehiclesWithSensors: new Set(sensors.map((s) => s.vehicleId)).size,
+        totalFilledL: liters('FILL'),
+        totalDroppedL: liters('DROP'),
+      },
+      sensors,
       items,
     };
   }
@@ -257,12 +361,21 @@ export class FleetReportService {
       const r = await this.objects(tenantId, q);
       sheet = objectsSheet(r.items, locale);
       rowCount = r.items.length;
-    } else {
+    } else if (report === 'temperature') {
       const r = await this.temperature(tenantId, q);
       sheet = temperatureSheet(
         r.items,
         { from: new Date(r.from), to: new Date(r.to) },
         { minC: r.minC, maxC: r.maxC },
+        locale,
+      );
+      rowCount = r.items.length;
+    } else {
+      const r = await this.fuel(tenantId, q);
+      sheet = fuelSheet(
+        r.items,
+        { from: new Date(r.from), to: new Date(r.to) },
+        r.minDeltaPct,
         locale,
       );
       rowCount = r.items.length;

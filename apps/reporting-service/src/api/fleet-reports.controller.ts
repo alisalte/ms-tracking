@@ -4,9 +4,10 @@
  *   GET /api/v1/reports/overspeed            — high speeds of every vehicle (limitKmh, minDurationSec)
  *   GET /api/v1/reports/mileage              — km per vehicle, fleet subtotals, grand total (hideZero)
  *   GET /api/v1/reports/temperature          — probe readings outside the allowed band (minC, maxC, minDurationSec)
+ *   GET /api/v1/reports/fuel                 — refills and abnormal level drops (minDeltaPct)
  *   GET /api/v1/reports/objects              — every vehicle with its tracker and newest fix (live status)
  *   GET /api/v1/reports/objects/csv          — the same as CSV in the legacy column order (report.export)
- *   GET /api/v1/reports/workbook/:report     — any of the four as .xlsx (lang=fa|en; report.export)
+ *   GET /api/v1/reports/workbook/:report     — any of the five as .xlsx (lang=fa|en; report.export)
  *
  * Every endpoint takes the shared window (preset | from+to) and the optional
  * vehicleId / fleetId filter. Tenant always from the verified principal.
@@ -56,6 +57,12 @@ export class FleetReportsController {
   @RequirePermissions('report.read')
   public async objects(@CurrentTenant() tenantId: string, @Query() q: FleetReportQuery) {
     return this.guard(() => this.reports.objects(tenantId, pick(q)));
+  }
+
+  @Get('fuel')
+  @RequirePermissions('report.read')
+  public async fuel(@CurrentTenant() tenantId: string, @Query() q: FleetReportQuery) {
+    return this.guard(() => this.reports.fuel(tenantId, pick(q)));
   }
 
   /** The objects list as CSV, in the previous system's column order. */
@@ -138,5 +145,6 @@ function pick(query: object): FleetReportQuery {
     hideZero: one(q.hideZero),
     minC: one(q.minC),
     maxC: one(q.maxC),
+    minDeltaPct: one(q.minDeltaPct),
   };
 }
