@@ -474,3 +474,39 @@ export function useUnbindDeviceFromVehicle() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.assets.all }),
   });
 }
+
+// ── Migration from the previous tracking system ──────────────────────────────
+
+export interface LegacyImportRowResult {
+  row: number;
+  imei: string | null;
+  name: string | null;
+  outcome: 'CREATED' | 'UPDATED' | 'FAILED';
+  vehicleId?: string;
+  deviceId?: string;
+  error?: string;
+  warnings: string[];
+}
+
+export interface LegacyImportResult {
+  created: number;
+  updated: number;
+  failed: number;
+  fleetsCreated: string[];
+  rows: LegacyImportRowResult[];
+}
+
+/** POST /vehicles/legacy-import — one batch (≤ 200 units), upserted by IMEI. */
+export function postLegacyImport(
+  rows: Array<Record<string, unknown>>,
+  defaultProtocol?: string,
+): Promise<LegacyImportResult> {
+  return apiPost<
+    { rows: Array<Record<string, unknown>>; defaultProtocol?: string },
+    LegacyImportResult
+  >(
+    '/vehicles/legacy-import',
+    { rows, ...(defaultProtocol ? { defaultProtocol } : {}) },
+    { timeout: 300_000 },
+  );
+}

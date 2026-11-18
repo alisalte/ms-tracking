@@ -18,6 +18,9 @@ import { DevicesSection } from '@/components/reports/DevicesSection';
 import { DistanceSection } from '@/components/reports/DistanceSection';
 import { DriversSection } from '@/components/reports/DriversSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
+import { HighSpeedSection } from '@/components/reports/HighSpeedSection';
+import { MileageSection } from '@/components/reports/MileageSection';
+import { ObjectsSection } from '@/components/reports/ObjectsSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
 import { OperationSection } from '@/components/reports/OperationSection';
 import { RangeSummary } from '@/components/reports/RangeSummary';
@@ -27,6 +30,7 @@ import { SchedulesSection } from '@/components/reports/SchedulesSection';
 import { SpeedSection } from '@/components/reports/SpeedSection';
 import { SpeedingSection } from '@/components/reports/SpeedingSection';
 import { StopsSection } from '@/components/reports/StopsSection';
+import { TemperatureSection } from '@/components/reports/TemperatureSection';
 import { TripsSection } from '@/components/reports/TripsSection';
 import { VehiclesSection } from '@/components/reports/VehiclesSection';
 import { PageHeader, Tabs } from '@/components/tailwind-ui';
@@ -53,7 +57,7 @@ export function ReportsPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t('reports.title')} description={t('reports.subtitle')} />
-      {section !== 'schedules' && (
+      {section !== 'schedules' && section !== 'objects' && (
         <>
           <ReportRangePicker range={range} onChange={setRange} />
           {section !== 'devices' && <RangeSummary range={range} />}
@@ -76,9 +80,13 @@ export function ReportsPage() {
       {section === 'vehicles' && <VehiclesSection range={range} />}
       {section === 'drivers' && <DriversSection range={range} />}
       {section === 'devices' && <DevicesSection />}
+      {section === 'objects' && <ObjectsSection />}
       {section === 'distance' && <DistanceSection range={range} />}
       {section === 'speed' && <SpeedSection range={range} />}
       {section === 'speeding' && <SpeedingSection range={range} />}
+      {section === 'highspeed' && <HighSpeedSection range={range} />}
+      {section === 'mileage' && <MileageSection range={range} />}
+      {section === 'temperature' && <TemperatureSection range={range} />}
       {section === 'stops' && <StopsSection range={range} />}
       {section === 'operation' && <OperationSection range={range} />}
       {section === 'odometer' && <OdometerSection range={range} />}

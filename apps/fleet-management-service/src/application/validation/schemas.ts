@@ -323,3 +323,47 @@ export function isDeviceRole(v: string): v is DeviceRole {
 export function isDeviceStatus(v: string): v is DeviceStatus {
   return v === 'ACTIVE' || v === 'SUSPENDED' || v === 'DECOMMISSIONED' || v === 'UNPAIRED';
 }
+
+// --- Legacy system migration (objects CSV / Wialon units sheet) --------------
+
+/** Max units accepted per legacy-import request (the dashboard sends batches). */
+export const LEGACY_IMPORT_MAX_ROWS = 200;
+
+const optionalText = (max: number) =>
+  z.preprocess(
+    (v) => (v === '' || v === null ? undefined : v),
+    z.string().trim().min(1).max(max).optional(),
+  );
+
+/**
+ * One legacy unit: a tracker (IMEI) on a vehicle. Upserted by IMEI — a tracker
+ * already in the registry (e.g. auto-enrolled on its first packet) keeps its
+ * history and has its placeholder vehicle renamed instead of duplicated.
+ */
+export const legacyUnitRowSchema = z.object({
+  row: z.coerce.number().int().min(1).optional(),
+  name,
+  imei: imeiField,
+  /** Target fleet (name or code); created when missing. */
+  fleet: z.string().trim().min(1).max(200),
+  plate: optionalText(32),
+  vin,
+  model: optionalText(128),
+  protocol: z.enum(PROTOCOLS).optional(),
+  simNumber: optionalText(64),
+  active: z.boolean().optional(),
+  odometerKm,
+  engineHours,
+  temperatureOffsetC: z.coerce.number().finite().min(-50).max(50).optional(),
+  /** Legacy custom fields and groups, kept verbatim on the vehicle. */
+  legacyFields: z.record(z.string().max(200), z.string().max(2000)).optional(),
+  groups: z.array(z.string().max(200)).max(100).optional(),
+});
+export type LegacyUnitRowInput = z.infer<typeof legacyUnitRowSchema>;
+
+export const legacyImportBodySchema = z.object({
+  rows: z.array(z.record(z.unknown())).min(1).max(LEGACY_IMPORT_MAX_ROWS),
+  /** Protocol for rows whose model does not name one. */
+  defaultProtocol: z.enum(PROTOCOLS).optional(),
+});
+export type LegacyImportBody = z.infer<typeof legacyImportBodySchema>;

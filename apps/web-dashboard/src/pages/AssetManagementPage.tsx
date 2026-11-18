@@ -11,7 +11,7 @@
  * Write actions (+ Add, edit, archive/decommission/deactivate) are gated per
  * tab via <PermissionGate> — the backend enforces the same strings.
  */
-import { Cpu, Download, FolderTree, Plus, Truck, Upload, UserRound } from 'lucide-react';
+import { Cpu, Download, FolderTree, History, Plus, Truck, Upload, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -34,6 +34,7 @@ import { DriverPhotosPanel } from '@/components/assets/DriverPhotosPanel';
 import { DriverRankingPanel } from '@/components/assets/DriverRankingPanel';
 import { DriversTab } from '@/components/assets/DriversTab';
 import { FleetsTab } from '@/components/assets/FleetsTab';
+import { LegacyImportDialog } from '@/components/assets/LegacyImportDialog';
 import { VehiclesTab } from '@/components/assets/VehiclesTab';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
@@ -158,6 +159,7 @@ export function AssetManagementPage() {
   const [editRecord, setEditRecord] = useState<AssetRecord | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [legacyOpen, setLegacyOpen] = useState(false);
 
   const counts = useMemo(
     () => ({
@@ -257,6 +259,19 @@ export function AssetManagementPage() {
             >
               {t('assets.export.action')}
             </Button>
+            {(tab === 'vehicles' || tab === 'devices') && (
+              <PermissionGate requires={[PERMISSIONS.vehicleWrite, PERMISSIONS.deviceWrite]}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<History size={15} />}
+                  onClick={() => setLegacyOpen(true)}
+                  data-testid="legacy-import-open"
+                >
+                  {t('assets.legacy.action')}
+                </Button>
+              </PermissionGate>
+            )}
             {showImport && (
               <PermissionGate requires={WRITE_PERMISSION[tab]}>
                 <Button
@@ -429,6 +444,8 @@ export function AssetManagementPage() {
         vehicles={vehicles}
         onClose={() => setFormOpen(false)}
       />
+
+      <LegacyImportDialog open={legacyOpen} onClose={() => setLegacyOpen(false)} />
 
       {showImport && (
         <AssetImportDialog

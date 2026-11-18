@@ -1,5 +1,6 @@
 import type { Knex } from '@fleetvision/persistence-knex';
 import type { PositionEvent } from '../../domain/position-event.js';
+import { probeTemperatures } from '../../domain/probe-temperatures.js';
 import { QUALITY_CODE } from '../../domain/quality.js';
 /**
  * Position repository — TimescaleDB `tracking.vehicle_positions` access
@@ -72,6 +73,11 @@ export class PositionRepository {
    * single-column unique constraint on event_id alone.
    */
   public async insert(event: PositionEvent): Promise<void> {
+    // Probe readings of this fix: the temperature report reads them back from history.
+    const temps = probeTemperatures(
+      (event.metadata as { fmbIo?: FmbIoPanel | null } | undefined)?.fmbIo,
+      event.capturedAt,
+    );
     const geom = `SRID=4326;POINT(${event.longitude} ${event.latitude})`;
     await this.knex
       .withSchema(SCHEMA)
@@ -97,6 +103,7 @@ export class PositionRepository {
             ...(event.satellites !== null ? { satellites: event.satellites } : {}),
             // The live I/O panel is a snapshot (Redis + websocket), not history.
             ...withoutFmbIo(event.metadata),
+            ...(temps ? { temps } : {}),
           }),
         ]),
       })

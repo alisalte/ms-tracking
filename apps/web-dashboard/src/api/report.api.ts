@@ -521,3 +521,221 @@ export async function exportReportCsv(
   const blob = await apiGetBlob(`/reports/export/${report}`, rangeParams(range, filters));
   downloadBlob(blob, `${report}-${new Date().toISOString().slice(0, 10)}.csv`);
 }
+
+// ── Fleet-wide tabular reports (high speeds, mileage, temperature) ───────────
+
+/** Vehicle / fleet scope shared by the fleet-wide reports. */
+export interface FleetScope {
+  vehicleId?: string;
+  fleetId?: string;
+}
+
+export interface OverspeedRowWire {
+  vehicleId: string;
+  label: string;
+  fleetName: string | null;
+  seq: number;
+  startedAt: string;
+  endedAt: string;
+  durationSec: number;
+  maxSpeedKmh: number;
+  avgSpeedKmh: number;
+  fixCount: number;
+  peak: { at: string; lat: number; lng: number };
+}
+
+export interface OverspeedReportResponse {
+  from: string;
+  to: string;
+  limitKmh: number;
+  minDurationSec: number;
+  truncated: boolean;
+  summary: {
+    episodeCount: number;
+    vehicleCount: number;
+    maxSpeedKmh: number | null;
+    totalDurationSec: number;
+    discardedFixCount: number;
+  };
+  items: OverspeedRowWire[];
+}
+
+export interface MileageRowWire {
+  vehicleId: string;
+  label: string;
+  fleetId: string | null;
+  fleetName: string | null;
+  distanceKm: number;
+  trips: number;
+}
+
+export interface MileageReportResponse {
+  from: string;
+  to: string;
+  hideZero: boolean;
+  groups: Array<{
+    fleetId: string | null;
+    fleetName: string | null;
+    rows: MileageRowWire[];
+    subtotalKm: number;
+    vehicleCount: number;
+  }>;
+  totalKm: number;
+  vehicleCount: number;
+  hiddenZeroCount: number;
+}
+
+export interface TemperatureRowWire {
+  vehicleId: string;
+  label: string;
+  fleetName: string | null;
+  sensor: string;
+  seq: number;
+  kind: 'HIGH' | 'LOW';
+  startedAt: string;
+  endedAt: string;
+  durationSec: number;
+  minC: number;
+  maxC: number;
+  avgC: number;
+  readings: number;
+  start: { lat: number; lng: number };
+}
+
+export interface TemperatureReportResponse {
+  from: string;
+  to: string;
+  minC: number | null;
+  maxC: number | null;
+  minDurationSec: number;
+  truncated: boolean;
+  summary: {
+    episodeCount: number;
+    vehicleCount: number;
+    vehiclesWithSensors: number;
+    totalDurationSec: number;
+    highestC: number | null;
+    lowestC: number | null;
+  };
+  sensors: Array<{
+    vehicleId: string;
+    label: string;
+    sensor: string;
+    readings: number;
+    minC: number;
+    maxC: number;
+  }>;
+  items: TemperatureRowWire[];
+}
+
+function scopeParams(scope: FleetScope) {
+  return {
+    ...(scope.vehicleId ? { vehicleId: scope.vehicleId } : {}),
+    ...(scope.fleetId ? { fleetId: scope.fleetId } : {}),
+  };
+}
+
+export function useOverspeedReport(
+  range: ReportRange,
+  scope: FleetScope,
+  opts: { limitKmh: number; minDurationSec: number },
+) {
+  return useQuery({
+    queryKey: ['reports', 'overspeed', range, scope, opts],
+    queryFn: () =>
+      apiGetRaw<OverspeedReportResponse>(
+        '/reports/overspeed',
+        rangeParams(range, { ...scopeParams(scope), ...opts }),
+      ),
+  });
+}
+
+export function useMileageReport(range: ReportRange, scope: FleetScope, hideZero: boolean) {
+  return useQuery({
+    queryKey: ['reports', 'mileage', range, scope, hideZero],
+    queryFn: () =>
+      apiGetRaw<MileageReportResponse>(
+        '/reports/mileage',
+        rangeParams(range, { ...scopeParams(scope), hideZero }),
+      ),
+  });
+}
+
+export function useTemperatureReport(
+  range: ReportRange,
+  scope: FleetScope,
+  opts: { minC: number | null; maxC: number | null; minDurationSec: number },
+) {
+  return useQuery({
+    queryKey: ['reports', 'temperature', range, scope, opts],
+    enabled: opts.minC !== null || opts.maxC !== null,
+    queryFn: () =>
+      apiGetRaw<TemperatureReportResponse>(
+        '/reports/temperature',
+        rangeParams(range, {
+          ...scopeParams(scope),
+          ...(opts.minC !== null ? { minC: opts.minC } : {}),
+          ...(opts.maxC !== null ? { maxC: opts.maxC } : {}),
+          minDurationSec: opts.minDurationSec,
+        }),
+      ),
+  });
+}
+
+/** Excel download of a fleet-wide report (Shamsi dates; Persian or English headers). */
+export async function exportFleetWorkbook(
+  report: 'overspeed' | 'mileage' | 'temperature' | 'objects',
+  range: ReportRange,
+  params: Record<string, unknown>,
+  lang: 'fa' | 'en',
+): Promise<void> {
+  const blob = await apiGetBlob(
+    `/reports/workbook/${report}`,
+    rangeParams(range, { ...params, lang }),
+  );
+  downloadBlob(blob, `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// ── Objects (live fleet status, legacy objects list) ─────────────────────────
+
+export interface ObjectStatusRowWire {
+  vehicleId: string;
+  name: string;
+  imei: string | null;
+  plate: string | null;
+  fleetName: string | null;
+  model: string | null;
+  vin: string | null;
+  simNumber: string | null;
+  active: boolean;
+  lat: number | null;
+  lng: number | null;
+  speedKmh: number | null;
+  altitudeM: number | null;
+  headingDeg: number | null;
+  odometerKm: number | null;
+  engineHours: number | null;
+  lastFixAt: string | null;
+  lastReceivedAt: string | null;
+  connection: string | null;
+}
+
+export interface ObjectsReportResponse {
+  asOf: string;
+  summary: { total: number; online: number; moving: number; noFix: number; silent24h: number };
+  items: ObjectStatusRowWire[];
+}
+
+export function useObjectsReport(scope: FleetScope) {
+  return useQuery({
+    queryKey: ['reports', 'objects', scope],
+    queryFn: () => apiGetRaw<ObjectsReportResponse>('/reports/objects', scopeParams(scope)),
+    refetchInterval: 60_000,
+  });
+}
+
+/** The objects list as CSV in the previous system's column order. */
+export async function exportObjectsCsv(scope: FleetScope, lang: 'fa' | 'en'): Promise<void> {
+  const blob = await apiGetBlob('/reports/objects/csv', { ...scopeParams(scope), lang });
+  downloadBlob(blob, `objects_${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '_')}.csv`);
+}
