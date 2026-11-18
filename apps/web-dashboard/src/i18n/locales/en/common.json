@@ -1882,6 +1882,49 @@
       "faceRegisteredHint_other": "Recognised automatically · {{count}} photos kept",
       "faceNotRegisteredHint": "File one of this driver's cabin photos under them (Drivers → Driver photos).",
       "galleryOpen": "Show photos"
+    },
+    "legacy": {
+      "action": "Import from previous system",
+      "title": "Import units from the previous system",
+      "subtitle": "Choose the previous system's objects list (CSV) or a Wialon Units export. Each row is one tracker (IMEI) on one vehicle; the fleet, device and vehicle are created or updated and bound together.",
+      "chooseFile": "Choose a CSV or Excel file",
+      "accepts": "objects_*.csv or a Units export (.xlsx)",
+      "format": {
+        "objects": "Previous system objects list",
+        "wialon": "Wialon Units export"
+      },
+      "unitsRead_one": "{{count}} unit read",
+      "unitsRead_other": "{{count}} units read",
+      "unitsSkipped_one": "{{count}} row has problems and will be skipped",
+      "unitsSkipped_other": "{{count}} rows have problems and will be skipped",
+      "issuesTitle": "Rows with problems",
+      "issues": {
+        "missingName": "Name is empty",
+        "invalidImei": "IMEI must be 15 digits",
+        "imeiLuhn": "IMEI check digit is wrong",
+        "duplicateImei": "IMEI repeated in the file"
+      },
+      "groupsTitle": "Groups to use as fleets",
+      "groupsHint": "Each unit goes to the first of its own groups that is ticked; units in no ticked group go to the default fleet. Existing fleets with the same name are reused.",
+      "fallback": "Default fleet:",
+      "defaultFleet": "Previous system",
+      "unknownModels_one": "{{count}} device's model does not name a protocol; use:",
+      "unknownModels_other": "{{count}} devices' models do not name a protocol; use:",
+      "skipUnknown": "Skip them",
+      "upsertNote": "Trackers already in the system (e.g. auto-enrolled on their first packet) are not duplicated: their history is kept and the vehicle is renamed and moved. Running the same file again is safe.",
+      "submit_one": "Import {{count}} unit",
+      "submit_other": "Import {{count}} units",
+      "progress": "{{done}} of {{total}}",
+      "created": "Created",
+      "updated": "Updated",
+      "failed": "Failed",
+      "fleetsCreated": "Fleets created: {{names}}",
+      "failedTitle": "Failed",
+      "warningsTitle": "Warnings",
+      "errors": {
+        "unknownFormat": "Columns not recognised. Use the previous system's objects list or a Wialon Units export.",
+        "empty": "The file is empty."
+      }
     }
   },
   "reports": {
@@ -1936,7 +1979,8 @@
       "schedules": "Schedules",
       "highspeed": "High speeds",
       "mileage": "Mileage",
-      "temperature": "Allowed temperature"
+      "temperature": "Allowed temperature",
+      "objects": "Objects"
     },
     "schedules": {
       "note": "Schedule reports (trips, utilization, alarms, haul services, and driver & truck work). Files are stored for download and emailed to the recipients (requires SMTP to be configured).",
@@ -2016,7 +2060,8 @@
         "schedules": "Daily or weekly CSV exports of trips, utilization, or alarms.",
         "highspeed": "Every speeding run across the fleet, with the top speed and where it happened.",
         "mileage": "Kilometres per vehicle over the period, with fleet subtotals and a grand total.",
-        "temperature": "Periods a cargo / fridge probe read outside the allowed range."
+        "temperature": "Periods a cargo / fridge probe read outside the allowed range.",
+        "objects": "Every vehicle with IMEI, SIM, last position and last message time; CSV export like the previous system."
       }
     },
     "daily": {
@@ -2314,6 +2359,31 @@
       "sensorSummary_other": "Summary of {{count}} probes",
       "readings_one": "{{count}} reading",
       "readings_other": "{{count}} readings"
+    },
+    "objects": {
+      "name": "Name",
+      "group": "Group",
+      "model": "Model",
+      "sim": "SIM number",
+      "active": "Active",
+      "yes": "Yes",
+      "no": "No",
+      "position": "Position",
+      "speed": "Speed",
+      "altitude": "Altitude",
+      "angle": "Angle",
+      "odometer": "Odometer",
+      "lastDevice": "Last device time",
+      "lastServer": "Last server time",
+      "search": "Search",
+      "searchHint": "Name, IMEI, SIM…",
+      "exportCsv": "Export CSV",
+      "total": "Vehicles",
+      "online": "Online",
+      "silent24h": "Silent over 24 h",
+      "noFix": "No position stored",
+      "asOf": "Updated {{time}} (every minute)",
+      "shown": "{{count}} of {{total}} vehicles"
     }
   },
   "admin": {

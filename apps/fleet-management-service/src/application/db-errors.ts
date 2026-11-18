@@ -26,3 +26,9 @@ export function mapUniqueViolation(err: unknown): ConflictException {
   const message = (e.constraint && CONSTRAINT_MESSAGES[e.constraint]) ?? DEFAULT_MESSAGE;
   return new ConflictException(message);
 }
+
+/** Whether `err` is a PostgreSQL unique violation (optionally on one constraint). */
+export function isUniqueViolation(err: unknown, constraint?: string): boolean {
+  const e = err as { code?: string; constraint?: string };
+  return e?.code === '23505' && (constraint === undefined || e.constraint === constraint);
+}

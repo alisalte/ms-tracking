@@ -33,7 +33,8 @@ export function HighSpeedSection({ range }: { range: ReportRange }) {
   const hms = useHms();
   const [scope, setScope] = useState<FleetScope>({});
   const [limitKmh, setLimitKmh] = useState(90);
-  const [minMinutes, setMinMinutes] = useState(0);
+  // The previous system only listed runs of 3 minutes or more.
+  const [minMinutes, setMinMinutes] = useState(3);
   const opts = { limitKmh, minDurationSec: minMinutes * 60 };
   const q = useOverspeedReport(range, scope, opts);
   const data = q.data;

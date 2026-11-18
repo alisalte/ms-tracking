@@ -684,7 +684,7 @@ export function useTemperatureReport(
 
 /** Excel download of a fleet-wide report (Shamsi dates; Persian or English headers). */
 export async function exportFleetWorkbook(
-  report: 'overspeed' | 'mileage' | 'temperature',
+  report: 'overspeed' | 'mileage' | 'temperature' | 'objects',
   range: ReportRange,
   params: Record<string, unknown>,
   lang: 'fa' | 'en',
@@ -694,4 +694,48 @@ export async function exportFleetWorkbook(
     rangeParams(range, { ...params, lang }),
   );
   downloadBlob(blob, `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// ── Objects (live fleet status, legacy objects list) ─────────────────────────
+
+export interface ObjectStatusRowWire {
+  vehicleId: string;
+  name: string;
+  imei: string | null;
+  plate: string | null;
+  fleetName: string | null;
+  model: string | null;
+  vin: string | null;
+  simNumber: string | null;
+  active: boolean;
+  lat: number | null;
+  lng: number | null;
+  speedKmh: number | null;
+  altitudeM: number | null;
+  headingDeg: number | null;
+  odometerKm: number | null;
+  engineHours: number | null;
+  lastFixAt: string | null;
+  lastReceivedAt: string | null;
+  connection: string | null;
+}
+
+export interface ObjectsReportResponse {
+  asOf: string;
+  summary: { total: number; online: number; moving: number; noFix: number; silent24h: number };
+  items: ObjectStatusRowWire[];
+}
+
+export function useObjectsReport(scope: FleetScope) {
+  return useQuery({
+    queryKey: ['reports', 'objects', scope],
+    queryFn: () => apiGetRaw<ObjectsReportResponse>('/reports/objects', scopeParams(scope)),
+    refetchInterval: 60_000,
+  });
+}
+
+/** The objects list as CSV in the previous system's column order. */
+export async function exportObjectsCsv(scope: FleetScope, lang: 'fa' | 'en'): Promise<void> {
+  const blob = await apiGetBlob('/reports/objects/csv', { ...scopeParams(scope), lang });
+  downloadBlob(blob, `objects_${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '_')}.csv`);
 }

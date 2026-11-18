@@ -5,6 +5,8 @@ import {
   fleetOverspeedEpisodes,
   formatDuration,
   mileageSheet,
+  objectCells,
+  objectsHeader,
   overspeedSheet,
   parseTemperatureBounds,
   sensorLabel,
@@ -193,5 +195,56 @@ describe('sheets', () => {
   it('prints the allowed band on the temperature sheet', () => {
     const sheet = temperatureSheet([], win, { minC: null, maxC: 16 }, 'fa');
     expect(sheet.rows[2]).toEqual(['بازهٔ مجاز (°C)', '-∞ … 16']);
+  });
+});
+
+describe('objects list', () => {
+  it('keeps the legacy column order and Shamsi times in fa', () => {
+    expect(objectsHeader('fa')).toHaveLength(17);
+    expect(objectsHeader('fa')[0]).toBe('نام');
+    expect(objectsHeader('fa')[16]).toBe('آخرین زمان ارسال سرور');
+    const cells = objectCells(
+      {
+        vehicleId: 'v',
+        name: 'T 15-612 izst',
+        imei: '350424065844621',
+        plate: null,
+        fleetName: 'پخش تهران',
+        model: 'FMB120',
+        vin: null,
+        simNumber: '+989018237131',
+        active: true,
+        lat: 35.834658,
+        lng: 50.94997,
+        speedKmh: 0,
+        altitudeM: 1319,
+        headingDeg: 86,
+        odometerKm: 19121.6,
+        engineHours: null,
+        lastFixAt: '2026-08-20T05:18:30Z',
+        lastReceivedAt: '2026-08-20T05:18:32Z',
+        connection: 'ONLINE',
+      },
+      'fa',
+    );
+    expect(cells).toEqual([
+      'T 15-612 izst',
+      '350424065844621',
+      '',
+      'پخش تهران',
+      'FMB120',
+      '',
+      '+989018237131',
+      1,
+      35.834658,
+      50.94997,
+      0,
+      1319,
+      86,
+      19121.6,
+      '',
+      '1405/05/29 08:48:30',
+      '1405/05/29 08:48:32',
+    ]);
   });
 });

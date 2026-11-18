@@ -8,6 +8,7 @@
 import { Logger } from '@nestjs/common';
 import type { ReportingConfig } from '../config/reporting.config.js';
 import type { CsvLocale } from '../domain/csv-locale.js';
+import { csvDocument } from '../domain/csv.js';
 import {
   type OverspeedEpisodeRow,
   type TemperatureBounds,
@@ -15,6 +16,9 @@ import {
   buildMileageReport,
   fleetOverspeedEpisodes,
   mileageSheet,
+  objectCells,
+  objectsHeader,
+  objectsSheet,
   overspeedSheet,
   parseTemperatureBounds,
   temperatureSheet,
@@ -33,7 +37,7 @@ const OVERSPEED_FIX_CAP = 100_000;
 /** Out-of-range periods returned by one request. */
 const TEMPERATURE_EPISODE_CAP = 20_000;
 
-export const FLEET_REPORTS = ['overspeed', 'mileage', 'temperature'] as const;
+export const FLEET_REPORTS = ['overspeed', 'mileage', 'temperature', 'objects'] as const;
 export type FleetReportId = (typeof FLEET_REPORTS)[number];
 
 export interface FleetReportQuery {
@@ -184,6 +188,44 @@ export class FleetReportService {
     };
   }
 
+  /** Objects: every vehicle with its tracker and newest fix (legacy objects list). */
+  public async objects(tenantId: string, q: FleetReportQuery) {
+    const rows = await this.deps.repository.objects(tenantId, this.filter(q));
+    rows.sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+    const now = Date.now();
+    const age = (iso: string | null) => (iso ? now - Date.parse(iso) : Number.POSITIVE_INFINITY);
+    return {
+      asOf: new Date(now).toISOString(),
+      summary: {
+        total: rows.length,
+        online: rows.filter((r) => r.connection === 'ONLINE').length,
+        moving: rows.filter((r) => (r.speedKmh ?? 0) > 3 && age(r.lastFixAt) < 600_000).length,
+        noFix: rows.filter((r) => r.lastFixAt === null).length,
+        silent24h: rows.filter((r) => r.lastFixAt !== null && age(r.lastFixAt) > 86_400_000).length,
+      },
+      items: rows,
+    };
+  }
+
+  /** CSV of the objects list in the legacy column order (UTF-8 with BOM). */
+  public async objectsCsv(
+    tenantId: string,
+    userId: string | null,
+    q: FleetReportQuery,
+    locale: CsvLocale,
+  ): Promise<{ csv: string; filename: string }> {
+    await this.allowExport(tenantId, userId);
+    const r = await this.objects(tenantId, q);
+    this.audited(tenantId, userId, 'objects', r.items.length, 'csv');
+    return {
+      csv: csvDocument(
+        objectsHeader(locale),
+        r.items.map((row) => objectCells(row, locale)),
+      ),
+      filename: `objects-${new Date().toISOString().slice(0, 10)}.csv`,
+    };
+  }
+
   /** .xlsx of one report, rate-limited and audited like the CSV exports. */
   public async workbook(
     tenantId: string,
@@ -195,15 +237,7 @@ export class FleetReportService {
     if (!(FLEET_REPORTS as readonly string[]).includes(report)) {
       throw new ReportInputError(`report must be ${FLEET_REPORTS.join(' | ')}`, 'INVALID_FILTER');
     }
-    if (this.deps.exportLimiter && userId) {
-      const allowed = await this.deps.exportLimiter.allow(tenantId, userId);
-      if (!allowed) {
-        throw new ReportInputError(
-          'Export rate limit exceeded — try again shortly',
-          'INVALID_FILTER',
-        );
-      }
-    }
+    await this.allowExport(tenantId, userId);
     let sheet: SheetSpec;
     let rowCount: number;
     if (report === 'overspeed') {
@@ -219,6 +253,10 @@ export class FleetReportService {
       const r = await this.mileage(tenantId, q);
       sheet = mileageSheet(r, { from: new Date(r.from), to: new Date(r.to) }, locale);
       rowCount = r.vehicleCount;
+    } else if (report === 'objects') {
+      const r = await this.objects(tenantId, q);
+      sheet = objectsSheet(r.items, locale);
+      rowCount = r.items.length;
     } else {
       const r = await this.temperature(tenantId, q);
       sheet = temperatureSheet(
@@ -229,6 +267,31 @@ export class FleetReportService {
       );
       rowCount = r.items.length;
     }
+    this.audited(tenantId, userId, report, rowCount, 'xlsx');
+    return {
+      bytes: buildXlsxWorkbook([sheet]),
+      filename: `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    };
+  }
+
+  private async allowExport(tenantId: string, userId: string | null): Promise<void> {
+    if (!this.deps.exportLimiter || !userId) return;
+    if (!(await this.deps.exportLimiter.allow(tenantId, userId))) {
+      throw new ReportInputError(
+        'Export rate limit exceeded — try again shortly',
+        'INVALID_FILTER',
+      );
+    }
+  }
+
+  /** Audit (action only — never the report contents). */
+  private audited(
+    tenantId: string,
+    userId: string | null,
+    report: string,
+    rows: number,
+    format: 'xlsx' | 'csv',
+  ): void {
     void this.deps.audit?.appendBestEffort({
       tenantId,
       actorId: userId,
@@ -238,13 +301,9 @@ export class FleetReportService {
       outcome: 'SUCCESS',
       requestId: null,
       before: null,
-      after: { rows: rowCount, format: 'xlsx' },
+      after: { rows, format },
     });
-    this.logger.log(`XLSX export ${report} rows=${rowCount} tenant=${tenantId}`);
-    return {
-      bytes: buildXlsxWorkbook([sheet]),
-      filename: `${report}-${new Date().toISOString().slice(0, 10)}.xlsx`,
-    };
+    this.logger.log(`${format.toUpperCase()} export ${report} rows=${rows} tenant=${tenantId}`);
   }
 
   // ── input ──────────────────────────────────────────────────────────────────

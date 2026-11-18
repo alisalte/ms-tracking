@@ -9,6 +9,7 @@
 import type { Knex } from '@fleetvision/persistence-knex';
 import {
   type MileageVehicleRow,
+  type ObjectStatusRow,
   TEMP_GAP_SEC,
   TEMP_PLAUSIBLE_MAX_C,
   TEMP_PLAUSIBLE_MIN_C,
@@ -225,7 +226,8 @@ export class FleetReportRepository {
    *
    *   - readings: Meitrack CCE temperature slots (`metadata.cce.status.temperatures`)
    *     and the Teltonika probes the GPS engine stores (`metadata.temps`);
-   *     sensor-fault values outside [-55, 85) °C are dropped.
+   *     sensor-fault values outside [-55, 85) °C are dropped, and the vehicle's
+   *     temperature offset (legacy "شیفت دما", fleet.vehicles.temperature_offset_c) is added;
    *   - a period is a run of consecutive readings on the same side of the band
    *     (HIGH / LOW); a reading gap over TEMP_GAP_SEC also ends it.
    *   - it ends at the first reading back in range (when one follows within the
@@ -247,8 +249,9 @@ export class FleetReportRepository {
         await trx.raw(
           `WITH raw AS (
              SELECT p.vehicle_id, p.captured_at AS at, p.latitude AS lat, p.longitude AS lng,
-                    p.metadata
+                    p.metadata, COALESCE(v.temperature_offset_c, 0) AS off
              FROM tracking.vehicle_positions p
+             JOIN fleet.vehicles v ON v.id = p.vehicle_id AND v.tenant_id = p.tenant_id
              WHERE p.tenant_id = ?::uuid AND p.vehicle_id = ANY(?::uuid[])
                AND p.quality <> 0
                AND p.captured_at >= ? AND p.captured_at < ?
@@ -257,14 +260,15 @@ export class FleetReportRepository {
            ),
            readings AS (
              SELECT r.vehicle_id, r.at, r.lat, r.lng, 'cce' || (t->>'slot') AS sensor,
-                    (t->>'celsius')::float8 AS c
+                    (t->>'celsius')::float8 AS rc, (t->>'celsius')::float8 + r.off AS c
              FROM raw r
              CROSS JOIN LATERAL jsonb_array_elements(
                CASE WHEN jsonb_typeof(r.metadata #> '{cce,status,temperatures}') = 'array'
                     THEN r.metadata #> '{cce,status,temperatures}' ELSE '[]'::jsonb END) t
              WHERE jsonb_typeof(t->'celsius') = 'number'
              UNION ALL
-             SELECT r.vehicle_id, r.at, r.lat, r.lng, e.key AS sensor, (e.value #>> '{}')::float8 AS c
+             SELECT r.vehicle_id, r.at, r.lat, r.lng, e.key AS sensor,
+                    (e.value #>> '{}')::float8 AS rc, (e.value #>> '{}')::float8 + r.off AS c
              FROM raw r
              CROSS JOIN LATERAL jsonb_each(
                CASE WHEN jsonb_typeof(r.metadata->'temps') = 'object'
@@ -274,7 +278,7 @@ export class FleetReportRepository {
            valid AS (
              SELECT DISTINCT ON (vehicle_id, sensor, at) *
              FROM readings
-             WHERE c >= ? AND c < ?
+             WHERE rc >= ? AND rc < ?
              ORDER BY vehicle_id, sensor, at
            ),
            marked AS (
@@ -370,6 +374,81 @@ export class FleetReportRepository {
           maxC: round2(Number(r.max_c)),
         })),
       };
+    });
+  }
+  // ── Objects (live status) ──────────────────────────────────────────────────
+
+  /**
+   * Every vehicle in scope with its primary tracker and the newest stored fix
+   * (index-backed per-vehicle lookup), plus the tracker's connection state.
+   */
+  public async objects(tenantId: string, filter: VehicleFilter): Promise<ObjectStatusRow[]> {
+    const vf = vehicleFilter(filter);
+    return this.query(async (trx) => {
+      const rows = (
+        await trx.raw(
+          `SELECT v.id, ${VEHICLE_LABEL_SQL} AS label, v.plate, v.vin, v.status AS vehicle_status,
+                  v.odometer_km AS registry_odometer, v.engine_hours,
+                  f.name AS fleet_name,
+                  d.imei, d.model, d.sim_number, d.status AS device_status,
+                  ds.state AS connection,
+                  pos.captured_at, pos.ingested_at, pos.latitude, pos.longitude, pos.speed_kmh,
+                  pos.altitude_m, pos.heading_deg, pos.odometer_km AS fix_odometer
+           FROM fleet.vehicles v
+           LEFT JOIN fleet.fleets f ON f.id = v.fleet_id AND f.tenant_id = v.tenant_id
+           LEFT JOIN LATERAL (
+             SELECT dd.id, dd.imei, dd.model, dd.sim_number, dd.status
+             FROM fleet.vehicle_devices vd
+             JOIN fleet.devices dd ON dd.id = vd.device_id AND dd.tenant_id = vd.tenant_id
+             WHERE vd.tenant_id = v.tenant_id AND vd.vehicle_id = v.id
+             ORDER BY vd.is_primary DESC, vd.bound_at
+             LIMIT 1
+           ) d ON TRUE
+           LEFT JOIN tracking.device_status ds ON ds.device_id = d.id AND ds.tenant_id = v.tenant_id
+           LEFT JOIN LATERAL (
+             SELECT p.captured_at, p.ingested_at, p.latitude, p.longitude, p.speed_kmh,
+                    p.altitude_m, p.heading_deg, p.odometer_km
+             FROM tracking.vehicle_positions p
+             WHERE p.tenant_id = v.tenant_id AND p.vehicle_id = v.id AND p.quality IN (1, 3)
+             ORDER BY p.captured_at DESC
+             LIMIT 1
+           ) pos ON TRUE
+           WHERE v.tenant_id = ?::uuid AND v.status <> 'ARCHIVED' ${vf.clause}`,
+          [tenantId, ...vf.binds],
+        )
+      ).rows as Array<Record<string, unknown>>;
+      const num = (x: unknown) => (x === null || x === undefined ? null : Number(x));
+      const iso = (x: unknown) => (x ? new Date(x as string | Date).toISOString() : null);
+      return rows.map((r) => ({
+        vehicleId: String(r.id),
+        name: String(r.label ?? r.id),
+        imei: r.imei ? String(r.imei) : null,
+        plate: r.plate ? String(r.plate) : null,
+        fleetName: r.fleet_name ? String(r.fleet_name) : null,
+        model: r.model ? String(r.model) : null,
+        vin: r.vin ? String(r.vin) : null,
+        simNumber: r.sim_number ? String(r.sim_number) : null,
+        active: r.vehicle_status === 'ACTIVE' && (r.device_status ?? 'ACTIVE') === 'ACTIVE',
+        lat: num(r.latitude),
+        lng: num(r.longitude),
+        speedKmh:
+          r.speed_kmh === null || r.speed_kmh === undefined
+            ? null
+            : Math.round(Number(r.speed_kmh)),
+        altitudeM:
+          r.altitude_m === null || r.altitude_m === undefined
+            ? null
+            : Math.round(Number(r.altitude_m)),
+        headingDeg:
+          r.heading_deg === null || r.heading_deg === undefined
+            ? null
+            : Math.round(Number(r.heading_deg)),
+        odometerKm: num(r.fix_odometer ?? r.registry_odometer),
+        engineHours: num(r.engine_hours),
+        lastFixAt: iso(r.captured_at),
+        lastReceivedAt: iso(r.ingested_at),
+        connection: r.connection ? String(r.connection) : null,
+      }));
     });
   }
 }

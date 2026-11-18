@@ -481,3 +481,117 @@ export function temperatureSheet(
     ],
   };
 }
+
+// ── Objects (live fleet status) ──────────────────────────────────────────────
+
+/** One vehicle with its tracker and its newest stored fix (legacy "objects" list). */
+export interface ObjectStatusRow {
+  readonly vehicleId: string;
+  readonly name: string;
+  readonly imei: string | null;
+  readonly plate: string | null;
+  readonly fleetName: string | null;
+  readonly model: string | null;
+  readonly vin: string | null;
+  readonly simNumber: string | null;
+  /** Vehicle and tracker active (not archived / suspended). */
+  readonly active: boolean;
+  readonly lat: number | null;
+  readonly lng: number | null;
+  readonly speedKmh: number | null;
+  readonly altitudeM: number | null;
+  readonly headingDeg: number | null;
+  readonly odometerKm: number | null;
+  readonly engineHours: number | null;
+  /** Device time of the newest fix. */
+  readonly lastFixAt: string | null;
+  /** When the server stored it. */
+  readonly lastReceivedAt: string | null;
+  /** Connection state of the tracker (ONLINE / OFFLINE / STALE); null when never connected. */
+  readonly connection: string | null;
+}
+
+const OBJECT_HEADERS: Record<CsvLocale, string[]> = {
+  fa: [
+    'نام',
+    'IMEI',
+    'پلاک',
+    'گروه',
+    'مدل',
+    'VIN',
+    'شماره سیم کارت',
+    'فعال',
+    'عرض جغرافیایی',
+    'طول جغرافیایی',
+    'سرعت',
+    'ارتفاع',
+    'زاویه',
+    'مسافت سنج',
+    'کارکرد ساعت موتور',
+    'آخرین زمان ارسال متحرک',
+    'آخرین زمان ارسال سرور',
+  ],
+  en: [
+    'Name',
+    'IMEI',
+    'Plate',
+    'Group',
+    'Model',
+    'VIN',
+    'SIM number',
+    'Active',
+    'Latitude',
+    'Longitude',
+    'Speed',
+    'Altitude',
+    'Angle',
+    'Odometer',
+    'Engine hours',
+    'Last device time',
+    'Last server time',
+  ],
+};
+
+export function objectsHeader(locale: CsvLocale): string[] {
+  return [...OBJECT_HEADERS[locale]];
+}
+
+/** Cells in the legacy column order; times as local `date time` (Shamsi in fa). */
+export function objectCells(r: ObjectStatusRow, locale: CsvLocale): SheetCell[] {
+  const when = (iso: string | null) => {
+    if (!iso) return '';
+    if (locale === 'fa') return stamp(iso);
+    return new Intl.DateTimeFormat('sv-SE', {
+      timeZone: REPORT_TIME_ZONE,
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    }).format(new Date(iso));
+  };
+  return [
+    r.name,
+    r.imei ?? '',
+    r.plate ?? '',
+    r.fleetName ?? '',
+    r.model ?? '',
+    r.vin ?? '',
+    r.simNumber ?? '',
+    r.active ? 1 : 0,
+    r.lat ?? '',
+    r.lng ?? '',
+    r.speedKmh ?? '',
+    r.altitudeM ?? '',
+    r.headingDeg ?? '',
+    r.odometerKm ?? '',
+    r.engineHours ?? '',
+    when(r.lastFixAt),
+    when(r.lastReceivedAt),
+  ];
+}
+
+export function objectsSheet(rows: readonly ObjectStatusRow[], locale: CsvLocale): SheetSpec {
+  return {
+    name: locale === 'fa' ? 'متحرک‌ها' : 'Objects',
+    rtl: locale === 'fa',
+    rows: [objectsHeader(locale), ...rows.map((r) => objectCells(r, locale))],
+  };
+}

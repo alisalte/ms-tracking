@@ -20,6 +20,7 @@ import { DriversSection } from '@/components/reports/DriversSection';
 import { GeofencesSection } from '@/components/reports/GeofencesSection';
 import { HighSpeedSection } from '@/components/reports/HighSpeedSection';
 import { MileageSection } from '@/components/reports/MileageSection';
+import { ObjectsSection } from '@/components/reports/ObjectsSection';
 import { OdometerSection } from '@/components/reports/OdometerSection';
 import { OperationSection } from '@/components/reports/OperationSection';
 import { RangeSummary } from '@/components/reports/RangeSummary';
@@ -56,7 +57,7 @@ export function ReportsPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t('reports.title')} description={t('reports.subtitle')} />
-      {section !== 'schedules' && (
+      {section !== 'schedules' && section !== 'objects' && (
         <>
           <ReportRangePicker range={range} onChange={setRange} />
           {section !== 'devices' && <RangeSummary range={range} />}
@@ -79,6 +80,7 @@ export function ReportsPage() {
       {section === 'vehicles' && <VehiclesSection range={range} />}
       {section === 'drivers' && <DriversSection range={range} />}
       {section === 'devices' && <DevicesSection />}
+      {section === 'objects' && <ObjectsSection />}
       {section === 'distance' && <DistanceSection range={range} />}
       {section === 'speed' && <SpeedSection range={range} />}
       {section === 'speeding' && <SpeedingSection range={range} />}

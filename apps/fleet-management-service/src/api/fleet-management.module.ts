@@ -18,6 +18,7 @@ import { EvidenceCaptureWorker } from '../application/evidence-capture.worker.js
 import { FleetService } from '../application/fleet.service.js';
 import { FtpPhotoReceiver } from '../application/ftp-photo-receiver.js';
 import { HaulRouteService } from '../application/haul-route.service.js';
+import { LegacyImportService } from '../application/legacy-import.service.js';
 import { PlatformTenantAssetsService } from '../application/platform-tenant-assets.service.js';
 import { SummaryService } from '../application/summary.service.js';
 import { VehicleService } from '../application/vehicle.service.js';
@@ -47,6 +48,7 @@ import { DevicesController } from './devices.controller.js';
 import { DriverPhotosController } from './driver-photos.controller.js';
 import { FleetsController } from './fleets.controller.js';
 import { HaulRoutesController } from './haul-routes.controller.js';
+import { LegacyImportController } from './legacy-import.controller.js';
 import {
   PlatformDeviceInboxController,
   PlatformTenantAssetsController,
@@ -68,6 +70,7 @@ import {
   FTP_PHOTO_RECEIVER,
   HAUL_ROUTE_SERVICE,
   IGNITION_TRIGGER_CONSUMER,
+  LEGACY_IMPORT_SERVICE,
   PLATFORM_TENANT_ASSETS_SERVICE,
   SESSION_LIFECYCLE_CONSUMER,
   SUMMARY_SERVICE,
@@ -217,6 +220,33 @@ export class FleetManagementModule {
               vehicles,
               bindings,
               fleets,
+              inbox,
+            ),
+        },
+        {
+          provide: LEGACY_IMPORT_SERVICE,
+          inject: [
+            KNEX_TOKEN,
+            AuditRepository,
+            BindingRepository,
+            BINDING_SERVICE,
+            'REGISTRY_INVALIDATION_PUBLISHER',
+            DeviceInboxRepository,
+          ],
+          useFactory: (
+            knex: unknown,
+            audit: AuditRepository,
+            bindingRepo: BindingRepository,
+            bindings: BindingService,
+            invalidation: RegistryInvalidationPublisher,
+            inbox: DeviceInboxRepository,
+          ) =>
+            new LegacyImportService(
+              knex as never,
+              audit,
+              bindingRepo,
+              bindings,
+              invalidation,
               inbox,
             ),
         },
@@ -433,6 +463,7 @@ export class FleetManagementModule {
         PlatformTenantAssetsController,
         PlatformDeviceInboxController,
         VehiclesController,
+        LegacyImportController,
         DevicesController,
         SummaryController,
         DeviceCommandsController,

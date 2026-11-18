@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/auth/auth.store';
 import { HighSpeedSection } from '@/components/reports/HighSpeedSection';
 import { MileageSection } from '@/components/reports/MileageSection';
+import { ObjectsSection } from '@/components/reports/ObjectsSection';
 import { TemperatureSection } from '@/components/reports/TemperatureSection';
 import { i18n } from '@/i18n';
 
@@ -101,7 +102,7 @@ describe('HighSpeedSection', () => {
     await waitFor(() => expect(screen.getByText('T 68-121 izst')).toBeInTheDocument());
     expect(apiGetRaw).toHaveBeenCalledWith(
       '/reports/overspeed',
-      expect.objectContaining({ preset: 'today', limitKmh: 90, minDurationSec: 0 }),
+      expect.objectContaining({ preset: 'today', limitKmh: 90, minDurationSec: 180 }),
     );
     expect(screen.getByText('4m 8s')).toBeInTheDocument();
     expect(screen.getAllByText('98 km/h').length).toBeGreaterThan(0);
@@ -250,6 +251,59 @@ describe('TemperatureSection', () => {
       expect(
         screen.getByText('No vehicle sent temperature probe data in this period.'),
       ).toBeInTheDocument(),
+    );
+  });
+});
+
+describe('ObjectsSection', () => {
+  it('lists every vehicle with its tracker, filters by search and exports the legacy CSV', async () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    const old = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const row = (name: string, imei: string, at: string | null) => ({
+      vehicleId: imei,
+      name,
+      imei,
+      plate: null,
+      fleetName: 'پخش تهران',
+      model: 'FMB120',
+      vin: null,
+      simNumber: '+989018237131',
+      active: true,
+      lat: at ? 35.834658 : null,
+      lng: at ? 50.94997 : null,
+      speedKmh: at ? 0 : null,
+      altitudeM: at ? 1319 : null,
+      headingDeg: at ? 86 : null,
+      odometerKm: at ? 19121.6 : null,
+      engineHours: null,
+      lastFixAt: at,
+      lastReceivedAt: at,
+      connection: at === recent ? 'ONLINE' : null,
+    });
+    apiGetRaw.mockResolvedValue({
+      asOf: new Date().toISOString(),
+      summary: { total: 3, online: 1, moving: 0, noFix: 1, silent24h: 1 },
+      items: [
+        row('T 15-612 izst', '350424065844621', recent),
+        row('P 35-669 حسيني', '350424066449792', old),
+        row('P 46-479 حشمتيان', '357073296978808', null),
+      ],
+    });
+    render(<ObjectsSection />, { wrapper });
+    await waitFor(() => expect(screen.getByText('T 15-612 izst')).toBeInTheDocument());
+    expect(apiGetRaw).toHaveBeenCalledWith('/reports/objects', {});
+    expect(screen.getByText('350424066449792')).toBeInTheDocument();
+    expect(screen.getAllByText('35.834658, 50.949970')).toHaveLength(2);
+
+    fireEvent.change(screen.getByPlaceholderText('Name, IMEI, SIM…'), {
+      target: { value: '3504240658' },
+    });
+    expect(screen.queryByText('P 35-669 حسيني')).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 3 vehicles', { exact: false })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Export CSV/ }));
+    await waitFor(() =>
+      expect(apiGetBlob).toHaveBeenCalledWith('/reports/objects/csv', { lang: 'en' }),
     );
   });
 });
