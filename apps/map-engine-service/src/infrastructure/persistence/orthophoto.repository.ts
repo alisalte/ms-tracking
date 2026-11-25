@@ -94,9 +94,13 @@ export class OrthophotoRepository {
     await this.table().where({ tenant_id: tenantId, id }).update({ status: 'failed', error });
   }
 
-  /** After a restart nothing is converting any more: fail the orphans. */
-  public async failInterrupted(error: string): Promise<void> {
-    await this.table().where({ status: 'processing' }).update({ status: 'failed', error });
+  /** Fail jobs left processing by a restart; returns them so their files can be removed. */
+  public async failInterrupted(error: string): Promise<Array<{ tenantId: string; id: string }>> {
+    const rows = await this.table()
+      .where({ status: 'processing' })
+      .update({ status: 'failed', error })
+      .returning(['tenant_id', 'id']);
+    return rows.map((row) => ({ tenantId: row.tenant_id, id: row.id }));
   }
 
   public async deleteReady(tenantId: string): Promise<string[]> {

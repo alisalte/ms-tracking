@@ -137,7 +137,14 @@ export class OrthophotoService implements OnModuleInit {
 
   public async onModuleInit(): Promise<void> {
     await mkdir(this.incomingDir, { recursive: true });
-    await this.deps.repo.failInterrupted('interrupted');
+    // A restart kills the running conversion; drop its half-written files
+    // (decoded/masked TIFFs can be several GB) so they don't eat the disk.
+    const interrupted = await this.deps.repo.failInterrupted(
+      'interrupted: the service restarted during conversion, upload the file again',
+    );
+    for (const job of interrupted) {
+      await rm(this.jobDir(job.tenantId, job.id), { force: true, recursive: true });
+    }
     for (const name of await readdir(this.incomingDir)) {
       await rm(join(this.incomingDir, name), { force: true, recursive: true });
     }
