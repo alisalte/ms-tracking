@@ -3931,6 +3931,21 @@
     "remove": "Remove",
     "errorType": "Only .ecw files are accepted.",
     "errorSize": "The file must be 2 GB or smaller.",
-    "errorRequest": "The request failed. Please try again."
+    "errorRequest": "The request failed. Please try again.",
+    "stageLabel": "Step {{step}} of 3: {{stage}} ({{percent}}%)",
+    "stage": {
+      "queued": "Waiting in the conversion queue…",
+      "decode": "Decoding the ECW",
+      "mask": "Removing the white collar",
+      "cog": "Building the map layer",
+      "publish": "Publishing"
+    },
+    "eta": "About {{time}} left (estimate)",
+    "etaUnknown": "Estimating time left…",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours",
+    "hoursMinutes": "{{hours}} h {{minutes}} min"
   }
 }

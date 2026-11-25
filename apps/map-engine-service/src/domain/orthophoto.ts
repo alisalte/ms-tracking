@@ -93,3 +93,53 @@ export function boundsFromExtent(extent: unknown): LngLatBounds | null {
     maxLat: Math.max(...lats),
   };
 }
+
+/**
+ * Percent done from the tail of a GDAL utility's stdout ("0...10...20.."):
+ * each number is a tenth, each dot after it another 2.5 %.
+ */
+export function gdalProgress(tail: string): number | null {
+  const m = /(\d{1,3})(\.{0,3})(?: - done\.?)?\s*$/.exec(tail);
+  if (!m) return null;
+  const pct = Number(m[1]) + 2.5 * (m[2]?.length ?? 0);
+  return pct <= 100 ? pct : null;
+}
+
+/** Last "NN.NN%" in the tail of ecw2tiff --progress stderr. */
+export function percentProgress(tail: string): number | null {
+  const all = [...tail.matchAll(/(\d{1,3}(?:\.\d+)?)%/g)];
+  const last = all.at(-1);
+  if (!last) return null;
+  const pct = Number(last[1]);
+  return pct <= 100 ? pct : null;
+}
+
+/** Strip ecw2tiff's \r-redrawn progress lines so error messages stay readable. */
+export function stripProgressLines(text: string): string {
+  return text.replace(/\r?[ \t]*\d{1,3}(?:\.\d+)?%[^\r\n]*Mpx\/s[^\r\n]*/g, '');
+}
+
+export type ConversionStage = 'queued' | 'decode' | 'mask' | 'cog' | 'publish';
+
+/** Share of the total conversion each stage roughly takes. */
+const STAGE_WEIGHTS: Record<Exclude<ConversionStage, 'queued'>, number> = {
+  decode: 0.35,
+  mask: 0.35,
+  cog: 0.28,
+  publish: 0.02,
+};
+const STAGE_ORDER = ['decode', 'mask', 'cog', 'publish'] as const;
+
+/** Overall percent (0–100) given the current stage and how far into it. */
+export function overallPercent(stage: ConversionStage, stagePercent: number): number {
+  if (stage === 'queued') return 0;
+  let done = 0;
+  for (const s of STAGE_ORDER) {
+    if (s === stage) {
+      done += STAGE_WEIGHTS[s] * Math.min(100, Math.max(0, stagePercent));
+      break;
+    }
+    done += STAGE_WEIGHTS[s] * 100;
+  }
+  return Math.round(done * 10) / 10;
+}

@@ -11,10 +11,15 @@ import { mkdir, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { OnModuleInit } from '@nestjs/common';
 import {
+  type ConversionStage,
   boundsFromExtent,
+  gdalProgress,
   isValidTile,
   nativeZoom,
+  overallPercent,
+  percentProgress,
   signTileToken,
+  stripProgressLines,
   tileBounds,
   tileTokenExpiry,
 } from '../domain/orthophoto.js';
@@ -28,7 +33,13 @@ export { OrthophotoBusyError };
 export class OrthophotoInputError extends Error {}
 export class OrthophotoDiskFullError extends Error {}
 
-export type CommandRunner = (cmd: string, args: readonly string[]) => Promise<string>;
+/** Called with the running command's percent done (0–100). */
+export type ProgressFn = (percent: number) => void;
+export type CommandRunner = (
+  cmd: string,
+  args: readonly string[],
+  onProgress?: ProgressFn,
+) => Promise<string>;
 
 /** Large ECW mosaics take hours to decode at low priority; override with ORTHOPHOTO_CONVERT_TIMEOUT_HOURS. */
 const CONVERT_TIMEOUT_MS =
@@ -62,7 +73,12 @@ function dedupeLines(text: string): string {
   ].join('\n');
 }
 
-function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<string> {
+function run(
+  cmd: string,
+  args: readonly string[],
+  timeoutMs: number,
+  onProgress?: ProgressFn,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, [...args], {
       env: GDAL_ENV,
@@ -72,11 +88,26 @@ function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<s
     });
     let out = '';
     let err = '';
+    // GDAL tools print "0...10...20" on stdout; ecw2tiff prints "NN.NN%" on stderr.
+    let outTail = '';
+    let errTail = '';
     child.stdout.on('data', (d: Buffer) => {
-      if (out.length < 4_000_000) out += d.toString();
+      const text = d.toString();
+      if (out.length < 4_000_000) out += text;
+      if (onProgress) {
+        outTail = (outTail + text).slice(-200);
+        const pct = gdalProgress(outTail);
+        if (pct !== null) onProgress(pct);
+      }
     });
     child.stderr.on('data', (d: Buffer) => {
-      err = (err + d.toString()).slice(-20_000);
+      const text = d.toString();
+      err = (err + text).slice(-20_000);
+      if (onProgress) {
+        errTail = (errTail + text).slice(-200);
+        const pct = percentProgress(errTail);
+        if (pct !== null) onProgress(pct);
+      }
     });
     child.on('error', reject);
     const started = Date.now();
@@ -91,13 +122,14 @@ function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<s
           : signal
             ? `killed by ${signal} after ${Math.round(elapsed / 60_000)} min`
             : `exited with code ${code}`;
-      const detail = dedupeLines(err).slice(-2000);
+      const detail = dedupeLines(stripProgressLines(err)).slice(-2000);
       reject(new Error(`${tool} ${why}${detail ? `: ${detail}` : ''}`));
     });
   });
 }
 
-const defaultConvertRunner: CommandRunner = (cmd, args) => run(cmd, args, CONVERT_TIMEOUT_MS);
+const defaultConvertRunner: CommandRunner = (cmd, args, onProgress) =>
+  run(cmd, args, CONVERT_TIMEOUT_MS, onProgress);
 const defaultTileRunner: CommandRunner = (cmd, args) => run(cmd, args, TILE_TIMEOUT_MS);
 
 export interface OrthophotoView {
@@ -112,11 +144,35 @@ export interface OrthophotoView {
   readonly minZoom: number | null;
   readonly maxZoom: number | null;
   readonly tileUrl: string | null;
+  /** Only while processing. */
+  readonly progress: ConversionProgress | null;
+}
+
+export interface ConversionProgress {
+  readonly stage: ConversionStage;
+  /** Percent of the current stage (0–100). */
+  readonly stagePercent: number;
+  /** Rough percent of the whole conversion (0–100). */
+  readonly percent: number;
+  /** Seconds since the current stage started (server clock; no skew for clients). */
+  readonly stageElapsedSeconds: number;
+  /** Rough seconds left for the whole conversion; null until there is enough to go on. */
+  readonly etaSeconds: number | null;
+}
+
+interface ProgressState {
+  stage: ConversionStage;
+  stagePercent: number;
+  stageStartedMs: number;
+  /** When the first stage started (null while queued). */
+  jobStartedMs: number | null;
 }
 
 export class OrthophotoService implements OnModuleInit {
   private queue: Promise<void> = Promise.resolve();
   private readonly renders = new Map<string, Promise<string | null>>();
+  /** In-memory: a restart kills the conversion anyway. */
+  private readonly progress = new Map<string, ProgressState>();
   private activeRenders = 0;
   private readonly renderWaiters: Array<() => void> = [];
   private readonly convert: CommandRunner;
@@ -179,7 +235,15 @@ export class OrthophotoService implements OnModuleInit {
       const dir = this.jobDir(input.tenantId, id);
       await mkdir(dir, { recursive: true });
       await rename(input.path, join(dir, 'source.ecw'));
-      this.queue = this.queue.then(() => this.process(input.tenantId, id));
+      this.progress.set(id, {
+        stage: 'queued',
+        stagePercent: 0,
+        stageStartedMs: Date.now(),
+        jobStartedMs: null,
+      });
+      this.queue = this.queue
+        .then(() => this.process(input.tenantId, id))
+        .finally(() => this.progress.delete(id));
       return id;
     } catch (err) {
       await rm(input.path, { force: true });
@@ -204,18 +268,36 @@ export class OrthophotoService implements OnModuleInit {
     const decoded = join(dir, 'decoded.tif');
     const masked = join(dir, 'masked.tif');
     const cog = join(dir, 'cog.tif');
+    const stage = (name: ConversionStage): ProgressFn => {
+      const now = Date.now();
+      const state: ProgressState = {
+        stage: name,
+        stagePercent: 0,
+        stageStartedMs: now,
+        jobStartedMs: this.progress.get(id)?.jobStartedMs ?? now,
+      };
+      this.progress.set(id, state);
+      return (pct) => {
+        state.stagePercent = pct;
+      };
+    };
     try {
-      await this.convert('nice', [
-        '-n',
-        '10',
-        'ecw2tiff',
-        '--threads',
-        '3',
-        '--compress',
-        'jpeg:92',
-        source,
-        decoded,
-      ]);
+      await this.convert(
+        'nice',
+        [
+          '-n',
+          '10',
+          'ecw2tiff',
+          '--progress',
+          '--threads',
+          '3',
+          '--compress',
+          'jpeg:92',
+          source,
+          decoded,
+        ],
+        stage('decode'),
+      );
       // The ECW is no longer needed (a failure discards the whole job anyway).
       await rm(source, { force: true });
       await this.ensureSpace((await stat(decoded)).size * DECODED_SPACE_FACTOR);
@@ -226,55 +308,62 @@ export class OrthophotoService implements OnModuleInit {
       // a 1-bit internal band beside JPEG RGB: an RGBA DEFLATE copy of a large
       // mosaic is many times the decoded size and filled the disk. The COG
       // step below turns the mask back into an alpha band.
-      await this.convert('nice', [
-        '-n',
-        '10',
-        'nearblack',
-        '-q',
-        '-color',
-        '255,255,255',
-        '-color',
-        '0,0,0',
-        '-near',
-        String(COLLAR_TOLERANCE),
-        '-setmask',
-        '-of',
-        'GTiff',
-        '-co',
-        'TILED=YES',
-        '-co',
-        'COMPRESS=JPEG',
-        '-co',
-        'JPEG_QUALITY=92',
-        '-co',
-        'PHOTOMETRIC=YCBCR',
-        '-co',
-        'BIGTIFF=IF_SAFER',
-        '-o',
-        masked,
-        decoded,
-      ]);
+      await this.convert(
+        'nice',
+        [
+          '-n',
+          '10',
+          'nearblack',
+          '-color',
+          '255,255,255',
+          '-color',
+          '0,0,0',
+          '-near',
+          String(COLLAR_TOLERANCE),
+          '-setmask',
+          '-of',
+          'GTiff',
+          '-co',
+          'TILED=YES',
+          '-co',
+          'COMPRESS=JPEG',
+          '-co',
+          'JPEG_QUALITY=92',
+          '-co',
+          'PHOTOMETRIC=YCBCR',
+          '-co',
+          'BIGTIFF=IF_SAFER',
+          '-o',
+          masked,
+          decoded,
+        ],
+        stage('mask'),
+      );
       await rm(decoded, { force: true });
-      await this.convert('nice', [
-        '-n',
-        '10',
-        'gdal_translate',
-        '-q',
-        '-of',
-        'COG',
-        '-co',
-        'TILING_SCHEME=GoogleMapsCompatible',
-        '-co',
-        'COMPRESS=WEBP',
-        '-co',
-        'QUALITY=85',
-        '-co',
-        'NUM_THREADS=3',
-        '-co',
-        'BIGTIFF=IF_SAFER',
-        masked,
-        cog,
-      ]);
+      await this.convert(
+        'nice',
+        [
+          '-n',
+          '10',
+          'gdal_translate',
+          '-of',
+          'COG',
+          '-co',
+          'TILING_SCHEME=GoogleMapsCompatible',
+          '-co',
+          'COMPRESS=WEBP',
+          '-co',
+          'QUALITY=85',
+          '-co',
+          'NUM_THREADS=3',
+          '-co',
+          'BIGTIFF=IF_SAFER',
+          masked,
+          cog,
+        ],
+        stage('cog'),
+      );
+      stage('publish');
       const info = JSON.parse(await this.convert('gdalinfo', ['-json', cog])) as {
         wgs84Extent?: unknown;
         geoTransform?: number[];
@@ -324,6 +413,9 @@ export class OrthophotoService implements OnModuleInit {
       });
       tileUrl = `/api/v1/map/orthophoto/tiles/${token}/{z}/{x}/{y}.webp`;
     }
+    const p = row.status === 'processing' ? this.progress.get(row.id) : undefined;
+    const percent = p ? overallPercent(p.stage, p.stagePercent) : 0;
+    const jobElapsed = p?.jobStartedMs ? (Date.now() - p.jobStartedMs) / 1000 : 0;
     return {
       id: row.id,
       status: row.status,
@@ -343,6 +435,18 @@ export class OrthophotoService implements OnModuleInit {
       minZoom: row.min_zoom,
       maxZoom: row.max_zoom,
       tileUrl,
+      progress: p
+        ? {
+            stage: p.stage,
+            stagePercent: Math.round(p.stagePercent * 10) / 10,
+            percent,
+            stageElapsedSeconds: Math.round((Date.now() - p.stageStartedMs) / 1000),
+            etaSeconds:
+              percent >= 2 && jobElapsed >= 60
+                ? Math.round((jobElapsed * (100 - percent)) / percent)
+                : null,
+          }
+        : null,
     };
   }
 

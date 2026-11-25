@@ -3928,6 +3928,21 @@
     "remove": "حذف",
     "errorType": "فقط فایل با پسوند ecw پذیرفته می‌شود.",
     "errorSize": "حجم فایل باید حداکثر ۲ گیگابایت باشد.",
-    "errorRequest": "درخواست انجام نشد. دوباره تلاش کنید."
+    "errorRequest": "درخواست انجام نشد. دوباره تلاش کنید.",
+    "stageLabel": "مرحله {{step}} از ۳: {{stage}} ({{percent}}٪)",
+    "stage": {
+      "queued": "در صف تبدیل…",
+      "decode": "باز کردن فایل ECW",
+      "mask": "حذف حاشیه سفید",
+      "cog": "ساخت لایه نقشه",
+      "publish": "انتشار"
+    },
+    "eta": "حدود {{time}} مانده (تخمینی)",
+    "etaUnknown": "در حال تخمین زمان باقی‌مانده…",
+    "minutes_one": "{{count}} دقیقه",
+    "minutes_other": "{{count}} دقیقه",
+    "hours_one": "{{count}} ساعت",
+    "hours_other": "{{count}} ساعت",
+    "hoursMinutes": "{{hours}} ساعت و {{minutes}} دقیقه"
   }
 }

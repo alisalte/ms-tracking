@@ -13,6 +13,19 @@ export interface Orthophoto {
   readonly minZoom: number | null;
   readonly maxZoom: number | null;
   readonly tileUrl: string | null;
+  /** Live conversion progress; only while processing. */
+  readonly progress: OrthophotoProgress | null;
+}
+
+export type OrthophotoStage = 'queued' | 'decode' | 'mask' | 'cog' | 'publish';
+
+export interface OrthophotoProgress {
+  readonly stage: OrthophotoStage;
+  readonly stagePercent: number;
+  readonly percent: number;
+  readonly stageElapsedSeconds: number;
+  /** Rough seconds left for the whole conversion, or null while unknown. */
+  readonly etaSeconds: number | null;
 }
 
 export const ORTHOPHOTO_CHANGE_EVENT = 'fv:orthophoto-change';

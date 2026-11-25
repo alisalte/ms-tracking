@@ -1,9 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   boundsFromExtent,
+  gdalProgress,
   isValidTile,
   nativeZoom,
+  overallPercent,
+  percentProgress,
   signTileToken,
+  stripProgressLines,
   tileBounds,
   tileTokenExpiry,
   verifyTileToken,
@@ -66,5 +70,31 @@ describe('orthophoto tile maths', () => {
       }),
     ).toEqual({ minLng: 51, minLat: 35, maxLng: 52, maxLat: 36 });
     expect(boundsFromExtent(null)).toBeNull();
+  });
+});
+
+describe('orthophoto conversion progress', () => {
+  it('reads GDAL dot progress', () => {
+    expect(gdalProgress('0...10...20')).toBe(20);
+    expect(gdalProgress('Input file size is 10, 20\n0...10...20..')).toBe(25);
+    expect(gdalProgress('0...10...20...30...40...50...60...70...80...90...100 - done.\n')).toBe(
+      100,
+    );
+    expect(gdalProgress('')).toBeNull();
+  });
+
+  it('reads ecw2tiff percent progress and strips it from errors', () => {
+    expect(percentProgress('\r 38.35%    3.0 Mpx/s \r 76.70%    2.4 Mpx/s ')).toBe(76.7);
+    expect(percentProgress('nothing yet')).toBeNull();
+    expect(stripProgressLines('\r 38.35%    3.0 Mpx/s \rerror: bad block\n')).toBe(
+      '\rerror: bad block\n',
+    );
+  });
+
+  it('weights stages into an overall percent', () => {
+    expect(overallPercent('queued', 50)).toBe(0);
+    expect(overallPercent('decode', 50)).toBe(17.5);
+    expect(overallPercent('mask', 0)).toBe(35);
+    expect(overallPercent('publish', 100)).toBe(100);
   });
 });

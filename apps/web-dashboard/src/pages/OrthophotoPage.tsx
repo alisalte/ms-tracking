@@ -3,18 +3,58 @@
  * COG and, once ready, it replaces the previous month on every map.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { TFunction } from 'i18next';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   ORTHOPHOTO_CHANGE_EVENT,
+  type OrthophotoProgress,
   deleteOrthophoto,
   fetchOrthophotos,
   uploadOrthophoto,
 } from '@/api/orthophoto.api';
+import { Meter } from '@/components/tailwind-ui/Meter';
 
 const QUERY_KEY = ['orthophotos'];
 const MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const STAGE_STEP = { decode: 1, mask: 2, cog: 3, publish: 3 } as const;
+
+function formatDuration(t: TFunction, seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) return t('orthophoto.minutes', { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest
+    ? t('orthophoto.hoursMinutes', { hours, minutes: rest })
+    : t('orthophoto.hours', { count: hours });
+}
+
+function ConversionProgress({ progress }: { progress: OrthophotoProgress }) {
+  const { t } = useTranslation();
+  if (progress.stage === 'queued') {
+    return (
+      <p className="mt-2 text-xs text-gray-500 dark:text-graydark-600">
+        {t('orthophoto.stage.queued')}
+      </p>
+    );
+  }
+  const label = t('orthophoto.stageLabel', {
+    step: STAGE_STEP[progress.stage],
+    stage: t(`orthophoto.stage.${progress.stage}`),
+    percent: Math.floor(progress.stagePercent),
+  });
+  return (
+    <div className="mt-3" data-testid="orthophoto-progress">
+      <Meter label={label} value={Math.floor(progress.percent)} unit="%" />
+      <p className="mt-1.5 text-xs text-gray-500 dark:text-graydark-600">
+        {progress.etaSeconds !== null
+          ? t('orthophoto.eta', { time: formatDuration(t, progress.etaSeconds) })
+          : t('orthophoto.etaUnknown')}
+      </p>
+    </div>
+  );
+}
 
 export function OrthophotoPage() {
   const { t, i18n } = useTranslation();
@@ -96,9 +136,12 @@ export function OrthophotoPage() {
           </p>
         )}
         {processing && (
-          <output className="mt-3 block text-sm text-brand-600 dark:text-brand-300">
-            {t('orthophoto.processing', { name: processing.originalName })}
-          </output>
+          <div className="mt-3">
+            <output className="block text-sm text-brand-600 dark:text-brand-300">
+              {t('orthophoto.processing', { name: processing.originalName })}
+            </output>
+            {processing.progress && <ConversionProgress progress={processing.progress} />}
+          </div>
         )}
         {(localError || upload.isError || isError) && (
           <p className="mt-3 text-sm text-red-600" role="alert">
