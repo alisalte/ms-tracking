@@ -91,6 +91,9 @@ describe('useTrips (real /trips mapping)', () => {
     // Origin/destination are coordinates — addresses are NOT fabricated.
     expect(trip?.originLabel).toBe('35.7000, 51.4000');
     expect(trip?.destinationLabel).toBe('35.7500, 51.4500');
+    // Raw fixes are carried so the UI can reverse-geocode them.
+    expect(trip?.origin).toEqual({ lat: 35.7, lng: 51.4 });
+    expect(trip?.destination).toEqual({ lat: 35.75, lng: 51.45 });
     // Idle totals are not part of the list projection.
     expect(trip?.idleMin).toBeUndefined();
   });
@@ -107,6 +110,7 @@ describe('useTrips (real /trips mapping)', () => {
     expect(result.current.data?.[0].status).toBe('in_progress');
     expect(result.current.data?.[0].endTime).toBeUndefined();
     expect(result.current.data?.[0].destinationLabel).toBe('—');
+    expect(result.current.data?.[0].destination).toBeUndefined();
     // No title when the registry is down — never show a truncated GUID.
     expect(result.current.data?.[0].vehicleLabel).toBe('');
   });

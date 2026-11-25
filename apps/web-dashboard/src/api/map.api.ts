@@ -90,11 +90,38 @@ export function useVehicleTrack(
   });
 }
 
+/**
+ * Client-side concurrency cap for reverse geocoding. A trip roster can ask for
+ * dozens of addresses at once; the public Nominatim policy allows ~1 req/s, so
+ * requests are queued and at most `REVERSE_MAX_IN_FLIGHT` hit the map-engine
+ * concurrently (cache hits there return instantly, so the queue drains fast).
+ */
+const REVERSE_MAX_IN_FLIGHT = 2;
+let reverseInFlight = 0;
+const reverseQueue: Array<() => void> = [];
+
+function limitReverse<T>(task: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      reverseInFlight++;
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          reverseInFlight--;
+          reverseQueue.shift()?.();
+        });
+    };
+    if (reverseInFlight < REVERSE_MAX_IN_FLIGHT) run();
+    else reverseQueue.push(run);
+  });
+}
+
 /** GET /location/reverse — reverse geocode a coordinate (justified events only). */
 export function useReverseGeocode(lat: number | null, lng: number | null) {
   return useQuery({
     queryKey: ['map', 'reverse', lat?.toFixed(5), lng?.toFixed(5)],
-    queryFn: () => apiGetRaw<GeocodedAddress | null>('/location/reverse', { lat, lng }),
+    queryFn: () =>
+      limitReverse(() => apiGetRaw<GeocodedAddress | null>('/location/reverse', { lat, lng })),
     enabled: lat !== null && lng !== null,
     staleTime: 10 * 60_000, // addresses rarely change
     retry: false, // provider 503s must not hammer the map-engine

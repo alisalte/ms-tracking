@@ -16,6 +16,7 @@ import {
   type TableColumn,
   Toolbar,
 } from '@/components/tailwind-ui';
+import { TripAddress } from '@/components/trips/TripAddress';
 import { formatDate } from '@/lib/format-date';
 import { displayLabel } from '@/lib/ids';
 import type { Trip, TripStatus } from '@/types/fleet.types';
@@ -93,8 +94,25 @@ export function TripsPage() {
       id: 'route',
       headerKey: 'trips.list.colRoute',
       render: (trip) => (
-        <span className="block max-w-64 truncate">
-          {trip.originLabel} → {trip.destinationLabel}
+        <span className="flex max-w-96 flex-col gap-0.5 text-xs">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success-500" />
+            <TripAddress
+              point={trip.origin}
+              fallback={trip.originLabel}
+              lazy
+              className="truncate"
+            />
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-error-500" />
+            <TripAddress
+              point={trip.destination}
+              fallback={trip.destinationLabel}
+              lazy
+              className="truncate"
+            />
+          </span>
         </span>
       ),
     },

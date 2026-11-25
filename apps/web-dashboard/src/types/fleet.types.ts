@@ -351,6 +351,10 @@ export interface Trip {
   status: TripStatus;
   originLabel: string;
   destinationLabel: string;
+  /** Start fix (WGS84) — reverse-geocoded to an address in the UI. */
+  origin?: { lat: number; lng: number };
+  /** End fix (omitted while the trip is still in progress). */
+  destination?: { lat: number; lng: number };
   /** ISO start timestamp. */
   startTime: string;
   /** ISO end timestamp (omitted for in_progress/planned). */

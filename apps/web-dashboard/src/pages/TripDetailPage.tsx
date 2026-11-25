@@ -15,6 +15,7 @@ import {
   Skeleton,
 } from '@/components/tailwind-ui';
 import { SpeedGraph } from '@/components/trips/SpeedGraph';
+import { TripAddress } from '@/components/trips/TripAddress';
 import { TripReplayMap } from '@/components/trips/TripReplayMap';
 import { TripSummary } from '@/components/trips/TripSummary';
 import { TripTimeline } from '@/components/trips/TripTimeline';
@@ -200,10 +201,10 @@ export function TripDetailPage() {
           <span className="mt-1 flex flex-wrap items-center gap-4">
             <span className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-graydark-600">
               <MapPin size={15} aria-hidden />
-              {trip.originLabel}
+              <TripAddress point={trip.origin} fallback={trip.originLabel} />
               {/* Directional affordance — mirrors in RTL. */}
-              <ArrowRight size={13} aria-hidden className="rtl:rotate-180" />
-              {trip.destinationLabel}
+              <ArrowRight size={13} aria-hidden className="shrink-0 rtl:rotate-180" />
+              <TripAddress point={trip.destination} fallback={trip.destinationLabel} />
             </span>
             <span className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-graydark-600">
               <Clock3 size={15} aria-hidden />
@@ -285,6 +286,16 @@ export function TripDetailPage() {
                     {e.label}
                     {e.durationMin ? ` · ${e.durationMin}m` : ''}
                   </span>
+                  {(e.type === 'stop' || e.type === 'idle') &&
+                    e.lat !== undefined &&
+                    e.lng !== undefined && (
+                      <TripAddress
+                        point={{ lat: e.lat, lng: e.lng }}
+                        fallback={`${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}`}
+                        lazy
+                        className="block truncate text-xs text-gray-500 dark:text-graydark-600"
+                      />
+                    )}
                 </p>
                 <span className="text-xs tabular-nums text-gray-500 dark:text-graydark-600">
                   {formatTime(e.ts)}

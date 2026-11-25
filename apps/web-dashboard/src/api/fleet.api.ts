@@ -393,8 +393,8 @@ function toTripStatus(wire: TripWire['status']): Trip['status'] {
 /**
  * Trip list — REAL `GET /trips` (gps-engine trip_events projection, last 7 days
  * by default). Vehicle labels join the registry (best-effort; falls back to the
- * vehicle id). Origin/destination render as coordinates — reverse-geocoded
- * labels are a map-engine concern and are NOT fabricated here.
+ * vehicle id). Origin/destination labels are coordinates; the raw fixes are
+ * carried along so the UI can reverse-geocode them (map-engine) on display.
  */
 function fetchTrips(): Promise<Trip[]> {
   if (!shouldUseMock()) {
@@ -420,6 +420,10 @@ function fetchTrips(): Promise<Trip[]> {
             w.endLat !== null && w.endLng !== null
               ? `${w.endLat.toFixed(4)}, ${w.endLng.toFixed(4)}`
               : '—',
+          origin: { lat: w.startLat, lng: w.startLng },
+          ...(w.endLat !== null && w.endLng !== null
+            ? { destination: { lat: w.endLat, lng: w.endLng } }
+            : {}),
           startTime: w.startedAt,
           endTime: w.endedAt ?? undefined,
           distanceKm: Math.round(w.distanceKm * 10) / 10,
@@ -481,6 +485,10 @@ function fetchTripDetail(id: string): Promise<TripDetail | null> {
           w.endLat !== null && w.endLng !== null
             ? `${w.endLat.toFixed(4)}, ${w.endLng.toFixed(4)}`
             : '—',
+        origin: { lat: w.startLat, lng: w.startLng },
+        ...(w.endLat !== null && w.endLng !== null
+          ? { destination: { lat: w.endLat, lng: w.endLng } }
+          : {}),
         startTime: w.startedAt,
         endTime: w.endedAt ?? undefined,
         distanceKm: Math.round(w.distanceKm * 10) / 10,
