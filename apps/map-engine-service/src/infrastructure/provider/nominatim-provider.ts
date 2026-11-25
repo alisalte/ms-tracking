@@ -37,6 +37,17 @@ export interface NominatimProviderDeps {
   readonly cache: RedisGeoCache;
   /** Preferred language for rendered addresses (BCP-47). */
   readonly language?: string;
+  /**
+   * Minimum spacing between upstream requests (ms). The public instance allows
+   * at most 1 request/second, so requests are queued to respect it; a
+   * self-hosted Nominatim can set 0.
+   */
+  readonly minIntervalMs?: number;
+  /**
+   * Cache TTL (s) for reverse-geocoded addresses. Streets don't move, so a long
+   * TTL keeps upstream traffic to one lookup per point.
+   */
+  readonly reverseTtlSeconds?: number;
 }
 
 interface NominatimPlace {
@@ -56,6 +67,9 @@ export class NominatimProvider implements MapProvider {
     'reverseGeocode',
     'searchPlaces',
   ]);
+
+  /** Earliest time (epoch ms) the next upstream request may start. */
+  private nextSlotAt = 0;
 
   constructor(private readonly deps: NominatimProviderDeps) {}
 
@@ -81,7 +95,7 @@ export class NominatimProvider implements MapProvider {
       components: place.address ?? {},
       provider: this.name,
     };
-    await this.deps.cache.set(cacheKey, addr);
+    await this.deps.cache.set(cacheKey, addr, this.deps.reverseTtlSeconds);
     return addr;
   }
 
@@ -143,7 +157,18 @@ export class NominatimProvider implements MapProvider {
     throw new MapProviderUnavailableError('Nominatim does not provide snapping');
   }
 
+  /** Wait for this request's slot so upstream calls stay `minIntervalMs` apart. */
+  private async waitForSlot(): Promise<void> {
+    const interval = this.deps.minIntervalMs ?? 0;
+    if (interval <= 0) return;
+    const now = Date.now();
+    const at = Math.max(now, this.nextSlotAt);
+    this.nextSlotAt = at + interval;
+    if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now));
+  }
+
   private async nominatimFetch<T>(url: string): Promise<T> {
+    await this.waitForSlot();
     let response: Response;
     try {
       response = await fetch(url, {

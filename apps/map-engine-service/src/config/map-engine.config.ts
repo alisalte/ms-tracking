@@ -42,6 +42,14 @@ export const mapEngineConfigSchema = baseConfigSchema.merge(authConfigSchema).me
     NOMINATIM_URL: z.string().default(''),
     /** User-Agent for Nominatim requests (public-instance usage policy requires identification). */
     NOMINATIM_USER_AGENT: z.string().default('FleetVision-MapEngine/1.0'),
+    /** Min ms between Nominatim requests (public instance policy: 1 req/s). 0 for self-hosted. */
+    NOMINATIM_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(1100),
+    /** Cache TTL (s) for reverse-geocoded addresses. Default 30 days. */
+    NOMINATIM_REVERSE_CACHE_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(30 * 86_400),
     GOOGLE_MAPS_KEY: z.string().default(''),
 
     // --- Cache TTLs (08 §6.1) ---

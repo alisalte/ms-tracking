@@ -118,6 +118,8 @@ export class MapEngineModule {
                   baseUrl: cfg.NOMINATIM_URL,
                   userAgent: cfg.NOMINATIM_USER_AGENT,
                   cache,
+                  minIntervalMs: cfg.NOMINATIM_MIN_INTERVAL_MS,
+                  reverseTtlSeconds: cfg.NOMINATIM_REVERSE_CACHE_TTL_SECONDS,
                 }),
               );
             }

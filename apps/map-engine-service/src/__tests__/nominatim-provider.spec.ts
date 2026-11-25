@@ -95,6 +95,41 @@ describe('NominatimProvider.reverseGeocode', () => {
     });
     await expect(provider.reverseGeocode(35.7, 51.4)).rejects.toThrow(/Nominatim unreachable/);
   });
+
+  it('spaces upstream requests by minIntervalMs (public instance: 1 req/s)', async () => {
+    const starts: number[] = [];
+    fetchMock.mockImplementation(async () => {
+      starts.push(Date.now());
+      return jsonResponse({ lat: '1', lon: '2', display_name: 'X' });
+    });
+    const provider = new NominatimProvider({
+      baseUrl: 'https://nominatim.test',
+      cache: fakeCache(),
+      minIntervalMs: 60,
+    });
+    await Promise.all([
+      provider.reverseGeocode(1, 2),
+      provider.reverseGeocode(3, 4),
+      provider.reverseGeocode(5, 6),
+    ]);
+    const [a = 0, b = 0, c = 0] = starts;
+    expect(starts).toHaveLength(3);
+    expect(b - a).toBeGreaterThanOrEqual(55);
+    expect(c - b).toBeGreaterThanOrEqual(55);
+  });
+
+  it('stores reverse results with the dedicated reverse TTL', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ lat: '1', lon: '2', display_name: 'X' }));
+    const cache = fakeCache();
+    const setSpy = jest.spyOn(cache, 'set');
+    const provider = new NominatimProvider({
+      baseUrl: 'https://nominatim.test',
+      cache,
+      reverseTtlSeconds: 86_400,
+    });
+    await provider.reverseGeocode(1, 2);
+    expect(setSpy).toHaveBeenCalledWith(expect.any(String), expect.anything(), 86_400);
+  });
 });
 
 describe('NominatimProvider.geocode', () => {
