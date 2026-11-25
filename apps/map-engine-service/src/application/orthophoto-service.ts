@@ -41,7 +41,26 @@ const FREE_SPACE_FACTOR = 6;
 const ZOOM_RANGE = 10;
 /** How far (per channel) a collar pixel may drift from pure white/black. */
 const COLLAR_TOLERANCE = 15;
-const GDAL_ENV = { ...process.env, GDAL_PAM_ENABLED: 'NO' };
+/**
+ * Room needed once the ECW is decoded, as a multiple of the decoded TIFF: the
+ * masked copy (nearblack writes every line twice, so rewritten compressed
+ * tiles can grow the file) plus the final COG.
+ */
+const DECODED_SPACE_FACTOR = 3;
+// Masks go inside the TIFF (no .msk sidecar next to the intermediate).
+const GDAL_ENV = { ...process.env, GDAL_PAM_ENABLED: 'NO', GDAL_TIFF_INTERNAL_MASK: 'YES' };
+
+/** GDAL repeats the same error for every failed block; keep each line once. */
+function dedupeLines(text: string): string {
+  return [
+    ...new Set(
+      text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean),
+    ),
+  ].join('\n');
+}
 
 function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,7 +76,7 @@ function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<s
       if (out.length < 4_000_000) out += d.toString();
     });
     child.stderr.on('data', (d: Buffer) => {
-      err = (err + d.toString()).slice(-2000);
+      err = (err + d.toString()).slice(-20_000);
     });
     child.on('error', reject);
     const started = Date.now();
@@ -72,7 +91,8 @@ function run(cmd: string, args: readonly string[], timeoutMs: number): Promise<s
           : signal
             ? `killed by ${signal} after ${Math.round(elapsed / 60_000)} min`
             : `exited with code ${code}`;
-      reject(new Error(`${tool} ${why}${err.trim() ? `: ${err.trim()}` : ''}`));
+      const detail = dedupeLines(err).slice(-2000);
+      reject(new Error(`${tool} ${why}${detail ? `: ${detail}` : ''}`));
     });
   });
 }
@@ -143,10 +163,7 @@ export class OrthophotoService implements OnModuleInit {
       if (!input.originalName.toLowerCase().endsWith('.ecw')) {
         throw new OrthophotoInputError('Only .ecw files are accepted');
       }
-      const fs = await statfs(this.deps.dataDir);
-      if (fs.bavail * fs.bsize < input.size * FREE_SPACE_FACTOR) {
-        throw new OrthophotoDiskFullError('Not enough free disk space to convert this file');
-      }
+      await this.ensureSpace(input.size * FREE_SPACE_FACTOR);
       const id = await this.deps.repo.createProcessing({
         tenantId: input.tenantId,
         originalName: input.originalName,
@@ -160,6 +177,17 @@ export class OrthophotoService implements OnModuleInit {
     } catch (err) {
       await rm(input.path, { force: true });
       throw err;
+    }
+  }
+
+  private async ensureSpace(bytes: number): Promise<void> {
+    const fs = await statfs(this.deps.dataDir);
+    const free = fs.bavail * fs.bsize;
+    if (free < bytes) {
+      const gb = (n: number) => (n / 1024 ** 3).toFixed(1);
+      throw new OrthophotoDiskFullError(
+        `Not enough free disk space to convert this file (needs ~${gb(bytes)} GB, ${gb(free)} GB free)`,
+      );
     }
   }
 
@@ -181,10 +209,16 @@ export class OrthophotoService implements OnModuleInit {
         source,
         decoded,
       ]);
+      // The ECW is no longer needed (a failure discards the whole job anyway).
+      await rm(source, { force: true });
+      await this.ensureSpace((await stat(decoded)).size * DECODED_SPACE_FACTOR);
       // ECW mosaics have no alpha: the area around the flown footprint is a
       // solid white (or black) collar that would cover the basemap. Mask the
       // collar — scanned in from the edges only, so white/black pixels inside
-      // the imagery stay — into an alpha band. `-near` absorbs JPEG noise.
+      // the imagery stay — into a mask. `-near` absorbs JPEG noise. The mask is
+      // a 1-bit internal band beside JPEG RGB: an RGBA DEFLATE copy of a large
+      // mosaic is many times the decoded size and filled the disk. The COG
+      // step below turns the mask back into an alpha band.
       await this.convert('nice', [
         '-n',
         '10',
@@ -196,15 +230,17 @@ export class OrthophotoService implements OnModuleInit {
         '0,0,0',
         '-near',
         String(COLLAR_TOLERANCE),
-        '-setalpha',
+        '-setmask',
         '-of',
         'GTiff',
         '-co',
         'TILED=YES',
         '-co',
-        'COMPRESS=DEFLATE',
+        'COMPRESS=JPEG',
         '-co',
-        'PREDICTOR=2',
+        'JPEG_QUALITY=92',
+        '-co',
+        'PHOTOMETRIC=YCBCR',
         '-co',
         'BIGTIFF=IF_SAFER',
         '-o',
@@ -247,7 +283,6 @@ export class OrthophotoService implements OnModuleInit {
         maxZoom,
         cogBytes: size,
       });
-      await rm(source, { force: true });
       await rm(masked, { force: true });
       for (const oldId of replaced) {
         await rm(this.jobDir(tenantId, oldId), { force: true, recursive: true });
